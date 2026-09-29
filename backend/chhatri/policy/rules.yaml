@@ -1,0 +1,25 @@
+# Chhatri pilot payout rules (SPEC §9.1).
+# Illustrative, to be set with Paytm's insurance partner and compliance teams. Every payout is logged.
+version: pilot-0.1
+payout_share: 0.50
+area:
+  index_floor_pct: 50
+  consecutive_hours: 3
+  min_shops_in_index: 20
+  daily_cap_rupees: 2500
+personal:
+  daily_cap_rupees: 1500
+  max_auto_days: 3
+  name_match_min_score: 85
+  slip_confidence_min: 0.80
+cover:
+  waiting_period_days: 7
+  alert_lookahead_hours: 72
+annual_limit_rupees: 30000
+dispute_sla_hours: 24
+payout_rail_delay_minutes: 4
+instalment_pause_delay_minutes: 5
+premium:
+  loading: 0.35
+  min_per_day_rupees: 2
+  first_payment_days: 30

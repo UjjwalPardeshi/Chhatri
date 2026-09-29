@@ -1,0 +1,308 @@
+{
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "icon": "fa:code",
+      "name": "Webhook Trigger",
+      "position": [
+        250,
+        300
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "chhatri-payout",
+      "parameters": {
+        "path": "chhatri-payout",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "verify-secret",
+      "icon": "fa:shield",
+      "name": "Verify Secret Header",
+      "position": [
+        450,
+        300
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $request.headers['x-chhatri-secret'] }}",
+              "value2": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}",
+              "operation": "equals"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "execute-payout",
+      "icon": "fa:square",
+      "name": "Execute Payout (0 min)",
+      "position": [
+        650,
+        200
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "parameters": {
+        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/execute_payout",
+        "method": "POST",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chhatri-Secret",
+              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'payout', step: 'execute_payout', payload: $request.body.payload }) }}"
+      }
+    },
+    {
+      "id": "wait-credit",
+      "icon": "fa:clock",
+      "name": "Wait 4 minutes",
+      "position": [
+        850,
+        200
+      ],
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "parameters": {
+        "amount": 4,
+        "unit": "minutes"
+      }
+    },
+    {
+      "id": "credit-payout",
+      "icon": "fa:square",
+      "name": "Credit Payout (4 min)",
+      "position": [
+        1050,
+        200
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "parameters": {
+        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/credit_payout",
+        "method": "POST",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chhatri-Secret",
+              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'payout', step: 'credit_payout', payload: $request.body.payload }) }}"
+      }
+    },
+    {
+      "id": "notify-merchant",
+      "icon": "fa:square",
+      "name": "Notify Merchant (4 min)",
+      "position": [
+        1050,
+        350
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "parameters": {
+        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/notify_merchant",
+        "method": "POST",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chhatri-Secret",
+              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'payout', step: 'notify_merchant', payload: $request.body.payload }) }}"
+      }
+    },
+    {
+      "id": "wait-pause",
+      "icon": "fa:clock",
+      "name": "Wait 1 minute (5 total)",
+      "position": [
+        1250,
+        350
+      ],
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "parameters": {
+        "amount": 1,
+        "unit": "minutes"
+      }
+    },
+    {
+      "id": "pause-instalment",
+      "icon": "fa:square",
+      "name": "Pause Instalment (5 min)",
+      "position": [
+        1450,
+        350
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "parameters": {
+        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/pause_instalment",
+        "method": "POST",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chhatri-Secret",
+              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'payout', step: 'pause_instalment', payload: $request.body.payload }) }}"
+      }
+    },
+    {
+      "id": "respond-202",
+      "icon": "fa:arrow-right",
+      "name": "Respond 202",
+      "position": [
+        450,
+        450
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "parameters": {
+        "responseCode": 202,
+        "responseBody": "={{ JSON.stringify({ ok: true, data: { status: 'queued' } }) }}"
+      }
+    },
+    {
+      "id": "error-response",
+      "icon": "fa:times-circle",
+      "name": "Respond 403 (secret mismatch)",
+      "position": [
+        650,
+        450
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "parameters": {
+        "responseCode": 403,
+        "responseBody": "={{ JSON.stringify({ ok: false, error: { code: 'invalid_secret', message: 'X-Chhatri-Secret header mismatch' } }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "verify-secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "verify-secret": {
+      "main": [
+        [
+          {
+            "node": "execute-payout",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "respond-202",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "error-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "execute-payout": {
+      "main": [
+        [
+          {
+            "node": "wait-credit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wait-credit": {
+      "main": [
+        [
+          {
+            "node": "credit-payout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "credit-payout": {
+      "main": [
+        [
+          {
+            "node": "notify-merchant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-merchant": {
+      "main": [
+        [
+          {
+            "node": "wait-pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wait-pause": {
+      "main": [
+        [
+          {
+            "node": "pause-instalment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": null
+}

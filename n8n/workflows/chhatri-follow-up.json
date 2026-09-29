@@ -1,0 +1,204 @@
+{
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "icon": "fa:code",
+      "name": "Webhook Trigger",
+      "position": [
+        250,
+        300
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "chhatri-follow-up",
+      "parameters": {
+        "path": "chhatri-follow-up",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "verify-secret",
+      "icon": "fa:shield",
+      "name": "Verify Secret Header",
+      "position": [
+        450,
+        300
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $request.headers['x-chhatri-secret'] }}",
+              "value2": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}",
+              "operation": "equals"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "wait-dispute-sla",
+      "icon": "fa:clock",
+      "name": "Wait Dispute SLA (24h)",
+      "position": [
+        650,
+        200
+      ],
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "parameters": {
+        "amount": 24,
+        "unit": "hours"
+      }
+    },
+    {
+      "id": "check-case-sla",
+      "icon": "fa:square",
+      "name": "Check Case SLA",
+      "position": [
+        850,
+        200
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "parameters": {
+        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/check_case_sla",
+        "method": "POST",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chhatri-Secret",
+              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'follow-up', step: 'check_case_sla', payload: $request.body.payload }) }}"
+      }
+    },
+    {
+      "id": "notify-resolution",
+      "icon": "fa:square",
+      "name": "Notify Resolution",
+      "position": [
+        1050,
+        200
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "parameters": {
+        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/notify_resolution",
+        "method": "POST",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chhatri-Secret",
+              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'follow-up', step: 'notify_resolution', payload: $request.body.payload }) }}"
+      }
+    },
+    {
+      "id": "respond-202",
+      "icon": "fa:arrow-right",
+      "name": "Respond 202",
+      "position": [
+        450,
+        400
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "parameters": {
+        "responseCode": 202,
+        "responseBody": "={{ JSON.stringify({ ok: true, data: { status: 'queued' } }) }}"
+      }
+    },
+    {
+      "id": "error-response",
+      "icon": "fa:times-circle",
+      "name": "Respond 403 (secret mismatch)",
+      "position": [
+        650,
+        400
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "parameters": {
+        "responseCode": 403,
+        "responseBody": "={{ JSON.stringify({ ok: false, error: { code: 'invalid_secret', message: 'X-Chhatri-Secret header mismatch' } }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "verify-secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "verify-secret": {
+      "main": [
+        [
+          {
+            "node": "wait-dispute-sla",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "respond-202",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "error-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "wait-dispute-sla": {
+      "main": [
+        [
+          {
+            "node": "check-case-sla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-case-sla": {
+      "main": [
+        [
+          {
+            "node": "notify-resolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": null
+}

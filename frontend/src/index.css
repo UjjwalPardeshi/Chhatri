@@ -1,0 +1,38 @@
+@import '@fontsource/ubuntu';
+@import '@fontsource/noto-sans-devanagari';
+@import 'tailwindcss';
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: 'Ubuntu', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Ubuntu', system-ui, sans-serif;
+  font-weight: 500;
+}
+
+/* Chhatri design tokens from deck */
+:root {
+  --navy: #0f1a33;
+  --ink: #0f172a;
+  --blue: #0b63c9;
+  --accent: #38a3e8;
+  --paper: #f3f5f8;
+  --amber: #e39a4f;
+  --red: #b91c1c;
+  --green: #15803d;
+  --whatsapp-header: #0b3d2e;
+  --chat-bg: #ece5dd;
+  --bubble-out: #d9fdd3;
+}

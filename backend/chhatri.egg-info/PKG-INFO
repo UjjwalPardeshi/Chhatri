@@ -1,0 +1,37 @@
+Metadata-Version: 2.4
+Name: chhatri
+Version: 0.1.0
+Summary: Chhatri — merchant income cover where the claim starts itself (Build for India AI Hackathon, Track 2)
+Requires-Python: <3.13,>=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<0.142,>=0.141
+Requires-Dist: uvicorn[standard]<0.55,>=0.54
+Requires-Dist: pydantic<3,>=2.13
+Requires-Dist: pydantic-settings<3,>=2.15
+Requires-Dist: sse-starlette<4,>=3.5
+Requires-Dist: httpx<0.29,>=0.28
+Requires-Dist: python-multipart>=0.0.32
+Requires-Dist: numpy<3,>=2.3
+Requires-Dist: pandas<4,>=3.0
+Requires-Dist: lightgbm<5,>=4.7
+Requires-Dist: h3<5,>=4.5
+Requires-Dist: shapely<3,>=2.1
+Requires-Dist: networkx<4,>=3.5
+Requires-Dist: rapidfuzz<4,>=3.14
+Requires-Dist: pillow<13,>=12
+Requires-Dist: pyyaml<7,>=6
+Requires-Dist: sarvamai==0.1.34
+Requires-Dist: mcp==1.30.0
+Requires-Dist: paytmchecksum==1.7.0
+Requires-Dist: pycryptodome<4,>=3.20
+Provides-Extra: dev
+Requires-Dist: pytest<10,>=9; extra == "dev"
+Requires-Dist: pytest-asyncio<2,>=1.4; extra == "dev"
+Requires-Dist: pytest-cov<8,>=7; extra == "dev"
+Requires-Dist: ruff>=0.13; extra == "dev"
+Provides-Extra: memory
+Requires-Dist: cognee<2,>=1.6; extra == "memory"
+
+# Chhatri backend
+
+FastAPI service: expected-sales model, triggers, policy engine, conversation, workflows. See ../docs/SPEC.md.
