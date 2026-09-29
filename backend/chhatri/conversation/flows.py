@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from chhatri.conversation.messages import bilingual, render
 from chhatri.domain.enums import Direction
-from chhatri.domain.models import Message, Merchant
+from chhatri.domain.models import Merchant, Message
 
 if TYPE_CHECKING:
     from chhatri.conversation.service import ConversationService

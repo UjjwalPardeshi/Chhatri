@@ -103,14 +103,10 @@ class TestGoldenNumbers:
         # Extract P50
         p50 = predictions[:, :, 1]  # (merchants, 24)
 
-        # Window [14:00, 17:00) = hours 14, 15, 16
-        window_end_hour = 17
+        # Compute indices (window [14:00, 17:00) = hours 14, 15, 16)
         rows_z7 = self.city.zone_rows("Z7")
         rows_z3 = self.city.zone_rows("Z3")
         rows_z12 = self.city.zone_rows("Z12")
-        rows_z9 = self.city.zone_rows("Z9")
-
-        # Compute indices (simplified: hour window sums)
         for rows, zone_id, target_index in [
             (rows_z7, "Z7", 37),
             (rows_z3, "Z3", 38),
@@ -123,10 +119,11 @@ class TestGoldenNumbers:
                 actual_sum += sales.amount_paise[row, 14:17].sum()
                 expected_sum += p50[row, 14:17].sum()
 
-            if expected_sum > 0:
-                index = int(actual_sum / expected_sum * 100 + 0.5)  # half up
-            else:
-                index = 100
+            index = (
+                int(actual_sum / expected_sum * 100 + 0.5)
+                if expected_sum > 0
+                else 100
+            )
 
             assert (
                 index == target_index
@@ -176,12 +173,11 @@ class TestGoldenNumbers:
             actual_sum = sum(sales.amount_paise[row, h] for row in rows)
             expected_sum = sum(p50[row, h] for row in rows)
 
-            if expected_sum > 0:
-                hourly_index = int(
-                    actual_sum / expected_sum * 100 + 0.5
-                )  # half up
-            else:
-                hourly_index = 100
+            hourly_index = (
+                int(actual_sum / expected_sum * 100 + 0.5)
+                if expected_sum > 0
+                else 100
+            )
 
             # Must be strictly less than both 50 and lower_bound
             assert hourly_index < 50, (

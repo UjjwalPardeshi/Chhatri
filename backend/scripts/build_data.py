@@ -321,7 +321,7 @@ def step_backtest(backend_dir: Path, force: bool = False) -> None:
     calibration = load_calibration(data_dir)
 
     logger.info("Running backtest...")
-    report = run_backtest(artifacts_dir, settings=settings, calibration=calibration)
+    _ = run_backtest(artifacts_dir, settings=settings, calibration=calibration)
 
     artifacts_dir.joinpath("backtest").mkdir(exist_ok=True)
     logger.info(f"Backtest completed; results in {artifacts_dir / 'backtest'}")
@@ -355,15 +355,18 @@ def step_manifest(backend_dir: Path) -> dict[str, Any]:
 
     # Try to get git commit
     try:
-        commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
+        import shutil
+
+        git_exe = shutil.which("git") or "/usr/bin/git"
+        commit = subprocess.check_output(  # noqa: S603
+            [git_exe, "rev-parse", "HEAD"],
             cwd=backend_dir,
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
         manifest["git_commit"] = commit
-    except Exception:
-        pass
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        logger.debug(f"Could not get git commit: {e}")
 
     # Get library versions
     try:

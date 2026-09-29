@@ -368,6 +368,7 @@ class ExpectedSalesModel:
             Uses only history strictly before start.date().
         """
         from datetime import timedelta
+
         from chhatri.forecast.features import construct_features
 
         # Ensure we have history before start

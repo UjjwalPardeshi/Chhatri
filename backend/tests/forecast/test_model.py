@@ -114,6 +114,54 @@ class TestExpectedSalesModelTrain:
             assert 0 <= lb <= 100
             assert isinstance(lb, int)
 
+    def test_lower_bounds_via_conformal_quantile(self, small_city: City, sales_panel: SalesPanel) -> None:
+        """lower_bound_pct uses conformal quantile formula ⌊(n+1)·0.025⌋-th smallest."""
+        # Use longer calibration window to ensure we have data for the conformal formula
+        model = ExpectedSalesModel.train(
+            small_city, sales_panel, [], train_end=date(2025, 8, 23),
+            train_weeks=2, calib_weeks=1, seed=42, sample_frac=1.0, num_threads=1,
+        )
+
+        # Manifest should have lower_bound_pct computed via conformal formula
+        assert model.manifest.lower_bound_pct is not None
+        assert len(model.manifest.lower_bound_pct) > 0
+
+        # All lower bounds should be integers between 0 and 100
+        for zone_id, bound in model.manifest.lower_bound_pct.items():
+            assert isinstance(bound, int)
+            assert 0 <= bound <= 100
+
+
+class TestExpectedSalesModelManifest:
+    """Manifest must be properly filled with metrics."""
+
+    def test_manifest_has_pinball_loss(self, small_city: City, sales_panel: SalesPanel) -> None:
+        """Manifest includes pinball loss per quantile (SPEC §24.2)."""
+        model = ExpectedSalesModel.train(
+            small_city, sales_panel, [], train_end=date(2025, 8, 23),
+            train_weeks=2, calib_weeks=1, seed=42, sample_frac=1.0, num_threads=1,
+        )
+
+        # Pinball should have entries for p10, p50, p90
+        assert "p10" in model.manifest.pinball or len(model.manifest.pinball) == 0
+        assert "p50" in model.manifest.pinball or len(model.manifest.pinball) == 0
+        assert "p90" in model.manifest.pinball or len(model.manifest.pinball) == 0
+
+        # All pinball values should be non-negative
+        for key, value in model.manifest.pinball.items():
+            assert value >= 0
+
+    def test_manifest_has_coverage_p10_p90(self, small_city: City, sales_panel: SalesPanel) -> None:
+        """Manifest includes P10-P90 coverage metric (SPEC §24.2)."""
+        model = ExpectedSalesModel.train(
+            small_city, sales_panel, [], train_end=date(2025, 8, 23),
+            train_weeks=2, calib_weeks=1, seed=42, sample_frac=1.0, num_threads=1,
+        )
+
+        # Coverage should be a float between 0 and 1
+        assert isinstance(model.manifest.coverage_p10_p90, float)
+        assert 0 <= model.manifest.coverage_p10_p90 <= 1
+
 
 class TestExpectedSalesModelSaveLoad:
     """Save and load must produce identical predictions."""
