@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
-from chhatri.clock import at
 from chhatri.sim.types import City, SalesPanel
 
 logger = logging.getLogger(__name__)

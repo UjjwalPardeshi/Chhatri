@@ -97,15 +97,11 @@ def evaluate_hour(
                     actual_h += int(actual_window.amount_paise[row].sum())
 
                     # Extract P50 (middle column if 3D, otherwise use as-is)
-                    exp_h = (
-                        expected_p50[row, :, 1]
-                        if len(expected_p50.shape) == 3
-                        else expected_p50[row, :]
-                    )
+                    exp_h = expected_p50[row, :, 1] if len(expected_p50.shape) == 3 else expected_p50[row, :]
 
                     # Get window indices for this 1-hour window
                     h_idx = actual.hour_index(hour_start)
-                    expected_h += int(exp_h[h_idx:h_idx+1].sum())
+                    expected_h += int(exp_h[h_idx : h_idx + 1].sum())
             except IndexError:
                 actual_h = 0
                 expected_h = 0
@@ -114,6 +110,7 @@ def evaluate_hour(
                 hourly_indices.append(None)
             else:
                 from chhatri.money import percent_half_up
+
                 idx = percent_half_up(actual_h, expected_h)
                 hourly_indices.append(idx)
 
@@ -130,11 +127,7 @@ def evaluate_hour(
                 actual_3h += int(actual_window.amount_paise[row].sum())
 
                 # Extract P50 (middle column if 3D, otherwise use as-is)
-                exp_3h = (
-                    expected_p50[row, :, 1]
-                    if len(expected_p50.shape) == 3
-                    else expected_p50[row, :]
-                )
+                exp_3h = expected_p50[row, :, 1] if len(expected_p50.shape) == 3 else expected_p50[row, :]
 
                 # Index the 3-hour window in the expected array
                 h_start = actual.hour_index(window_start)
@@ -148,15 +141,15 @@ def evaluate_hour(
             window_index = None
         else:
             from chhatri.money import percent_half_up
+
             window_index = percent_half_up(actual_3h, expected_3h)
 
         # Find active alert for this zone
         alert_id = None
         for alert in alerts:
-            if zone_id in alert.zone_ids:
-                if alert.valid_from <= at < alert.valid_to:
-                    alert_id = alert.id
-                    break
+            if zone_id in alert.zone_ids and alert.valid_from <= at < alert.valid_to:
+                alert_id = alert.id
+                break
 
         # Check trigger conditions
         floor = rules.area.index_floor_pct
@@ -176,6 +169,7 @@ def evaluate_hour(
         ):
             # Trigger!
             from chhatri.ids import IdFactory
+
             trigger_id = IdFactory.area_trigger(zone_id, at.date())
 
             trigger = AreaTrigger(
@@ -196,8 +190,7 @@ def evaluate_hour(
         elif has_alert and all_below_floor:
             status = "watch"
         elif not has_alert and (
-            window_below_bound
-            or any(h is not None and h < floor for h in hourly_indices)
+            window_below_bound or any(h is not None and h < floor for h in hourly_indices)
         ):
             status = "slow_day"
         else:

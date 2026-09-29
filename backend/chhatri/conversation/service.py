@@ -17,6 +17,15 @@ from datetime import date, datetime
 from typing import Any, Protocol
 
 from chhatri.clock import Clock
+from chhatri.conversation.flows import (
+    handle_acknowledge,
+    handle_buy_cover,
+    handle_cover_status,
+    handle_dispute,
+    handle_report_illness,
+    handle_why_amount,
+    send_fallback_help,
+)
 from chhatri.conversation.intents import Intent
 from chhatri.conversation.messages import bilingual, render
 from chhatri.conversation.nlu import classify_with_llm
@@ -33,8 +42,8 @@ from chhatri.domain.models import (
     CoverQuote,
     Decision,
     InstalmentPause,
-    Message,
     Merchant,
+    Message,
     Payout,
     SlipExtraction,
 )
@@ -145,19 +154,19 @@ class ConversationService:
         # Process by intent
         replies = []
         if intent == Intent.WHY_AMOUNT:
-            replies = await self._handle_why_amount(merchant, now)
+            replies = await handle_why_amount(self, merchant, now)
         elif intent == Intent.DISPUTE_AMOUNT:
-            replies = await self._handle_dispute(merchant, text, now)
+            replies = await handle_dispute(self, merchant, text, now)
         elif intent == Intent.REPORT_ILLNESS:
-            replies = await self._handle_report_illness(merchant, now)
+            replies = await handle_report_illness(self, merchant, now)
         elif intent == Intent.BUY_COVER:
-            replies = await self._handle_buy_cover(merchant, now)
+            replies = await handle_buy_cover(self, merchant, now)
         elif intent == Intent.COVER_STATUS:
-            replies = await self._handle_cover_status(merchant, now)
+            replies = await handle_cover_status(self, merchant, now)
         elif intent in (Intent.GREETING, Intent.AFFIRM, Intent.DENY):
-            replies = await self._handle_acknowledge(merchant, intent, now)
+            replies = await handle_acknowledge(self, merchant, intent, now)
         else:
-            replies = await self._send_fallback_help(merchant, now)
+            replies = await send_fallback_help(self, merchant, now)
 
         return (inbound,) + tuple(replies)
 
@@ -504,161 +513,6 @@ class ConversationService:
         return tuple(messages)
 
     # ---- Helpers ----
-
-    async def _handle_why_amount(
-        self, merchant: Merchant, now: datetime
-    ) -> list[Message]:
-        """WHY_AMOUNT flow: show explanation."""
-        latest = self.claims.latest_paid_decision(merchant.id)
-        if latest is None:
-            return await self._send_fallback_help(merchant, now)
-
-        # EXPLAIN_AREA with decision facts
-        if latest.explanation:
-            exp = latest.explanation
-            hi_text, en_text = bilingual(
-                "EXPLAIN_AREA",
-                weekday_hi=exp.weekday_hi,
-                weekday_en=exp.weekday_en,
-                expected=format_inr(exp.expected_day_paise),
-                drop=exp.drop_pct or 0,
-            )
-        else:
-            return await self._send_fallback_help(merchant, now)
-
-        msg = await self._send_message(merchant, hi_text, en_text, now)
-        return [msg]
-
-    async def _handle_dispute(
-        self, merchant: Merchant, text: str, now: datetime
-    ) -> list[Message]:
-        """DISPUTE_AMOUNT flow: open case."""
-        case = await self.claims.open_dispute(merchant.id, text)
-
-        messages = []
-
-        # DISPUTE_ACK
-        hi_text, en_text = bilingual("DISPUTE_ACK")
-        ack_msg = await self._send_message(
-            merchant,
-            hi_text,
-            en_text,
-            now,
-        )
-        messages.append(ack_msg)
-
-        # CASE_CHIP
-        chip_msg = Message(
-            id=self.ids.next("message"),
-            merchant_id=merchant.id,
-            direction=Direction.OUTBOUND,
-            channel=self.channel_name,
-            kind=MessageKind.CASE_CHIP,
-            text_en=render("CASE_CHIP", "en", case_id=case.id),
-            created_at=now,
-        )
-        self.store.add_message(chip_msg)
-        self.audit.append(
-            at=now,
-            actor="ai-agent",
-            action="message_outbound",
-            subject_type="message",
-            subject_id=chip_msg.id,
-            data={"kind": "case_chip", "case_id": case.id},
-        )
-        messages.append(chip_msg)
-
-        # Publish case event
-        self.bus.publish(
-            "case",
-            now,
-            {"case": case.model_dump(mode="json")},
-        )
-
-        return messages
-
-    async def _handle_report_illness(
-        self, merchant: Merchant, now: datetime
-    ) -> list[Message]:
-        """REPORT_ILLNESS flow: check if outreach is open, ask for slip."""
-        silence = self.claims.open_silence(merchant.id)
-        if silence is None:
-            # No outreach open, send fallback
-            return await self._send_fallback_help(merchant, now)
-
-        # ASK_SLIP
-        hi_text, en_text = bilingual("ASK_SLIP")
-        msg = await self._send_message(
-            merchant, hi_text, en_text, now
-        )
-        return [msg]
-
-    async def _handle_buy_cover(
-        self, merchant: Merchant, now: datetime
-    ) -> list[Message]:
-        """BUY_COVER flow: get quote, send link or blocked."""
-        quote, payment = await self.claims.quote_cover(merchant.id)
-
-        messages = []
-
-        if quote.outcome.value == "BLOCKED":
-            # COVER_BLOCKED
-            hi_text, en_text = bilingual(
-                "COVER_BLOCKED",
-                starts_on_hi=self._format_date_hi(quote.starts_on),
-                starts_on_en=self._format_date_en(quote.starts_on),
-            )
-            msg = await self._send_message(
-                merchant,
-                hi_text,
-                en_text,
-                now,
-            )
-            messages.append(msg)
-        else:
-            # COVER_LINK
-            hi_text, en_text = bilingual(
-                "COVER_LINK",
-                first_payment=format_inr(quote.first_payment_paise),
-                per_day=format_inr(quote.premium_per_day_paise),
-                url=payment.link_url or "https://paytm.me/chhatri",
-            )
-            msg = await self._send_message(
-                merchant,
-                hi_text,
-                en_text,
-                now,
-            )
-            messages.append(msg)
-
-        return messages
-
-    async def _handle_cover_status(
-        self, merchant: Merchant, now: datetime
-    ) -> list[Message]:
-        """COVER_STATUS flow: provide information."""
-        # For now, use fallback help as no specific COVER_STATUS template
-        return await self._send_fallback_help(merchant, now)
-
-    async def _handle_acknowledge(
-        self,
-        merchant: Merchant,
-        intent: Intent,
-        now: datetime,
-    ) -> list[Message]:
-        """Handle GREETING, AFFIRM, DENY."""
-        if intent == Intent.GREETING:
-            hi_text = "नमस्ते! मैं छतरी हूँ।"
-            en_text = "Hello! I'm Chhatri."
-        elif intent == Intent.AFFIRM:
-            hi_text = "ठीक है!"
-            en_text = "Great!"
-        else:  # DENY
-            hi_text = "समझा।"
-            en_text = "Okay."
-
-        msg = await self._send_message(merchant, hi_text, en_text, now)
-        return [msg]
 
     async def _send_personal_paid(
         self,

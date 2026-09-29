@@ -42,11 +42,7 @@ def window_index(
             actual_paise += int(sub_actual.amount_paise[row].sum())
 
             # Extract P50 (middle column if 3D, otherwise use as-is)
-            exp_hours = (
-                expected_p50[row, :, 1]
-                if len(expected_p50.shape) == 3
-                else expected_p50[row, :]
-            )
+            exp_hours = expected_p50[row, :, 1] if len(expected_p50.shape) == 3 else expected_p50[row, :]
 
             # Align to window hours
             h_start = actual.hour_index(start)

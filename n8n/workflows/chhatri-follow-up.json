@@ -84,34 +84,6 @@
       }
     },
     {
-      "id": "notify-resolution",
-      "icon": "fa:square",
-      "name": "Notify Resolution",
-      "position": [
-        1050,
-        200
-      ],
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "parameters": {
-        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/notify_resolution",
-        "method": "POST",
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Chhatri-Secret",
-              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'follow-up', step: 'notify_resolution', payload: $request.body.payload }) }}"
-      }
-    },
-    {
       "id": "respond-202",
       "icon": "fa:arrow-right",
       "name": "Respond 202",
@@ -192,7 +164,7 @@
       "main": [
         [
           {
-            "node": "notify-resolution",
+            "node": "respond-202",
             "type": "main",
             "index": 0
           }

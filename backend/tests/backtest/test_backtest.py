@@ -12,7 +12,6 @@ import pytest
 from chhatri.backtest.run import (
     run_backtest,
     compute_premiums,
-    BacktestContext,
     evaluate_weather_only_trigger,
 )
 from chhatri.config import Settings
@@ -31,7 +30,7 @@ def small_city(settings):
     """Build a small city for fast tests."""
     return build_city(
         seed=settings.chhatri_seed,
-        data_dir=Path(settings.data_dir),
+        data_dir=settings.chhatri_data_dir,
         scale="small",
     )
 
@@ -39,7 +38,7 @@ def small_city(settings):
 @pytest.fixture
 def calibration(settings):
     """Load calibration."""
-    return load_calibration(Path(settings.data_dir))
+    return load_calibration(settings.chhatri_data_dir)
 
 
 class TestBacktestReportShape:

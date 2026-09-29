@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Sequence, ClassVar
+from typing import ClassVar
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import lightgbm as lgb
 
 from chhatri.domain.models import Alert
 from chhatri.money import percent_half_up
@@ -20,6 +21,7 @@ from chhatri.sim.types import City, SalesPanel
 @dataclass(frozen=True, slots=True)
 class ModelManifest:
     """Metadata about a trained model (SPEC §24.2)."""
+
     seed: int
     train_start: date
     train_end: date
@@ -103,9 +105,10 @@ class ExpectedSalesModel:
         if len(df_train) > 0:
             # Exclude rows where the zone had an alert that day
             mask_alert = df_train.apply(
-                lambda row: (row["date"] in alert_zones_by_day and
-                             row["zone_id"] in alert_zones_by_day[row["date"]]),
-                axis=1
+                lambda row: (
+                    row["date"] in alert_zones_by_day and row["zone_id"] in alert_zones_by_day[row["date"]]
+                ),
+                axis=1,
             )
             df_train = df_train[~mask_alert].copy()
 
@@ -126,8 +129,14 @@ class ExpectedSalesModel:
         # Prepare LightGBM datasets
         cat_features = ["zone_id", "shop_type"]
         feature_cols = [
-            "zone_id", "shop_type", "hour", "dow", "is_festival", "month",
-            "shop_level", "shop_hour_share"
+            "zone_id",
+            "shop_type",
+            "hour",
+            "dow",
+            "is_festival",
+            "month",
+            "shop_level",
+            "shop_hour_share",
         ]
 
         if len(df_train_set) > 0:
@@ -185,8 +194,7 @@ class ExpectedSalesModel:
             y_pred_p90_denorm = y_pred_p90 * np.exp(df_calib["shop_level"].values)
 
             # Count rows where P10 <= actual <= P90
-            covered = ((y_calib_denorm >= y_pred_p10_denorm) &
-                      (y_calib_denorm <= y_pred_p90_denorm)).sum()
+            covered = ((y_calib_denorm >= y_pred_p10_denorm) & (y_calib_denorm <= y_pred_p90_denorm)).sum()
             coverage_p10_p90 = float(covered / len(df_calib)) if len(df_calib) > 0 else 0.0
 
         # Compute lower bounds per zone via conformal calibration (SPEC §7.4)
@@ -194,9 +202,6 @@ class ExpectedSalesModel:
         # Lower bound = floor((n+1)*0.025)-th smallest value (1-based)
         lower_bound_pct: dict[str, int] = {}
         if len(df_calib) > 0 and models[0.50] is not None:
-            from chhatri.clock import at
-            from datetime import timedelta
-
             X_calib = df_calib[feature_cols]
             y_pred_p50 = models[0.50].predict(X_calib)
             df_calib["predicted_p50"] = y_pred_p50
@@ -215,9 +220,7 @@ class ExpectedSalesModel:
                     # For each 3-hour window in business hours
                     for h_start in range(0, 24, 3):
                         h_end = min(h_start + 3, 24)
-                        window_data = day_data[
-                            (day_data["hour"] >= h_start) & (day_data["hour"] < h_end)
-                        ]
+                        window_data = day_data[(day_data["hour"] >= h_start) & (day_data["hour"] < h_end)]
 
                         if len(window_data) > 0:
                             actual_sum = window_data["amount"].sum()
@@ -256,8 +259,7 @@ class ExpectedSalesModel:
         )
 
         shop_types = (
-            sorted(df_full["shop_type"].cat.categories.tolist())
-            if "shop_type" in df_full.columns else []
+            sorted(df_full["shop_type"].cat.categories.tolist()) if "shop_type" in df_full.columns else []
         )
         metadata = {
             "feature_cols": feature_cols,
@@ -302,18 +304,22 @@ class ExpectedSalesModel:
 
         manifest_path = directory / "manifest.json"
         with open(manifest_path, "w") as f:
-            json.dump({
-                "seed": self.manifest.seed,
-                "train_start": self.manifest.train_start.isoformat(),
-                "train_end": self.manifest.train_end.isoformat(),
-                "calib_start": self.manifest.calib_start.isoformat(),
-                "calib_end": self.manifest.calib_end.isoformat(),
-                "rows_train": self.manifest.rows_train,
-                "rows_calib": self.manifest.rows_calib,
-                "pinball": self.manifest.pinball,
-                "coverage_p10_p90": self.manifest.coverage_p10_p90,
-                "lower_bound_pct": self.manifest.lower_bound_pct,
-            }, f, indent=2)
+            json.dump(
+                {
+                    "seed": self.manifest.seed,
+                    "train_start": self.manifest.train_start.isoformat(),
+                    "train_end": self.manifest.train_end.isoformat(),
+                    "calib_start": self.manifest.calib_start.isoformat(),
+                    "calib_end": self.manifest.calib_end.isoformat(),
+                    "rows_train": self.manifest.rows_train,
+                    "rows_calib": self.manifest.rows_calib,
+                    "pinball": self.manifest.pinball,
+                    "coverage_p10_p90": self.manifest.coverage_p10_p90,
+                    "lower_bound_pct": self.manifest.lower_bound_pct,
+                },
+                f,
+                indent=2,
+            )
 
         metadata_path = directory / "metadata.json"
         with open(metadata_path, "w") as f:
@@ -405,7 +411,7 @@ class ExpectedSalesModel:
 
             # Build features for this hour
             rows_list = []
-            for row_idx, merchant in enumerate(city.merchants):
+            for _row_idx, merchant in enumerate(city.merchants):
                 profile = city.profiles[merchant.id]
 
                 # Skip if outside business hours or weekly off
@@ -416,6 +422,7 @@ class ExpectedSalesModel:
 
                 # Estimate shop_level from history
                 from chhatri.forecast.features import _compute_shop_level, _is_festival_day
+
                 shop_level = _compute_shop_level(merchant.id, day, history_for_features, city)
 
                 # Compute shop_hour_share from historical patterns (last 56 normal days)
@@ -433,16 +440,18 @@ class ExpectedSalesModel:
                     if day_total > 0:
                         shop_hour_share = hour_amount / day_total
 
-                rows_list.append({
-                    "zone_id": merchant.zone_id,
-                    "shop_type": merchant.shop_type,
-                    "hour": hour,
-                    "dow": dow,
-                    "is_festival": 1 if _is_festival_day(day) else 0,
-                    "month": month,
-                    "shop_level": shop_level,
-                    "shop_hour_share": shop_hour_share,
-                })
+                rows_list.append(
+                    {
+                        "zone_id": merchant.zone_id,
+                        "shop_type": merchant.shop_type,
+                        "hour": hour,
+                        "dow": dow,
+                        "is_festival": 1 if _is_festival_day(day) else 0,
+                        "month": month,
+                        "shop_level": shop_level,
+                        "shop_hour_share": shop_hour_share,
+                    }
+                )
 
             if rows_list:
                 df_hour = pd.DataFrame(rows_list)
@@ -466,17 +475,14 @@ class ExpectedSalesModel:
                             profile = city.profiles[merchant.id]
                             is_open = profile.is_business_hour(hour)
                             not_off = merchant.weekly_off is None or dow != merchant.weekly_off
-                            if is_open and not_off:
-                                if pred_idx < len(preds):
-                                    # Convert from target (normalized) to paise
-                                    if pred_idx < len(rows_list):
-                                        shop_level = rows_list[pred_idx]["shop_level"]
-                                    else:
-                                        shop_level = 0
-                                    result[row_idx, h, q_idx] = (
-                                        preds[pred_idx] * np.exp(shop_level)
-                                    )
-                                    pred_idx += 1
+                            if is_open and not_off and pred_idx < len(preds):
+                                # Convert from target (normalized) to paise
+                                if pred_idx < len(rows_list):
+                                    shop_level = rows_list[pred_idx]["shop_level"]
+                                else:
+                                    shop_level = 0
+                                result[row_idx, h, q_idx] = preds[pred_idx] * np.exp(shop_level)
+                                pred_idx += 1
 
         return result
 

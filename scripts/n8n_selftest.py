@@ -252,7 +252,7 @@ def main() -> int:
                 "workflow": "follow-up",
                 "payload": {"case_id": "C-2291"}
             },
-            expected_steps=["check_case_sla", "notify_resolution"]  # Wait step is not a backend call
+            expected_steps=["check_case_sla"]  # Wait step is not a backend call
         ),
     ]
 

@@ -50,12 +50,14 @@ def find_silent(
             p10, p50, p90 = day_range
 
             if p10 > 0:
-                findings.append(SilentFinding(
-                    merchant_id=merchant_id,
-                    day=day,
-                    expected_day_paise=p50,
-                    p10_day_paise=p10,
-                ))
+                findings.append(
+                    SilentFinding(
+                        merchant_id=merchant_id,
+                        day=day,
+                        expected_day_paise=p50,
+                        p10_day_paise=p10,
+                    )
+                )
 
     return tuple(findings)
 

@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy backend code
 COPY backend/ .
 
-# Install Python dependencies (the package + extras)
-RUN pip install --no-cache-dir -e .[dev]
+# Install Python dependencies (production; dev tools not needed in runtime)
+RUN pip install --no-cache-dir -e .
 
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \

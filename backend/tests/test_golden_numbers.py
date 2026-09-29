@@ -8,16 +8,13 @@ Run with: pytest -m slow tests/test_golden_numbers.py
 
 from __future__ import annotations
 
-import json
 import logging
-import os
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 import pytest
 
-from chhatri.clock import at, ist
-from chhatri.domain.enums import DecisionOutcome
+from chhatri.clock import at
 from chhatri.forecast.model import ExpectedSalesModel
 from chhatri.policy.engine import publish_expected_day
 from chhatri.sim.calibration import load_calibration
@@ -99,8 +96,6 @@ class TestGoldenNumbers:
         sales = simulator.generate(replay_date, replay_date)
 
         # Compute indices at 17:00 (hour 17)
-        from chhatri.detect.area_index import zone_window
-        import numpy as np
 
         # Get predictions for the day
         predictions = self.model.predict(self.city, None, at(replay_date, 0), 24)
@@ -157,8 +152,8 @@ class TestGoldenNumbers:
         replay_date = date(2025, 8, 19)
         scenario = get_scenario("monsoon", self.city, self.calibration)
 
-        from chhatri.sim.weather import build_shocks
         from chhatri.sim.sales import SalesSimulator
+        from chhatri.sim.weather import build_shocks
 
         shocks = build_shocks(
             self.city,

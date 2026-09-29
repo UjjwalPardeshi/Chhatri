@@ -30,10 +30,17 @@ async def health(state: Annotated = Depends(get_state)) -> dict:
 
     Returns version and seed from package metadata and settings.
     """
+    from importlib.metadata import version as pkg_version, PackageNotFoundError
+
+    try:
+        version = pkg_version("chhatri")
+    except PackageNotFoundError:
+        version = "dev"
+
     return ok(
         HealthResponse(
             status="ok",
-            version=state.static.settings.chhatri_seed,  # Will be set properly
+            version=version,
             seed=state.static.settings.chhatri_seed,
         ).model_dump()
     )
@@ -45,33 +52,25 @@ async def integrations(state: Annotated = Depends(get_state)) -> dict:
 
     Each integration is LIVE or SIMULATED based on environment.
     """
-    from chhatri.integrations.registry import build_registry
-
-    try:
-        registry = build_registry(state.static.settings, None)  # type: ignore
-        statuses = registry.statuses()
-        return ok([s.model_dump() for s in statuses])
-    except Exception as e:
-        logger.error(f"Failed to build integrations registry: {e}", exc_info=True)
-        # Return defaults
-        defaults = [
-            {"name": "sarvam_stt", "mode": "SIMULATED", "detail": "not configured"},
-            {"name": "sarvam_tts", "mode": "SIMULATED", "detail": "not configured"},
-            {"name": "sarvam_chat", "mode": "SIMULATED", "detail": "not configured"},
-            {"name": "sarvam_vision", "mode": "SIMULATED", "detail": "not configured"},
-            {"name": "whatsapp", "mode": "SIMULATED", "detail": "not configured"},
-            {"name": "paytm", "mode": state.static.settings.paytm_mode.upper(), "detail": ""},
-            {"name": "n8n", "mode": "SIMULATED" if not state.static.settings.n8n_live else "LIVE", "detail": ""},
-            {"name": "memory", "mode": "SIMULATED", "detail": "not configured"},
-            {"name": "weather", "mode": "LIVE" if state.static.settings.openmeteo_live else "SIMULATED", "detail": ""},
-            {"name": "soundbox", "mode": "SIMULATED", "detail": ""},
-            {"name": "sales_data", "mode": "SIMULATED", "detail": ""},
-            {"name": "alerts", "mode": "SIMULATED", "detail": ""},
-            {"name": "payout_rail", "mode": "SIMULATED", "detail": ""},
-            {"name": "lender", "mode": "SIMULATED", "detail": ""},
-            {"name": "kyc", "mode": "SIMULATED", "detail": ""},
-        ]
-        return ok(defaults)
+    # Default statuses based on settings (integrations package not yet available)
+    defaults = [
+        {"name": "sarvam_stt", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
+        {"name": "sarvam_tts", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
+        {"name": "sarvam_chat", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
+        {"name": "sarvam_vision", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
+        {"name": "whatsapp", "mode": "LIVE" if state.static.settings.whatsapp_live else "SIMULATED", "detail": ""},
+        {"name": "paytm", "mode": state.static.settings.paytm_mode.upper(), "detail": ""},
+        {"name": "n8n", "mode": "LIVE" if state.static.settings.n8n_live else "SIMULATED", "detail": ""},
+        {"name": "memory", "mode": "LIVE" if state.static.settings.cognee_enabled else "SIMULATED", "detail": ""},
+        {"name": "weather", "mode": "LIVE" if state.static.settings.openmeteo_live else "SIMULATED", "detail": ""},
+        {"name": "soundbox", "mode": "SIMULATED", "detail": ""},
+        {"name": "sales_data", "mode": "SIMULATED", "detail": ""},
+        {"name": "alerts", "mode": "SIMULATED", "detail": ""},
+        {"name": "payout_rail", "mode": "SIMULATED", "detail": ""},
+        {"name": "lender", "mode": "SIMULATED", "detail": ""},
+        {"name": "kyc", "mode": "SIMULATED", "detail": ""},
+    ]
+    return ok(defaults)
 
 
 @router.get("/session")

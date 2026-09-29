@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, timedelta
-from typing import Mapping
 
 import numpy as np
 
@@ -60,6 +60,7 @@ def calibrate_lower_bounds(
             for hour_start in range(0, 24, 3):  # 0, 3, 6, 9, ...
                 try:
                     from chhatri.clock import at
+
                     window_start = at(current_date, hour_start)
                     window_end = window_start + timedelta(hours=3)
 

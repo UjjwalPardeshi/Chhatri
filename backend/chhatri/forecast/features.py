@@ -11,17 +11,14 @@ from chhatri.sim.types import City, SalesPanel
 
 # Festival windows (SPEC §6.2, §7.1)
 GANESH_CHATURTHI_WINDOWS = [
-    (date(2024, 9, 7), date(2024, 9, 16)),   # 2024: 7 Sep + 10 days (through 16 Sep inclusive)
-    (date(2025, 8, 27), date(2025, 9, 5)),   # 2025: 27 Aug + 10 days (through 5 Sep inclusive)
+    (date(2024, 9, 7), date(2024, 9, 16)),  # 2024: 7 Sep + 10 days (through 16 Sep inclusive)
+    (date(2025, 8, 27), date(2025, 9, 5)),  # 2025: 27 Aug + 10 days (through 5 Sep inclusive)
 ]
 
 
 def _is_festival_day(day: date) -> bool:
     """Check if day falls in a festival window."""
-    for start, end in GANESH_CHATURTHI_WINDOWS:
-        if start <= day <= end:
-            return True
-    return False
+    return any(start <= day <= end for start, end in GANESH_CHATURTHI_WINDOWS)
 
 
 def _compute_shop_level(
@@ -147,20 +144,22 @@ def construct_features(
                 exp_shop_level = np.exp(shop_level)
                 target = amount_paise / exp_shop_level if exp_shop_level > 0 else 0.0
 
-                rows_list.append({
-                    "merchant_id": merchant_id,
-                    "zone_id": merchant.zone_id,
-                    "shop_type": merchant.shop_type,
-                    "hour": hour,
-                    "dow": current_date.weekday(),
-                    "is_festival": 1 if _is_festival_day(current_date) else 0,
-                    "month": current_date.month,
-                    "date": current_date,  # For filtering in model training
-                    "shop_level": shop_level,
-                    "shop_hour_share": shop_hour_share,
-                    "amount": amount_paise,
-                    "target": target,
-                })
+                rows_list.append(
+                    {
+                        "merchant_id": merchant_id,
+                        "zone_id": merchant.zone_id,
+                        "shop_type": merchant.shop_type,
+                        "hour": hour,
+                        "dow": current_date.weekday(),
+                        "is_festival": 1 if _is_festival_day(current_date) else 0,
+                        "month": current_date.month,
+                        "date": current_date,  # For filtering in model training
+                        "shop_level": shop_level,
+                        "shop_hour_share": shop_hour_share,
+                        "amount": amount_paise,
+                        "target": target,
+                    }
+                )
 
         current_date += timedelta(days=1)
 
@@ -168,10 +167,22 @@ def construct_features(
 
     if len(df) == 0:
         # Empty dataframe with correct columns
-        return pd.DataFrame(columns=[
-            "merchant_id", "zone_id", "shop_type", "hour", "dow", "is_festival", "month", "date",
-            "shop_level", "shop_hour_share", "amount", "target"
-        ])
+        return pd.DataFrame(
+            columns=[
+                "merchant_id",
+                "zone_id",
+                "shop_type",
+                "hour",
+                "dow",
+                "is_festival",
+                "month",
+                "date",
+                "shop_level",
+                "shop_hour_share",
+                "amount",
+                "target",
+            ]
+        )
 
     # Convert shop_type to categorical with fixed categories
     df["shop_type"] = pd.Categorical(df["shop_type"], categories=all_shop_types, ordered=False)

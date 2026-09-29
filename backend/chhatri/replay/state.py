@@ -25,10 +25,11 @@ from chhatri.ids import IdFactory
 from chhatri.integrations.registry import build_integrations
 from chhatri.policy.rules import PolicyRules, default_rules
 from chhatri.sim.calibration import load_calibration
+from chhatri.sim.calibration import Calibration
 from chhatri.sim.city import build_city
 from chhatri.sim.geo import build_geography
 from chhatri.sim.sales import SalesSimulator
-from chhatri.sim.scenarios import SCENARIOS, get_scenario
+from chhatri.sim.scenarios import get_scenario
 from chhatri.sim.weather import build_shocks
 from chhatri.store.repositories import Store
 
@@ -204,7 +205,8 @@ class AppState:
             ValueError: unknown scenario name.
             RuntimeError: model missing (required for decisions).
         """
-        if scenario_name not in SCENARIOS:
+        valid_scenarios = ("monsoon", "illness", "illness_mismatch", "buy_cover")
+        if scenario_name not in valid_scenarios:
             raise ValueError(f"Unknown scenario: {scenario_name}")
 
         if self.static.model is None:

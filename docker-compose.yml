@@ -69,9 +69,10 @@ services:
   # Requires: N8N_BASE_URL environment variable to be set
   # Workflows auto-imported + activated on startup via entrypoint script
   n8n:
-    image: docker.n8n.io/n8nio/n8n:1.70.1
+    image: docker.n8n.io/n8nio/n8n:2.2.0
     ports:
       - "5678:5678"
+    entrypoint: /workflows/entrypoint.sh
     environment:
       DB_TYPE: sqlite
       DB_SQLITE_PATH: /home/node/.n8n/database.sqlite
