@@ -1,111 +1,208 @@
-"""Backtest runner (SPEC §18, §19.2, §24.6).
+"""Backtest runner (SPEC §18, §24.6 artefacts; decision B6).
 
-Runs historical monsoon seasons (2024 Jun-Sep, 2025 Jun-Sep) on simulated sales with real
-Open-Meteo rainfall. Compares Chhatri's area trigger against a weather-only baseline.
-Computes loss ratios and premiums per zone.
-
-Determinism: same seed + calibration → byte-identical report.json.
+`run_backtest` replays each season of the configuration on the simulated world (`world.py`):
+1. train the season's rolling-origin model and predict its alerted days (`forecasting.py`);
+2. scan Chhatri's SPEC §8.2 trigger at every hour boundary under an alert (`triggers.py`);
+3. plan personal claims from silent-shop detection (`personal.py`);
+4. decide every Chhatri area claim and personal claim with the policy engine in time order, so the
+   rolling annual limit and NOT_ALREADY_PAID see earlier payments (`area.py`, `personal.py`);
+5. pay the weather-only baseline on its own ledger (`area.py`);
+6. read the ground truth (`SalesSimulator.ground_truth`) for the real drops.
+Then it computes the metrics and premiums (`metrics.py`) and writes report.json, report.md and
+premiums.json (`report.py`). The same seed, calibration and configuration give byte-identical files.
 """
 
 from __future__ import annotations
 
-import json
 import logging
+import time
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from types import MappingProxyType
+from typing import Any, Final
 
-import numpy as np
-import pandas as pd
-from decimal import Decimal
-
+from chhatri.backtest.area import alerts_by_id, decide_trigger, decide_weather_day
+from chhatri.backtest.config import DEFAULT_CONFIG, BacktestConfig, Season
+from chhatri.backtest.forecasting import forecast_season, season_model
+from chhatri.backtest.ledger import ClaimOutcome, Ledger
+from chhatri.backtest.metrics import (
+    ZoneDay,
+    drop_breakdown,
+    paid_zone_days,
+    personal_metrics,
+    real_drops,
+    trigger_metrics,
+    trigger_to_money,
+    zone_economics,
+)
+from chhatri.backtest.notes import WEATHER_TO_MONEY, NoteFacts, build_notes
+from chhatri.backtest.personal import PersonalClaimPlan, decide_personal, plan_claims
+from chhatri.backtest.report import ReportInputs, build_report, write_outputs
+from chhatri.backtest.triggers import scan_chhatri, trigger_day, weather_only_days
+from chhatri.backtest.world import World, build_world, check_world, season_covers
 from chhatri.clock import at
 from chhatri.config import Settings
-from chhatri.detect.triggers import evaluate_hour
+from chhatri.domain.enums import ClaimKind
+from chhatri.domain.models import AreaTrigger, Cover
 from chhatri.forecast.model import ExpectedSalesModel
-from chhatri.money import format_inr, percent_half_up, round_to_ten_rupees, to_decimal
-from chhatri.policy.engine import publish_expected_day
-from chhatri.policy.rules import default_rules
-from chhatri.sim.calibration import Calibration
-from chhatri.sim.city import build_city
-from chhatri.sim.sales import SalesSimulator
-from chhatri.sim.weather import build_shocks
-from chhatri.sim.types import City
-from chhatri.policy.rules import PolicyRules
+from chhatri.ids import IdFactory
+from chhatri.policy.rules import PolicyRules, default_rules
+from chhatri.sim.types import Calibration
 
 logger = logging.getLogger(__name__)
 
+P50: Final = 1  # day_ranges_paise → (p10, p50, p90)
 
-def compute_premiums(
-    zones: Sequence[Any],
-    zone_expected_annual_loss: Mapping[str, Decimal],
-    rules: PolicyRules,
-) -> dict[str, int]:
-    """Compute premiums per zone using expected annual loss (SPEC §9.7).
 
-    Premium = max(min_per_day, expected_annual_loss / 365 / (1 - loading))
+@dataclass(frozen=True, slots=True)
+class SeasonResult:
+    season: Season
+    chhatri: tuple[ClaimOutcome, ...]  # area and personal, in decision order
+    weather: tuple[ClaimOutcome, ...]
+    real_drops: frozenset[ZoneDay]
+    drop_labels: Mapping[ZoneDay, str]
+    model: ExpectedSalesModel
 
-    Args:
-        zones: Zones from city
-        zone_expected_annual_loss: Expected annual loss in paise per zone
-        rules: Policy rules with loading and min_per_day
 
-    Returns:
-        {zone_id: premium_per_day_paise}
-    """
-    premiums = {}
-    min_paise = rules.premium.min_per_day_rupees * 100
-    loading = to_decimal(rules.premium.loading)
+@dataclass(frozen=True, slots=True)
+class _RunContext:
+    settings: Settings
+    config: BacktestConfig
+    rules: PolicyRules
+    ids: IdFactory
+    chhatri_ledger: Ledger
+    weather_ledger: Ledger
+    models: Mapping[Season, ExpectedSalesModel]
 
-    for zone in zones:
-        loss_paise = zone_expected_annual_loss.get(zone.id, Decimal(0))
 
-        # Premium = loss / 365 / (1 - loading)
-        denominator = Decimal(365) * (Decimal(1) - loading)
-        if denominator == 0:
-            premium_paise = min_paise
+def _p50(model: ExpectedSalesModel, world: World, day: date, ids: Sequence[str]) -> dict[str, int]:
+    ranges = model.day_ranges_paise(world.city, world.history, day, ids)
+    return {mid: value[P50] for mid, value in ranges.items()}
+
+
+def _chhatri_claims(
+    world: World,
+    model: ExpectedSalesModel,
+    triggers: Sequence[AreaTrigger],
+    plans: Sequence[PersonalClaimPlan],
+    covers: Mapping[str, Cover],
+    ctx: _RunContext,
+) -> tuple[ClaimOutcome, ...]:
+    """Area and personal decisions in time order on the shared Chhatri ledger."""
+    alerts = alerts_by_id(world.shocks.alerts)
+    events: list[tuple[datetime, int, str, AreaTrigger | PersonalClaimPlan]] = [
+        (t.fired_at, 0, t.id, t) for t in triggers
+    ]
+    events.extend((p.claim_at, 1, p.merchant_id, p) for p in plans)
+    outcomes: list[ClaimOutcome] = []
+    for _time, _order, _key, event in sorted(events, key=lambda e: (e[0], e[1], e[2])):
+        if isinstance(event, AreaTrigger):
+            expected = _p50(model, world, trigger_day(event), world.covered_ids(event.zone_id))
+            outcomes.extend(
+                decide_trigger(
+                    event,
+                    alerts[event.alert_id],
+                    city=world.city,
+                    covers=covers,
+                    expected_day=expected,
+                    ledger=ctx.chhatri_ledger,
+                    rules=ctx.rules,
+                    ids=ctx.ids,
+                )
+            )
         else:
-            premium = (loss_paise / denominator)
-            premium_paise = max(int(premium), min_paise)
+            outcomes.append(
+                decide_personal(
+                    event, world=world, covers=covers, ledger=ctx.chhatri_ledger, rules=ctx.rules, ids=ctx.ids
+                )
+            )
+    return tuple(outcomes)
 
-        premiums[zone.id] = premium_paise
 
-    return premiums
+def _weather_claims(
+    world: World, model: ExpectedSalesModel, season: Season, ctx: _RunContext
+) -> tuple[ClaimOutcome, ...]:
+    by_day: dict[date, list[str]] = {}
+    for zone_id, day in weather_only_days(world, season):
+        by_day.setdefault(day, []).append(zone_id)
+    outcomes: list[ClaimOutcome] = []
+    for day in sorted(by_day):
+        ids = [mid for zone_id in by_day[day] for mid in world.covered_ids(zone_id)]
+        expected = _p50(model, world, day, ids) if ids else {}
+        for zone_id in by_day[day]:
+            zone_expected = {mid: expected[mid] for mid in world.covered_ids(zone_id)}
+            outcomes.extend(
+                decide_weather_day(
+                    zone_id, day, expected_day=zone_expected, ledger=ctx.weather_ledger, rules=ctx.rules
+                )
+            )
+    return tuple(outcomes)
 
 
-def evaluate_weather_only_trigger(
-    city: City,
-    shocks,
-    zone_rows: tuple[int, ...],
-    zone_id: str,
-    at_datetime: datetime,
-) -> bool:
-    """Weather-only trigger: reference grid point daily rain >= 64.5mm (SPEC §18).
+def run_season(world: World, season: Season, ctx: _RunContext) -> SeasonResult:
+    """Steps 1–6 of the module docstring for one season."""
+    started = time.perf_counter()
+    seed = ctx.settings.chhatri_seed
+    model = season_model(world, season, ctx.config, seed, ctx.models.get(season))
+    forecast = forecast_season(world, season, model)
+    triggers = scan_chhatri(world, forecast, ctx.rules, model.manifest.lower_bound_pct)
+    area_zones: dict[date, frozenset[str]] = {}
+    for trigger in triggers:
+        day = trigger_day(trigger)
+        area_zones[day] = area_zones.get(day, frozenset()) | {trigger.zone_id}
+    plans = plan_claims(world, model, season, area_zones, seed, workers=ctx.config.num_threads)
+    covers = season_covers(world, season, ctx.rules.cover.waiting_period_days, ctx.config.history_end)
+    chhatri = _chhatri_claims(world, model, triggers, plans, covers, ctx)
+    weather = _weather_claims(world, model, season, ctx)
+    truth = world.simulator.ground_truth(season.start, season.end)
+    drops = real_drops(truth)
+    logger.info("%s done in %.1f s: %d real drops", season.label, time.perf_counter() - started, len(drops))
+    return SeasonResult(
+        season=season,
+        chhatri=chhatri,
+        weather=weather,
+        real_drops=drops,
+        drop_labels=MappingProxyType({k: truth.zone_day_label[k] for k in sorted(drops)}),
+        model=model,
+    )
 
-    Args:
-        city: City with zones
-        shocks: ShockCalendar
-        zone_rows: Merchant row indices in zone
-        zone_id: Zone ID
-        at_datetime: Trigger evaluation time (hour boundary)
 
-    Returns:
-        True if trigger fires for this zone at this hour
-    """
-    if not zone_rows:
-        return False
-
-    # Check daily rain for the trigger day
-    day_start = at_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
-    total_rain = 0.0
-
-    for hour_offset in range(24):
-        hour_start = day_start + timedelta(hours=hour_offset)
-        rain_mm = shocks.rain_mm(zone_id, hour_start)
-        total_rain += rain_mm
-
-    # Trigger if daily total >= 64.5mm (SPEC §18)
-    return total_rain >= 64.5
+def _report(
+    world: World, results: Sequence[SeasonResult], ctx: _RunContext
+) -> tuple[dict[str, Any], dict[str, int]]:
+    chhatri = [o for r in results for o in r.chhatri]
+    weather = [o for r in results for o in r.weather]
+    drops = frozenset(zd for r in results for zd in r.real_drops)
+    zone_ids = [z.id for z in world.city.zones]
+    shops = {z: len(world.covered_ids(z)) for z in zone_ids}
+    zones = zone_economics(zone_ids, shops, chhatri, drops, len(results), ctx.rules)
+    personal = personal_metrics(chhatri)
+    facts = NoteFacts(
+        world=world,
+        seasons=tuple(r.season for r in results),
+        manifests=tuple(r.model.manifest for r in results),
+        drops=drop_breakdown(
+            {k: v for r in results for k, v in r.drop_labels.items()},
+            paid_zone_days(chhatri),
+            paid_zone_days(weather),
+        ),
+        personal=personal,
+        rules=ctx.rules,
+    )
+    inputs = ReportInputs(
+        seasons=tuple(r.season.label for r in results),
+        generated_at=at(results[-1].season.end + timedelta(days=1), 0).isoformat(),
+        chhatri=trigger_metrics("chhatri", chhatri, drops),
+        chhatri_to_money=trigger_to_money([o for o in chhatri if o.kind is ClaimKind.AREA], ctx.rules),
+        weather=trigger_metrics("weather_only", weather, drops),
+        weather_to_money=WEATHER_TO_MONEY,
+        zones=zones,
+        personal=personal,
+        notes=build_notes(facts),
+    )
+    return build_report(inputs), {z.zone_id: z.premium_per_day_paise for z in zones}
 
 
 def run_backtest(
@@ -113,305 +210,28 @@ def run_backtest(
     *,
     settings: Settings,
     calibration: Calibration,
+    config: BacktestConfig = DEFAULT_CONFIG,
+    rules: PolicyRules | None = None,
+    world: World | None = None,
+    models: Mapping[Season, ExpectedSalesModel] | None = None,
 ) -> dict[str, Any]:
-    """Run backtest on 2024 and 2025 monsoon seasons.
+    """Run the SPEC §18 backtest, write report.json, report.md and premiums.json, return the report.
 
-    SPEC §18: Replays two past monsoons (1 Jun–30 Sep 2024 and 2025) on simulated sales
-    driven by real Open-Meteo rainfall with rolling-origin models. Compares Chhatri's
-    trigger against weather-only trigger. Outputs report.json, report.md, premiums.json.
-
-    Args:
-        artifacts_dir: Directory to write backtest/ and premiums.json
-        settings: Application settings
-        calibration: City calibration data
-
-    Returns:
-        Backtest report dict (matching BacktestReport type from §19.2)
+    `world` and `models` let a caller reuse a world built by `build_world(config, ...)` and season
+    models trained on it; they are checked against the configuration and seed (ValueError) and give
+    the same report as building and training them here.
     """
-    backtest_dir = artifacts_dir / "backtest"
-    backtest_dir.mkdir(parents=True, exist_ok=True)
-
-    # Build city
-    city = build_city(
-        seed=settings.chhatri_seed,
-        data_dir=settings.chhatri_data_dir,
-        calibration=calibration,
+    started = time.perf_counter()
+    rules = rules if rules is not None else default_rules()
+    seed = settings.chhatri_seed
+    if world is None:
+        world = build_world(config, settings=settings, calibration=calibration)
+    world = check_world(world, config, seed)
+    ctx = _RunContext(
+        settings, config, rules, IdFactory(), Ledger(), Ledger(), MappingProxyType(dict(models or {}))
     )
-
-    # Load or create models
-    model_2024 = None
-    model_2025 = None
-    model_error = None
-
-    model_dir = artifacts_dir / "model"
-    if model_dir.exists():
-        try:
-            model_2024 = ExpectedSalesModel.load(model_dir)
-            model_2025 = model_2024  # Same model for both years in current setup
-        except Exception as e:
-            logger.warning(f"Could not load model: {e}")
-            model_error = str(e)
-
-    rules = default_rules()
-
-    # Initialize tracking structures
-    seasons_data = []
-    zone_expected_annual_paise = {zone.id: Decimal(0) for zone in city.zones}
-    all_chhatri_triggers = []
-    all_weather_triggers = []
-    zone_day_has_real_drop = {}
-    personal_claims_data = {"total": 0, "auto_paid": 0, "referred": 0}
-
-    # Process each season
-    for year in [2024, 2025]:
-        season_start = date(year, 6, 1)
-        season_end = date(year, 9, 30)
-
-        logger.info(f"Processing {year} season: {season_start} to {season_end}")
-
-        # Build shocks for this season
-        shocks = build_shocks(city, settings.chhatri_data_dir, settings.chhatri_seed)
-
-        # Generate sales
-        sales_sim = SalesSimulator(city, shocks, settings.chhatri_seed)
-        sales = sales_sim.generate(season_start, season_end)
-        ground_truth = sales_sim.ground_truth(season_start, season_end)
-
-        # Get expected sales (p50) from model or dummy
-        if model_2024 or model_2025:
-            model = model_2024 if year == 2024 else model_2025
-            # Use model's expected day for each merchant/day
-            # For now, use simple approach: create dummy p50 array
-            expected_p50 = np.zeros((len(city.merchants), 24, 3))
-            for row, merchant in enumerate(city.merchants):
-                try:
-                    expected = model.expected_day_paise(city, sales, merchant.id, season_start)
-                    expected_p50[row, :, 1] = expected / 24  # Simple split across 24 hours
-                except Exception:
-                    expected_p50[row, :, 1] = 5000  # Dummy
-        else:
-            # Dummy expectations
-            expected_p50 = np.full((len(city.merchants), 24, 3), 5000, dtype=np.float64)
-
-        # Track triggers and real drops
-        alerts = shocks.alerts_between(
-            at(season_start, 0, 0, 0),
-            at(season_end, 23, 59, 59),
-        )
-        already_triggered = frozenset()
-
-        # Mark real drops in this season
-        for (zone_id, day), loss_pct in ground_truth.zone_day_loss_pct.items():
-            if loss_pct >= 40.0 and season_start <= day <= season_end:
-                zone_day_has_real_drop[(zone_id, day)] = True
-
-        # Simulate hour-by-hour evaluation (simplified)
-        for day_offset in range((season_end - season_start).days + 1):
-            eval_day = season_start + timedelta(days=day_offset)
-            eval_hour = at(eval_day, 0, 0, 0)
-
-            try:
-                lower_bounds = {
-                    z.id: (model_2024.lower_bound_pct(z.id) if model_2024 else 50)
-                    for z in city.zones
-                }
-                chhatri_triggers, zone_states = evaluate_hour(
-                    eval_hour,
-                    city,
-                    sales,
-                    expected_p50,
-                    alerts,
-                    lower_bounds,
-                    rules,
-                    already_triggered,
-                )
-                all_chhatri_triggers.extend(chhatri_triggers)
-                already_triggered = already_triggered | {
-                    (t.zone_id, t.window_start.date()) for t in chhatri_triggers
-                }
-            except Exception as e:
-                logger.debug(f"Trigger eval error at {eval_hour}: {e}")
-
-            # Weather-only trigger evaluation
-            for zone in city.zones:
-                zone_rows = city.zone_rows(zone.id)
-                if evaluate_weather_only_trigger(city, shocks, zone_rows, zone.id, eval_hour):
-                    all_weather_triggers.append((zone.id, eval_day))
-
-            # Accumulate expected sales
-            for merchant in city.merchants:
-                try:
-                    expected_day = model_2024.expected_day_paise(city, sales, merchant.id, eval_day) if model_2024 else 500000
-                    zone_expected_annual_paise[merchant.zone_id] += Decimal(expected_day)
-                except Exception:
-                    zone_expected_annual_paise[merchant.zone_id] += Decimal(500000)
-
-        seasons_data.append({
-            "start": season_start.isoformat(),
-            "end": season_end.isoformat(),
-        })
-
-    # Compute premiums
-    premiums = compute_premiums(city.zones, zone_expected_annual_paise, rules)
-
-    # Compute aggregated metrics
-    total_real_drops = len(zone_day_has_real_drop)
-
-    # Chhatri: count triggers that align with real drops
-    chhatri_triggered_days = {(t.zone_id, t.window_start.date()) for t in all_chhatri_triggers}
-    chhatri_real_drops_paid = len(chhatri_triggered_days & set(zone_day_has_real_drop.keys()))
-    chhatri_payouts = len(all_chhatri_triggers)
-    chhatri_payouts_no_real_drop = chhatri_payouts - chhatri_real_drops_paid
-
-    # Weather-only: count weather triggers aligned with real drops
-    weather_triggered_days = set(all_weather_triggers)
-    weather_real_drops_paid = len(weather_triggered_days & set(zone_day_has_real_drop.keys()))
-    weather_payouts = len(weather_triggered_days)
-    weather_payouts_no_real_drop = weather_payouts - weather_real_drops_paid
-
-    def safe_divide(numerator: int | float, denominator: int | float) -> float:
-        """Safely divide, returning 0 if denominator is 0."""
-        if denominator == 0:
-            return 0.0
-        return float(numerator) / float(denominator)
-
-    # generated_at: deterministic from seed (not wall-clock)
-    generated_at = f"backtest-{settings.chhatri_seed}"
-
-    report: dict[str, Any] = {
-        "label": "simulated sales · real Open-Meteo rainfall",
-        "seasons": [f"{s['start']}..{s['end']}" for s in seasons_data],
-        "generated_at": generated_at,
-        "triggers": [
-            {
-                "name": "chhatri",
-                "real_drops": total_real_drops,
-                "real_drops_paid": chhatri_real_drops_paid,
-                "recall": safe_divide(chhatri_real_drops_paid, total_real_drops),
-                "payouts": chhatri_payouts,
-                "payouts_no_real_drop": chhatri_payouts_no_real_drop,
-                "false_positive_rate": safe_divide(chhatri_payouts_no_real_drop, chhatri_payouts),
-                "paid_paise": 0,  # Placeholder
-                "trigger_to_money": "4 minutes",
-                "documents_per_area_claim": 0,
-            },
-            {
-                "name": "weather_only",
-                "real_drops": total_real_drops,
-                "real_drops_paid": weather_real_drops_paid,
-                "recall": safe_divide(weather_real_drops_paid, total_real_drops),
-                "payouts": weather_payouts,
-                "payouts_no_real_drop": weather_payouts_no_real_drop,
-                "false_positive_rate": safe_divide(weather_payouts_no_real_drop, weather_payouts),
-                "paid_paise": 0,  # Placeholder
-                "trigger_to_money": "same day (IMD reference)",
-                "documents_per_area_claim": 0,
-            },
-        ],
-        "zones": [],
-        "personal": personal_claims_data,
-        "notes": [
-            "Models trained on rolling-origin windows per SPEC §18",
-            "Weather-only trigger: reference grid daily rain >= 64.5mm",
-            "Real drop: zone-day with >=40% shock-caused loss",
-            "Premiums computed from expected annual loss / (1 - loading)",
-        ],
-    }
-
-    if model_error:
-        report["notes"].append(f"Model loading note: {model_error}")
-
-    # Add per-zone metrics
-    for zone in city.zones:
-        zone_id = zone.id
-        premiums_paise = premiums.get(zone_id, rules.premium.min_per_day_rupees * 100)
-        zone_data = {
-            "zone_id": zone_id,
-            "premium_per_day_label": format_inr(premiums_paise),
-            "premiums_paise": premiums_paise,
-            "payouts_paise": 0,  # Placeholder
-            "loss_ratio": 0.0,  # Placeholder
-            "chhatri_fp": chhatri_payouts_no_real_drop,
-            "chhatri_fn": 0,  # Placeholder
-        }
-        report["zones"].append(zone_data)
-
-    # Write outputs
-    report_json_path = backtest_dir / "report.json"
-    with open(report_json_path, "w") as f:
-        json.dump(report, f, indent=2)
-    logger.info(f"Wrote {report_json_path}")
-
-    premiums_json_path = artifacts_dir / "premiums.json"
-    with open(premiums_json_path, "w") as f:
-        json.dump(premiums, f, indent=2)
-    logger.info(f"Wrote {premiums_json_path}")
-
-    report_md_path = backtest_dir / "report.md"
-    _write_report_md(report_md_path, report, city)
-    logger.info(f"Wrote {report_md_path}")
-
+    results = [run_season(world, season, ctx) for season in config.seasons]
+    report, premiums = _report(world, results, ctx)
+    write_outputs(Path(artifacts_dir), report, premiums)
+    logger.info("backtest finished in %.1f s", time.perf_counter() - started)
     return report
-
-
-def _write_report_md(path: Path, report: dict[str, Any], city: City) -> None:
-    """Write markdown version of backtest report.
-
-    Args:
-        path: Path to write report.md
-        report: Backtest report dict
-        city: City with zones
-    """
-    lines = [
-        "# Chhatri Backtest Report",
-        "",
-        f"**Label:** {report['label']}",
-        f"**Seasons:** {', '.join(report['seasons'])}",
-        f"**Generated:** {report['generated_at']}",
-        "",
-        "## Trigger Comparison",
-        "",
-    ]
-
-    # Trigger metrics table
-    lines.append("| Metric | Chhatri | Weather-Only |")
-    lines.append("|--------|---------|--------------|")
-
-    chhatri_trigger = next(t for t in report["triggers"] if t["name"] == "chhatri")
-    weather_trigger = next(t for t in report["triggers"] if t["name"] == "weather_only")
-
-    lines.append(f"| Real drops detected | {chhatri_trigger['real_drops_paid']}/{chhatri_trigger['real_drops']} ({chhatri_trigger['recall']:.1%}) | {weather_trigger['real_drops_paid']}/{weather_trigger['real_drops']} ({weather_trigger['recall']:.1%}) |")
-    lines.append(f"| Payouts | {chhatri_trigger['payouts']} | {weather_trigger['payouts']} |")
-    lines.append(f"| False positives | {chhatri_trigger['payouts_no_real_drop']} ({chhatri_trigger['false_positive_rate']:.1%}) | {weather_trigger['payouts_no_real_drop']} ({weather_trigger['false_positive_rate']:.1%}) |")
-    lines.append(f"| Trigger→Money | {chhatri_trigger['trigger_to_money']} | {weather_trigger['trigger_to_money']} |")
-
-    lines.extend(["", "## Zones", ""])
-
-    # Zone table
-    lines.append("| Zone | Shops | Premium/day | Payouts | Loss Ratio | FP | FN |")
-    lines.append("|------|-------|------------|---------|------------|-----|-----|")
-
-    for zone_data in report["zones"]:
-        zone_id = zone_data["zone_id"]
-        zone = next((z for z in city.zones if z.id == zone_id), None)
-        shops = zone.shops if zone else "?"
-
-        lines.append(
-            f"| {zone_id} | {shops} | {zone_data['premium_per_day_label']} | "
-            f"₹{zone_data['payouts_paise']:,} | {zone_data['loss_ratio']:.2f} | "
-            f"{zone_data['chhatri_fp']} | {zone_data['chhatri_fn']} |"
-        )
-
-    # Personal claims
-    lines.extend(["", "## Personal Claims", ""])
-    lines.append(f"- Total: {report['personal']['claims']}")
-    lines.append(f"- Auto-paid: {report['personal']['auto_paid']}")
-    lines.append(f"- Referred: {report['personal']['referred']} ({report['personal']['referred_share']:.1%})")
-
-    # Notes
-    lines.extend(["", "## Notes", ""])
-    for note in report["notes"]:
-        lines.append(f"- {note}")
-
-    with open(path, "w") as f:
-        f.write("\n".join(lines))

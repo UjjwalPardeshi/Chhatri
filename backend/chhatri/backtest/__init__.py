@@ -1,7 +1,7 @@
-"""Backtest module (SPEC §18, §19.2, §24.6).
+"""Backtest of two past monsoons: Chhatri's trigger vs a weather-only trigger (SPEC §18).
 
-Runs historical monsoon seasons on simulated sales with real Open-Meteo rainfall.
-Compares Chhatri's trigger against weather-only baseline and computes premiums.
+Public entry point: `run_backtest(artifacts_dir, *, settings, calibration)`; command line:
+``python -m chhatri.backtest``.
 """
 
 from chhatri.backtest.run import run_backtest
