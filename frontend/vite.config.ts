@@ -1,25 +1,25 @@
+/**
+ * Vite config for the Chhatri console (SPEC §20, §23; binding decision B7).
+ * The dev server proxies /api to VITE_API_URL (default http://localhost:8000).
+ * `vite --mode mock` loads .env.mock (VITE_MOCK=1) and serves the console on the in-browser mock backend.
+ */
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/webhooks': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
+const DEFAULT_API_URL = 'http://localhost:8000'
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const target = env.VITE_API_URL || DEFAULT_API_URL
+  return {
+    plugins: [react()],
+    server: {
+      proxy: {
+        '/api': { target, changeOrigin: true },
       },
     },
-  },
-  define: {
-    'import.meta.env.VITE_USE_MOCKS': JSON.stringify(
-      process.env.VITE_USE_MOCKS === '1'
-    ),
-  },
+    build: {
+      chunkSizeWarningLimit: 700,
+    },
+  }
 })

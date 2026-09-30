@@ -1,45 +1,25 @@
-# Chhatri frontend (SPEC §20, §23)
-# Multi-stage: Node build → nginx SPA + proxy
-
-# Stage 1: Build
-FROM node:22-alpine as builder
+# Chhatri console image (SPEC §20, §23; binding decision B7).
+#
+# Build context is frontend/ (see frontend/.dockerignore). Stage 1 runs the B7 `build` script
+# (tsc -b && vite build); stage 2 serves dist/ with unprivileged nginx on :8080 and proxies /api and
+# /webhooks to the backend. frontend/nginx.conf is an nginx *template*: the image renders
+# ${CHHATRI_BACKEND_UPSTREAM} (default backend:8000, the compose service) at container start.
+FROM node:22-alpine AS build
 
 WORKDIR /app
-
-# Copy package files
-COPY frontend/package.json frontend/package-lock.json ./
-
-# Install dependencies
-RUN npm ci
-
-# Copy source
-COPY frontend/src ./src
-COPY frontend/public ./public
-COPY frontend/index.html ./
-COPY frontend/vite.config.ts ./
-COPY frontend/tsconfig.json ./
-COPY frontend/tsconfig.app.json ./
-COPY frontend/tsconfig.node.json ./
-COPY frontend/tailwind.config.js ./
-COPY frontend/postcss.config.js ./
-
-# Build
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
 RUN npm run build
 
-# Stage 2: Serve with nginx
-FROM nginx:alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine
 
-# Copy config
-COPY frontend/nginx.conf /etc/nginx/nginx.conf
+ENV CHHATRI_BACKEND_UPSTREAM=backend:8000
 
-# Copy built app
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Health check
-HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:80 || exit 1
+EXPOSE 8080
 
-# Expose
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["wget", "--quiet", "--output-document=/dev/null", "http://127.0.0.1:8080/healthz"]

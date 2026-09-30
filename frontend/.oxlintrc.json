@@ -1,8 +1,39 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
+  "plugins": [
+    "react",
+    "typescript",
+    "oxc",
+    "unicorn",
+    "jsx-a11y",
+    "vitest"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/exhaustive-deps": "warn",
+    "no-console": [
+      "warn",
+      {
+        "allow": [
+          "warn",
+          "error"
+        ]
+      }
+    ],
+    "typescript/no-explicit-any": "error",
+    "eqeqeq": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/only-export-components": "off",
+    "react/exhaustive-effect-dependencies": "off"
+  },
+  "ignorePatterns": [
+    "dist",
+    "coverage",
+    "node_modules",
+    "src/mock/data"
+  ]
 }
