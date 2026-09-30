@@ -58,7 +58,8 @@ export async function seek(page: Page, hhmm: string): Promise<void> {
   await input.fill(hhmm)
   await page.getByRole('button', { name: 'Seek', exact: true }).click()
   await expect(page.locator('.clock-label')).toContainText(hhmm, { timeout: REPLAY_TIMEOUT_MS })
-  await expect(page.getByRole('button', { name: 'Seek', exact: true })).toBeEnabled({ timeout: REPLAY_TIMEOUT_MS })
+  /** The seek box may have folded away again (phones); the play button is always there and is disabled while busy. */
+  await expect(page.getByRole('button', { name: /^(Play|Pause)$/ })).toBeEnabled({ timeout: REPLAY_TIMEOUT_MS })
 }
 
 export async function goTo(page: Page, link: string): Promise<void> {
