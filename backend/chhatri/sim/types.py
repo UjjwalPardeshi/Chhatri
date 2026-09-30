@@ -145,7 +145,9 @@ class SalesPanel:
         delta = require_aware(ts) - self.start
         idx = int(delta // HOUR)
         if not 0 <= idx < self.hours:
-            raise IndexError(f"{ts.isoformat()} outside panel [{self.start.isoformat()}, {self.end.isoformat()})")
+            raise IndexError(
+                f"{ts.isoformat()} outside panel [{self.start.isoformat()}, {self.end.isoformat()})"
+            )
         return idx
 
     def window(self, start: datetime, end: datetime) -> SalesPanel:
@@ -156,7 +158,9 @@ class SalesPanel:
         j = i + int((require_aware(end) - require_aware(start)) // HOUR)
         if j > self.hours:
             raise IndexError("window extends past the panel")
-        return SalesPanel(self.merchant_ids, self.start + i * HOUR, j - i, self.amount_paise[:, i:j], self.txns[:, i:j])
+        return SalesPanel(
+            self.merchant_ids, self.start + i * HOUR, j - i, self.amount_paise[:, i:j], self.txns[:, i:j]
+        )
 
     def day(self, day: date) -> SalesPanel:
         from chhatri.clock import at
