@@ -1,219 +1,110 @@
-"""Tests for memory integration (SPEC §14.6, §16)."""
+"""networkx memory graph and SPEC §16 precedent ranking."""
 
-from datetime import datetime, timedelta, timezone
+from __future__ import annotations
+
+from datetime import timedelta
 
 import pytest
 
+from chhatri.clock import ist
 from chhatri.integrations.base import MemoryFact
-from chhatri.integrations.memory import SimulatedMemoryGraph
+from chhatri.integrations.memory import (
+    DECIDED_BY,
+    DISPUTED,
+    IN_ZONE,
+    PAID_FOR,
+    SIMILAR_TO,
+    SimulatedMemoryGraph,
+    rank_precedents,
+)
 
-IST = timezone(timedelta(hours=5, minutes=30))
+T0 = ist(2025, 8, 19, 17, 0)
 
 
-class TestSimulatedMemoryGraph:
-    """Tests for SimulatedMemoryGraph."""
+def fact(
+    kind: str, subject: str, merchant: str | None, zone: str | None, minutes: int = 0, **attrs: str
+) -> MemoryFact:
+    return MemoryFact(
+        kind=kind,
+        subject_id=subject,
+        merchant_id=merchant,
+        zone_id=zone,
+        at=T0 + timedelta(minutes=minutes),
+        text=f"{kind} {subject}",
+        attrs=attrs,
+    )
 
-    @pytest.mark.asyncio
-    async def test_remember_fact(self):
-        """Test storing a memory fact."""
-        graph = SimulatedMemoryGraph()
-        now = datetime.now(tz=IST)
 
-        fact = MemoryFact(
-            kind="payout",
-            subject_id="P-000001",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=now,
-            text="Paid ₹1,380 for area claim",
-        )
+async def test_graph_nodes_and_edges() -> None:
+    graph = SimulatedMemoryGraph()
+    await graph.remember(fact("trigger", "E-Z7-20250819", None, "Z7"))
+    await graph.remember(fact("decision", "D-000001", "S-0142", "Z7"))
+    await graph.remember(fact("payout", "P-000001", "S-0142", "Z7", 4, trigger_id="E-Z7-20250819"))
+    await graph.remember(fact("dispute", "C-2291", "S-0142", "Z7", 12, decision_id="D-000001"))
+    await graph.remember(fact("case", "C-2292", "S-0142", "Z7", 13, decision_id="D-000001"))
+    await graph.remember(fact("payout", "P-000002", "S-0142", "Z7", 20))
+    g = graph.graph
+    edges = {(u, v, k) for u, v, k in g.edges(keys=True)}
+    assert ("shop:S-0142", "zone:Z7", IN_ZONE) in edges
+    assert ("event:E-Z7-20250819", "zone:Z7", IN_ZONE) in edges
+    assert ("payout:P-000001", "shop:S-0142", PAID_FOR) in edges
+    assert ("payout:P-000001", "event:E-Z7-20250819", PAID_FOR) in edges
+    assert ("shop:S-0142", "dispute:C-2291", DISPUTED) in edges
+    assert ("dispute:C-2291", "decision:D-000001", DISPUTED) in edges
+    assert ("decision:D-000001", "shop:S-0142", DECIDED_BY) in edges
+    assert ("case:C-2292", "decision:D-000001", DECIDED_BY) in edges
+    assert ("payout:P-000002", "payout:P-000001", SIMILAR_TO) in edges
+    assert {g.nodes[n]["type"] for n in g.nodes} == {
+        "shop",
+        "zone",
+        "event",
+        "payout",
+        "dispute",
+        "case",
+        "decision",
+    }
 
-        await graph.remember(fact)
 
-        # Verify node was created
-        assert "P-000001" in graph.graph.nodes
-        node_data = graph.graph.nodes["P-000001"]
-        assert node_data["kind"] == "payout"
-        assert node_data["text"] == "Paid ₹1,380 for area claim"
+async def test_precedent_scores_ties_and_exclusion() -> None:
+    graph = SimulatedMemoryGraph()
+    await graph.remember(fact("case", "C-1", "S-0142", "Z7", 0))
+    await graph.remember(fact("case", "C-2", "S-0001", "Z7", 5))
+    await graph.remember(fact("case", "C-3", "S-0002", "Z3", 10))
+    await graph.remember(fact("case", "C-4", "S-0142", "Z7", 20))
+    await graph.remember(fact("case", "C-5", "S-0003", "Z7", 5))
+    await graph.remember(fact("payout", "P-1", "S-0142", "Z7", 30))
+    result = await graph.precedents(merchant_id="S-0142", zone_id="Z7", kind="case", exclude_subject_id="C-4")
+    assert [(p.subject_id, p.score) for p in result] == [
+        ("C-1", 1.0),
+        ("C-2", 0.7),
+        ("C-5", 0.7),
+        ("C-3", 0.4),
+    ]
+    limited = await graph.precedents(zone_id="Z3", limit=2)
+    assert [p.subject_id for p in limited] == ["C-3", "P-1"]
+    assert [p.score for p in limited] == [0.7, 0.4]
 
-    @pytest.mark.asyncio
-    async def test_remember_creates_edges(self):
-        """Test that remember creates edges to merchant and zone."""
-        graph = SimulatedMemoryGraph()
-        now = datetime.now(tz=IST)
 
-        fact = MemoryFact(
-            kind="payout",
-            subject_id="P-000001",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=now,
-            text="Paid",
-        )
+async def test_remember_is_idempotent_per_subject_and_validates() -> None:
+    graph = SimulatedMemoryGraph()
+    await graph.remember(fact("payout", "P-1", "S-0142", "Z7"))
+    await graph.remember(fact("payout", "P-1", "S-0142", "Z7"))
+    assert len(graph.facts()) == 1
+    assert not any(k == SIMILAR_TO for *_, k in graph.graph.edges(keys=True))
+    with pytest.raises(ValueError):
+        await graph.remember(fact("payout", "", "S-0142", "Z7"))
+    with pytest.raises(ValueError):
+        await graph.remember(MemoryFact("payout", "P-9", None, None, T0.replace(tzinfo=None), "naive"))
 
-        await graph.remember(fact)
 
-        # Check merchant and zone nodes exist
-        assert "merchant:S-0142" in graph.graph.nodes
-        assert "zone:Z7" in graph.graph.nodes
+def test_rank_precedents_rejects_negative_limit() -> None:
+    with pytest.raises(ValueError):
+        rank_precedents([], merchant_id=None, zone_id=None, kind=None, limit=-1, exclude_subject_id=None)
 
-    @pytest.mark.asyncio
-    async def test_precedents_empty(self):
-        """Test precedents with empty graph."""
-        graph = SimulatedMemoryGraph()
 
-        precedents = await graph.precedents(merchant_id="S-0142", limit=5)
-        assert len(precedents) == 0
+def test_cognee_class_still_importable_from_memory() -> None:
+    from chhatri.integrations import memory, memory_cognee
 
-    @pytest.mark.asyncio
-    async def test_precedents_same_merchant_highest_score(self):
-        """Test that same merchant has score 1.0."""
-        graph = SimulatedMemoryGraph()
-        base_time = datetime.now(tz=IST)
-
-        # Add facts for different merchants
-        fact1 = MemoryFact(
-            kind="payout",
-            subject_id="P-000001",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=base_time - timedelta(days=2),
-            text="First payout",
-        )
-        fact2 = MemoryFact(
-            kind="payout",
-            subject_id="P-000002",
-            merchant_id="S-0143",
-            zone_id="Z7",
-            at=base_time - timedelta(days=1),
-            text="Other merchant payout",
-        )
-
-        await graph.remember(fact1)
-        await graph.remember(fact2)
-
-        # Query precedents for S-0142
-        precedents = await graph.precedents(merchant_id="S-0142")
-
-        # Should return only S-0142's facts with score 1.0
-        assert len(precedents) == 1
-        assert precedents[0].subject_id == "P-000001"
-        assert precedents[0].score == 1.0
-
-    @pytest.mark.asyncio
-    async def test_precedents_same_zone_score_0_7(self):
-        """Test that same zone (no merchant match) has score 0.7."""
-        graph = SimulatedMemoryGraph()
-        base_time = datetime.now(tz=IST)
-
-        # Add facts for different merchants, same zone
-        fact = MemoryFact(
-            kind="payout",
-            subject_id="P-000001",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=base_time,
-            text="Z7 payout",
-        )
-
-        await graph.remember(fact)
-
-        # Query precedents for Z7 (different merchant)
-        precedents = await graph.precedents(zone_id="Z7", limit=5)
-
-        # Should return Z7 fact with score 0.7
-        assert len(precedents) == 1
-        assert precedents[0].subject_id == "P-000001"
-        assert precedents[0].score == 0.7
-
-    @pytest.mark.asyncio
-    async def test_precedents_recency_ordering(self):
-        """Test that facts are ordered by recency (latest first)."""
-        graph = SimulatedMemoryGraph()
-        base_time = datetime.now(tz=IST)
-
-        # Add facts at different times
-        fact1 = MemoryFact(
-            kind="payout",
-            subject_id="P-000001",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=base_time - timedelta(days=2),
-            text="Oldest",
-        )
-        fact2 = MemoryFact(
-            kind="payout",
-            subject_id="P-000002",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=base_time,
-            text="Newest",
-        )
-
-        await graph.remember(fact1)
-        await graph.remember(fact2)
-
-        precedents = await graph.precedents(merchant_id="S-0142")
-
-        # Should be ordered by recency (newest first)
-        assert len(precedents) == 2
-        assert precedents[0].subject_id == "P-000002"
-        assert precedents[1].subject_id == "P-000001"
-
-    @pytest.mark.asyncio
-    async def test_precedents_limit(self):
-        """Test limit parameter."""
-        graph = SimulatedMemoryGraph()
-        base_time = datetime.now(tz=IST)
-
-        # Add 5 facts
-        for i in range(5):
-            fact = MemoryFact(
-                kind="payout",
-                subject_id=f"P-{i:06d}",
-                merchant_id="S-0142",
-                zone_id="Z7",
-                at=base_time - timedelta(days=i),
-                text=f"Payout {i}",
-            )
-            await graph.remember(fact)
-
-        # Query with limit=2
-        precedents = await graph.precedents(merchant_id="S-0142", limit=2)
-
-        # Should return only 2 results
-        assert len(precedents) == 2
-
-    @pytest.mark.asyncio
-    async def test_precedents_kind_filter(self):
-        """Test filtering by kind."""
-        graph = SimulatedMemoryGraph()
-        now = datetime.now(tz=IST)
-
-        # Add facts of different kinds
-        payout_fact = MemoryFact(
-            kind="payout",
-            subject_id="P-000001",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=now,
-            text="Payout",
-        )
-        dispute_fact = MemoryFact(
-            kind="dispute",
-            subject_id="D-000001",
-            merchant_id="S-0142",
-            zone_id="Z7",
-            at=now,
-            text="Dispute",
-        )
-
-        await graph.remember(payout_fact)
-        await graph.remember(dispute_fact)
-
-        # Query only payouts
-        precedents = await graph.precedents(kind="payout")
-
-        # Should return only payout fact
-        assert len(precedents) == 1
-        assert precedents[0].kind == "payout"
+    assert memory.CogneeMemoryGraph is memory_cognee.CogneeMemoryGraph
+    with pytest.raises(AttributeError):
+        memory.DoesNotExist  # noqa: B018
