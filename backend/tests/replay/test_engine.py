@@ -244,3 +244,59 @@ async def test_seek_to_the_end_is_allowed() -> None:
     rig = Rig(end=monsoon_at(8, 5))
     await rig.engine.seek("08:05")
     assert rig.clock.now() == monsoon_at(8, 5)
+
+
+class Ran:
+    """Records which scheduled jobs ran."""
+
+    def __init__(self) -> None:
+        self.names: list[str] = []
+
+    def job(self, name: str) -> Callable[[], Any]:
+        async def run() -> None:
+            self.names.append(name)
+
+        return run
+
+
+async def test_money_decided_at_the_end_still_arrives_on_its_schedule() -> None:
+    """B1 offsets survive the window's end: payout steps due within the settle horizon still run."""
+    rig, ran = Rig(end=monsoon_at(8, 10), settle_minutes=5), Ran()
+    await rig.engine.step(10)
+    rig.scheduler.schedule(monsoon_at(8, 14), "payout:D-1:credit_payout", ran.job("credit"))
+    rig.scheduler.schedule(monsoon_at(8, 15), "payout:D-1:pause_instalment", ran.job("pause"))
+    rig.scheduler.schedule(
+        monsoon_at(8, 10) + timedelta(hours=24), "follow-up:C-1:check_case_sla", ran.job("sla")
+    )
+    with pytest.raises(ValueError, match="beyond the end"):
+        await rig.engine.step(6)
+    await rig.engine.step(4)
+    assert (rig.clock.now(), ran.names) == (monsoon_at(8, 14), ["credit"])
+    await rig.engine.step(1)
+    assert ran.names == ["credit", "pause"]
+    with pytest.raises(ValueError, match="beyond the end"):  # only the +24 h follow-up is left
+        await rig.engine.step(1)
+
+
+async def test_play_at_the_end_settles_pending_payout_steps_then_pauses() -> None:
+    rig, ran = (
+        Rig(end=monsoon_at(8, 10), settle_minutes=5, sleep=GateSleep(wakes=100), monotonic=StepClock(1.0)),
+        Ran(),
+    )
+    await rig.engine.step(10)
+    rig.scheduler.schedule(monsoon_at(8, 13), "payout:D-1:credit_payout", ran.job("credit"))
+    await rig.engine.play(120)
+    await wait_until(lambda: not rig.engine.running)
+    assert (rig.clock.now(), ran.names) == (monsoon_at(8, 13), ["credit"])
+    await rig.engine.play()  # settled: nothing left to run
+    assert rig.engine.running is False
+
+
+async def test_without_a_settle_horizon_the_end_is_hard() -> None:
+    rig, ran = Rig(end=monsoon_at(8, 10)), Ran()
+    await rig.engine.step(10)
+    rig.scheduler.schedule(monsoon_at(8, 11), "payout:D-1:credit_payout", ran.job("credit"))
+    with pytest.raises(ValueError, match="beyond the end"):
+        await rig.engine.step(1)
+    with pytest.raises(ValueError, match="settle"):
+        Rig(settle_minutes=-1)

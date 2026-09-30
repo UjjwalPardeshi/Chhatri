@@ -122,3 +122,15 @@ def test_failure_recorder_audits_and_feeds_step_failures_and_replay_stops() -> N
         "The replay clock stopped after an error (RuntimeError); press play to go on",
     ]
     assert {item.type for item in feed.items()} == {"error"}
+
+
+async def test_latest_due_is_the_last_pending_job_up_to_a_time() -> None:
+    scheduler, _, log = make()
+    assert scheduler.latest_due(monsoon_at(20)) is None
+    for minute in (4, 5, 0):
+        scheduler.schedule(monsoon_at(17, minute), f"job-{minute}", job(log, str(minute)))
+    scheduler.schedule(T0 + timedelta(hours=24), "follow-up", job(log, "sla"))
+    assert scheduler.latest_due(monsoon_at(17, 4)) == monsoon_at(17, 4)
+    assert scheduler.latest_due(monsoon_at(18)) == monsoon_at(17, 5)
+    await scheduler.run_due(monsoon_at(17, 5))
+    assert (log, scheduler.latest_due(monsoon_at(18)), scheduler.pending()) == (["0", "4", "5"], None, 1)

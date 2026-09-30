@@ -15,6 +15,12 @@
 - ``pause`` waits for the minute being processed to finish, so no half-processed minute remains.
 - ``step(minutes)``: pauses, then advances synchronously awaiting every effect; ValueError for a
   non-positive or non-integer count or past the scenario's end.
+- Settling (B1, B2; SPEC §17.1 is silent on money decided in the window's last minutes): money
+  decided inside the window still arrives on its B1 schedule. At or after the scenario's end the
+  clock may keep advancing — by ``play`` or ``step`` — up to the latest pending workflow step that
+  is due within ``settle_minutes`` (the payout workflow's last offset, 5) of the later of now and
+  the end; then it pauses as usual. Only those steps extend the window: the follow-up SLA check a
+  day later never does, and ``seek`` stays inside the scenario window.
 - ``seek("HH:MM")`` on the scenario day: forward = step; backward = reload the scenario (fresh ids,
   store, audit; SPEC §3) and seek on the new engine; ValueError for a bad time or one outside the
   scenario window. `sleep` and `monotonic` are injectable so tests control pacing.
@@ -100,9 +106,12 @@ class ReplayEngine:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         speed: float = DEFAULT_SPEED,
+        settle_minutes: int = 0,
     ) -> None:
         if end <= start:
             raise ValueError("a scenario ends after it starts")
+        if settle_minutes < 0:
+            raise ValueError("settle_minutes must not be negative")
         self._clock = clock
         self._scheduler = scheduler
         self._hooks = hooks
@@ -110,6 +119,7 @@ class ReplayEngine:
         self._failures = failures
         self._start = start
         self._end = end
+        self._settle = settle_minutes * MINUTE
         self._reload = reload
         self._sleep = sleep
         self._monotonic = monotonic
@@ -124,6 +134,12 @@ class ReplayEngine:
     def running(self) -> bool:
         return self._running
 
+    def _limit(self) -> datetime:
+        """The scenario's end, extended to the last payout step still settling (see module docstring)."""
+        horizon = max(self._clock.now(), self._end) + self._settle
+        due = self._scheduler.latest_due(horizon) if self._settle else None
+        return self._end if due is None else max(self._end, due)
+
     @property
     def speed(self) -> float:
         return self._speed
@@ -132,7 +148,7 @@ class ReplayEngine:
         """Run the clock at `speed` (or the current speed); a no-op at the scenario's end."""
         if speed is not None:
             self._speed = validate_speed(speed)
-        if self._clock.now() >= self._end:
+        if self._clock.now() >= self._limit():
             logger.info("replay is at its end; play ignored")
         elif not self._running:
             self._running = True
@@ -155,7 +171,7 @@ class ReplayEngine:
         """Advance `minutes` simulated minutes now, awaiting every effect."""
         if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes < 1:
             raise ValueError("minutes must be a positive whole number")
-        if self._clock.now() + minutes * MINUTE > self._end:
+        if self._clock.now() + minutes * MINUTE > self._limit():
             raise ValueError("cannot step beyond the end of the scenario")
         await self.pause()
         async with self._lock:
@@ -204,8 +220,8 @@ class ReplayEngine:
             if not await self._advance_guarded(whole):
                 return
             self._maybe_tick()
-            if self._clock.now() >= self._end and self._running:
-                logger.info("replay reached its end at %s; paused", self._end.isoformat())
+            if self._clock.now() >= self._limit() and self._running:
+                logger.info("replay reached its end at %s; paused", self._clock.now().isoformat())
                 self._running = False
                 self._events.tick()
 
@@ -214,7 +230,7 @@ class ReplayEngine:
         try:
             async with self._lock:
                 for _ in range(minutes):
-                    if not self._running or self._clock.now() >= self._end:
+                    if not self._running or self._clock.now() >= self._limit():
                         break
                     await self._minute(self._clock.now() + MINUTE)
         except Exception as exc:  # the background clock must surface, not die silently (SPEC §24.6)

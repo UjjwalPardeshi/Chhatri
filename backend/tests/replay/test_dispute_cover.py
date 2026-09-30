@@ -134,8 +134,16 @@ async def test_cover_after_the_alert_is_blocked_but_the_paytm_link_is_offered(st
     assert cover is not None and cover.starts_on == date(2025, 8, 25) and cover.status is CoverStatus.WAITING
     feed = [i.text_en for i in rt.feed.items() if i.type == "premium"]
     assert feed == [f"Ramesh Vada Pav paid {format_inr(per_day * 30)} premium · covered 25 Aug–23 Sep"]
+    told = rt.store.messages(RAMESH)[-1]
+    assert (told.direction.value, told.created_at, told.text_en) == (
+        "OUTBOUND",
+        rt.clock.now(),
+        f"Ramesh ji, we received your {format_inr(per_day * 30)} premium. "
+        "Your cover starts on 25 August and is paid through 23 September.",
+    )
     await rt.orchestrator.paytm_paid(premium.link_id or "", "TXN-1")  # idempotent: no second feed line
     assert len([i for i in rt.feed.items() if i.type == "premium"]) == 1
+    assert rt.store.messages(RAMESH)[-1].id == told.id  # nor a second confirmation
     with pytest.raises(KeyError):
         await rt.orchestrator.paytm_paid("no-such-link", None)
 

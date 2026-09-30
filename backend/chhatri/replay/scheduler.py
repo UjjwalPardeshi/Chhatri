@@ -80,6 +80,11 @@ class SimScheduler:
     def pending(self) -> int:
         return len(self._heap)
 
+    def latest_due(self, until: datetime) -> datetime | None:
+        """The time of the latest pending job due at or before `until`; None when there is none."""
+        limit = require_aware(until)
+        return max((entry.at for entry in self._heap if entry.at <= limit), default=None)
+
     async def run_due(self, now: datetime) -> int:
         """Run every job due at or before `now` in (at, seq) order; returns how many ran."""
         limit = require_aware(now)

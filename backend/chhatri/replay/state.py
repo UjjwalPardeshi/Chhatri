@@ -57,6 +57,7 @@ from chhatri.sim.scenarios import SCENARIOS
 from chhatri.sim.types import SalesPanel, Scenario
 from chhatri.sim.weather import ShockCalendar
 from chhatri.store.repositories import Store
+from chhatri.workflows import definitions as wf
 
 __all__ = ["AppState", "Runtime", "StaticContext", "load_static"]
 
@@ -144,6 +145,11 @@ def _zone_shops(static: StaticContext, store: Store) -> Mapping[str, int]:
     """Covered shops per zone at load (ZoneSnapshot ``shops``, SPEC §5.4)."""
     counts = Counter(static.city.merchant(mid).zone_id for mid in store.covers())
     return MappingProxyType({zone.id: counts.get(zone.id, 0) for zone in static.city.zones})
+
+
+def _settle_minutes(rules: PolicyRules) -> int:
+    """The payout workflow's last step offset: how long money decided at the end takes (B1)."""
+    return max(step.delay_minutes_from_start for step in wf.build_workflows(rules)[wf.PAYOUT])
 
 
 def _channel(integrations: Integrations) -> Channel:
@@ -295,6 +301,7 @@ class AppState:
             reload=reload,
             sleep=self._sleep,
             monotonic=self._monotonic,
+            settle_minutes=_settle_minutes(self.static.rules),
         )
 
     async def shutdown(self) -> None:

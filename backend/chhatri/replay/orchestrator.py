@@ -154,7 +154,11 @@ class Orchestrator:
         return decision
 
     async def paytm_paid(self, link_id: str, txn_id: str | None) -> PremiumPayment:
-        """Paid callback (SPEC §14.3): activates or extends the cover; KeyError for an unknown link."""
+        """Paid callback (SPEC §10, §14.3): activates or extends the cover, then tells the merchant.
+
+        KeyError for an unknown link. A repeated callback for a paid link changes nothing and sends
+        no second confirmation.
+        """
         rt = self._link.rt
         before = rt.store.premium_by_link(link_id)
         paid = rt.premiums.mark_paid(link_id, rt.clock.now(), txn_id)
@@ -165,6 +169,12 @@ class Orchestrator:
                 f"{day_month(paid.covers_from)}–{day_month(paid.covers_to)}"
             )
             rt.feed.add(rt.clock.now(), "premium", text, merchant_id=paid.merchant_id)
+            cover = rt.store.cover(paid.merchant_id)
+            if cover is None:
+                raise ValueError(
+                    f"payment {paid.id} was marked paid but merchant {paid.merchant_id} has no cover"
+                )
+            await rt.conversation.notify_premium_paid(paid, cover)
         await self._drain()
         return paid
 
