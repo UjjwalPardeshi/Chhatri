@@ -64,7 +64,7 @@ class CheckCode(StrEnum):
 
 
 class CheckStatus(StrEnum):
-    PASS = "PASS"
+    PASS = "PASS"  # noqa: S105 - a check status, not a password
     FAIL = "FAIL"
     UNSURE = "UNSURE"
     NOT_APPLICABLE = "NOT_APPLICABLE"
