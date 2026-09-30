@@ -1,81 +1,63 @@
 /**
- * API Types - mirrored from SPEC §19.2
- * TypeScript types for all Chhatri API responses
+ * HTTP API shapes — a field-for-field mirror of SPEC §19.2 (and the SSE events of §19.1).
+ * Money fields end in `_paise` and always travel with a preformatted `*_label` (SPEC §4.2), so the
+ * console never re-derives money. Keep this file in lock-step with `chhatri/api/schemas.py`.
  */
+import type { FeatureCollection } from 'geojson'
 
-// Envelope types
-export interface Envelope<T> {
-  ok: true
-  data: T
-  meta?: {
-    total: number
-    limit: number
-    offset: number
-  }
-}
+export type ApiErrorBody = { code: string; message: string; fields?: Record<string, string> }
+export type ListMeta = { total: number; limit: number; offset: number }
+export type Envelope<T> = { ok: true; data: T; meta?: ListMeta } | { ok: false; error: ApiErrorBody }
 
-export interface ErrorEnvelope {
-  ok: false
-  error: {
-    code: string
-    message: string
-    fields?: Record<string, string>
-  }
-}
+export const INTEGRATION_NAMES = [
+  'sarvam_stt',
+  'sarvam_tts',
+  'sarvam_chat',
+  'sarvam_vision',
+  'whatsapp',
+  'paytm',
+  'n8n',
+  'memory',
+  'weather',
+  'soundbox',
+  'sales_data',
+  'alerts',
+  'payout_rail',
+  'lender',
+  'kyc',
+] as const
+export type IntegrationName = (typeof INTEGRATION_NAMES)[number]
+export type IntegrationMode = 'LIVE' | 'SIMULATED'
+export type IntegrationStatus = { name: IntegrationName; mode: IntegrationMode; detail: string }
 
-export type ApiResponse<T> = Envelope<T> | ErrorEnvelope
+export const SCENARIO_NAMES = ['monsoon', 'illness', 'illness_mismatch', 'buy_cover'] as const
+export type ScenarioName = (typeof SCENARIO_NAMES)[number]
 
-// Integration status
-export type IntegrationName =
-  | 'sarvam_stt'
-  | 'sarvam_tts'
-  | 'sarvam_chat'
-  | 'sarvam_vision'
-  | 'whatsapp'
-  | 'paytm'
-  | 'n8n'
-  | 'memory'
-  | 'weather'
-  | 'soundbox'
-  | 'sales_data'
-  | 'alerts'
-  | 'payout_rail'
-  | 'lender'
-  | 'kyc'
-
-export interface IntegrationStatus {
-  name: IntegrationName
-  mode: 'LIVE' | 'SIMULATED'
-  detail: string
-}
-
-// Clock and scenario
-export type ScenarioName = 'monsoon' | 'illness' | 'illness_mismatch' | 'buy_cover'
-
-export interface ClockState {
-  now: string // ISO IST
+export type ClockState = {
+  now: string
   scenario: ScenarioName | null
   scenario_title: string
   running: boolean
-  speed: number // sim minutes per real second
+  speed: number
   start: string
   end: string
-  label: string // e.g. "Mumbai · monsoon replay · 17:00 · simulated"
+  label: string
 }
 
-// Zones and hexes
 export type ZoneStatusName = 'normal' | 'watch' | 'triggered' | 'slow_day' | 'no_data'
+export type AlertLevel = 'YELLOW' | 'ORANGE' | 'RED'
+export type AlertKind = 'RAIN' | 'CIVIC' | 'HEATWAVE'
 
-export interface AlertSnap {
+export type ZoneAlert = {
   id: string
-  level: 'YELLOW' | 'ORANGE' | 'RED'
-  kind: 'RAIN' | 'CIVIC' | 'HEATWAVE'
+  level: AlertLevel
+  kind: AlertKind
   valid_from: string
   valid_to: string
   headline_en: string
 }
 
-export interface ZoneSnapshot {
+export type ZoneSnapshot = {
   zone_id: string
   ward: string
   name: string
@@ -85,12 +67,11 @@ export interface ZoneSnapshot {
   lower_bound_pct: number
   status: ZoneStatusName
   hours_below: number
-  alert: AlertSnap | null
-  label: string // "Z7 · 37% · 46 shops"
+  alert: ZoneAlert | null
+  label: string
 }
 
-// KPIs
-export interface Kpis {
+export type Kpis = {
   zones_triggered: number
   shops_paid: number
   trigger_to_money_min: number | null
@@ -99,8 +80,7 @@ export interface Kpis {
   instalments_paused: number
 }
 
-// Feed
-export interface FeedItem {
+export type FeedItem = {
   id: number
   at: string
   type: string
@@ -109,24 +89,22 @@ export interface FeedItem {
   merchant_id?: string
 }
 
-// Full state snapshot
-export interface StateSnapshot {
+export type StateSnapshot = {
   clock: ClockState
   zones: ZoneSnapshot[]
-  hexes: Record<string, number | null> // h3 → index_pct or null
+  hexes: Record<string, number | null>
   kpis: Kpis
   triggers: AreaTrigger[]
-  explanations: Record<string, string> // zone_id → explanation text
+  explanations: Record<string, string>
   feed: FeedItem[]
   demo_merchant_id: string | null
-  rain_band: Record<string, unknown> | null // GeoJSON FeatureCollection
+  rain_band: FeatureCollection | null
 }
 
-// Alert
-export interface Alert {
+export type Alert = {
   id: string
-  kind: 'RAIN' | 'CIVIC' | 'HEATWAVE'
-  level: 'YELLOW' | 'ORANGE' | 'RED'
+  kind: AlertKind
+  level: AlertLevel
   zone_ids: string[]
   issued_at: string
   valid_from: string
@@ -136,8 +114,7 @@ export interface Alert {
   headline_hi: string
 }
 
-// Instalment pause
-export interface InstalmentPause {
+export type InstalmentPause = {
   id: string
   loan_id: string
   merchant_id: string
@@ -149,8 +126,7 @@ export interface InstalmentPause {
   created_at: string
 }
 
-// Area trigger
-export interface AreaTrigger {
+export type AreaTrigger = {
   id: string
   zone_id: string
   alert_id: string
@@ -164,43 +140,31 @@ export interface AreaTrigger {
   fired_at: string
 }
 
-// Zone panel (detailed zone view)
-export interface ZonePanelRow {
-  label: 'Alert' | 'Sales' | 'Cover' | 'Paid' | 'Total'
-  value: string
-}
-
-export interface ZoneHourly {
-  hour: string
-  index_pct: number | null
-}
-
-export interface ZonePanel {
+export type ZonePanelRowLabel = 'Alert' | 'Sales' | 'Cover' | 'Paid' | 'Total'
+export type ZonePanel = {
   zone: ZoneSnapshot
   triggered: boolean
-  rows: ZonePanelRow[]
+  rows: { label: ZonePanelRowLabel; value: string }[]
   explanation: string | null
   shops_paid: number
   total_paid_paise: number
   total_paid_label: string
-  hourly: ZoneHourly[]
+  hourly: { hour: string; index_pct: number | null }[]
 }
 
-// Policy/Decision types
 export type CheckStatus = 'PASS' | 'FAIL' | 'UNSURE' | 'NOT_APPLICABLE' | 'WAIVED_BY_OFFICER'
-export type CheckSeverity = 'HARD' | 'SOFT'
-
-export interface Check {
+export type Severity = 'HARD' | 'SOFT'
+export type Check = {
   code: string
   status: CheckStatus
-  severity: CheckSeverity
+  severity: Severity
   label_en: string
   detail_en: string
   observed: string | null
   required: string | null
 }
 
-export interface Explanation {
+export type Explanation = {
   weekday_en: string
   weekday_hi: string
   expected_day_paise: number
@@ -217,8 +181,7 @@ export interface Explanation {
 }
 
 export type DecisionOutcome = 'APPROVED' | 'REFERRED' | 'DECLINED'
-
-export interface Decision {
+export type Decision = {
   id: string
   claim_id: string
   merchant_id: string
@@ -235,8 +198,7 @@ export interface Decision {
 }
 
 export type PayoutStatus = 'PENDING' | 'CREDITED' | 'FAILED'
-
-export interface Payout {
+export type Payout = {
   id: string
   decision_id: string
   merchant_id: string
@@ -249,8 +211,7 @@ export interface Payout {
   reference: string
 }
 
-// Merchant types
-export interface MerchantSummary {
+export type MerchantSummary = {
   id: string
   shop_name: string
   owner_name: string
@@ -262,51 +223,35 @@ export interface MerchantSummary {
   covered: boolean
 }
 
-export interface MerchantCover {
-  status: string
-  starts_on: string
-  prepaid_through: string | null
-  premium_per_day_label: string
-}
-
-export interface MerchantLoan {
-  daily_instalment_label: string
-  lender_name: string
-}
-
-export interface MerchantDetail extends MerchantSummary {
+export type MerchantDetail = MerchantSummary & {
   owner_name_hi: string
   kyc_name_masked: string
   phone_masked: string
   language: string
-  cover: MerchantCover | null
-  loan: MerchantLoan | null
+  cover: { status: string; starts_on: string; prepaid_through: string | null; premium_per_day_label: string } | null
+  loan: { daily_instalment_label: string; lender_name: string } | null
   expected_today_label: string | null
   payouts: Payout[]
   decisions: Decision[]
 }
 
-// Messages
 export type MessageDirection = 'INBOUND' | 'OUTBOUND'
 export type MessageChannel = 'WHATSAPP' | 'SIMULATOR' | 'SOUNDBOX'
 export type MessageKind = 'TEXT' | 'VOICE' | 'IMAGE' | 'PAYOUT_CARD' | 'CASE_CHIP' | 'SOUNDBOX' | 'TEMPLATE' | 'BUTTONS'
-
-export interface MessageCard {
+export type PayoutCard = {
   amount_label: string
   subtitle_hi: string
   subtitle_en: string
   badge: string
   footer_en?: string
 }
-
-export interface MessageMeta {
+export type MessageMeta = {
   transcript?: string
   voice_source?: 'sarvam' | 'browser-simulated'
   duration_s?: number
   case_id?: string
 }
-
-export interface Message {
+export type Message = {
   id: string
   merchant_id: string
   direction: MessageDirection
@@ -316,16 +261,14 @@ export interface Message {
   text_en: string | null
   audio_url: string | null
   media_url: string | null
-  card: MessageCard | null
+  card: PayoutCard | null
   created_at: string
   meta: MessageMeta
 }
 
-// Cases
 export type CaseKind = 'PERSONAL_CLAIM_REVIEW' | 'DISPUTE' | 'AREA_REVIEW'
 export type CaseStatus = 'OPEN' | 'APPROVED' | 'DECLINED' | 'CLOSED'
-
-export interface SlipEvidence {
+export type SlipEvidence = {
   media_url: string
   patient_name: string | null
   admission_date: string | null
@@ -335,31 +278,16 @@ export interface SlipEvidence {
   confidence: number
   source: string
 }
-
-export interface HourlyEvidence {
-  hour: string
-  expected_paise: number
-  actual_paise: number
-}
-
-export interface Precedent {
-  subject_id: string
-  kind: string
-  at: string
-  text: string
-}
-
-export interface CaseEvidence {
-  expected_vs_actual?: HourlyEvidence[]
+export type CaseEvidence = {
+  expected_vs_actual?: { hour: string; expected_paise: number; actual_paise: number }[]
   slip?: SlipEvidence
   kyc_name?: string
   name_score?: number
   silent_days?: string[]
   merchant_text?: string
-  precedents?: Precedent[]
+  precedents?: { subject_id: string; kind: string; at: string; text: string }[]
 }
-
-export interface Case {
+export type Case = {
   id: string
   kind: CaseKind
   merchant_id: string
@@ -375,8 +303,7 @@ export interface Case {
   resolved_at: string | null
 }
 
-// Audit
-export interface AuditEntry {
+export type AuditEntry = {
   seq: number
   at: string
   recorded_at: string
@@ -388,36 +315,15 @@ export interface AuditEntry {
   prev_hash: string
   hash: string
 }
+export type AuditVerify = { valid: boolean; entries: number; head_hash: string; first_bad_seq: number | null }
 
-export interface AuditVerify {
-  valid: boolean
-  entries: number
-  head_hash: string
-  first_bad_seq: number | null
-}
-
-// Policy
-export interface PolicyAuthority {
-  case: string
-  alone: string
-  human: string
-}
-
-export interface PolicyCheck {
-  code: string
-  severity: 'HARD' | 'SOFT'
-  applies: 'area' | 'personal' | 'all'
-  passes_when: string
-}
-
-export interface PolicyView {
+export type PolicyView = {
   rules: Record<string, unknown>
-  authority: PolicyAuthority[]
-  checks: PolicyCheck[]
+  authority: { case: string; alone: string; human: string }[]
+  checks: { code: string; severity: Severity; applies: 'area' | 'personal' | 'all'; passes_when: string }[]
 }
 
-// Backtest
-export interface BacktestTrigger {
+export type BacktestTrigger = {
   name: 'chhatri' | 'weather_only'
   real_drops: number
   real_drops_paid: number
@@ -429,8 +335,7 @@ export interface BacktestTrigger {
   trigger_to_money: string
   documents_per_area_claim: number
 }
-
-export interface BacktestZone {
+export type BacktestZone = {
   zone_id: string
   premium_per_day_label: string
   premiums_paise: number
@@ -439,75 +344,64 @@ export interface BacktestZone {
   chhatri_fp: number
   chhatri_fn: number
 }
-
-export interface BacktestPersonal {
-  claims: number
-  auto_paid: number
-  referred: number
-  referred_share: number
-}
-
-export interface BacktestReport {
+export type BacktestReport = {
   label: string
   seasons: string[]
   generated_at: string
   triggers: BacktestTrigger[]
   zones: BacktestZone[]
-  personal: BacktestPersonal
+  personal: { claims: number; auto_paid: number; referred: number; referred_share: number }
   notes: string[]
 }
 
-// SSE event types
-export interface SseEventBase<T> {
-  id: string
-  type: string
-  at: string
-  data: T
+/** GET /api/health, /api/session, /api/preflight (SPEC §19). */
+export type Health = { status: string; version: string; seed: number }
+export type Session = { officer_token: string }
+export type PreflightItem = { name: string; ok: boolean; detail: string }
+
+/** SSE `soundbox` payload (SPEC §19.1). */
+export type SoundboxEvent = { merchant_id: string; text: string; amount_label: string; audio_url: string | null }
+/** SSE `audit` payload (SPEC §19.1). */
+export type AuditEvent = { seq: number; action: string; actor: string; subject_type: string; subject_id: string }
+
+/** SPEC §19.1: event type → `data` payload. */
+export type SseEventMap = {
+  scenario: { clock: ClockState }
+  tick: { clock: ClockState }
+  zone: { zone: ZoneSnapshot }
+  hexes: { hexes: Record<string, number | null> }
+  alert: { alert: Alert }
+  trigger: { trigger: AreaTrigger }
+  decision: { decision: Decision }
+  payout: { payout: Payout }
+  instalment: { pause: InstalmentPause }
+  message: { message: Message }
+  soundbox: SoundboxEvent
+  case: { case: Case }
+  audit: AuditEvent
+  kpis: { kpis: Kpis }
 }
+export type SseEventType = keyof SseEventMap
+export const SSE_EVENT_TYPES: readonly SseEventType[] = [
+  'scenario',
+  'tick',
+  'zone',
+  'hexes',
+  'alert',
+  'trigger',
+  'decision',
+  'payout',
+  'instalment',
+  'message',
+  'soundbox',
+  'case',
+  'audit',
+  'kpis',
+]
+export type SseEvent = {
+  [K in SseEventType]: { id: string; type: K; at: string; data: SseEventMap[K] }
+}[SseEventType]
+export type SseEventOf<K extends SseEventType> = Extract<SseEvent, { type: K }>
 
-export type SseScenarioEvent = SseEventBase<{ clock: ClockState }>
-export type SseTickEvent = SseEventBase<{ clock: ClockState }>
-export type SseZoneEvent = SseEventBase<{ zone: ZoneSnapshot }>
-export type SseHexesEvent = SseEventBase<{ hexes: Record<string, number | null> }>
-export type SseAlertEvent = SseEventBase<{ alert: Alert }>
-export type SseTriggerEvent = SseEventBase<{ trigger: AreaTrigger }>
-export type SseDecisionEvent = SseEventBase<{ decision: Decision }>
-export type SsePayoutEvent = SseEventBase<{ payout: Payout }>
-export type SseInstalmentEvent = SseEventBase<{ pause: InstalmentPause }>
-export type SseMessageEvent = SseEventBase<{ message: Message }>
-export type SseSoundboxEvent = SseEventBase<{
-  merchant_id: string
-  text: string
-  amount_label: string
-  audio_url: string | null
-}>
-export type SseCaseEvent = SseEventBase<{ case: Case }>
-export type SseAuditEvent = SseEventBase<{
-  seq: number
-  action: string
-  actor: string
-  subject_type: string
-  subject_id: string
-}>
-export type SseKpisEvent = SseEventBase<{ kpis: Kpis }>
-
-export type SseEvent =
-  | SseScenarioEvent
-  | SseTickEvent
-  | SseZoneEvent
-  | SseHexesEvent
-  | SseAlertEvent
-  | SseTriggerEvent
-  | SseDecisionEvent
-  | SsePayoutEvent
-  | SseInstalmentEvent
-  | SseMessageEvent
-  | SseSoundboxEvent
-  | SseCaseEvent
-  | SseAuditEvent
-  | SseKpisEvent
-
-// Session (demo mode only)
-export interface SessionData {
-  officer_token: string
-}
+/** Demo voice notes (SPEC §19 POST /voice-demo). */
+export type VoiceDemoKey = 'why' | 'dispute' | 'ill' | 'cover'

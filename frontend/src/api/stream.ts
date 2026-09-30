@@ -1,177 +1,168 @@
 /**
- * SSE Stream Handler - EventSource with auto-reconnect
- * Handles server-sent events with Last-Event-ID for resumption
+ * Live event stream (SPEC §19.1, §20 "Resilience"). Uses fetch + a streaming body instead of
+ * EventSource so the client can send `Last-Event-ID` itself on every reconnect (EventSource only
+ * does that for its own internal retries). Reconnects forever with capped exponential backoff and
+ * a silence watchdog (the server pings every 15 s); the UI shows a "reconnecting" pill meanwhile.
  */
+import type { FetchLike } from './client'
+import { SseParser } from './sse'
+import { SSE_EVENT_TYPES, type SseEvent, type SseEventType } from './types'
 
-import type { SseEvent } from './types'
+export type StreamStatus = 'connecting' | 'open' | 'reconnecting' | 'closed'
 
-export interface StreamListener {
+export type StreamHandlers = {
   onEvent: (event: SseEvent) => void
-  onError: (error: Error) => void
-  onReconnect: () => void
+  onStatus: (status: StreamStatus) => void
 }
 
-export class SseStream {
-  private eventSource: EventSource | null = null
-  private baseUrl: string
-  private token: string | null = null
-  private lastEventId: string = ''
-  private reconnectAttempts: number = 0
-  private maxReconnectAttempts: number = 10
-  private reconnectDelay: number = 1000 // ms
-  private listeners: Set<StreamListener> = new Set()
+export type StreamOptions = {
+  baseDelayMs: number
+  maxDelayMs: number
+  /** No bytes (not even a keep-alive ping) for this long ⇒ reconnect. */
+  silenceMs: number
+}
 
-  constructor(baseUrl: string = import.meta.env.VITE_API_BASE || '') {
-    this.baseUrl = baseUrl
+export const DEFAULT_STREAM_OPTIONS: StreamOptions = { baseDelayMs: 500, maxDelayMs: 8_000, silenceMs: 45_000 }
+
+const KNOWN_TYPES = new Set<string>(SSE_EVENT_TYPES)
+
+/** Parses one SSE `data:` payload into a typed event; returns null (and logs) when malformed. */
+export function decodeEvent(eventName: string, raw: string): SseEvent | null {
+  if (!KNOWN_TYPES.has(eventName)) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (error) {
+    console.warn(`[stream] dropped malformed ${eventName} event`, error)
+    return null
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null
+  const body = parsed as { id?: unknown; type?: unknown; at?: unknown; data?: unknown }
+  if (typeof body.data !== 'object' || body.data === null) {
+    console.warn(`[stream] dropped ${eventName} event without data`)
+    return null
+  }
+  return {
+    id: String(body.id ?? ''),
+    type: eventName as SseEventType,
+    at: typeof body.at === 'string' ? body.at : '',
+    data: body.data,
+  } as SseEvent
+}
+
+export class EventStream {
+  private lastEventId: string | null = null
+  private controller: AbortController | null = null
+  private attempt = 0
+  private stopped = true
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly fetchImpl: FetchLike
+  private readonly url: string
+  private readonly handlers: StreamHandlers
+  private readonly options: StreamOptions
+
+  constructor(fetchImpl: FetchLike, url: string, handlers: StreamHandlers, options = DEFAULT_STREAM_OPTIONS) {
+    this.fetchImpl = fetchImpl
+    this.url = url
+    this.handlers = handlers
+    this.options = options
   }
 
-  /**
-   * Set authentication token for SSE stream
-   * Token is appended as URL query parameter since EventSource doesn't support Authorization headers
-   * (SPEC §19, token is persisted across reconnects via Last-Event-ID)
-   */
-  setToken(token: string): void {
-    this.token = token
-    // Reconnect if already connected to apply new token
-    if (this.isConnected()) {
-      this.disconnect()
-      this.connect()
-    }
-  }
-
-  subscribe(listener: StreamListener): () => void {
-    this.listeners.add(listener)
-    if (this.listeners.size === 1) {
-      this.connect()
-    }
-
-    return () => {
-      this.listeners.delete(listener)
-      if (this.listeners.size === 0) {
-        this.disconnect()
-      }
-    }
-  }
-
-  private connect(): void {
-    if (this.eventSource) {
-      return
-    }
-
-    const url = new URL(`${this.baseUrl}/api/stream`)
-
-    // Append token as query parameter (EventSource doesn't support Authorization headers)
-    if (this.token) {
-      url.searchParams.set('token', this.token)
-    }
-
-    if (this.lastEventId) {
-      // Send Last-Event-ID as query param for resumption
-      url.searchParams.set('last_id', this.lastEventId)
-    }
-
-    this.eventSource = new EventSource(url.toString())
-
-    // Set up event handlers for each event type
-    this.setupEventListener('scenario')
-    this.setupEventListener('tick')
-    this.setupEventListener('zone')
-    this.setupEventListener('hexes')
-    this.setupEventListener('alert')
-    this.setupEventListener('trigger')
-    this.setupEventListener('decision')
-    this.setupEventListener('payout')
-    this.setupEventListener('instalment')
-    this.setupEventListener('message')
-    this.setupEventListener('soundbox')
-    this.setupEventListener('case')
-    this.setupEventListener('audit')
-    this.setupEventListener('kpis')
-
-    this.eventSource.onerror = () => {
-      this.handleConnectionError()
-    }
-  }
-
-  private setupEventListener(eventType: string): void {
-    if (!this.eventSource) return
-
-    this.eventSource.addEventListener(eventType, (e: Event) => {
-      if (!(e instanceof MessageEvent)) return
-
-      try {
-        this.lastEventId = e.lastEventId || this.lastEventId
-        const data = JSON.parse(e.data) as SseEvent
-
-        this.reconnectAttempts = 0
-
-        this.listeners.forEach((listener) => {
-          try {
-            listener.onEvent(data)
-          } catch (error) {
-            console.error('Listener error:', error)
-          }
-        })
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error))
-        this.listeners.forEach((listener) => {
-          listener.onError(err)
-        })
-      }
-    })
-  }
-
-  private handleConnectionError(): void {
-    this.disconnect()
-
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++
-      const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000)
-
-      this.listeners.forEach((listener) => {
-        listener.onReconnect()
-      })
-
-      setTimeout(() => {
-        this.connect()
-      }, delay)
-    } else {
-      const error = new Error(
-        'Max reconnection attempts reached'
-      )
-      this.listeners.forEach((listener) => {
-        listener.onError(error)
-      })
-    }
-  }
-
-  private disconnect(): void {
-    if (this.eventSource) {
-      this.eventSource.close()
-      this.eventSource = null
-    }
-  }
-
-  public close(): void {
-    this.listeners.clear()
-    this.disconnect()
-  }
-
-  public getLastEventId(): string {
+  get lastId(): string | null {
     return this.lastEventId
   }
 
-  public isConnected(): boolean {
-    return (
-      this.eventSource !== null &&
-      this.eventSource.readyState === 1 // EventSource.OPEN
-    )
+  start(): void {
+    if (!this.stopped) return
+    this.stopped = false
+    this.handlers.onStatus('connecting')
+    void this.connect()
   }
 
-  public getReconnectAttempts(): number {
-    return this.reconnectAttempts
+  stop(): void {
+    this.stopped = true
+    this.clearTimers()
+    this.controller?.abort()
+    this.controller = null
+    this.handlers.onStatus('closed')
+  }
+
+  /** Next backoff delay: base × 2^attempt, capped. */
+  delayFor(attempt: number): number {
+    return Math.min(this.options.maxDelayMs, this.options.baseDelayMs * 2 ** attempt)
+  }
+
+  private headers(): Record<string, string> {
+    const headers: Record<string, string> = { Accept: 'text/event-stream', 'Cache-Control': 'no-cache' }
+    if (this.lastEventId) headers['Last-Event-ID'] = this.lastEventId
+    return headers
+  }
+
+  private async connect(): Promise<void> {
+    const controller = new AbortController()
+    this.controller = controller
+    try {
+      const response = await this.fetchImpl(this.url, { headers: this.headers(), signal: controller.signal })
+      if (!response.ok || !response.body) throw new Error(`stream HTTP ${response.status}`)
+      this.handlers.onStatus('open')
+      await this.pump(response.body, controller)
+      if (!controller.signal.aborted) console.warn('[stream] server closed the stream; reconnecting')
+    } catch (error) {
+      if (!controller.signal.aborted || !this.stopped) console.warn('[stream] connection lost', error)
+    }
+    this.scheduleReconnect(controller)
+  }
+
+  private async pump(body: ReadableStream<Uint8Array>, controller: AbortController): Promise<void> {
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    const parser = new SseParser()
+    /** Set once the lock is released, so a late watchdog never cancels a released reader. */
+    const lease = { released: false }
+    this.armSilenceWatchdog(controller, reader, lease)
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) return
+        this.attempt = 0
+        this.armSilenceWatchdog(controller, reader, lease)
+        for (const message of parser.push(decoder.decode(value, { stream: true }))) {
+          if (message.id !== null) this.lastEventId = message.id
+          const event = decodeEvent(message.event, message.data)
+          if (event) this.handlers.onEvent(event)
+        }
+      }
+    } finally {
+      lease.released = true
+      reader.releaseLock()
+    }
+  }
+
+  /** No bytes for `silenceMs` ⇒ abort the request and cancel the body (works for any stream). */
+  private armSilenceWatchdog(controller: AbortController, reader: ReadableStreamDefaultReader<Uint8Array>, lease: { readonly released: boolean }): void {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer)
+    this.silenceTimer = setTimeout(() => {
+      if (lease.released) return
+      console.warn('[stream] no data or keep-alive in time; reconnecting')
+      controller.abort()
+      reader.cancel().catch((error: unknown) => console.warn('[stream] cancel failed', error))
+    }, this.options.silenceMs)
+  }
+
+  private scheduleReconnect(controller: AbortController): void {
+    if (this.stopped || this.controller !== controller) return
+    this.clearTimers()
+    this.handlers.onStatus('reconnecting')
+    const delay = this.delayFor(this.attempt)
+    this.attempt += 1
+    this.retryTimer = setTimeout(() => void this.connect(), delay)
+  }
+
+  private clearTimers(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer)
+    if (this.silenceTimer) clearTimeout(this.silenceTimer)
+    this.retryTimer = null
+    this.silenceTimer = null
   }
 }
-
-const sseStream = new SseStream()
-export { sseStream }
