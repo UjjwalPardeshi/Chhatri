@@ -1,82 +1,94 @@
-"""Tests for optional LLM NLU (SPEC §13.2). Falls back to rules on any error."""
+"""Optional LLM NLU (SPEC §13.2): rules first, LLM only for UNKNOWN, rules on any error."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
 
 import pytest
 
 from chhatri.conversation.intents import Intent
-from chhatri.conversation.nlu import classify_with_llm
-from chhatri.integrations.base import ChatModel, IntegrationError
+from chhatri.conversation.nlu import INTENT_SCHEMA, IntentResult, detect_intent
+from chhatri.integrations.base import IntegrationError
 
 
-class FakeChatModel(ChatModel):
-    """Fake chat model for testing."""
-
-    def __init__(self, response: dict | None = None, error: str | None = None):
-        self.response = response
+class FakeChat:
+    def __init__(self, result: Any = None, error: BaseException | None = None) -> None:
+        self.result = result
         self.error = error
+        self.calls: list[tuple[str, str, dict[str, Any], str]] = []
 
     async def complete_json(
-        self, system: str, user: str, schema: dict, *, schema_name: str
-    ) -> dict:
-        if self.error:
-            raise IntegrationError("fake_chat", self.error)
-        if self.response is None:
-            raise ValueError("No response configured")
-        return self.response
+        self, system: str, user: str, schema: dict[str, Any], *, schema_name: str
+    ) -> dict[str, Any]:
+        self.calls.append((system, user, schema, schema_name))
+        if self.error is not None:
+            raise self.error
+        return self.result
 
 
-@pytest.mark.asyncio
-async def test_classify_with_llm_success():
-    """LLM returns a valid intent."""
-    chat = FakeChatModel(response={"intent": "WHY_AMOUNT"})
-    result = await classify_with_llm("why did I get only this", chat)
-    assert result == Intent.WHY_AMOUNT
+async def test_rules_only_without_chat() -> None:
+    assert await detect_intent("मेरा नुकसान ज़्यादा हुआ।", None) == IntentResult(Intent.DISPUTE_AMOUNT, "rules")
+    assert await detect_intent("gibberish words", None) == IntentResult(Intent.UNKNOWN, "rules")
 
 
-@pytest.mark.asyncio
-async def test_classify_with_llm_valid_enum_values():
-    """LLM returns valid enum value."""
-    for intent_value in [
-        "WHY_AMOUNT",
-        "DISPUTE_AMOUNT",
-        "REPORT_ILLNESS",
-        "BUY_COVER",
-        "COVER_STATUS",
-        "GREETING",
-        "AFFIRM",
-        "DENY",
-        "UNKNOWN",
-    ]:
-        chat = FakeChatModel(response={"intent": intent_value})
-        result = await classify_with_llm("test text", chat)
-        assert result == Intent(intent_value)
+async def test_rules_win_for_known_utterances_and_chat_is_not_called() -> None:
+    chat = FakeChat({"intent": "GREETING"})
+    result = await detect_intent("Red alert tomorrow. Cover me today.", chat)
+    assert result == IntentResult(Intent.BUY_COVER, "rules")
+    assert chat.calls == []
 
 
-@pytest.mark.asyncio
-async def test_classify_with_llm_invalid_intent_fallback():
-    """LLM returns invalid intent → fall back to rules."""
-    # Fallback should return UNKNOWN or use rules
-    chat = FakeChatModel(response={"intent": "INVALID_INTENT"})
-    result = await classify_with_llm("test text", chat)
-    # Should not raise, should fall back gracefully
-    assert isinstance(result, Intent)
+async def test_llm_extends_unknown_text() -> None:
+    chat = FakeChat({"intent": "REPORT_ILLNESS"})
+    result = await detect_intent("my leg is broken, can't open the shop", chat)
+    assert result == IntentResult(Intent.REPORT_ILLNESS, "llm")
+    system, user, schema, name = chat.calls[0]
+    assert schema is INTENT_SCHEMA
+    assert name == "merchant_intent"
+    assert "my leg is broken" in user
+    assert "WHY_AMOUNT" in system
 
 
-@pytest.mark.asyncio
-async def test_classify_with_llm_error_fallback():
-    """LLM error → fall back to rules."""
-    chat = FakeChatModel(error="API timeout")
-    result = await classify_with_llm(
-        "मुझे इतने ही पैसे क्यों मिले?", chat
+def test_schema_enumerates_exactly_the_intents() -> None:
+    assert INTENT_SCHEMA["properties"]["intent"]["enum"] == [i.value for i in Intent]
+    assert INTENT_SCHEMA["required"] == ["intent"]
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        {"intent": "APPROVE_PAYMENT"},
+        {"intent": "why_amount"},
+        {"intent": 3},
+        {},
+        ["WHY_AMOUNT"],
+        None,
+    ],
+)
+async def test_invalid_llm_output_falls_back_to_rules(result: Any, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.WARNING)
+    outcome = await detect_intent("something unclear", FakeChat(result))
+    assert outcome == IntentResult(Intent.UNKNOWN, "rules")
+    assert "falling back to rules" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        IntegrationError("sarvam_chat", "timeout", retryable=True),
+        ValueError("bad json"),
+        RuntimeError("boom"),
+    ],
+)
+async def test_llm_errors_fall_back_to_rules(error: BaseException, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.WARNING)
+    outcome = await detect_intent("something unclear", FakeChat(error=error))
+    assert outcome == IntentResult(Intent.UNKNOWN, "rules")
+    assert "falling back to rules" in caplog.text
+
+
+async def test_llm_unknown_is_accepted_as_unknown() -> None:
+    assert await detect_intent("something unclear", FakeChat({"intent": "UNKNOWN"})) == IntentResult(
+        Intent.UNKNOWN, "llm"
     )
-    # Should fall back to rules and get WHY_AMOUNT
-    assert result == Intent.WHY_AMOUNT
-
-
-@pytest.mark.asyncio
-async def test_classify_with_llm_none_chat():
-    """chat=None → use rules only."""
-    result = await classify_with_llm(
-        "मुझे इतने ही पैसे क्यों मिले?", None
-    )
-    # Should fall back to rules
-    assert result == Intent.WHY_AMOUNT

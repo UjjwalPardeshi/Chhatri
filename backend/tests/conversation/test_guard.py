@@ -1,78 +1,71 @@
-"""Tests for guard function (SPEC §13.3). Reject digit sequences and false promises."""
+"""Free-text guard (SPEC §13.3, §24.4)."""
+
+from __future__ import annotations
 
 import pytest
 
-from chhatri.conversation.guard import grounded
+from chhatri.conversation.guard import grounded, numbers_in
+
+FACTS = ("₹4,380", "63%", "₹1,380", "C-2291")
 
 
-class TestGuarded:
-    """Test grounded(reply, allowed_numbers) function."""
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Your usual Tuesday: ₹4,380. Your area fell 63%.",
+        "आपका आम मंगलवार: ₹4,380। आज आपके इलाके की बिक्री 63% गिरी।",
+        "Half of the lost sales is ₹1,380.",
+        "Your case C-2291 is with our team.",
+        "Rain hit your area today.",
+        "",
+        "आपका आम मंगलवार: ₹४,३८०।",  # Devanagari digits are the same number
+    ],
+)
+def test_grounded_replies_pass(reply: str) -> None:
+    assert grounded(reply, FACTS) is True
 
-    def test_grounded_no_numbers_is_safe(self):
-        # Safe text without numbers
-        reply = "Thank you for this help"
-        assert grounded(reply, []) is True
-        assert grounded(reply, ["1000", "2000"]) is True
 
-    def test_grounded_allowed_number(self):
-        # Digit sequence in allowed list
-        reply = "I got ₹1,380"
-        assert grounded(reply, ["1380", "1,380"]) is True
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "You lost ₹5,000 today.",  # number not in the facts
+        "Your area fell 64%.",
+        "Case C-2292 is open.",
+        "₹1,380.50 was credited.",  # the 50 is not a fact
+        "आपको ₹२,००० मिलेंगे।",
+    ],
+)
+def test_ungrounded_numbers_fail(reply: str) -> None:
+    assert grounded(reply, FACTS) is False
 
-    def test_grounded_disallowed_number(self):
-        # Digit sequence NOT in allowed list
-        reply = "I got ₹5,000"
-        assert grounded(reply, ["1380", "2000"]) is False
 
-    def test_grounded_digit_sequence_normalization(self):
-        # "₹1,380" should match "1380" (digits only)
-        reply = "I got ₹1,380"
-        assert grounded(reply, ["1380"]) is True
-        # But not if the digit sequence is not in the list
-        assert grounded(reply, ["138"]) is False
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Your claim is approved.",
+        "I guarantee you will be paid.",
+        "Don't worry, you will get the money tomorrow.",
+        "We will pay you ₹1,380.",
+        "We promise a refund.",
+        "आपका दावा मंज़ूर है।",
+        "आपका दावा मंजूर हो जाएगा।",
+        "पक्का पैसे मिल जाएंगे।",
+        "हम आपको भुगतान कर देंगे।",
+        "claim pass ho jayega",
+        "paise mil jayenge",
+    ],
+)
+def test_money_or_approval_promises_fail(reply: str) -> None:
+    assert grounded(reply, FACTS) is False
 
-    def test_grounded_rejects_money_promises(self):
-        # Promises of money not grounded in facts
-        reply = "I'll give you ₹5,000 tomorrow"
-        assert grounded(reply, []) is False
 
-    def test_grounded_rejects_approval_promises(self):
-        # False promises of approval
-        reply = "Your claim is approved!"
-        assert grounded(reply, []) is False
+def test_numbers_in_normalises_grouping_currency_percent_and_script() -> None:
+    assert numbers_in("₹1,58,900 and 63% and ₹1.80") == frozenset({"158900", "63", "1", "80"})
+    assert numbers_in("१,३८०") == frozenset({"1380"})
+    assert numbers_in("no digits") == frozenset()
 
-        reply = "You're definitely getting paid"
-        assert grounded(reply, []) is False
 
-    def test_grounded_rejects_assurances_not_facts(self):
-        # Assurances that go beyond facts
-        reply = "I promise you'll get money"
-        assert grounded(reply, []) is False
-
-    def test_grounded_rejects_guarantees(self):
-        reply = "I guarantee this will work"
-        assert grounded(reply, []) is False
-
-    def test_grounded_true_when_empty_reply(self):
-        # Empty or whitespace-only reply
-        assert grounded("", []) is True
-        assert grounded("   ", []) is True
-
-    def test_grounded_allows_template_text(self):
-        # Template text from the system should be allowed
-        reply = "Your usual Tuesday: ₹4,380. Your area fell 63%. Chhatri pays half the lost sales."
-        allowed = ["4380", "4,380", "63"]
-        assert grounded(reply, allowed) is True
-
-    def test_grounded_rejects_multiple_disallowed_numbers(self):
-        reply = "You got ₹5,000 and then ₹3,000"
-        assert grounded(reply, ["1000"]) is False
-
-    def test_grounded_hindi_promises(self):
-        # Hindi: "मैं आपको पैसे दूंगा"
-        reply = "मैं आपको ₹5,000 दूंगा"
-        assert grounded(reply, []) is False
-
-    def test_grounded_mixed_hindi_english(self):
-        reply = "Your claim is मंज़ूर (approved)"
-        assert grounded(reply, []) is False
+def test_allowed_numbers_are_normalised_the_same_way() -> None:
+    assert grounded("₹1380 today", ["₹1,380"]) is True
+    assert grounded("1,380 today", ["1380"]) is True
+    assert grounded("63 percent", [63]) is True  # type: ignore[list-item]
