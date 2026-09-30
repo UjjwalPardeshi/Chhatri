@@ -1,0 +1,354 @@
+/* Overview (SPEC §20 "/"): storm, journeys, humans in control, proof (deck slides 6-8, 11). */
+
+/* Storm (deck slide 6) on navy: the map about 60% of the row, the live panel beside it. */
+.ov-storm__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--sp-10);
+  align-items: start;
+}
+
+.ov-storm__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.ov-storm__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-6) 0 var(--sp-2);
+}
+
+.ov-storm .inline-error {
+  margin-top: var(--sp-2);
+}
+
+/* Journeys (deck slide 7). */
+.journeys {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 36px;
+}
+
+.journey {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.journey__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-md);
+}
+
+.journey__head strong {
+  color: var(--blue);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.journey__n {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.journey__phone {
+  height: 640px;
+}
+
+.journey__go {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.journey__hint {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Humans in control (deck slide 8). */
+.ov-humans__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--sp-10);
+  align-items: start;
+}
+
+.ov-humans .authority,
+.policy-grid .authority {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--card);
+}
+
+.ov-humans .authority td,
+.ov-humans .authority th {
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-md);
+}
+
+.ov-humans .authority tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* The three live tests (shared with /policy): badge column, hanging text, Run it. */
+.live-tests {
+  padding: var(--sp-6) 28px;
+  border-radius: var(--radius-lg);
+  background: var(--ink);
+  color: #fff;
+}
+
+.live-tests__title {
+  color: var(--accent);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.live-tests__list {
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.live-test {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  grid-template-areas:
+    'quote quote'
+    'badge text'
+    '. run';
+  column-gap: 10px;
+  row-gap: var(--sp-2);
+  align-items: start;
+  padding: var(--sp-5) 0;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+}
+
+.live-test__quote {
+  grid-area: quote;
+  font-size: var(--fs-lg);
+}
+
+.live-test__badge {
+  grid-area: badge;
+  justify-content: center;
+  height: 26px;
+  font-size: var(--fs-xs);
+}
+
+.live-test__text {
+  grid-area: text;
+  padding-top: 3px;
+  color: var(--on-navy-2);
+  font-size: var(--fs-base);
+  line-height: 1.45;
+}
+
+.live-test__run {
+  grid-area: run;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #fff;
+  font-size: var(--fs-sm);
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.live-test__run:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.live-test__run:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.live-tests .inline-error {
+  margin-top: var(--sp-2);
+}
+
+/* Proof (deck slide 11): paired bars on one 0-100% axis, direct labels, no tracks. */
+.proof__pairs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-10);
+}
+
+.proof-pair {
+  margin: 0;
+}
+
+.proof-pair figcaption {
+  margin-bottom: 14px;
+  font-size: var(--fs-md);
+}
+
+.proof-pair figcaption strong {
+  font-weight: 500;
+}
+
+.proof-bar {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) 128px;
+  gap: var(--sp-3);
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: var(--fs-base);
+}
+
+.proof-bar__track {
+  height: 24px;
+}
+
+.proof-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: #9aa7bb;
+  transform-origin: left center;
+  transform: scaleX(0.02);
+  transition: transform 1000ms var(--ease-out) 200ms;
+}
+
+.reveal.is-in .proof-bar__fill,
+.page .proof-bar__fill {
+  transform: scaleX(1);
+}
+
+.proof-bar--ours .proof-bar__name {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.proof-bar--ours .proof-bar__fill {
+  background: var(--blue);
+}
+
+.proof-bar__value strong {
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+
+.proof-bar--ours .proof-bar__value strong {
+  color: var(--blue);
+}
+
+.proof__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-6);
+  margin: var(--sp-8) 0 0;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.proof__facts dt {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.proof__facts dd {
+  margin: var(--sp-1) 0 0;
+  color: var(--ink);
+  font-size: var(--fs-2xl);
+  font-weight: 500;
+}
+
+.proof__facts .proof__sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+@media (max-width: 1100px) {
+  .ov-storm__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ov-storm__panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .ov-storm__panel,
+  .ov-humans__grid,
+  .proof__pairs,
+  .proof__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Phones: one journey per swipe, the next one peeking in. */
+  .journeys {
+    grid-template-columns: none;
+    grid-auto-columns: 85%;
+    grid-auto-flow: column;
+    gap: var(--sp-4);
+    margin: 0 calc(-1 * var(--ov-pad-x));
+    padding: 0 var(--ov-pad-x) var(--sp-2);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding: 0 var(--ov-pad-x);
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .journey {
+    scroll-snap-align: start;
+  }
+
+  .journey__phone {
+    width: 100%;
+    max-width: none;
+    height: 600px;
+  }
+
+  .proof-bar {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+
+  .proof-bar__value {
+    grid-column: 2;
+  }
+
+  .ov-humans .authority td,
+  .ov-humans .authority th {
+    padding: 10px;
+    font-size: var(--fs-sm);
+  }
+
+  .live-tests {
+    padding: var(--sp-5);
+  }
+
+  .live-test {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,495 @@
+/*
+ * Overview homepage (SPEC §20 "/", B10; deck slides 1-13). Sections alternate navy, paper and
+ * white like the deck's bookends; a hairline separates two sections only when their surface is
+ * the same. Tokens only (tokens.css).
+ */
+.overview {
+  --ov-max: 1180px;
+  --ov-pad-x: 40px;
+  background: var(--paper);
+}
+
+/* Section frame + scroll reveal (motion: the story arrives section by section). */
+.ov-section--paper {
+  background: var(--paper);
+}
+
+.ov-section--white {
+  background: var(--card);
+}
+
+.ov-section--navy {
+  background:
+    radial-gradient(70% 60% at 20% 0%, rgb(56 163 232 / 10%), transparent 70%),
+    var(--navy);
+  color: var(--on-navy);
+}
+
+.ov-section__inner {
+  max-width: var(--ov-max);
+  margin: 0 auto;
+  padding: var(--sp-18) var(--ov-pad-x) var(--sp-14);
+}
+
+.ov-section--paper + .ov-section--paper .ov-section__inner,
+.ov-section--white + .ov-section--white .ov-section__inner {
+  border-top: 1px solid var(--line);
+}
+
+.reveal .ov-section__inner {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity var(--dur-reveal) var(--ease-out),
+    transform 700ms var(--ease-out);
+}
+
+.reveal.is-in .ov-section__inner {
+  opacity: 1;
+  transform: none;
+}
+
+.ov-h2 {
+  max-width: 30em;
+  margin-bottom: var(--sp-8);
+  color: var(--ink);
+  font-size: var(--fs-3xl);
+  font-weight: 500;
+  line-height: 1.16;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
+}
+
+.ov-h2--light,
+.ov-section--navy .ov-h2 {
+  color: var(--on-navy);
+}
+
+.ov-label {
+  margin-bottom: 14px;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+.ov-lede {
+  max-width: 72ch;
+  margin-top: var(--sp-6);
+  color: var(--ink-2);
+  font-size: var(--fs-lg);
+  line-height: 1.55;
+}
+
+.ov-lede strong,
+.failures__fix strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.ov-note {
+  margin-top: var(--sp-3);
+  color: var(--ink-2);
+  font-size: var(--fs-base);
+}
+
+.ov-source {
+  margin-top: var(--sp-6);
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+
+.ov-section--navy .ov-source {
+  color: var(--on-navy-3);
+}
+
+/* Pill buttons with a nested arrow (tactile press, never wraps). */
+.ov-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 48px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.ov-btn:hover {
+  text-decoration: none;
+}
+
+.ov-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.ov-btn[aria-busy='true'] {
+  opacity: 1;
+}
+
+.ov-btn--primary {
+  padding-right: 6px;
+  background: var(--blue);
+  color: #fff;
+}
+
+.ov-btn--primary:hover:not(:disabled) {
+  background: var(--blue-hover);
+}
+
+.ov-btn__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 16%);
+  transition: transform var(--dur-ui) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ov-btn--primary:hover .ov-btn__icon {
+    transform: translateX(2px);
+  }
+}
+
+.ov-btn--ghost {
+  border-color: rgb(255 255 255 / 34%);
+  color: #fff;
+}
+
+.ov-btn--ghost:hover:not(:disabled) {
+  border-color: #fff;
+  background: rgb(255 255 255 / 8%);
+}
+
+.ov-btn--quiet {
+  height: 42px;
+  border-color: var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--fs-base);
+}
+
+.ov-btn--quiet:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.ov-btn--link {
+  height: 42px;
+  padding: 0 var(--sp-2);
+  color: var(--accent);
+  font-size: var(--fs-base);
+  text-decoration: underline;
+  text-decoration-color: rgb(56 163 232 / 40%);
+  text-underline-offset: 4px;
+}
+
+.ov-btn--link:hover:not(:disabled) {
+  color: #7cc3f0;
+}
+
+/* On navy, the primary CTA takes the deck accent so it reads first. */
+.ov-hero .ov-btn--primary,
+.ov-section--navy .ov-btn--primary,
+.ov-closing .ov-btn--primary {
+  background: var(--accent);
+  color: var(--navy);
+}
+
+.ov-hero .ov-btn--primary:hover:not(:disabled),
+.ov-section--navy .ov-btn--primary:hover:not(:disabled),
+.ov-closing .ov-btn--primary:hover:not(:disabled) {
+  background: #5bb5ee;
+}
+
+.ov-hero .ov-btn__icon,
+.ov-section--navy .ov-btn__icon,
+.ov-closing .ov-btn__icon {
+  background: rgb(15 26 51 / 14%);
+}
+
+/* Hero (deck slide 1): fits the first screen at 1280x720 with the phone's bottom bezel visible. */
+.ov-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(60% 80% at 82% 38%, rgb(56 163 232 / 16%), transparent 70%),
+    var(--navy);
+  color: var(--on-navy);
+}
+
+.ov-hero__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 316px;
+  align-items: center;
+  gap: var(--sp-14);
+  max-width: var(--ov-max);
+  min-height: calc(100dvh - var(--header-h) - var(--footer-h));
+  margin: 0 auto;
+  padding: var(--sp-6) var(--ov-pad-x);
+}
+
+.ov-kicker {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ov-hero__name {
+  margin: var(--sp-3) 0 0;
+  font-size: 96px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.ov-hero__gloss {
+  color: var(--on-navy-3);
+  font-size: var(--fs-2xl);
+  font-weight: 300;
+  letter-spacing: 0;
+}
+
+.ov-hero__claim {
+  max-width: 22ch;
+  margin-top: var(--sp-4);
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.ov-hero__sub {
+  max-width: 46ch;
+  margin-top: var(--sp-4);
+  color: var(--on-navy-2);
+  font-size: var(--fs-lg);
+  font-weight: 300;
+  line-height: 1.55;
+}
+
+.ov-hero__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+}
+
+.ov-hero .inline-error,
+.ov-closing .inline-error {
+  margin-top: var(--sp-3);
+}
+
+/* The 10-second takeaway: large numerals, small labels, no cards. */
+.ov-figures {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  gap: var(--sp-8);
+  margin: var(--sp-8) 0 0;
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--navy-line);
+}
+
+.ov-figure {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+
+.ov-figure dt {
+  color: var(--on-navy-3);
+  font-size: var(--fs-sm);
+}
+
+.ov-figure dd {
+  margin: 0;
+  color: var(--on-navy);
+  font-size: var(--fs-2xl);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+/* Story phones: the real phone components, sized for the page. */
+.story-phone {
+  height: 610px;
+  color: var(--ink);
+}
+
+.story-phone .day-chip,
+.story-phone .bubble__voice,
+.story-phone .voice__tag,
+.story-phone .photo figcaption {
+  display: none;
+}
+
+.story-phone .phone__thread {
+  gap: 6px;
+  padding: 8px 9px;
+  overflow: hidden;
+}
+
+.story-phone .bubble__hi {
+  font-size: var(--fs-sm);
+  line-height: 1.42;
+}
+
+.story-phone .bubble__en {
+  font-size: var(--fs-2xs);
+}
+
+.story-phone .photo img {
+  max-height: 64px;
+}
+
+.story-phone .payout-card__amount {
+  font-size: var(--fs-2xl);
+}
+
+.story-phone .soundbox {
+  margin: 6px 8px 8px;
+}
+
+.story-phone .phone {
+  height: 100%;
+  max-height: none;
+  border-color: #1b2440;
+  box-shadow: var(--shadow-navy);
+}
+
+.ov-hero__phone {
+  height: min(592px, calc(100dvh - var(--header-h) - var(--footer-h) - 2 * var(--sp-6)));
+}
+
+.ov-hero__phone .phone__status {
+  padding-top: 5px;
+}
+
+.ov-hero__phone .phone__header {
+  padding-bottom: 8px;
+}
+
+.ov-hero__phone .bubble-row,
+.ov-hero__phone .soundbox {
+  animation: story-in 520ms var(--ease-out) both;
+}
+
+.ov-hero__phone .phone__thread > :nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.ov-hero__phone .phone__thread > :nth-child(4) {
+  animation-delay: 520ms;
+}
+
+.ov-hero__phone .phone__thread > :nth-child(5) {
+  animation-delay: 1000ms;
+}
+
+.ov-hero__phone .soundbox {
+  animation-delay: 1400ms;
+}
+
+@keyframes story-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal .ov-section__inner,
+  .engine__step,
+  .wait-row__bar,
+  .proof-bar__fill,
+  .revenue__bar {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .ov-hero__phone .bubble-row,
+  .ov-hero__phone .soundbox {
+    animation: none;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .ov-hero__name {
+    font-size: 80px;
+  }
+
+  .ov-figures {
+    gap: var(--sp-6);
+  }
+}
+
+@media (max-width: 900px) {
+  .overview {
+    --ov-pad-x: 16px;
+  }
+
+  .ov-section__inner {
+    padding-top: var(--sp-10);
+    padding-bottom: var(--sp-10);
+  }
+
+  .ov-hero__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-8);
+    min-height: 0;
+    padding-top: var(--sp-8);
+    padding-bottom: var(--sp-10);
+  }
+
+  .ov-hero__name {
+    font-size: 64px;
+  }
+
+  .ov-hero__gloss {
+    display: block;
+    margin-top: var(--sp-2);
+    font-size: var(--fs-xl);
+  }
+
+  .ov-hero__claim {
+    font-size: 30px;
+  }
+
+  .ov-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-5) var(--sp-4);
+  }
+
+  .ov-h2 {
+    font-size: var(--fs-2xl);
+  }
+
+  .ov-btn {
+    height: 46px;
+  }
+
+  .story-phone,
+  .ov-hero__phone {
+    width: 100%;
+    max-width: 340px;
+    height: 560px;
+    margin: 0 auto;
+  }
+}

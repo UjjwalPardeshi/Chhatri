@@ -1,0 +1,174 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 18px 22px 28px;
+}
+
+.page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page__head h1 {
+  margin: 2px 0 4px;
+  font-size: var(--fs-2xl);
+}
+
+.page__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.page__tools .input {
+  width: 260px;
+}
+
+.verify {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.verify--ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.verify--bad {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+.audit-table td {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.actor {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--paper);
+  font-size: var(--fs-xs);
+}
+
+.section {
+  padding: 14px 18px;
+}
+
+.section h2 {
+  margin-bottom: 10px;
+  font-size: var(--fs-lg);
+}
+
+.compare td {
+  font-size: var(--fs-base);
+}
+
+.compare__us {
+  color: var(--blue) !important;
+}
+
+.compare__best {
+  color: var(--green);
+  font-weight: 500;
+}
+
+.ratio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 200px;
+}
+
+.ratio__bar {
+  height: 8px;
+  max-width: 150px;
+  border-radius: 4px;
+  background: var(--amber);
+}
+
+.notes {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--fs-xs);
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 14px;
+}
+
+.authority td {
+  font-size: var(--fs-base);
+}
+
+.cell--pays {
+  color: var(--green);
+  font-weight: 500;
+}
+
+.cell--never {
+  color: var(--red);
+  font-weight: 500;
+}
+
+.rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--sp-8);
+  margin: 0;
+}
+
+.rules__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 40px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.rules__row dt {
+  color: var(--ink-3);
+}
+
+.rules__row dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 500;
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding: 14px 16px 24px;
+  }
+
+  .policy-grid,
+  .rules {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .table-wrap,
+  .section {
+    overflow-x: auto;
+  }
+
+  .page__tools .input {
+    width: 100%;
+  }
+}

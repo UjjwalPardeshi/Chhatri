@@ -1,0 +1,372 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hi,
+[lang='hi'] {
+  font-family: var(--font-hi);
+}
+
+.num,
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.eyebrow {
+  color: var(--blue);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--paper);
+  border-color: var(--faint);
+}
+
+.btn--primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--blue-hover);
+  border-color: var(--blue-hover);
+}
+
+.btn--approve {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.btn--approve:hover:not(:disabled) {
+  background: #11692f;
+}
+
+.btn--decline {
+  background: var(--card);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn--decline:hover:not(:disabled) {
+  background: var(--red-soft);
+}
+
+.btn--icon {
+  width: 32px;
+  padding: 0;
+}
+
+.btn--lg {
+  height: 40px;
+  padding: 0 18px;
+  font-size: var(--fs-md);
+}
+
+.input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge--red {
+  background: var(--red);
+  color: #fff;
+}
+
+.badge--amber {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.badge--green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.badge--blue {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.badge--grey {
+  background: var(--grey-soft);
+  color: var(--muted);
+}
+
+.badge--solid-blue {
+  background: var(--blue);
+  color: #fff;
+}
+
+.badge--solid-amber {
+  background: var(--amber-solid);
+  color: #fff;
+}
+
+.badge--solid-red {
+  background: var(--red);
+  color: #fff;
+}
+
+.badge--navy {
+  background: var(--navy);
+  color: #fff;
+}
+
+.status-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.status-box--error {
+  color: var(--red);
+}
+
+.status-box__title {
+  font-weight: 500;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--line);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.inline-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius-sm);
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: var(--fs-sm);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.table td.num,
+.table th.num {
+  text-align: right;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion: every animation runs once and instantly (no strobing loops), no smooth scroll. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Semantic wrappers (output = live status, fieldset = control group) without browser chrome. */
+output {
+  display: block;
+}
+
+fieldset {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.spinner {
+  display: block;
+}

@@ -1,0 +1,711 @@
+/*
+ * App frame (SPEC §20): header, replay controls (live pages only), page, footer. Named grid areas,
+ * so a page without the control bar (the Overview) can never shift the footer into the page row.
+ */
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'header'
+    'controls'
+    'main'
+    'footer';
+  grid-template-rows: var(--header-h) auto minmax(0, 1fr) var(--footer-h);
+  height: 100vh;
+  height: 100dvh;
+}
+
+.app--overview {
+  grid-template-areas:
+    'header'
+    'main'
+    'footer';
+  grid-template-rows: var(--header-h) minmax(0, 1fr) var(--footer-h);
+}
+
+.app-header {
+  grid-area: header;
+}
+
+.control-bar {
+  grid-area: controls;
+}
+
+/* Positioned, so absolutely placed descendants (visually-hidden labels) stay inside the scroller. */
+.app-main {
+  position: relative;
+  grid-area: main;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app-footer {
+  grid-area: footer;
+}
+
+/* Header */
+.app-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: 0 var(--sp-4);
+  background: var(--navy);
+  color: var(--on-navy);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex: none;
+  color: inherit;
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+.brand__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  align-self: center;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--navy);
+}
+
+.brand__word {
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.brand__hi {
+  color: var(--on-navy-3);
+  font-size: var(--fs-sm);
+}
+
+.app-nav {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.app-nav__link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 11px;
+  border-radius: var(--radius-sm);
+  color: var(--on-navy-2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.app-nav__link:hover {
+  background: rgb(255 255 255 / 8%);
+  color: var(--on-navy);
+  text-decoration: none;
+}
+
+.app-nav__link.is-active {
+  background: rgb(56 163 232 / 20%);
+  color: var(--on-navy);
+}
+
+/* The count sits on the link's corner, so it appearing never shifts the nav. */
+.app-nav__count {
+  position: absolute;
+  top: 1px;
+  right: -3px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid var(--navy);
+  border-radius: var(--radius-pill);
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  animation: count-in var(--dur-ui) var(--ease-out);
+}
+
+@keyframes count-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+  flex: none;
+}
+
+/* Integration status (SPEC §0.1, §20): LIVE green / SIMULATED grey, details in the popover. */
+.integrations {
+  position: relative;
+}
+
+.integrations-summary {
+  display: inline-flex;
+  align-items: stretch;
+  height: 30px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 6%);
+  color: var(--on-navy-2);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  transition:
+    border-color 120ms ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.integrations-summary:hover {
+  border-color: rgb(255 255 255 / 40%);
+}
+
+.integrations-summary:active {
+  transform: scale(0.97);
+}
+
+.integrations-summary__seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+}
+
+.integrations-summary__seg strong {
+  color: var(--on-navy);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.integrations-summary__seg--live {
+  border-right: 1px solid rgb(255 255 255 / 14%);
+}
+
+.integrations-summary__seg--live[data-count='0'] {
+  color: var(--on-navy-3);
+}
+
+.integrations-summary__glyph {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgb(34 197 94 / 22%);
+}
+
+.integrations-summary__seg--live[data-count='0'] .integrations-summary__glyph {
+  background: var(--on-navy-3);
+  box-shadow: none;
+}
+
+.integrations-summary__seg--sim {
+  background: rgb(255 255 255 / 5%);
+}
+
+.integrations-summary--error,
+.integrations-summary--loading {
+  align-items: center;
+  padding: 0 12px;
+  letter-spacing: 0;
+}
+
+.integrations-summary--error {
+  border-color: #f1a5a5;
+  color: #ffd1d1;
+}
+
+.integrations-popover {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  z-index: var(--z-popover);
+  width: 470px;
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+  transform-origin: top right;
+  animation: pop-in var(--dur-ui) var(--ease-out);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+}
+
+.integrations-popover__title {
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.integration-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.integration {
+  display: grid;
+  grid-template-columns: 10px 112px 82px 1fr;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-xs);
+}
+
+.integration__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.integration--live .integration__dot {
+  background: var(--green);
+}
+
+.integration__name {
+  font-weight: 500;
+}
+
+.integration__mode {
+  justify-self: start;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--grey-soft);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.integration--live .integration__mode {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.integration__detail {
+  color: var(--muted);
+}
+
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--on-navy);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    background-color 120ms ease;
+}
+
+.sound-toggle:active {
+  transform: scale(0.97);
+}
+
+.sound-toggle--on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--navy);
+}
+
+.connection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.connection-pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Replay controls */
+.control-bar {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 7px var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+
+.control-bar--empty {
+  color: var(--muted);
+}
+
+.scenario-select {
+  flex: none;
+  width: 262px;
+  font-weight: 500;
+}
+
+.clock-label {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow: hidden;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.clock-label__main {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.clock-label__time {
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-label__tail {
+  color: var(--muted);
+}
+
+.clock-label__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+.clock-label[data-running='true'] .clock-label__dot {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.transport {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.transport__play {
+  min-width: 84px;
+}
+
+.transport__more-toggle {
+  display: none;
+}
+
+.transport__more {
+  display: contents;
+}
+
+.speed .input {
+  width: 96px;
+}
+
+.seek {
+  display: flex;
+  gap: 4px;
+}
+
+.seek__input {
+  width: 64px;
+  text-align: center;
+}
+
+.seek__input::placeholder {
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+.seek__input.is-invalid {
+  border-color: var(--red);
+}
+
+.control-bar__error {
+  position: absolute;
+  top: 100%;
+  right: var(--sp-4);
+  z-index: var(--z-popover);
+  margin-top: 6px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Replay progress: a hairline scaled from the left (transform only). */
+.control-bar__progress {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--blue);
+  transform-origin: left center;
+  transition: transform 300ms linear;
+}
+
+/* Footer: attributions and what is simulated (SPEC §0.1, §5.1, §20). */
+.app-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 var(--sp-4);
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.app-footer a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+}
+
+.app-footer__sim {
+  margin-left: auto;
+}
+
+.app--overview .app-footer {
+  border-top-color: var(--navy-line);
+  background: var(--navy);
+  color: var(--on-navy-3);
+}
+
+.app--overview .app-footer a {
+  color: var(--on-navy-3);
+  text-decoration-color: var(--navy-line);
+}
+
+.app--overview .app-footer .badge--amber {
+  background: rgb(227 154 79 / 16%);
+  color: #f3b979;
+}
+
+@media (max-width: 900px) {
+  .app,
+  .app--overview {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .app--overview {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .app-main {
+    overflow: visible;
+  }
+
+  .app-header {
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
+    padding: var(--sp-2) var(--sp-4) 0;
+  }
+
+  /* The nav scrolls sideways: fade the edges so it reads as scrollable, snap to links. */
+  .app-nav {
+    order: 3;
+    width: calc(100% + 2 * var(--sp-4));
+    margin: 0 calc(-1 * var(--sp-4));
+    padding: 0 var(--sp-4) var(--sp-2);
+    scroll-snap-type: x proximity;
+    scroll-padding: 0 var(--sp-6);
+    mask-image: linear-gradient(90deg, transparent 0, #000 var(--sp-4), #000 calc(100% - 36px), transparent 100%);
+  }
+
+  .app-nav__link {
+    scroll-snap-align: start;
+  }
+
+  .app-header__right {
+    gap: 6px;
+    margin-left: auto;
+  }
+
+  .integrations-popover {
+    position: fixed;
+    top: 96px;
+    right: var(--sp-4);
+    left: var(--sp-4);
+    width: auto;
+  }
+
+  .integration {
+    grid-template-columns: 10px 100px 1fr;
+  }
+
+  .integration__detail {
+    grid-column: 2 / -1;
+  }
+
+  .app-footer {
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    padding: 10px var(--sp-4);
+    white-space: normal;
+  }
+
+  .app-footer__sim {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 900px) and (min-width: 641px) {
+  .control-bar {
+    flex-wrap: wrap;
+  }
+
+  .transport {
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+}
+
+/* Phones: one row of controls (scenario, play, More) and the clock on one line below. */
+@media (max-width: 640px) {
+  .sound-toggle__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .sound-toggle {
+    width: 30px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .brand__hi {
+    display: none;
+  }
+
+  .control-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'scenario transport'
+      'clock clock';
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+  }
+
+  .scenario-select {
+    grid-area: scenario;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .clock-label {
+    grid-area: clock;
+    justify-content: center;
+    font-size: var(--fs-xs);
+  }
+
+  .clock-label__city {
+    display: none;
+  }
+
+  .transport {
+    grid-area: transport;
+    margin-left: 0;
+  }
+
+  .transport__play {
+    min-width: 0;
+  }
+
+  .transport__more-toggle {
+    display: inline-flex;
+  }
+
+  .transport__more {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: var(--sp-4);
+    left: var(--sp-4);
+    z-index: var(--z-popover);
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: var(--sp-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .transport__more[data-open='true'] {
+    display: flex;
+    animation: pop-in var(--dur-ui) var(--ease-out);
+    transform-origin: top right;
+  }
+
+  .transport__more .seek {
+    flex: 1 1 auto;
+  }
+
+  .transport__more .seek__input {
+    flex: 1;
+  }
+}

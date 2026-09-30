@@ -1,0 +1,251 @@
+/*
+ * Static storm map (deck slide 6) and the pieces it shares with the live map: the rain pill and
+ * the dark zone label chips. Land and sea come from the ward polygons (tokens --land, --sea).
+ */
+.storm-map {
+  position: relative;
+  container-type: inline-size;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--sea);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 8%),
+    var(--shadow-navy);
+  aspect-ratio: 4 / 3;
+}
+
+.storm-map__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.storm-map__sea {
+  fill: var(--sea);
+}
+
+/* A soft shallow-water halo along the coast, then the land on top: only the outer edge shows. */
+.storm-map__shallows path {
+  fill: none;
+  stroke: rgb(11 99 201 / 10%);
+  stroke-width: 14;
+  stroke-linejoin: round;
+}
+
+.storm-map__coast path {
+  fill: none;
+  stroke: var(--coast);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.storm-map__land path {
+  fill: var(--land);
+  fill-rule: evenodd;
+}
+
+.storm-map__rain-fill path {
+  fill: url(#storm-hatch);
+}
+
+.storm-map__hexes path {
+  stroke: #fff;
+  stroke-width: 0.9;
+  stroke-opacity: 0.9;
+  fill-opacity: 0.86;
+}
+
+.storm-map__wards path {
+  fill: none;
+  stroke: var(--ward-line);
+  stroke-width: 0.6;
+}
+
+.storm-map__rain-edge path {
+  fill: none;
+  stroke: var(--rain);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 5;
+  stroke-opacity: 0.55;
+}
+
+.storm-map__triggered path {
+  fill: none;
+  stroke: var(--red);
+  stroke-width: 2;
+  stroke-opacity: 0.7;
+  stroke-linejoin: round;
+}
+
+.storm-map__leaders line {
+  stroke: var(--navy);
+  stroke-width: 1.4;
+}
+
+.storm-map__leaders circle {
+  fill: var(--navy);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.storm-map__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: clamp(9px, 1.7cqw, 13px);
+}
+
+.storm-map__overlay > * {
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+}
+
+.storm-label {
+  padding: 0.38em 0.8em;
+  border-left: 3px solid #ef4444;
+  border-radius: var(--radius-sm);
+  background: var(--navy);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 30%);
+  color: #fff;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transform: translate(-50%, -50%);
+}
+
+.storm-label--slow {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+}
+
+.storm-label--slow span {
+  color: var(--muted);
+  font-size: 0.86em;
+  font-weight: 400;
+}
+
+.storm-pin {
+  width: 0;
+  height: 0;
+}
+
+.storm-pin__dot {
+  position: absolute;
+  top: -0.75em;
+  left: -0.75em;
+  width: 1.5em;
+  height: 1.5em;
+  border: 0.22em solid #fff;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 1px 6px rgb(15 23 42 / 45%);
+}
+
+.storm-pin__card {
+  position: absolute;
+  bottom: 1.1em;
+  left: 1.1em;
+  display: flex;
+  flex-direction: column;
+  padding: 0.4em 0.8em;
+  border: 1.5px solid var(--blue);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: 0 2px 10px rgb(15 23 42 / 22%);
+  white-space: nowrap;
+}
+
+.storm-pin__card strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.storm-pin__card span {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+/* The rain band's label: a light-blue pill on the band's top edge (live map and static map). */
+.rain-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.3em 0.75em 0.3em 0.6em;
+  border: 1px solid rgb(11 99 201 / 28%);
+  border-radius: var(--radius-pill);
+  background: #e3effb;
+  box-shadow: 0 1px 4px rgb(11 99 201 / 14%);
+  color: #0b4f9c;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.storm-map__rain-pill {
+  transform: translate(-50%, calc(-100% - 6px));
+}
+
+.storm-map__water {
+  color: #5d7a99;
+  font-style: italic;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+.storm-map__chip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.storm-map__chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+.storm-map .north-arrow {
+  top: 12px;
+  right: 14px;
+}
+
+.storm-map .map-legend {
+  right: 12px;
+  bottom: 12px;
+}
+
+@container (max-width: 520px) {
+  .storm-map .map-legend {
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    justify-content: space-between;
+    padding: 6px 10px;
+  }
+
+  .storm-map .map-legend__bar {
+    width: 120px;
+  }
+
+  .storm-map__chip {
+    top: 8px;
+    left: 8px;
+  }
+}
