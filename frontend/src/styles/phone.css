@@ -599,7 +599,10 @@
     padding: 8px 8px 12px;
   }
 
+  /* The composer stays on screen under the header and the replay bar (about 236px on a phone). */
   .merchant-page > .phone {
+    height: 72vh;
+    height: max(440px, calc(100dvh - 236px));
     border: 0;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
