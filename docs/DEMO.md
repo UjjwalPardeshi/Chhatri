@@ -1,220 +1,212 @@
-# Chhatri Demo Script (SPEC §0, §13, §17)
+# Demo script: 3 October 2026 (about 7 minutes)
 
-**Duration**: 4–5 minutes live (no internet needed; all data offline)
+This is the presenter's script for the live demo. It follows the deck (slides 3, 6, 7 and 8). Every
+number and string below comes from the SPEC (§4.3, §9.6, §13.4, §13.6, §17.2) and is asserted by
+`make test-slow` (golden numbers) and `make demo-check`. **If the console shows anything different
+from this page, stop and run `make demo-check` before going on.**
 
-**Setup**: `make dev` (backend + frontend running), or `make up` (Docker)
+Replay speed is 6 simulated minutes per real second by default, so 1 simulated hour takes 10 seconds.
+Every scenario load is deterministic: same ids, same amounts, and the first case is always `C-2291`.
 
----
-
-## Pre-Demo Checklist
-
-- [ ] Wifi **off** or presenter note warning judges (demo is 100% offline; only simulators run)
-- [ ] Browser zoomed to **100%** (demo is designed for 1280×720 projector)
-- [ ] Enable sound: click **"Enable sound"** toggle in header (browser autoplay is blocked; one click grants permission)
-- [ ] Load scenario: pick **"monsoon"** from scenario picker (top left)
-- [ ] **Play** button: ensure replay is paused at start (click play to begin)
+> The deck's concept screen (slide 6) shows "Z7 · 41%". The prototype shows **37 %**. That is the
+> number that produces the 63 % drop and the ₹1,380 payout. Say "37 %".
 
 ---
 
-## Demo Flow (4 minutes)
+## T−30 min: machine check
 
-### 1. The Problem (30 seconds, no interaction)
+1. Start the stack with one of these:
+   - `make dev`: console at http://localhost:5173, API at http://localhost:8000.
+   - `make up`: console at http://localhost:8080, API at http://localhost:8000, n8n at http://localhost:5678.
+     `make up` returns only when every container is healthy.
+2. Run `make demo-check`. It must pass every scenario.
+3. Run `curl -s localhost:8000/api/preflight`. Every item must have `"ok": true`.
+4. Open the console at 1280×720 with browser zoom at 100 %, in a full-screen window.
+5. Click **Enable sound** in the header once. This is the one user gesture the browser needs;
+   afterwards Soundbox and voice notes auto-play.
+6. Check the header badges. Everything is SIMULATED except what you configured, for example Sarvam,
+   WhatsApp, Paytm staging or n8n. Nothing simulated may be called live.
+7. Pick the **monsoon** scenario. The clock must read `Mumbai · monsoon replay · 08:00 · simulated`
+   and the replay must be paused.
 
-> *[Scroll frontend to show initial state: map with green zones, no alerts]*
->
-> "Anil runs a tea stall in Mumbai. When it rains, sales collapse. Today, he's not online to file a claim. By the time he reaches an office, the insurance company has asked for bills and photos. That's 30–60 days to get paid.
->
-> Chhatri fixes this: **the claim starts itself.**"
+Backup controls, if a UI control misbehaves. `API` is `http://localhost:8000` with `make dev`, or
+`http://localhost:8080` (through nginx) with `make up`:
 
-### 2. The Storm Hits (2 minutes, live replay)
-
-> *[Click play button; replay starts at 08:00]*
->
-> "It's Tuesday morning in Mumbai. Weather forecast says rain could hit the city at 14:00.
->
-> At 13:30, the red alert appears." 
-
-*[Wait until ~14:00 sim-time; zones Z7, Z3, Z12 turn orange/red on the map]*
-
-> "Three zones are flagged. Watch the sales data: they're falling in real-time."
-
-*[Let replay run; watch hexes on the map change color as sales drop below expected]*
-
-> "At 17:00—the trigger fires."
-
-*[Watch the KPI tiles update: "3 zones triggered", "312 shops paid"]*
-
-> "Three zones triggered. 312 shops just got paid—**automatically, in 4 minutes**. No claim forms. No bills. No waiting.
-
-> Here's Anil's shop."
-
-*[Click Z7 on map or zone card; inspect panel showing "₹1,380 paid · 17:04"]*
-
-> "His usual Tuesday is ₹4,380. Sales fell 63%. We pay him half the loss: ₹1,380. **Credited with today's settlement.**
->
-> His next instalment—₹600—is paused. He can't miss a payment when sales collapsed."
-
-*[Point to "Tomorrow's ₹600 instalment is paused" in the zone panel]*
-
-### 3. Personal Claim (1.5 minutes, live conversation)
-
-> *[Switch to merchant phone view; navigate to Anil's chat]*
->
-> "But Anil is in the hospital with a fever. His shop is closed.
->
-> At 11:20 tomorrow, Chhatri checks in."
-
-*[Scroll to see the check-in message: "Your shop has been closed since yesterday. Is everything okay?"]*
-
-> "Anil replies."
-
-*[Use the voice demo chip: click "I'm in hospital with a fever" (canned voice); watch message appear in chat]*
-
-> "Chhatri asks for proof."
-
-*[Point to the follow-up: "Please send one photo of the hospital slip."]*
-
-> "One photo."
-
-*[Click upload sample slip; show the admission slip ("Anil R. Jadhav, admitted Aug 20, KEM Hospital, Viral fever")]*
-
-> "Our vision model reads the name, dates, hospital. Policy checks:
-> - **Name matches KYC?** Yes, ✓
-> - **Dates cover the silent days?** Yes, ✓
-> - **Within the 3-day auto-limit?** Yes, ✓
->
-> All checks pass. Decision: **APPROVED, ₹1,500**. Paid the same day."
-
-*[Show the payout card in the chat; watch the audit log for the decision]*
-
-### 4. Three Live Tests (1 minute, automated checks)
-
-> *[Reset to monsoon scenario at 17:12; or load fresh]*
->
-> "Our demo includes three live tests from the pitch deck."
-
-#### Test 1: EXPLAINED
-> *[In chat, send or use chip: "Why did I get only this much?" or "मुझे इतने पैसे क्यों मिले?"]*
->
-> "**Merchant asks why the payout is small.**"
-
-*[Watch response appear: "Your usual Tuesday: ₹4,380. Your area fell 63%. Chhatri pays half the lost sales."]*
-
-> "We show the breakdown—every number is reproducible. Then:"
-
-*[Watch follow-up: "मेरा नुकसान ज़्यादा हुआ" / "My loss was bigger."]*
-
-> "**The merchant disputes.** A case is opened instantly. A human on our team will review."
-
-*[Point to "Sent to a claims officer · case C-2291" in chat; switch to claims officer queue if time]*
-
-#### Test 2: HUMAN
-> *[Show slip mismatch scenario briefly, or explain]*
->
-> "If the slip has a different name, or dates don't match, the AI can't auto-approve. **A human always reviews doubtful claims.**"
-
-#### Test 3: BLOCKED
-> *[Or explain without live replay]*
->
-> "If a merchant tries to buy cover **during a forecast alert**, they're blocked. New cover starts after the 7-day waiting period."
+```bash
+API=http://localhost:8000
+post() { curl -s -X POST "$API$1" -H 'Content-Type: application/json' -d "$2"; echo; }
+post /api/replay/load  '{"scenario":"monsoon"}'      # reset to 08:00, paused; ids restart (C-2291)
+post /api/replay/seek  '{"to":"13:30"}'
+post /api/replay/play  '{"speed":6}'
+post /api/replay/pause '{}'
+post /api/merchants/S-0142/voice-demo '{"key":"why"}'   # why | dispute | ill | cover
+post /api/merchants/S-0142/photo '{}'                   # the loaded scenario's sample slip
+```
 
 ---
 
-## Fallback Plan (No Internet, No Paytm)
+## 0:00–0:30 · The problem (deck slide 3)
 
-**Fallback already built in.** The demo is 100% offline:
+> "Anil runs a tea stall in Parel. On a day of heavy rain his sales fall by more than half, and his ₹600
+> loan instalment is still cut from his settlement. Today, getting paid for that day takes 30 to 60
+> days of forms and documents. Paytm already sees his sales fall, as it happens. With Chhatri, the
+> claim starts itself, and he is paid the same evening."
 
-- ✓ All merchants, sales, weather fixtures committed to `backend/data/`
-- ✓ Model trained on past data; committed to `backend/artifacts/model/`
-- ✓ Sarvam voice/chat/vision → simulator (deterministic, Hindi/English)
-- ✓ WhatsApp → console phone simulator
-- ✓ Paytm → simulated links (marked "SIMULATED", cannot actually charge)
-- ✓ n8n → in-process workflow runner
-- ✓ Fonts self-hosted (Ubuntu, Noto Sans Devanagari)
+## 0:30–2:30 · Storm replay on the live map (deck slides 3 and 6)
 
-If the Paytm payment link button fails (PAYTM_MCP_URL not set), it shows a simulated link and says "SIMULATED".
+Console `/live` (the live map; `/` is the overview homepage), scenario **monsoon**: Tue 19 Aug 2025,
+paused at 08:00.
+
+1. **Seek to 13:30 and press Play (speed 6).**
+   > "This is Mumbai, ward by ward. Every hexagon is the shops' sales against what our model expected
+   > for this hour. Green is normal."
+2. **About 13:30–14:00**: the red alert `A-20250818-01` for Z3, Z7 and Z12 is already in the feed. It
+   was issued yesterday, Mon 18 Aug at 17:30, and is valid from 14:00 to 20:00. From 14:00 the rain band
+   appears over Z3, Z7 and Z12.
+   > "A red rain alert from 14:00 for three wards. Watch their sales."
+3. **14:00–17:00 (about 30 s at speed 6)**: Z3, Z7 and Z12 turn amber, then red. Zone status goes from `watch` to
+   `triggered`. Z9 (Chembur, by the harbour) also dips, but it has no alert.
+4. **17:00: the trigger fires** for Z3, Z7 and Z12. Pause if you want to talk over it.
+   - Zone labels: `Z7 · 37% · 46 shops`, `Z3 · 38% · 141 shops`, `Z12 · 47% · 125 shops`.
+   > "The drop held for three hours across all 46 shops in Zone 7, below 50 % and below the bottom of
+   > the model's range, during the alert. The policy engine checks every shop's cover. No one filed
+   > anything."
+5. **17:04: money.** The KPI tiles read **3** zones triggered, **312** shops paid, **4 min** trigger to
+   money. Anil's pin reads **₹1,380 paid · 17:04**. Click **Z7**. The panel must read exactly:
+
+   | Row | Value |
+   |---|---|
+   | Alert | Red alert from 14:00 |
+   | Sales | 37% of expected for 3 hours |
+   | Cover | 46 of 46 prepaid |
+   | Paid | 17:04, with the settlement |
+   | Total | ₹58,900 · instalments paused |
+
+   > "312 shops, paid four minutes after the trigger, with the evening settlement."
+6. **Why Zone 9 got nothing** (right panel), verbatim: *"Why Zone 9 got nothing: its sales fell to 61%
+   on a day with no weather alert. That's a slow day, not a loss event, so Chhatri doesn't pay."*
+   > "A slow day is not a loss event. The trigger needs an alert and a drop the model can't explain."
+7. **17:05**: tomorrow's instalments are paused. **Pause the replay** at about 17:06.
+
+## 2:30–3:30 · What Anil sees, and "why this amount?" (deck slides 1, 7 and 8, test 1: EXPLAINED)
+
+Open `/merchant/S-0142` (Anil's phone: "Paytm · Chhatri", "Merchant protection · Hindi, English").
+
+At **17:04**:
+- `अनिल जी, आज भारी बारिश से आपके इलाके की बिक्री 63% गिरी।` / *Anil ji, heavy rain cut your area's
+  sales by 63% today.*
+- Payout card **₹1,380**, `आज के सेटलमेंट के साथ जमा` / *Credited with today's settlement*, badge
+  **No claim needed**.
+- Soundbox: **"Paytm par ₹1,380 prapt hue — Chhatri se"** / *₹1,380 received on Paytm, from Chhatri*.
+
+At **17:05**: `कल की ₹600 की किस्त रोक दी गई है।` / *Tomorrow's ₹600 instalment is paused.*
+
+**Live test 1: EXPLAINED.**
+1. Tap the voice chip **why**. Anil says `मुझे इतने ही पैसे क्यों मिले?` (*Why did I get only this
+   much?*). The reply:
+   `आपका आम मंगलवार: ₹4,380। आज आपके इलाके की बिक्री 63% गिरी। छतरी खोई हुई बिक्री का आधा देती है।` /
+   *Your usual Tuesday: ₹4,380. Your area fell 63%. Chhatri pays half the lost sales.*
+   > "Every number can be checked: half of ₹4,380 times 63 % is ₹1,379.70, which rounds to ₹1,380."
+   > (Formula shown on the decision: `½ × ₹4,380 × 63% = ₹1,380`;
+   > Hindi `₹4,380 का 63% = ₹2,759.40; उसका आधा = ₹1,380`.)
+2. Tap **dispute**. Anil says `मेरा नुकसान ज़्यादा हुआ।` (*My loss was bigger.*). The reply:
+   `ठीक है, मैं इसे हमारी टीम को भेज रहा हूँ। 24 घंटे में जवाब मिलेगा।` / *Okay, I'm sending this to our
+   team. You'll hear back within 24 hours.* Then the chip **Sent to a claims officer · case C-2291**.
+   > "Chhatri explains with his own numbers and offers a human. It never argues or changes the amount."
+3. Optional: open `/claims` to show case **C-2291** (DISPUTE), with the expected-vs-actual hours.
+
+## 3:30–4:45 · Personal claim: ill, one photo (deck slide 7, panel 2)
+
+Pick scenario **illness**: Thu 21 Aug 2025, 10:30. Anil's shop had zero sales all of Wed 20 Aug and his
+zone was normal.
+
+1. **Seek to 11:15, then Play.** At **11:20** Chhatri checks in:
+   `अनिल जी, आपकी दुकान कल से बंद दिख रही है। सब ठीक है?` / *Your shop has been closed since yesterday.
+   Is everything okay?*
+   > "Nobody filed a claim. Paytm saw a full day with no payments, and Chhatri reached out first."
+2. Pause. Tap the voice chip **ill**: `मैं अस्पताल में हूँ, बुखार है।` (*I'm in hospital with a
+   fever.*). Reply: `जल्दी ठीक हो जाइए। अस्पताल की पर्ची की एक फ़ोटो भेज दीजिए।` / *Get well soon. Please
+   send one photo of the hospital slip.*
+3. Send the **sample slip** (`anil_admission_slip.png`: patient "Anil R. Jadhav", admitted
+   2025-08-20, "Viral fever", KEM Hospital, Parel).
+   > "The vision model reads the name and dates. The policy engine checks them against KYC
+   > (ANIL RAMESH JADHAV) and against the silent day."
+   Decision **APPROVED ₹1,500**:
+   - The decision's formula has the SPEC §9.6 personal form, `½ × <usual Wednesday> = … a day, capped
+     at ₹1,500 × 1 day = ₹1,500` (the claim is for Wednesday 20 Aug, so read that day's number off the
+     screen; only the ₹1,500 is a golden number).
+   - Message: `अनिल जी, आपका दावा मंज़ूर है। ₹1,500 आज के सेटलमेंट के साथ जमा।` / *Anil ji, your claim
+     is approved. ₹1,500 credited with today's settlement.* This arrives at credit time, 4 simulated
+     minutes after the decision, so press **Play** briefly.
+   - The instalment for Thursday (the day after the silent day) is paused.
+
+## 4:45–5:45 · Live tests 2 and 3 (deck slide 8)
+
+**HUMAN: a slip with a different name.** Pick scenario **illness_mismatch**. Seek to 11:15, play to
+11:20, pause, tap **ill**, then send the sample slip (`mismatch_admission_slip.png`, patient "Sunil
+Pawar").
+- The decision is **REFERRED**: `NAME_MATCHES_KYC` fails and no money moves. Chat:
+  `धन्यवाद। पर्ची पर नाम आपके KYC से मेल नहीं खा रहा, इसलिए हमारी टीम इसे देखेगी। 24 घंटे में जवाब मिलेगा।` /
+  *Thank you. The name on the slip doesn't match your KYC, so our team will check it. You'll hear back
+  within 24 hours.* Then **Sent to a claims officer · case C-2291**.
+- Open `/claims` → **C-2291**. The evidence shows the slip image, the extracted name, the KYC name, the
+  match score, the silent days and the checks. Tap **Approve**. The officer decision re-runs every HARD
+  check and pays **₹1,500**. Anil gets `अनिल जी, हमारी टीम ने आपका दावा मंज़ूर किया। ₹1,500 जमा।` /
+  *Anil ji, our team approved your claim. ₹1,500 credited.*
+  > "Doubtful claims always go to a person. The AI never pays on a doubt."
+
+**BLOCKED: "Red alert tomorrow. Cover me today."** Pick scenario **buy_cover**: Mon 18 Aug 2025,
+18:00. The alert `A-20250818-01` (issued 17:30) is in the feed. Open `/merchant/S-0907` (Ramesh Vada
+Pav, Z3, not covered) and tap the voice chip **cover**.
+- Reply: `नया कवर वेटिंग पीरियड के बाद शुरू होता है — 25 अगस्त से। कल के अलर्ट पर यह लागू नहीं होगा।` /
+  *New cover starts after the waiting period — from 25 August. It won't apply to tomorrow's alert.*
+- Then `COVER_LINK` with a Paytm link for 30 days of Z3's premium. The link comes from Paytm staging
+  when `PAYTM_MCP_URL` or `PAYTM_MID` + `PAYTM_KEY_SECRET` is set; otherwise it is
+  `https://paytm.me/sim-…`, labelled SIMULATED.
+  > "Nobody can buy cover once a storm is forecast. The waiting period is seven days."
+
+## 5:45–6:30 · Trust: audit, policy, backtest (deck slides 5, 8 and 11)
+
+- `/audit` → **Verify chain** → valid. Every step, from trigger to decision, payout, pause and message,
+  is hash-chained.
+- `/policy`: the payout-authority table, exactly as on slide 8 (area drop: Chhatri pays, a human only
+  on dispute; personal claim: pays up to the daily cap; slip unclear: never alone; cover after an
+  alert: never, waiting period).
+- `/backtest`: Chhatri vs a weather-only trigger over the 2024 and 2025 monsoons, labelled
+  "simulated sales · real Open-Meteo rainfall". Read the numbers off the screen; they come from
+  `backend/artifacts/backtest/report.json`.
+
+## 6:30–7:00 · Close (deck slide 13)
+
+> "Live in this prototype: Sarvam voice, the policy engine, WhatsApp, the claims console and the Paytm
+> premium link on staging. Sales, the weather replay, KYC, payouts and the lender are simulated and
+> labelled. Code decides the money, and every step is logged."
 
 ---
 
-## Likely Judge Questions
+## If something goes wrong
 
-### "Is the payout real? How do you actually send money?"
-> "In the demo, payouts are simulated. The settlement rail is simulated: 4 minutes after the policy engine approves, we record a `Payout(status=CREDITED)`.
->
-> In production, this would hit Paytm's settlement rail. We already integrate with Paytm's payment MCP server—we use the same API that powers the premium link button. The demo just records the event instead of actually charging."
+| Symptom | Do this |
+|---|---|
+| Numbers differ from this page | Reload the scenario (picker, or `post /api/replay/load '{"scenario":"monsoon"}'`). It is deterministic. If they still differ, run `make demo-check` and use the backup machine. |
+| Map tiles missing (no internet) | Nothing. The console falls back to ward outlines on a plain background. |
+| "reconnecting" pill | Wait. SSE resumes with `Last-Event-ID`. Reload the page if it lasts more than 10 s; state is server-side. |
+| No sound | Click **Enable sound** again. Every voice bubble also has a play button. |
+| n8n container down | Nothing. A workflow n8n cannot start runs in-process instead, with the same steps and timeline; the backend logs it at ERROR. |
+| Paytm staging slow or down | Say so; nothing else depends on it. For an offline demo, start without the Paytm variables: the link is then `https://paytm.me/sim-…`, labelled SIMULATED. |
+| Replay stuck | `post /api/replay/pause '{}'`, then `post /api/replay/step '{"minutes":5}'`, or seek to the moment you need. |
 
-### "What if someone lies about being sick?"
-> "The hospital slip is verified by our vision model (Sarvam). The patient name must match the KYC name (95–100% confidence via fuzzy matching). The dates must cover the silent period.
->
-> If **any** of these fail, the case goes to a human. We never auto-pay without confidence.
->
-> We also have basis risk: if a merchant claims illness but was actually on holiday, the area-level trigger didn't fire (no rain alert), so **the area check fails first**. Basis risk is baked into the trigger logic."
+## Golden numbers (all asserted by tests)
 
-### "How do you prevent gaming? Can a merchant pay people to buy at their shop to bump sales?"
-> "Good catch. Our trigger is area-level, not shop-level. One shop can't fake an area index. If Anil's shop has high sales but the rest of the zone is low, that's actually healthy—the zone's index is still below the model's range.
->
-> **Gaming the index would require coordinating 20+ shops.** Easier to just work.
->
-> Also: the expected sales model is trained on normal days only (no alerts, no shocks). If half the shops in a zone suddenly have high sales during a RED alert, that's a statistical anomaly—the backtest would flag it."
-
-### "Why focus on merchants, not crop insurance?"
-> "Merchants are 1.57 crore on Paytm—we can reach them instantly. Crop insurance requires physical inspection and acreage proof. Merchants have digital footprints (transaction history, location, loan data). We measure the loss in real-time from their sales data; no assessment needed.
->
-> The model is smaller (LightGBM, ≤ 500 MB), faster (triggers in 4 minutes), and cheaper (settlement costs are lower than crop insurance).
->
-> The monsoon pilot tests this. Future: heatwave cover, bandh cover, other weather events."
-
-### "What's the business model?"
-> "Chhatri sits on top of Paytm's merchant plan (₹2/day fixed price). We charge an additional rider:
->
-> - Premium = expected loss cost / (1 - loading factor)
-> - Loading (profit margin) = 35%
-> - Merchants prepay via settlement: Paytm deducts the daily premium from the merchant's own collections that day
->
-> If a merchant collects ₹10,000 and the premium is ₹10, Paytm settles ₹9,990 and ₹10 goes to insurance. The payout comes from the insurance fund (our partner), not Paytm's pocket.
->
-> See deck slide 12: ₹561 crore merchant plan revenue → ₹814 crore with Chhatri rider (+45% YoY)."
-
-### "How is this different from Paytm's earlier plans?"
-> "Paytm's earlier merchant protection plans (30–60 days, required bills/photos) never gained trust because merchants had to file and wait. Chhatri:
->
-> - **Automatic**: triggers on data Paytm already sees
-> - **Same-day**: payout within hours, not weeks
-> - **No docs for area claims**: we measure the loss, not ask the merchant to prove it
-> - **Minimal docs for personal claims**: one photo, not a binder of bills
->
-> This is a product innovation, not a tech innovation. The innovation is **policy + data**, not just AI."
-
----
-
-## Demo Technical Notes
-
-- **Replay speed**: 6 sim-minutes per real second (configurable via slider; default for demo is 6x)
-- **Monsoon replay**: 08:00–20:00 IST (12 hours) → ≈ 2 min wall-clock at 6x
-- **Scenario load**: ≤ 1s (cold start: ≤ 3s)
-- **Trigger → money**: 17:00 trigger → 17:04 credited (sim-time); displayed in real-time
-- **Fonts**: Self-hosted Ubuntu + Noto Sans Devanagari (no external CDN)
-- **Audio**: Sarvam Bulbul v3 TTS (live) or browser `speechSynthesis` (simulated, en-US for English)
-
----
-
-## After the Demo
-
-- **Backtest tab**: Show 2024 & 2025 monsoon backtests (real rainfall, simulated sales, 2 trigger strategies)
-- **Audit tab**: "Verify chain" button proves tamper-evidence (every step cryptographically linked)
-- **Policy tab**: Show the payout authority table (what Chhatri alone pays, what goes to humans)
-
----
-
-## Keywords for Judges
-
-- **Claims that start themselves**: automation via real-time data
-- **Measured loss, not guessed**: LightGBM model + area index
-- **Same-day payout**: 4-minute trigger-to-money in replay
-- **Instalment pause**: loan protection, not just insurance claim
-- **No claim form**: merchant does nothing
-- **No basis risk**: area-level trigger, not individual shop
-- **Doubt → human**: REFERRED cases go to officers, not paid without review
-- **Code decides, not AI**: policy engine is logic, not LLM
-- **Offline-first**: works without internet; Sarvam/WhatsApp/n8n optional
-- **Deterministic**: same scenario seed → identical payouts, audit hashes
+| Fact | Value |
+|---|---|
+| Replay day | Tue 19 Aug 2025, 08:00–20:00 IST (simulated) |
+| Alert | `A-20250818-01`, RED rain, Z3 · Z7 · Z12, issued Mon 18 Aug 17:30, valid 14:00–20:00 |
+| Indices at 17:00 | Z7 37 % (drop 63 %) · Z3 38 % · Z12 47 % · Z9 61 % (slow day, no alert) |
+| Timeline | decisions 17:00 · credits + WhatsApp + Soundbox 17:04 · instalment pauses 17:05 |
+| KPIs | 3 zones triggered · 312 shops paid · 4 min trigger to money |
+| Z7 | 46 shops, 46 of 46 prepaid, total ₹58,900 |
+| Anil (S-0142) | usual Tuesday ₹4,380 · area payout ₹1,380 · instalment ₹600 paused |
+| Personal claim | ₹1,500 (daily cap), 1 day, Thursday instalment paused |
+| First case after a fresh load | C-2291 |
+| Cover bought Mon 18 Aug | BLOCKED, starts 25 August (7-day waiting period) |

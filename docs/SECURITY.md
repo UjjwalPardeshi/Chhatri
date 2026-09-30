@@ -1,259 +1,92 @@
-# Chhatri Security (SPEC §21)
+# Security
+
+Chhatri is a hackathon prototype that moves only simulated money. It is still built so that no
+component except the policy engine can approve a payout, and every step can be audited. This page
+lists the controls that exist in the code and in the infra (SPEC §0.2, §11, §14, §19, §21), the known
+limits, and the checklist to run before a demo.
 
 ## Controls
 
-### Secrets
-
-- **No secrets in source code**: all credentials from environment (`.env`)
-- **Demo mode**: officer token printed at startup when unset (secure; token is not persisted)
-- **Internal secret**: `CHHATRI_INTERNAL_SECRET` used for n8n webhook verification and officer routes
-
-### Input Validation
-
-- **Pydantic models**: all HTTP inputs validated against schema
-- **File uploads**: type/size checked by magic bytes (not just MIME headers)
-  - Images: ≤ 5 MB, jpeg/png/webp
-  - Audio: ≤ 5 MB, ≤ 30 s, ogg/opus/webm/mp3/wav/m4a
-- **Merchant phone numbers**: masked in logs (`+91•••••12345`)
-- **Audit log**: PII never logged
-
-### API Security
-
-- **Authentication**: `Bearer <CHHATRI_OFFICER_TOKEN>` on sensitive routes
-  - `POST /api/cases/{id}/approve`
-  - `POST /api/cases/{id}/decline`
-  - `POST /api/premium/link`
-- **Authorization**: demo mode routes return 404 when `CHHATRI_DEMO_MODE=false`
-- **Webhook signature verification**: WhatsApp webhooks verify `X-Hub-Signature-256 = hmac_sha256(app_secret, raw_body)`
-- **CORS**: restricted to `CHHATRI_CONSOLE_ORIGIN` (default `http://localhost:5173`)
-- **Rate limiting**: simple in-memory limits on webhook and upload routes
-
-### Audit
-
-- **Immutable ledger**: `AuditLog` is append-only SQLite; every decision stored with all checks
-- **Tamper detection**: SHA256 hash chain; `AuditLog.verify()` recomputes chain and reports first bad entry
-- **Determinism**: same seed + same scenario ⇒ identical audit hashes (except `recorded_at` wall time)
-
-### Workflow Security
-
-- **Signature verification**: n8n workflows verify `X-Chhatri-Secret` header before executing steps
-- **Idempotency**: payout execution is idempotent on `decision_id` (prevents double-spending)
-- **No free-text approval**: policy engine is deterministic code; LLM never approves
-
----
-
-## Threat Model
-
-### 1. Forged Webhooks
-
-**Threat**: Attacker sends fake webhook (WhatsApp, Paytm callback, n8n step callback).
-
-**Controls**:
-- WhatsApp: signature verification (`X-Hub-Signature-256`)
-- n8n: secret header verification (`X-Chhatri-Secret`)
-- Paytm: (depends on Paytm's API security; we don't verify signatures beyond HTTPS + API key)
-
-**Residual risk**: Low. Attacker must forge HMAC or steal shared secret.
-
-### 2. Replayed Callbacks
-
-**Threat**: Attacker replays a legitimate webhook (e.g., payout callback) to trigger double-payout.
-
-**Controls**:
-- Idempotency: payout execution is idempotent on `decision_id`
-- Audit log: every execution logged with timestamp and actor
-- Backend enforcement: `payout_for_decision(decision_id)` returns existing payout if already executed
-
-**Residual risk**: Very low. Replay attack results in 200 (no-op), not double-payout.
-
-### 3. Gaming the Area Index
-
-**Threat**: Merchants coordinate to boost sales during a claimed low-index window (e.g., all shops in Z7 run promotions) to invalidate a payout trigger.
-
-**Controls**:
-- Area-level trigger: requires 20+ shops below the model range (coordination difficult)
-- Model training: trained on normal days only (anomalies detectable)
-- Historical data: backtest validates trigger accuracy over 2 past monsoons
-
-**Residual risk**: Medium. Requires coordination of 20+ merchants. Economically irrational (merchants gain ₹0, lose effort).
-
-### 4. Fake Slips
-
-**Threat**: Merchant presents fake hospital slip (photoshopped, from internet, printed template) to claim personal payout.
-
-**Controls**:
-- Vision model: Sarvam extracts patient name, dates, hospital from image
-- Name matching: rapidfuzz token_set_ratio ≥ 85 vs KYC name
-- Date matching: admission ≤ silent day ≤ discharge (or ∞)
-- Confidence threshold: 0.80 minimum
-- Manual review: if any SOFT check fails (name mismatch, date mismatch, unreadable), case goes to human
-
-**Residual risk**: Medium. Vision model can be fooled by high-quality fakes. Mitigated by: (a) confidence threshold, (b) always-review-on-doubt, (c) audit log (catches patterns).
-
-### 5. Buying Cover Before a Storm
-
-**Threat**: Merchant buys cover after an alert is issued, triggering immediately.
-
-**Controls**:
-- Waiting period: new cover starts 7 days after purchase (SPEC §9.5)
-- Alert lookahead: if an alert is current or forecasted within 72 hours, cover is blocked from immediate start
-- Check `COVER_BEFORE_ALERT`: if trigger alert issued after purchase, claim is declined
-
-**Residual risk**: Low. Waiting period enforced in policy engine.
-
-### 6. Premium Evasion
-
-**Threat**: Merchant stops paying premium, then claims a loss.
-
-**Controls**:
-- Check `PREMIUM_PREPAID`: requires `prepaid_through ≥ event_date` (Insurance Act s.64VB)
-- Settlement deduction: Paytm deducts premium from merchant's daily collections automatically
-- If gross settlement < premium, no advance; claim fails
-
-**Residual risk**: Very low. Premium check is a HARD fail.
-
-### 7. Officer Collusion
-
-**Threat**: Officer approves ineligible claims (e.g., slip with different name).
-
-**Controls**:
-- `apply_officer_decision()` re-runs all HARD checks (cover, premium, not-already-paid)
-- SOFT checks are recorded as `WAIVED_BY_OFFICER` (not deleted; auditable)
-- Officer approval is logged with officer ID in audit chain
-- Audit log is tamper-evident (SHA256 chain)
-
-**Residual risk**: Medium. Officer can waive SOFT checks. Mitigated by: (a) audit trail (all waivers logged), (b) backtest review (catches patterns of bias).
-
----
-
-## Security Testing
-
-### Unit Tests
-
-- `backend/tests/api/test_security.py`: webhook signature verification
-- `backend/tests/policy/test_engine.py`: check logic (cover, premium, dates, etc.)
-- `backend/tests/audit/test_log.py`: chain tamper detection
-
-### Integration Tests
-
-- Replay scenarios with bad data (slip mismatch, expired cover, lapsed premium)
-- Verify every scenario produces the expected decision (APPROVED / REFERRED / DECLINED)
-
-### Audit Verification
-
-- `GET /api/audit/verify` returns `{valid, entries, head_hash, first_bad_seq}`
-- Test tampers audit entry, verify detection
-
-### E2E (Playwright)
-
-- Test officer approve flow with partial slip (name mismatch) → REFERRED → APPROVED with waiver
-- Verify audit log records the waiver
-
----
-
-## Deployment Security
-
-### Environment
-
-- `.env` is `.gitignore`d (never committed)
-- `CHHATRI_INTERNAL_SECRET` is auto-generated if unset (printed to stdout at startup)
-- `CHHATRI_OFFICER_TOKEN` is auto-generated if unset (printed to stdout in demo mode only)
-
-### Docker
-
-- Backend image: `python:3.12-slim` + minimal dependencies
-- Frontend image: multi-stage (node builder + nginx serving)
-- No secrets in Dockerfile (all from environment)
-
-### HTTPS
-
-- Demo runs on `http://` (localhost, no HTTPS needed)
-- Production deployment: add HTTPS reverse proxy (nginx, CloudFront)
-- API should enforce HTTPS only (see deployment guide)
-
----
-
-## Privacy
-
-### Data Minimization
-
-- Phone numbers masked in logs: `+91•••••12345`
-- Audit log stores facts (decision_id, amount, checks), not merchant name or address
-- Slip extractions are stored (necessary for fraud detection) but marked sensitive
-
-### Data Retention
-
-- Audit log: permanent (immutable ledger)
-- Decisions, payouts, cases: retained for dispute period (24 hours in demo, longer in production)
-- Messages (WhatsApp, voice): retained per WhatsApp T&C (not our choice)
-
-### GDPR / India Privacy Act
-
-- Demo doesn't handle real PII (merchants are simulated, names are fake, phone numbers are fake)
-- Production: data controller agreements with Paytm, Sarvam, WhatsApp required
-- Right to erasure: handled at Paytm level (Chhatri is integration, not primary data holder)
-
----
-
-## Incident Response
-
-### If a Secret Leaks
-
-1. Rotate `CHHATRI_INTERNAL_SECRET` and `CHHATRI_OFFICER_TOKEN` immediately
-2. Redeploy backend + n8n
-3. Review audit log for forged requests (actor = webhook source IP / token value)
-4. Revert any unauthorized decisions (officer can decline and issue counter-payout)
-
-### If a Decision is Disputed
-
-1. Officer reviews decision + checks + evidence
-2. If error, issue counter-payout or revised decision
-3. Both decisions logged in audit chain with audit timestamps (wall time) and `decided_by`
-
-### If Model is Suspected of Bias
-
-1. Run backtest on historical data
-2. Compute false positive / false negative rates per zone
-3. Retrain if calibration drifts (recompute lower bound)
-4. All model versions logged with training date, metrics, data window
-
----
-
-## Compliance
-
-### Insurance Act, s.64VB (India)
-
-> "Insurer shall not forfeit the policy for non-payment of premium if premium is paid within 2 months of the due date."
-
-**Chhatri's approach**:
-- Premium prepaid via settlement deduction (automatic)
-- Check `PREMIUM_PREPAID` is HARD fail (no claim without prepayment)
-- Waiting period (7 days post-purchase) complies with s.64VB spirit (insurability requirement)
-
-### Prevention of Fraud
-
-- Vision model for slip verification (difficult to forge)
-- Name matching (rapidfuzz, not substring match)
-- Audit log tamper-evidence
-- Human review of doubtful claims
-
-### Accountability
-
-- Every decision recorded with `decided_by` (`policy-engine` or `officer:<id>`)
-- Audit log chain-verified
-- Officer actions logged and wayward patterns detectable
-
----
-
-## Security Checklist for Deployment
-
-- [ ] `.env` file created (never `.env.example`)
-- [ ] `CHHATRI_INTERNAL_SECRET` set (or auto-generated and rotated after startup)
-- [ ] `CHHATRI_OFFICER_TOKEN` set (or auto-generated; if auto, printed to stdout only)
-- [ ] `SARVAM_API_KEY` not in logs (check `chhatri_log_level=ERROR` or `WARNING` in production)
-- [ ] WhatsApp webhook verified (Meta dashboard)
-- [ ] CORS origin configured (`CHHATRI_CONSOLE_ORIGIN`)
-- [ ] Rate limits enabled (built-in; limits not currently tuned for production, adjust as needed)
-- [ ] Audit log backed up (SQLite file in volume)
-- [ ] HTTPS enforced on frontend (reverse proxy, not Chhatri's concern)
-- [ ] Demo mode disabled in production (`CHHATRI_DEMO_MODE=false`)
+### Secrets (SPEC §21)
+
+- Secrets come only from the environment: `.env` at the repo root, or the shell. `.env` is
+  git-ignored. `.env.example` lists every setting but carries no secret values.
+- `make env` (`scripts/init_env.py`) creates `.env` with a random `CHHATRI_INTERNAL_SECRET` and
+  `N8N_ENCRYPTION_KEY` (32 random bytes each), with file mode `0600`. It never overwrites an existing
+  `.env` and never prints a secret.
+- Secret settings are pydantic `SecretStr`. `Settings.public_summary()` is the only view of the
+  settings that leaves the process, and it holds booleans and modes only.
+- `docker compose` refuses to start without `CHHATRI_INTERNAL_SECRET`. Optional credentials are passed
+  to the backend only when they are set.
+- The Paytm key never reaches the browser, and neither does any other key.
+
+### Who can do what
+
+| Surface | Protection |
+|---|---|
+| Officer actions (`POST /api/cases/{id}/approve`, `/decline`, `POST /api/premium/link`) | `Authorization: Bearer <CHHATRI_OFFICER_TOKEN>`, constant-time compare. When the token is unset, a random one is generated at start-up and logged once. In demo mode (`CHHATRI_DEMO_MODE=true`) `GET /api/session` hands it to the console. **Set `CHHATRI_DEMO_MODE=false` anywhere but the demo laptop.** |
+| n8n callbacks (`POST /internal/workflows/{step}`) | `X-Chhatri-Secret` compared in constant time (`hmac.compare_digest`). An empty configured secret refuses everything. The body is validated against `WORKFLOWS`, and every `execute_payout` re-checks that the decision exists, is APPROVED and has not been executed. Idempotent per `(run_id, step)`. Not proxied by the console's nginx. |
+| n8n webhooks (`/webhook/chhatri-*`) | The workflow compares `X-Chhatri-Secret` with `$env.CHHATRI_INTERNAL_SECRET` and requires the secret to be non-empty; otherwise 403 and no callbacks (proved by `make n8n-selftest`). |
+| WhatsApp webhook (`/webhooks/whatsapp`) | GET needs `WHATSAPP_VERIFY_TOKEN`. POST verifies `X-Hub-Signature-256` (HMAC-SHA256 of the raw body with `WHATSAPP_APP_SECRET`) before parsing. Idempotent on message id. |
+| Paytm callback (`/api/webhooks/paytm`) | In REST mode, `CHECKSUMHASH` is verified with `PaytmChecksum.verifySignature`. Only `TXN_SUCCESS`/`SUCCESS`/`PAID` count. |
+| Uploads (`/api/merchants/{id}/photo`, `/voice`) | Type is checked by magic bytes, not headers (JPEG, PNG and WebP images; the §19 audio formats). Images and audio are limited to 5 MB and audio to 30 s. nginx caps request bodies at 6 MB. |
+| Rate limits | In-memory sliding window of 60 s per client: webhooks 60, uploads 20, phone messages 60. |
+| CORS | Only `CHHATRI_CONSOLE_ORIGIN`, with no credentials. The docker console is same-origin through nginx. |
+
+### Money path (SPEC §0.2, §9)
+
+- `chhatri.policy.engine` is pure and is the only code that returns `APPROVED`. LLM output can choose
+  an intent from a fixed list and nothing else. Free-text replies pass the guard (§13.3): no digits that
+  are not in the decision facts, and no promises of money.
+- An officer's approval creates a new decision after re-running every HARD check, so an officer cannot
+  pay an uncovered merchant, a merchant with an unpaid premium, or the same claim twice. SOFT checks
+  are recorded as `WAIVED_BY_OFFICER`.
+- n8n only orders steps. It never decides, and the backend sets the timing from simulated time (B1).
+- Cover bought while an alert is active or forecast starts only after the 7-day waiting period (§9.5).
+
+### Audit (SPEC §11)
+
+The audit log is an append-only SQLite hash chain: SHA-256 over canonical JSON, with a genesis of
+64 zeros. The wall-clock `recorded_at` is excluded from the hash. `GET /api/audit/verify` recomputes
+the chain and reports the first bad `seq`. Every decision stores all of its checks. Actors are named:
+`policy-engine`, `officer:<id>`, `workflow:<name>`, `merchant:<id>`, and so on.
+
+### Privacy (SPEC §14.2, §21)
+
+- Phone numbers are masked in logs as `+91•••••12345`. The merchant view shows only the masked phone and
+  masked KYC name. The officer's case view shows the KYC name, because the name check needs it.
+- Live WhatsApp messages go only to `WHATSAPP_DEMO_RECIPIENT`, and only for demo merchants. Simulated
+  merchants have fake `+9199000…` numbers and are never contacted.
+- Error responses use the envelope and never echo secrets or stack traces.
+
+### Containers and network
+
+- Backend image: Python 3.12 slim, **non-root** (uid 10001). The code, data and artefacts under `/app`
+  are root-owned and read-only to the app; run state goes to `/app/var` (a volume). There is no compiler,
+  curl or wget in the image, and the healthcheck uses stdlib urllib.
+- Console image: **unprivileged** nginx (uid 101), `server_tokens off`, `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: same-origin`. Only `/api/` and `/webhooks/`
+  are proxied.
+- All published ports bind to `127.0.0.1` by default (`CHHATRI_BIND_ADDR`). Expose the WhatsApp
+  webhook through a tunnel that forwards only `/webhooks/whatsapp`.
+
+## Known limits (accepted for the prototype)
+
+| Limit | Why it is acceptable here | Mitigation |
+|---|---|---|
+| In MCP or simulated Paytm mode, the process has no merchant key, so the Paytm callback cannot be checksum-verified | Staging and simulated premiums only; no real cover is sold | Use REST mode (`PAYTM_MID` + `PAYTM_KEY_SECRET`) to verify, or keep `/api/webhooks/paytm` off the tunnel |
+| The n8n webhook secret check is a plain string comparison in an n8n expression, not constant time | n8n listens on localhost or the compose network only | Keep port 5678 unexposed; the backend re-checks the secret on every callback in constant time |
+| `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`: any workflow in this n8n can read its environment | This n8n runs only the three generated Chhatri workflows | Never import third-party workflows into it; its environment holds only the internal secret, the public URL and the encryption key |
+| The n8n editor is reachable on `localhost:5678` until an owner account is created | Local only | Open it once and create the owner account, or leave the port closed |
+| Rate limits are in memory, per process | Single-process demo | A shared store would be needed to scale out |
+| Demo mode hands the officer token to any console user | Needed for one-tap approval on stage | `CHHATRI_DEMO_MODE=false` outside the demo |
+
+## Pre-demo security checklist
+
+- [ ] `.env` exists (`make env`), is mode 0600, is not committed (`git status` shows nothing), and has
+      no empty `CHHATRI_OFFICER_TOKEN=` line.
+- [ ] `WHATSAPP_DEMO_RECIPIENT` is the presenter's own number, if WhatsApp is live.
+- [ ] Every Paytm variable points at **staging** (`PAYTM_BASE_URL=https://securestage.paytmpayments.com`).
+- [ ] Ports are bound to `127.0.0.1`. If a tunnel is used, it forwards only `/webhooks/whatsapp`.
+- [ ] `GET /api/audit/verify` returns `valid: true` after a full rehearsal.
+- [ ] `make test`, `make test-infra` and `make n8n-selftest` pass on the demo machine.
