@@ -1,141 +1,85 @@
-.PHONY: help setup data test test-backend test-frontend e2e dev demo-check up down lint clean
+# Chhatri developer commands (SPEC §23; binding decisions B7, B8).
+#
+# Only `data` builds artefacts; no other target depends on it. `test` never needs artefacts;
+# `test-slow` and `demo-check` read the committed artefacts and never rebuild them.
 
-# Colors for terminal output
-BLUE := \033[0;34m
-GREEN := \033[0;32m
-RED := \033[0;31m
-NC := \033[0m # No Color
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+.DEFAULT_GOAL := help
 
-help:
-	@echo "$(BLUE)Chhatri — make targets (SPEC §23)$(NC)"
-	@echo ""
-	@echo "$(GREEN)Setup & Data$(NC)"
-	@echo "  make setup          Create venv, install deps, npm ci"
-	@echo "  make data           Build zones, hexes, calibration, model, backtest artifacts"
-	@echo ""
-	@echo "$(GREEN)Testing$(NC)"
-	@echo "  make test           Run all tests (backend + frontend)"
-	@echo "  make test-backend   Backend tests only (pytest with coverage)"
-	@echo "  make test-frontend  Frontend tests only (vitest)"
-	@echo "  make e2e            Playwright E2E tests (monsoon replay + officer approve)"
-	@echo ""
-	@echo "$(GREEN)Development$(NC)"
-	@echo "  make dev            Run backend + frontend concurrently (uvicorn + vite)"
-	@echo "  make demo-check     Smoke test: run all scenarios, check golden numbers"
-	@echo ""
-	@echo "$(GREEN)Docker Compose$(NC)"
-	@echo "  make up             Start all services (backend, frontend, n8n if set)"
-	@echo "  make down           Stop and remove containers"
-	@echo ""
-	@echo "$(GREEN)Code Quality$(NC)"
-	@echo "  make lint           Run ruff check on backend"
-	@echo "  make clean          Remove venv, node_modules, .pytest_cache, build artifacts"
-	@echo ""
+ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+PYTHON ?= python3.12
+VENV := $(ROOT)/backend/.venv
+PY := $(VENV)/bin/python
+NPM ?= npm
+BACKEND_PORT ?= 8000
+CONSOLE_PORT ?= 5173
+CONSOLE_URL ?= http://localhost:$(CONSOLE_PORT)
+COVERAGE_MIN ?= 80
+INFRA_COVERAGE_MIN ?= 90
 
-# === Setup ===
+.PHONY: help setup data test test-backend test-frontend test-slow test-infra dev demo-check e2e \
+	env up down lint n8n-workflows n8n-selftest clean
 
-setup: backend-venv backend-deps frontend-deps
-	@echo "$(GREEN)✓ Setup complete$(NC)"
-	@echo "  Backend venv: backend/.venv"
-	@echo "  Frontend npm: frontend/node_modules"
-	@echo ""
-	@echo "  Start development with: $(BLUE)make dev$(NC)"
+help: ## List the targets
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
 
-backend-venv:
-	@test -d backend/.venv || python3 -m venv backend/.venv
-	@echo "$(GREEN)✓ Backend venv ready$(NC)"
+setup: ## Create backend/.venv, install backend[dev], npm ci in frontend/
+	test -x $(PY) || $(PYTHON) -m venv $(VENV)
+	$(PY) -m pip install --upgrade pip
+	$(PY) -m pip install -e "$(ROOT)/backend[dev]"
+	cd $(ROOT)/frontend && $(NPM) ci
 
-backend-deps: backend-venv
-	@. backend/.venv/bin/activate && pip install --upgrade pip setuptools wheel
-	@. backend/.venv/bin/activate && pip install -e "backend[dev]"
-	@echo "$(GREEN)✓ Backend dependencies installed$(NC)"
+data: ## Build every artefact: python backend/scripts/build_data.py (slow; the only artefact writer)
+	cd $(ROOT) && $(PY) backend/scripts/build_data.py
 
-frontend-deps:
-	@test -d frontend/node_modules || (cd frontend && npm ci)
-	@echo "$(GREEN)✓ Frontend dependencies installed$(NC)"
+test: test-backend test-frontend ## Fast suite: backend (not slow, coverage >= 80%) + frontend typecheck, lint, test
 
-# === Data ===
+test-backend: ## Backend pytest -m "not slow" with coverage >= 80% (COVERAGE_MIN)
+	cd $(ROOT)/backend && $(PY) -m pytest -m "not slow" --cov=chhatri --cov-report=term-missing --cov-fail-under=$(COVERAGE_MIN)
 
-data: backend-deps
-	@. backend/.venv/bin/activate && python backend/scripts/build_geo.py
-	@. backend/.venv/bin/activate && python backend/scripts/calibrate.py
-	@. backend/.venv/bin/activate && python backend/scripts/build_data.py
-	@echo "$(GREEN)✓ Artifacts built: zones, hexes, calibration, model, backtest$(NC)"
+test-frontend: ## Frontend typecheck, lint and unit tests (B7 scripts)
+	cd $(ROOT)/frontend && $(NPM) run typecheck && $(NPM) run lint && $(NPM) run test
 
-# === Testing ===
+test-slow: ## Golden numbers + full-artefact flows (pytest -m slow; needs committed artefacts, never rebuilds them)
+	cd $(ROOT)/backend && $(PY) -m pytest -m slow
 
-test: test-backend test-frontend
-	@echo "$(GREEN)✓ All tests passed$(NC)"
+test-infra: ## Infra checks: n8n workflows generated from WORKFLOWS, compose, Makefile, env, nginx, scripts
+	cd $(ROOT) && $(PY) scripts/n8n_workflows.py --check
+	cd $(ROOT) && $(PY) -m pytest -p no:cacheprovider scripts/tests --cov=scripts --cov-report=term-missing --cov-fail-under=$(INFRA_COVERAGE_MIN)
 
-test-backend: backend-deps data
-	@. backend/.venv/bin/activate && pytest backend/tests -v --cov=backend/chhatri --cov-report=term-missing --cov-fail-under=80 -m "not slow"
-	@echo "$(GREEN)✓ Backend tests passed (≥80% coverage)$(NC)"
-
-test-frontend: frontend-deps
-	@cd frontend && npm run test:unit
-	@echo "$(GREEN)✓ Frontend tests passed$(NC)"
-
-e2e: backend-deps frontend-deps data
-	@. backend/.venv/bin/activate && python -m pytest backend/tests -v -k "test_" --co > /dev/null 2>&1
-	@cd frontend && npm run test:e2e
-	@echo "$(GREEN)✓ E2E tests passed$(NC)"
-
-# === Development ===
-
-dev: backend-deps frontend-deps data
-	@echo "$(BLUE)Starting development servers...$(NC)"
-	@echo "  Backend (FastAPI):  http://localhost:8000"
-	@echo "  Frontend (Vite):    http://localhost:5173"
-	@echo "  Swagger docs:       http://localhost:8000/docs"
-	@echo ""
-	@echo "Press Ctrl+C to stop both servers"
-	@echo ""
-	@(. backend/.venv/bin/activate && cd backend && uvicorn --factory chhatri.api.app:create_app --reload --host 0.0.0.0 --port 8000) & \
-	(cd frontend && npm run dev) & \
+dev: ## Backend (uvicorn :8000, reload) + console (vite :5173, proxies /api); Ctrl+C stops both
+	trap 'kill $$(jobs -p) 2>/dev/null || true' INT TERM EXIT; \
+	(cd $(ROOT)/backend && $(PY) -m uvicorn --factory chhatri.api.app:create_app --reload --host 127.0.0.1 --port $(BACKEND_PORT)) & \
+	(cd $(ROOT)/frontend && VITE_API_URL=http://127.0.0.1:$(BACKEND_PORT) $(NPM) run dev -- --host 127.0.0.1 --port $(CONSOLE_PORT) --strictPort) & \
 	wait
 
-# === Demo & Acceptance ===
+demo-check: ## Every scenario through the HTTP API: python backend/scripts/demo_check.py (needs artefacts)
+	cd $(ROOT) && $(PY) backend/scripts/demo_check.py
 
-demo-check: backend-deps data
-	@echo "$(BLUE)Running demo scenarios...$(NC)"
-	@. backend/.venv/bin/activate && python backend/scripts/demo_check.py
-	@echo "$(GREEN)✓ Demo check passed$(NC)"
+e2e: ## Playwright (chromium) against running backend + console at CONSOLE_URL (default :5173)
+	cd $(ROOT)/frontend && CONSOLE_URL=$(CONSOLE_URL) $(NPM) run test:e2e
 
-# === Docker Compose ===
+env: ## Create .env from .env.example with generated secrets; an existing .env is only checked, never overwritten
+	python3 $(ROOT)/scripts/init_env.py
 
-up:
-	docker compose config > /dev/null || (echo "$(RED)✗ docker-compose.yml is invalid$(NC)" && exit 1)
-	@echo "$(BLUE)Starting Docker services...$(NC)"
-	docker compose up -d
-	@echo "$(GREEN)✓ Services started$(NC)"
-	@echo "  Backend:  http://localhost:8000"
-	@echo "  Frontend: http://localhost:80"
-	@echo "  n8n:      http://localhost:5678 (if enabled via profile)"
+up: env ## docker compose up -d --build (backend, frontend, n8n), waits until healthy
+	cd $(ROOT) && docker compose up -d --build --wait
 
-down:
-	docker compose down
-	@echo "$(GREEN)✓ Services stopped$(NC)"
+down: ## Stop the docker stack (keeps volumes)
+	cd $(ROOT) && docker compose down
 
-# === Code Quality ===
+lint: ## ruff check + format check (backend; scripts via scripts/ruff.toml, which extends the backend config)
+	cd $(ROOT)/backend && $(PY) -m ruff check . && $(PY) -m ruff format --check .
+	cd $(ROOT) && $(PY) -m ruff check scripts && $(PY) -m ruff format --check scripts
 
-lint: backend-deps
-	@. backend/.venv/bin/activate && ruff check backend/chhatri backend/tests
-	@echo "$(GREEN)✓ Lint passed$(NC)"
+n8n-workflows: ## Regenerate n8n/workflows/*.json from chhatri.workflows.definitions.WORKFLOWS
+	cd $(ROOT) && $(PY) scripts/n8n_workflows.py
 
-# === Cleanup ===
+n8n-selftest: ## Run the pinned n8n image with the workflows against a stub backend (needs docker)
+	cd $(ROOT) && $(PY) scripts/n8n_selftest.py --start-container
 
-clean:
-	rm -rf backend/.venv
-	rm -rf backend/.pytest_cache backend/.ruff_cache
-	rm -rf backend/chhatri.egg-info
-	rm -rf backend/.coverage backend/htmlcov
-	rm -rf frontend/node_modules frontend/dist
-	rm -rf frontend/.vite-cache
-	@echo "$(GREEN)✓ Cleanup complete$(NC)"
-
-# === Utilities ===
-
-version:
-	@echo "Chhatri — Build for India AI Hackathon · Track 2"
-	@echo "Demo: 3 Oct 2026"
-	@echo "Repo: https://github.com/palkia/Chhatri"
+clean: ## Remove caches and build output (keeps .venv, node_modules, artefacts and .env)
+	rm -rf $(ROOT)/backend/.pytest_cache $(ROOT)/backend/.ruff_cache $(ROOT)/backend/htmlcov $(ROOT)/backend/.coverage
+	rm -rf $(ROOT)/frontend/dist $(ROOT)/frontend/test-results $(ROOT)/frontend/playwright-report
+	find $(ROOT)/backend $(ROOT)/scripts -name __pycache__ -type d -prune -exec rm -rf {} +
