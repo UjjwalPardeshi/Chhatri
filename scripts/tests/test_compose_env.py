@@ -1,0 +1,138 @@
+# ruff: noqa: S105, S106, S310 - test fixtures: dummy secrets, local http:// URLs (same policy as backend tests/)
+"""docker-compose.yml and .env.example against Settings (SPEC §0.1, §21, §23; decisions B1, B6, B8)."""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+from chhatri.config import Settings
+
+DOCKER = shutil.which("docker") or "docker"
+FIXED_IN_CONTAINER = {
+    "CHHATRI_DATA_DIR": "/app/data",
+    "CHHATRI_VAR_DIR": "/app/var",
+    "CHHATRI_PUBLIC_URL": "http://backend:8000",
+}
+SECRET_FIELDS = {name.upper() for name, f in Settings.model_fields.items() if "Secret" in str(f.annotation)}
+
+
+def _settings_env_names() -> set[str]:
+    return {name.upper() for name in Settings.model_fields}
+
+
+def _compose(repo_root: Path) -> dict[str, Any]:
+    return yaml.safe_load((repo_root / "docker-compose.yml").read_text(encoding="utf-8"))
+
+
+def _config(repo_root: Path, env_file: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - fixed argv
+        [DOCKER, "compose", "--env-file", str(env_file), "config", "--format", "json"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def test_env_example_lists_every_settings_field_without_secrets(
+    repo_root: Path,
+) -> None:
+    text = (repo_root / ".env.example").read_text(encoding="utf-8")
+    listed = set(re.findall(r"^(?:# )?([A-Z][A-Z0-9_]*)=", text, flags=re.M))
+    assert _settings_env_names() <= listed
+    active = dict(re.findall(r"^([A-Z][A-Z0-9_]*)=(.*)$", text, flags=re.M))
+    for name in SECRET_FIELDS | {
+        "N8N_ENCRYPTION_KEY",
+        "WHATSAPP_DEMO_RECIPIENT",
+        "PAYTM_MID",
+    }:
+        assert active.get(name, "") == "", f"{name} must not carry a value in .env.example"
+
+
+def test_compose_passes_every_setting_to_the_backend(repo_root: Path) -> None:
+    env = _compose(repo_root)["services"]["backend"]["environment"]
+    assert _settings_env_names() <= set(env)
+    for name, value in FIXED_IN_CONTAINER.items():
+        assert env[name] == value
+    assert env["N8N_BASE_URL"] == "${CHHATRI_STACK_N8N_URL-http://n8n:5678}"
+    optional = [n for n in _settings_env_names() if n not in FIXED_IN_CONTAINER and n != "N8N_BASE_URL"]
+    for name in optional:
+        value = env[name]
+        assert value is None or str(value).startswith("${"), f"{name} must come from .env/shell"
+
+
+def test_compose_services_ports_and_n8n(repo_root: Path) -> None:
+    services = _compose(repo_root)["services"]
+    assert sorted(services) == ["backend", "frontend", "n8n"]
+    ports = {name: svc["ports"][0] for name, svc in services.items()}
+    assert ports == {
+        "backend": "${CHHATRI_BIND_ADDR:-127.0.0.1}:${CHHATRI_BACKEND_PORT:-8000}:8000",
+        "frontend": "${CHHATRI_BIND_ADDR:-127.0.0.1}:${CHHATRI_CONSOLE_PORT:-8080}:8080",
+        "n8n": "${CHHATRI_BIND_ADDR:-127.0.0.1}:${CHHATRI_N8N_PORT:-5678}:5678",
+    }
+    n8n = services["n8n"]
+    assert re.fullmatch(r"docker\.n8n\.io/n8nio/n8n:2\.\d+\.\d+", n8n["image"])
+    assert n8n["entrypoint"] == ["/bin/sh", "/chhatri/entrypoint.sh"]
+    assert "./n8n/workflows:/chhatri/workflows:ro" in n8n["volumes"]
+    assert "./n8n/entrypoint.sh:/chhatri/entrypoint.sh:ro" in n8n["volumes"]
+    assert n8n["environment"]["N8N_BLOCK_ENV_ACCESS_IN_NODE"] == "false"
+    assert n8n["environment"]["CHHATRI_PUBLIC_URL"] == "http://backend:8000"
+    backend_health = " ".join(services["backend"]["healthcheck"]["test"])
+    assert "urllib.request" in backend_health and "requests" not in backend_health.replace(
+        "urllib.request", ""
+    )
+    assert services["frontend"]["depends_on"]["backend"]["condition"] == "service_healthy"
+
+
+def test_compose_config_validates_and_resolves(repo_root: Path, tmp_path: Path) -> None:
+    env_file = tmp_path / "stack.env"
+    env_file.write_text(
+        "CHHATRI_INTERNAL_SECRET=abc123\nCHHATRI_OFFICER_TOKEN=tok\nCHHATRI_CONSOLE_PORT=18080\n"
+        "CHHATRI_STACK_N8N_URL=\n",
+        encoding="utf-8",
+    )
+    result = _config(repo_root, env_file)
+    assert result.returncode == 0, result.stderr
+    doc = json.loads(result.stdout)
+    backend = doc["services"]["backend"]["environment"]
+    assert (
+        backend["CHHATRI_INTERNAL_SECRET"] == doc["services"]["n8n"]["environment"]["CHHATRI_INTERNAL_SECRET"]
+    )
+    assert backend["CHHATRI_OFFICER_TOKEN"] == "tok"
+    assert backend["N8N_BASE_URL"] == ""
+    assert backend["CHHATRI_CONSOLE_ORIGIN"] == "http://localhost:18080"  # follows CHHATRI_CONSOLE_PORT
+    assert "SARVAM_API_KEY" not in backend or backend["SARVAM_API_KEY"] is None
+    published = {name: svc["ports"][0]["published"] for name, svc in doc["services"].items()}
+    assert published == {"backend": "8000", "frontend": "18080", "n8n": "5678"}
+    assert all(svc["ports"][0]["host_ip"] == "127.0.0.1" for svc in doc["services"].values())
+
+
+def test_compose_refuses_to_start_without_the_internal_secret(repo_root: Path, tmp_path: Path) -> None:
+    env_file = tmp_path / "empty.env"
+    env_file.write_text("CHHATRI_INTERNAL_SECRET=\n", encoding="utf-8")
+    result = _config(repo_root, env_file)
+    assert result.returncode != 0
+    assert "CHHATRI_INTERNAL_SECRET" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        ".env",
+        ".env.*",
+        "!.env.example",
+        "!frontend/.env.mock",
+        "backend/var/",
+        "frontend/node_modules/",
+    ],
+)
+def test_gitignore_keeps_secrets_and_run_state_out(repo_root: Path, line: str) -> None:
+    assert line in (repo_root / ".gitignore").read_text(encoding="utf-8").splitlines()

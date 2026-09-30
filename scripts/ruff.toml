@@ -1,0 +1,2 @@
+# Ruff settings for the infra scripts: the backend's (line length 110, same rules), found automatically.
+extend = "../backend/pyproject.toml"
