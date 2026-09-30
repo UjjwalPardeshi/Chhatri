@@ -13,6 +13,9 @@ out, written in the same voice:
 - ``EXPLAIN_PERSONAL`` / ``EXPLAIN_AREA_FORMULA`` — §13.5 WHY_AMOUNT "(or personal equivalent)",
   filled with the §9.6 formula strings, which reproduce the amount from the shown numbers (§4.3).
 - ``PAYOUT_CARD_BADGE*`` — the §13.4 card badge ("No claim needed") and its personal/officer forms.
+- ``PREMIUM_PAID_STARTS`` / ``_ACTIVE`` — the confirmation after Paytm's paid callback (SPEC §10
+  ``PremiumService`` "on paid callback, extend prepaid_through"): the amount received and the
+  cover dates, so a merchant who bought cover after an alert sees when it starts (§9.5).
 - decline reasons, cover status, check-in follow-ups, "voice unclear", "photo not needed" and
   "payment link unavailable" replies.
 
@@ -190,6 +193,16 @@ _ENTRIES: Final[dict[str, Template]] = {
     "COVER_STATUS_UNPAID": Template(
         "आपका कवर चालू है, पर आगे के दिनों का प्रीमियम अभी जमा नहीं है।",
         "Your cover is active, but the premium for the coming days hasn't been paid yet.",
+    ),
+    "PREMIUM_PAID_STARTS": Template(
+        "{name_hi} जी, आपका {amount} का प्रीमियम मिल गया। "
+        "आपका कवर {starts_on_hi} से शुरू होगा और {paid_to_hi} तक का प्रीमियम जमा है।",
+        "{name_en} ji, we received your {amount} premium. "
+        "Your cover starts on {starts_on_en} and is paid through {paid_to_en}.",
+    ),
+    "PREMIUM_PAID_ACTIVE": Template(
+        "{name_hi} जी, आपका {amount} का प्रीमियम मिल गया। आपका कवर चालू है और {paid_to_hi} तक का प्रीमियम जमा है।",
+        "{name_en} ji, we received your {amount} premium. Your cover is active and paid through {paid_to_en}.",
     ),
     "COVER_LINK_UNAVAILABLE": Template(
         "भुगतान लिंक अभी नहीं बन सका। थोड़ी देर बाद फिर से पूछिए।",

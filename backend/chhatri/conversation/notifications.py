@@ -9,6 +9,8 @@ Called by the orchestrator's workflow steps at simulated time:
   whenever "tomorrow's" would be false.
 - ``personal_paid`` at credit time: PERSONAL_PAID, or OFFICER_APPROVED when an officer's decision is
   being paid (the illness_mismatch story), then PAYOUT_CARD and SOUNDBOX.
+- ``premium_paid`` after Paytm's paid callback: PREMIUM_PAID_STARTS (the cover starts after the
+  waiting period, SPEC §9.5) or PREMIUM_PAID_ACTIVE, with the amount and the paid-through date.
 - ``checkin_silent`` (11:20): CHECKIN_SILENT (template ``chhatri_checkin`` outside the window).
 - ``officer_result`` at the officer's decision: OFFICER_DECLINED with the reason; an approval is
   told once the money is credited, by ``personal_paid`` ("… {amount} जमा" must be true when read),
@@ -38,8 +40,25 @@ from chhatri.conversation.outbox import (
 )
 from chhatri.conversation.ports import MerchantDirectory
 from chhatri.conversation.reasons import dispute_reason_key, officer_reason_key
-from chhatri.domain.enums import CaseKind, CaseStatus, DecisionOutcome, MessageKind, PayoutStatus
-from chhatri.domain.models import AreaTrigger, Case, Decision, InstalmentPause, Merchant, Message, Payout
+from chhatri.domain.enums import (
+    CaseKind,
+    CaseStatus,
+    DecisionOutcome,
+    MessageKind,
+    PayoutStatus,
+    PremiumStatus,
+)
+from chhatri.domain.models import (
+    AreaTrigger,
+    Case,
+    Cover,
+    Decision,
+    InstalmentPause,
+    Merchant,
+    Message,
+    Payout,
+    PremiumPayment,
+)
 from chhatri.money import format_inr
 
 OFFICER_PREFIX: Final = "officer:"
@@ -133,6 +152,30 @@ class Notifications:
             reply = Outgoing.text(
                 "INSTALMENT_PAUSED_ON", instalment=instalment, date_hi=date_hi(due), date_en=date_en(due)
             )
+        return await self._outbox.send(merchant, reply)
+
+    async def premium_paid(self, premium: PremiumPayment, cover: Cover) -> Message:
+        _require(
+            premium.status is PremiumStatus.PAID, f"payment {premium.id} is {premium.status.value}, not PAID"
+        )
+        _require(cover.id == premium.cover_id, f"cover {cover.id} is not the cover of payment {premium.id}")
+        _require(cover.merchant_id == premium.merchant_id, f"cover {cover.id} is for another merchant")
+        merchant = self._directory.merchant(premium.merchant_id)
+        facts: dict[str, object] = {
+            "amount": format_inr(premium.amount_paise),
+            "paid_to_hi": date_hi(premium.covers_to),
+            "paid_to_en": date_en(premium.covers_to),
+            **name_facts(merchant),
+        }
+        if cover.starts_on > self._today():
+            reply = Outgoing.text(
+                "PREMIUM_PAID_STARTS",
+                starts_on_hi=date_hi(cover.starts_on),
+                starts_on_en=date_en(cover.starts_on),
+                **facts,
+            )
+        else:
+            reply = Outgoing.text("PREMIUM_PAID_ACTIVE", **facts)
         return await self._outbox.send(merchant, reply)
 
     async def checkin_silent(self, merchant_id: str, first_silent_day: date) -> Message:

@@ -13,7 +13,7 @@ from chhatri.integrations.whatsapp_sim import SimulatorChannel
 from chhatri.ledger.instalments import InstalmentService
 from chhatri.policy.engine import apply_officer_decision
 from chhatri.policy.facts import PersonalClaimFacts
-from chhatri.sim.city import ANIL
+from chhatri.sim.city import ANIL, RAMESH
 from chhatri.sim.slips import render_slip
 from tests.conversation.conftest import RULES, SILENT_DAY, SUNITA, AudioTTS, World, make_world, z7_trigger
 
@@ -270,3 +270,59 @@ async def test_officer_result_validation() -> None:
     approved = _officer(referred, facts, world, approve=True)
     with pytest.raises(ValueError, match="is not for case"):
         await world.service.notify_officer_result(approved, case.model_copy(update={"merchant_id": "S-0907"}))
+
+
+# ------------------------------------------------------------------ premium paid (SPEC §10, §14.3)
+
+
+async def _paid_premium(world: World):
+    _, link = await world.claims.quote_cover(RAMESH.id)
+    assert link is not None and link.link_id is not None
+    paid = world.claims.premiums.mark_paid(link.link_id, world.clock.now(), "TXN-1")
+    cover = world.store.cover(RAMESH.id)
+    assert cover is not None
+    return paid, cover
+
+
+async def test_premium_paid_confirms_the_cover_that_starts_after_the_waiting_period() -> None:
+    world = make_world(start=ist(2025, 8, 18, 18, 10))
+    paid, cover = await _paid_premium(world)
+    told = await world.service.notify_premium_paid(paid, cover)
+    assert (told.kind, told.merchant_id, told.created_at) == (MessageKind.TEXT, RAMESH.id, world.clock.now())
+    assert told.text_hi == (
+        "रमेश जी, आपका ₹60 का प्रीमियम मिल गया। आपका कवर 25 अगस्त से शुरू होगा और 23 सितंबर तक का प्रीमियम जमा है।"
+    )
+    assert told.text_en == (
+        "Ramesh ji, we received your ₹60 premium. "
+        "Your cover starts on 25 August and is paid through 23 September."
+    )
+    assert world.events("message")[-1].data["message"]["id"] == told.id
+
+
+async def test_premium_paid_for_a_cover_in_force_says_it_is_active() -> None:
+    world = make_world(start=ist(2025, 8, 18, 18, 10))
+    paid, cover = await _paid_premium(world)
+    world.at(ist(2025, 8, 26, 9, 0))
+    told = await world.service.notify_premium_paid(
+        paid, cover.model_copy(update={"starts_on": date(2025, 8, 25)})
+    )
+    assert (
+        told.text_en
+        == "Ramesh ji, we received your ₹60 premium. Your cover is active and paid through 23 September."
+    )
+    assert (
+        told.text_hi == "रमेश जी, आपका ₹60 का प्रीमियम मिल गया। आपका कवर चालू है और 23 सितंबर तक का प्रीमियम जमा है।"
+    )
+
+
+async def test_premium_paid_validation() -> None:
+    world = make_world(start=ist(2025, 8, 18, 18, 10))
+    _, link = await world.claims.quote_cover(RAMESH.id)
+    assert link is not None
+    paid, cover = await _paid_premium(make_world(start=ist(2025, 8, 18, 18, 10)))
+    with pytest.raises(ValueError, match="is PENDING, not PAID"):
+        await world.service.notify_premium_paid(link, cover)
+    with pytest.raises(ValueError, match="is not the cover of payment"):
+        await world.service.notify_premium_paid(paid, cover.model_copy(update={"id": "CV-other"}))
+    with pytest.raises(ValueError, match="is for another merchant"):
+        await world.service.notify_premium_paid(paid, cover.model_copy(update={"merchant_id": ANIL.id}))

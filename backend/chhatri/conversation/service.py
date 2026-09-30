@@ -38,7 +38,17 @@ from chhatri.conversation.ports import ClaimsPort, ConversationStore, MerchantDi
 from chhatri.conversation.replies import Replies
 from chhatri.conversation.slip_flow import SlipFlow
 from chhatri.domain.enums import Channel, MessageKind
-from chhatri.domain.models import AreaTrigger, Case, Decision, InstalmentPause, Merchant, Message, Payout
+from chhatri.domain.models import (
+    AreaTrigger,
+    Case,
+    Cover,
+    Decision,
+    InstalmentPause,
+    Merchant,
+    Message,
+    Payout,
+    PremiumPayment,
+)
 from chhatri.events import EventBus
 from chhatri.ids import IdFactory
 from chhatri.integrations.base import (
@@ -207,6 +217,10 @@ class ConversationService:
     async def notify_personal_paid(self, decision: Decision, payout: Payout) -> tuple[Message, ...]:
         """PERSONAL_PAID / OFFICER_APPROVED → PAYOUT_CARD → SOUNDBOX, at credit time."""
         return await self._notices.personal_paid(decision, payout)
+
+    async def notify_premium_paid(self, premium: PremiumPayment, cover: Cover) -> Message:
+        """PREMIUM_PAID_STARTS / _ACTIVE after Paytm's paid callback (SPEC §10, §14.3)."""
+        return await self._notices.premium_paid(premium, cover)
 
     async def checkin_silent(self, merchant_id: str, first_silent_day: date) -> Message:
         """CHECKIN_SILENT, business-initiated (template outside the 24 h window, SPEC §13.7)."""
