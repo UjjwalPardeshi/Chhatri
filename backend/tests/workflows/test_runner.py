@@ -1,172 +1,73 @@
-"""Tests for workflow engines (SPEC §14.5, §15)."""
+"""In-process workflow engine schedules each step at start + offset (B1, SPEC §15)."""
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping
+from __future__ import annotations
+
+from datetime import timedelta
 
 import pytest
 
-from chhatri.integrations.base import IntegrationError
-from chhatri.workflows.definitions import Scheduler, StepHandlers, StepSpec
-from chhatri.workflows.runner import InProcessWorkflowEngine
+from chhatri.clock import ist
+from chhatri.workflows import runner
+from chhatri.workflows.runner import InProcessWorkflowEngine, N8nWorkflowEngine
 
-IST = timezone(timedelta(hours=5, minutes=30))
+from .fakes import FakeScheduler, RecordingHandlers
 
-
-class MockScheduler:
-    """Mock scheduler for testing."""
-
-    def __init__(self):
-        self.scheduled_steps: list[tuple[datetime, str, Any]] = []
-        self._now = datetime.now(tz=IST)
-
-    def schedule(self, at: datetime, name: str, fn):
-        """Record scheduled step."""
-        self.scheduled_steps.append((at, name, fn))
-
-    def now(self) -> datetime:
-        """Return current time."""
-        return self._now
+DECIDED = ist(2025, 8, 19, 17, 0)
+PAYOUT = {"decision_id": "D-000001", "merchant_id": "S-0142"}
 
 
-class MockStepHandlers:
-    """Mock step handlers for testing."""
+async def test_monsoon_timeline_decision_1700_credit_1704_pause_1705() -> None:
+    scheduler, handlers = FakeScheduler(DECIDED), RecordingHandlers()
+    run = await InProcessWorkflowEngine(scheduler, handlers).start("payout", PAYOUT)
+    assert (run.run_id, run.engine, run.accepted) == ("payout:D-000001", "in-process", True)
+    assert [(at.strftime("%H:%M"), name) for at, name, _ in scheduler.jobs] == [
+        ("17:00", "payout:D-000001:execute_payout"),
+        ("17:04", "payout:D-000001:credit_payout"),
+        ("17:04", "payout:D-000001:notify_merchant"),
+        ("17:05", "payout:D-000001:pause_instalment"),
+    ]
+    await scheduler.run_all()
+    assert [step for _, step, _ in handlers.calls] == [
+        "execute_payout",
+        "credit_payout",
+        "notify_merchant",
+        "pause_instalment",
+    ]
+    assert all(dict(payload) == PAYOUT for *_, payload in handlers.calls)
 
-    def __init__(self):
-        self.executed_steps: list[tuple[str, str, dict]] = []
 
-    async def run_step(self, workflow: str, step: str, payload: Mapping[str, Any]) -> None:
-        """Record executed step."""
-        self.executed_steps.append((workflow, step, dict(payload)))
+async def test_follow_up_waits_for_sla_in_simulated_time() -> None:
+    scheduler = FakeScheduler(DECIDED)
+    await InProcessWorkflowEngine(scheduler, RecordingHandlers()).start("follow-up", {"case_id": "C-2291"})
+    assert {at for at, *_ in scheduler.jobs} == {DECIDED + timedelta(hours=24)}
 
 
-class TestInProcessWorkflowEngine:
-    """Tests for InProcessWorkflowEngine."""
+async def test_duplicate_start_is_ignored() -> None:
+    scheduler = FakeScheduler(DECIDED)
+    engine = InProcessWorkflowEngine(scheduler, RecordingHandlers())
+    await engine.start("human-review", {"case_id": "C-2291", "merchant_id": "S-0142"})
+    again = await engine.start("human-review", {"case_id": "C-2291", "merchant_id": "S-0142"})
+    assert again.accepted is False and len(scheduler.jobs) == 2
 
-    @pytest.mark.asyncio
-    async def test_start_payout_workflow(self):
-        """Test starting a payout workflow."""
-        scheduler = MockScheduler()
-        handlers = MockStepHandlers()
 
-        workflows = {
-            "payout": (
-                StepSpec("execute_payout", 0),
-                StepSpec("credit_payout", 4),
-                StepSpec("notify_merchant", 4),
-                StepSpec("pause_instalment", 5),
-            )
-        }
+async def test_invalid_starts_raise() -> None:
+    engine = InProcessWorkflowEngine(FakeScheduler(DECIDED), RecordingHandlers())
+    with pytest.raises(ValueError, match="unknown workflow"):
+        await engine.start("refund", {})
+    with pytest.raises(ValueError):
+        await engine.start("payout", {"decision_id": "D-1"})
 
-        engine = InProcessWorkflowEngine(scheduler, handlers, workflows)
 
-        payload = {"decision_id": "D-000001", "merchant_id": "S-0142"}
-        run = await engine.start("payout", payload)
+async def test_step_failures_propagate_to_the_scheduler() -> None:
+    scheduler = FakeScheduler(DECIDED)
+    await InProcessWorkflowEngine(scheduler, RecordingHandlers(fail_on="credit_payout")).start(
+        "payout", PAYOUT
+    )
+    with pytest.raises(RuntimeError, match="credit_payout failed"):
+        await scheduler.run_all()
 
-        assert run.workflow == "payout"
-        assert run.engine == "in-process"
-        assert run.accepted is True
-        assert len(scheduler.scheduled_steps) == 4
 
-    @pytest.mark.asyncio
-    async def test_start_workflow_with_correct_offsets(self):
-        """Test that steps are scheduled with correct time offsets."""
-        scheduler = MockScheduler()
-        handlers = MockStepHandlers()
-        base_time = scheduler.now()
+def test_n8n_engine_is_reexported() -> None:
+    from chhatri.integrations.n8n import N8nWorkflowEngine as Impl
 
-        workflows = {
-            "test": (
-                StepSpec("step1", 0),
-                StepSpec("step2", 5),
-                StepSpec("step3", 10),
-            )
-        }
-
-        engine = InProcessWorkflowEngine(scheduler, handlers, workflows)
-        await engine.start("test", {})
-
-        # Verify scheduling times
-        times = [t for t, _, _ in scheduler.scheduled_steps]
-        names = [n for _, n, _ in scheduler.scheduled_steps]
-
-        assert len(times) == 3
-        assert times[0] == base_time  # +0 min
-        assert times[1] == base_time + timedelta(minutes=5)  # +5 min
-        assert times[2] == base_time + timedelta(minutes=10)  # +10 min
-
-    @pytest.mark.asyncio
-    async def test_start_unknown_workflow(self):
-        """Test starting an unknown workflow raises error."""
-        scheduler = MockScheduler()
-        handlers = MockStepHandlers()
-        workflows = {}
-
-        engine = InProcessWorkflowEngine(scheduler, handlers, workflows)
-
-        with pytest.raises(IntegrationError, match="Unknown workflow"):
-            await engine.start("unknown", {})
-
-    @pytest.mark.asyncio
-    async def test_start_human_review_workflow(self):
-        """Test starting a human-review workflow."""
-        scheduler = MockScheduler()
-        handlers = MockStepHandlers()
-
-        workflows = {
-            "human-review": (
-                StepSpec("open_case", 0),
-                StepSpec("notify_officer", 0),
-            )
-        }
-
-        engine = InProcessWorkflowEngine(scheduler, handlers, workflows)
-
-        payload = {"case_id": "C-2291", "merchant_id": "S-0142"}
-        run = await engine.start("human-review", payload)
-
-        assert run.workflow == "human-review"
-        assert len(scheduler.scheduled_steps) == 2
-
-        # Both steps should be at the same time (offset 0)
-        times = [t for t, _, _ in scheduler.scheduled_steps]
-        assert times[0] == times[1]
-
-    @pytest.mark.asyncio
-    async def test_start_followup_workflow(self):
-        """Test starting a follow-up workflow."""
-        scheduler = MockScheduler()
-        handlers = MockStepHandlers()
-
-        workflows = {
-            "follow-up": (
-                StepSpec("check_case_sla", 24 * 60),  # 24 hours
-            )
-        }
-
-        engine = InProcessWorkflowEngine(scheduler, handlers, workflows)
-
-        payload = {"case_id": "C-2291"}
-        run = await engine.start("follow-up", payload)
-
-        assert len(scheduler.scheduled_steps) == 1
-
-        # Verify offset is 24 hours
-        exec_time = scheduler.scheduled_steps[0][0]
-        expected_time = scheduler.now() + timedelta(hours=24)
-        assert exec_time == expected_time
-
-    def test_add_minutes(self):
-        """Test the _add_minutes helper."""
-        base = datetime(2025, 8, 19, 12, 0, 0, tzinfo=IST)
-
-        result = InProcessWorkflowEngine._add_minutes(base, 30)
-
-        assert result == datetime(2025, 8, 19, 12, 30, 0, tzinfo=IST)
-
-    def test_add_minutes_crossing_day(self):
-        """Test _add_minutes crossing day boundary."""
-        base = datetime(2025, 8, 19, 23, 0, 0, tzinfo=IST)
-
-        result = InProcessWorkflowEngine._add_minutes(base, 120)
-
-        assert result == datetime(2025, 8, 20, 1, 0, 0, tzinfo=IST)
+    assert N8nWorkflowEngine is Impl and "N8nWorkflowEngine" in runner.__all__

@@ -1,151 +1,134 @@
-"""Workflow definitions (SPEC §15).
+"""Workflow step lists and their simulated-time offsets (SPEC §14.5, §15, §24.5; binding decision B1).
 
-Step lists with simulated-time offsets from the policy rules.
+Offsets are simulated minutes from the workflow start (the decision time):
+
+| workflow       | steps (offset)                                                                   |
+|----------------|----------------------------------------------------------------------------------|
+| `payout`       | execute_payout +0, credit_payout +rail delay (4), notify_merchant +4,             |
+|                | pause_instalment +instalment pause delay (5)                                     |
+| `human-review` | open_case +0, notify_officer +0                                                  |
+| `follow-up`    | check_case_sla +dispute SLA (24 h), notify_officer +24 h                          |
+
+So the monsoon demo reads: decisions 17:00, credits + WhatsApp + Soundbox 17:04, pauses 17:05. The
+in-process runner and the n8n callbacks both schedule every step at start + offset on the simulated
+scheduler, so the replay timeline is identical in both modes. n8n never decides anything.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any, Protocol
+
+from chhatri.policy.rules import PolicyRules, default_rules
+
+PAYOUT = "payout"
+HUMAN_REVIEW = "human-review"
+FOLLOW_UP = "follow-up"
+
+EXECUTE_PAYOUT = "execute_payout"
+CREDIT_PAYOUT = "credit_payout"
+NOTIFY_MERCHANT = "notify_merchant"
+PAUSE_INSTALMENT = "pause_instalment"
+OPEN_CASE = "open_case"
+NOTIFY_OFFICER = "notify_officer"
+CHECK_CASE_SLA = "check_case_sla"
+MINUTES_PER_HOUR = 60
+
+# SPEC §14.5 workflow payloads: required keys (non-empty strings); extra keys pass through unchanged.
+WORKFLOW_PAYLOAD_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        PAYOUT: ("decision_id", "merchant_id"),
+        HUMAN_REVIEW: ("case_id", "merchant_id"),
+        FOLLOW_UP: ("case_id",),
+    }
+)
+_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:_.\-]{0,127}$")
 
 
 @dataclass(frozen=True, slots=True)
 class StepSpec:
-    """Workflow step specification.
-
-    SPEC §24.5:
-    - name: step name (e.g., "execute_payout")
-    - delay_minutes_from_start: simulated-time offset from workflow start in minutes
-    """
+    """One workflow step and its offset from the workflow start, in simulated minutes."""
 
     name: str
     delay_minutes_from_start: int
 
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("step name is empty")
+        if self.delay_minutes_from_start < 0:
+            raise ValueError("step offsets are non-negative")
+
 
 class Scheduler(Protocol):
-    """Scheduler protocol for workflow steps.
+    """Simulated-time scheduler (implemented by `replay.scheduler.SimScheduler`)."""
 
-    Implemented by the orchestrator to schedule step execution at specific times.
-    """
+    def schedule(self, at: datetime, name: str, fn: Callable[[], Awaitable[None]]) -> None: ...
 
-    def schedule(self, at: datetime, name: str, fn: Callable[[], Awaitable[None]]) -> None:
-        """Schedule a step for execution at a specific time.
-
-        Args:
-            at: Datetime when the step should execute (IST-aware).
-            name: Step name for logging.
-            fn: Async function to execute.
-        """
-        ...
-
-    def now(self) -> datetime:
-        """Get the current simulated time.
-
-        Returns:
-            Current datetime (IST-aware).
-        """
-        ...
+    def now(self) -> datetime: ...
 
 
 class StepHandlers(Protocol):
-    """Step execution handler protocol.
+    """Application effects of each step (implemented by the orchestrator)."""
 
-    Implemented by the orchestrator to handle workflow step execution.
-    """
-
-    async def run_step(self, workflow: str, step: str, payload: Mapping[str, Any]) -> None:
-        """Execute a workflow step.
-
-        Args:
-            workflow: Workflow name (e.g., "payout").
-            step: Step name (e.g., "execute_payout").
-            payload: Step payload.
-
-        Raises:
-            Exception: If the step execution fails.
-        """
-        ...
+    async def run_step(self, workflow: str, step: str, payload: Mapping[str, Any]) -> None: ...
 
 
-def _build_payout_workflow(payout_rail_delay_minutes: int,
-                           instalment_pause_delay_minutes: int) -> tuple[StepSpec, ...]:
-    """Build payout workflow steps from policy rules.
-
-    SPEC §15, §24.5:
-    - execute_payout: offset +0
-    - credit_payout: offset +payout_rail_delay_minutes
-    - notify_merchant: offset +payout_rail_delay_minutes
-    - pause_instalment: offset +instalment_pause_delay_minutes
-
-    Args:
-        payout_rail_delay_minutes: Delay from policy rules.
-        instalment_pause_delay_minutes: Delay from policy rules.
-
-    Returns:
-        Tuple of StepSpec objects.
-    """
-    return (
-        StepSpec(name="execute_payout", delay_minutes_from_start=0),
-        StepSpec(name="credit_payout", delay_minutes_from_start=payout_rail_delay_minutes),
-        StepSpec(name="notify_merchant", delay_minutes_from_start=payout_rail_delay_minutes),
-        StepSpec(name="pause_instalment", delay_minutes_from_start=instalment_pause_delay_minutes),
+def build_workflows(rules: PolicyRules) -> Mapping[str, tuple[StepSpec, ...]]:
+    """Step lists for `rules` (B1); read-only mapping."""
+    rail = rules.payout_rail_delay_minutes
+    sla = rules.dispute_sla_hours * MINUTES_PER_HOUR
+    return MappingProxyType(
+        {
+            PAYOUT: (
+                StepSpec(EXECUTE_PAYOUT, 0),
+                StepSpec(CREDIT_PAYOUT, rail),
+                StepSpec(NOTIFY_MERCHANT, rail),
+                StepSpec(PAUSE_INSTALMENT, rules.instalment_pause_delay_minutes),
+            ),
+            HUMAN_REVIEW: (StepSpec(OPEN_CASE, 0), StepSpec(NOTIFY_OFFICER, 0)),
+            FOLLOW_UP: (StepSpec(CHECK_CASE_SLA, sla), StepSpec(NOTIFY_OFFICER, sla)),
+        }
     )
 
 
-def _build_human_review_workflow() -> tuple[StepSpec, ...]:
-    """Build human review workflow steps.
-
-    SPEC §15:
-    - open_case: offset +0
-    - notify_officer: offset +0
-
-    Returns:
-        Tuple of StepSpec objects.
-    """
-    return (
-        StepSpec(name="open_case", delay_minutes_from_start=0),
-        StepSpec(name="notify_officer", delay_minutes_from_start=0),
-    )
+WORKFLOWS: Mapping[str, tuple[StepSpec, ...]] = build_workflows(default_rules())
 
 
-def _build_followup_workflow(dispute_sla_hours: int) -> tuple[StepSpec, ...]:
-    """Build follow-up workflow steps.
-
-    SPEC §15:
-    - check_case_sla: offset +dispute_sla_hours*60
-
-    Args:
-        dispute_sla_hours: SLA hours from policy rules.
-
-    Returns:
-        Tuple of StepSpec objects.
-    """
-    return (
-        StepSpec(name="check_case_sla", delay_minutes_from_start=dispute_sla_hours * 60),
-    )
+def step_spec(
+    workflow: str, step: str, workflows: Mapping[str, tuple[StepSpec, ...]] = WORKFLOWS
+) -> StepSpec:
+    """The StepSpec for (workflow, step); ValueError when the step is not part of that workflow."""
+    for spec in workflows.get(workflow, ()):
+        if spec.name == step:
+            return spec
+    raise ValueError(f"step {step!r} is not part of workflow {workflow!r}")
 
 
-def build_workflows(payout_rail_delay_minutes: int, instalment_pause_delay_minutes: int,
-                    dispute_sla_hours: int) -> Mapping[str, tuple[StepSpec, ...]]:
-    """Build all workflow definitions from policy rules.
-
-    Args:
-        payout_rail_delay_minutes: Delay from policy rules.
-        instalment_pause_delay_minutes: Delay from policy rules.
-        dispute_sla_hours: SLA hours from policy rules.
-
-    Returns:
-        Mapping of workflow name to step specs.
-    """
-    return {
-        "payout": _build_payout_workflow(payout_rail_delay_minutes, instalment_pause_delay_minutes),
-        "human-review": _build_human_review_workflow(),
-        "follow-up": _build_followup_workflow(dispute_sla_hours),
-    }
+def validate_payload(workflow: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Check a SPEC §14.5 payload; returns a read-only copy. ValueError on unknown workflow/bad keys."""
+    required = WORKFLOW_PAYLOAD_KEYS.get(workflow)
+    if required is None:
+        raise ValueError(f"unknown workflow {workflow!r}")
+    if not isinstance(payload, Mapping):
+        raise ValueError("workflow payload must be an object")
+    missing = [key for key in required if not isinstance(payload.get(key), str) or not payload.get(key)]
+    if missing:
+        raise ValueError(f"workflow {workflow!r} payload needs non-empty {', '.join(missing)}")
+    return MappingProxyType(dict(payload))
 
 
-# Default workflow definitions for immediate use
-# These will be populated by the registry based on policy rules
-WORKFLOWS: Mapping[str, tuple[StepSpec, ...]] = {}
+def run_id_for(workflow: str, payload: Mapping[str, Any]) -> str:
+    """Deterministic run id `{workflow}:{decision_id|case_id}` — one run per subject (idempotency key)."""
+    subject = validate_payload(workflow, payload)[WORKFLOW_PAYLOAD_KEYS[workflow][0]]
+    run_id = f"{workflow}:{subject}"
+    if not _RUN_ID.match(run_id):
+        raise ValueError("workflow subject id contains unsupported characters")
+    return run_id
+
+
+def is_valid_run_id(run_id: object) -> bool:
+    return isinstance(run_id, str) and bool(_RUN_ID.match(run_id))
