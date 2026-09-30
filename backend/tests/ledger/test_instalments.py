@@ -1,117 +1,65 @@
-"""Tests for InstalmentService (SPEC §10, §24.3)."""
+"""SPEC §10 InstalmentService: pause event_date + 1 with the simulated lender, once, audited."""
+
+from __future__ import annotations
+
+from datetime import date
 
 import pytest
-from datetime import datetime, date, timedelta
-from zoneinfo import ZoneInfo
 
 from chhatri.audit.log import AuditLog
+from chhatri.clock import ist
 from chhatri.domain.enums import DecisionOutcome
-from chhatri.domain.models import Decision, Loan, Merchant
+from chhatri.domain.models import Decision
 from chhatri.ids import IdFactory
-from chhatri.ledger.instalments import InstalmentService
+from chhatri.ledger.instalments import LENDER, InstalmentService
+from chhatri.money import rupees
+from chhatri.policy.engine import evaluate_area_claim
+from chhatri.policy.rules import default_rules
 from chhatri.store.repositories import Store
-from chhatri.sim.types import City
+from tests.policy import builders as b
 
-IST = ZoneInfo("Asia/Kolkata")
-
-
-@pytest.fixture
-def city():
-    merchant = Merchant(
-        id="S-0142", shop_name="Tea", owner_name="Anil", owner_name_hi="अनिल",
-        kyc_name="ANIL RAMESH JADHAV", phone="+919900000142", language="hi",
-        zone_id="Z7", lat=19.0, lng=72.8, h3_cell="test", shop_type="TEA_STALL",
-        weekly_off=None, is_demo=True
-    )
-    loan = Loan(id="L-001", merchant_id="S-0142", lender_name="NBFC", daily_instalment_paise=60000, outstanding_paise=3600000)
-    return City(seed=20251019, geography=None, merchants=(merchant,), profiles={}, covers={}, loans={"S-0142": loan})
+PAUSE_AT = ist(2025, 8, 19, 17, 5)
+EVENT = date(2025, 8, 19)
 
 
 @pytest.fixture
-def service(city):
-    store = Store(city)
-    audit_log = AuditLog()
-    ids = IdFactory()
-    return InstalmentService(store, audit_log, ids)
+def service(store: Store, audit: AuditLog, ids: IdFactory) -> InstalmentService:
+    return InstalmentService(store, audit, ids)
 
 
-class TestInstalmentPause:
-    """Pause next day's instalment."""
+def decision(**kw: object) -> Decision:
+    d = evaluate_area_claim(b.area_facts(), default_rules(), decision_id="D-000001", now=ist(2025, 8, 19, 17))
+    return d.model_copy(update=kw) if kw else d
 
-    def test_pause_next_creates_pause(self, service):
-        """Pause next day's instalment."""
-        decision = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=138000,
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
 
-        pause = service.pause_next(
-            merchant_id="S-0142",
-            event_date=date(2025, 8, 19),
-            decision=decision,
-            at=datetime(2025, 8, 19, 17, 5, tzinfo=IST)
-        )
+def test_pauses_tomorrows_instalment(service: InstalmentService, store: Store, audit: AuditLog) -> None:
+    pause = service.pause_next("S-0142", EVENT, decision(), PAUSE_AT)
+    assert pause is not None
+    assert (pause.id, pause.loan_id, pause.instalment_date) == ("IP-000001", "L-S-0142", date(2025, 8, 20))
+    assert (pause.amount_paise, pause.decision_id, pause.created_at) == (rupees(600), "D-000001", PAUSE_AT)
+    assert LENDER == "Simulated lender (NBFC partner)"
+    assert LENDER in pause.reason and "end of the tenure" in pause.reason and "₹600" in pause.reason
+    assert store.pauses("S-0142") == (pause,)
+    [entry] = audit.entries()
+    assert (entry.action, entry.actor, entry.at) == ("instalment.pause", "workflow:payout", PAUSE_AT)
+    assert entry.data["lender"] == LENDER and entry.data["instalment_date"] == "2025-08-20"
+    assert entry.data["penalty_paise"] == 0
 
-        assert pause is not None
-        assert pause.instalment_date == date(2025, 8, 20)
-        assert pause.amount_paise == 60000
 
-    def test_pause_next_no_loan_returns_none(self, city):
-        """No pause if merchant has no loan."""
-        merchant = Merchant(
-            id="S-0999", shop_name="Tea", owner_name="Bob", owner_name_hi="बॉब",
-            kyc_name="BOB", phone="+919900000999", language="hi",
-            zone_id="Z3", lat=19.0, lng=72.8, h3_cell="test", shop_type="TEA_STALL",
-            weekly_off=None, is_demo=False
-        )
-        city2 = City(seed=20251019, geography=None, merchants=(merchant,), profiles={}, covers={}, loans={})
-        store = Store(city2)
-        service = InstalmentService(store, AuditLog(), IdFactory())
+def test_second_pause_for_same_day_is_none(service: InstalmentService, store: Store) -> None:
+    assert service.pause_next("S-0142", EVENT, decision(), PAUSE_AT) is not None
+    assert service.pause_next("S-0142", EVENT, decision(), PAUSE_AT) is None
+    assert len(store.pauses()) == 1
 
-        decision = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0999",
-            outcome=DecisionOutcome.APPROVED, amount_paise=138000,
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
 
-        pause = service.pause_next(
-            merchant_id="S-0999",
-            event_date=date(2025, 8, 19),
-            decision=decision,
-            at=datetime(2025, 8, 19, 17, 5, tzinfo=IST)
-        )
+def test_no_loan_means_no_pause(service: InstalmentService, store: Store) -> None:
+    d = decision(merchant_id="S-0907")
+    assert service.pause_next("S-0907", EVENT, d, PAUSE_AT) is None
+    assert store.pauses() == ()
 
-        assert pause is None
 
-    def test_pause_next_already_paused_returns_none(self, service):
-        """No pause if already paused for that date."""
-        decision = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=138000,
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
-
-        # First pause
-        pause1 = service.pause_next(
-            merchant_id="S-0142",
-            event_date=date(2025, 8, 19),
-            decision=decision,
-            at=datetime(2025, 8, 19, 17, 5, tzinfo=IST)
-        )
-        assert pause1 is not None
-
-        # Second pause for same date should return None
-        pause2 = service.pause_next(
-            merchant_id="S-0142",
-            event_date=date(2025, 8, 19),
-            decision=decision,
-            at=datetime(2025, 8, 19, 17, 6, tzinfo=IST)
-        )
-        assert pause2 is None
+def test_rejects_other_merchant_or_unapproved(service: InstalmentService) -> None:
+    with pytest.raises(ValueError, match="is for"):
+        service.pause_next("S-0907", EVENT, decision(), PAUSE_AT)
+    with pytest.raises(ValueError, match="only APPROVED"):
+        service.pause_next("S-0142", EVENT, decision(outcome=DecisionOutcome.REFERRED), PAUSE_AT)
