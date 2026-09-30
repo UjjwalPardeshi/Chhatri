@@ -7,7 +7,15 @@ what they must show, `report` runs them and prints the pass/fail table.
 from chhatri.api.demo.client import DemoApi, DemoHttpError
 from chhatri.api.demo.flows import FLOWS
 from chhatri.api.demo.golden import GOLDEN, DemoNumbers, expectations
-from chhatri.api.demo.report import CheckRow, ScenarioRun, all_passed, compare, rehearse, render_json, render_table
+from chhatri.api.demo.report import (
+    CheckRow,
+    ScenarioRun,
+    all_passed,
+    compare,
+    rehearse,
+    render_json,
+    render_table,
+)
 
 __all__ = [
     "FLOWS",

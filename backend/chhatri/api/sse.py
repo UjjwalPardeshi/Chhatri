@@ -7,12 +7,8 @@ bounded queue on the process-wide ``EventBus`` (the bus drops that subscriber's 
 it falls behind, so a slow console never blocks the replay). The subscription is removed when the
 client disconnects.
 
-Subscription: ``EventBus.subscribe`` in the read-only scaffold cannot be used — ``events._Subscriber``
-is a plain ``@dataclass`` (eq=True, so unhashable) and ``subscribe`` raises ``TypeError`` when it adds
-it to the subscriber set. ``subscribe`` below registers an identity-hashed subscriber with the same
-contract (``queue`` + ``dropped``, read by ``EventBus.publish``), replays history, then drains the
-queue, and always unregisters on exit. Requested scaffold fix: ``@dataclass(eq=False)`` on
-``_Subscriber`` (chhatri/events.py:48).
+Subscription: ``EventBus.subscribe`` (SPEC §19.1 bus contract): history after the id first, then
+the subscriber's own queue; closing the stream unregisters the subscriber.
 
 Resume rule (SPEC §19.1 is silent on stale ids): an id newer than anything this process has
 published — e.g. after a backend restart — resumes from the start of the retained history, so a
@@ -21,7 +17,6 @@ reconnecting console never silently misses events.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -92,30 +87,11 @@ def resume_point(bus: EventBus, after_id: int) -> int:
     return after_id
 
 
-class _StreamSubscriber:
-    """What ``EventBus.publish`` feeds: a bounded queue and a drop counter (identity-hashed)."""
-
-    __slots__ = ("dropped", "queue")
-
-    def __init__(self, queue_size: int) -> None:
-        self.queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=queue_size)
-        self.dropped = 0
-
-
 async def subscribe(bus: EventBus, after_id: int) -> AsyncIterator[Event]:
     """Retained events after ``after_id``, then live ones; unregisters when closed (SPEC §19.1)."""
-    subscriber = _StreamSubscriber(bus.queue_size)
-    subscribers: set[object] = bus._subscribers  # private on purpose: see the module docstring
-    subscribers.add(subscriber)
-    try:
-        for event in bus.history(after_id):
+    async with aclosing(bus.subscribe(after_id)) as events:
+        async for event in events:
             yield event
-        while True:
-            yield await subscriber.queue.get()
-    finally:
-        subscribers.discard(subscriber)
-        if subscriber.dropped:
-            logger.warning("slow event-stream client missed %d event(s)", subscriber.dropped)
 
 
 def encode_event(event: Event) -> ServerSentEvent:

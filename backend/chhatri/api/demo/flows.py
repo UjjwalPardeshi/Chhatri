@@ -28,6 +28,7 @@ from chhatri.api.demo.observe import (
     replies_en,
     zone_order,
 )
+from chhatri.money import format_inr
 
 __all__ = [
     "ANIL",
@@ -49,6 +50,7 @@ COVER_TEXT: Final = "Red alert tomorrow. Cover me today."  # SPEC §13.6 BLOCKED
 PAYOUT_WAIT_MINUTES: Final = 4  # B1: credit_payout / notify_merchant offset
 PAUSE_WAIT_MINUTES: Final = 1  # B1: pause_instalment is one minute after the credit
 SIMULATED_LINK_PREFIX: Final = "https://paytm.me/sim-"  # SPEC §14.3 simulated links
+QUOTE_AMOUNT: Final = "<quote amount>"
 
 
 async def monsoon(api: DemoApi) -> Observed:
@@ -61,6 +63,7 @@ async def monsoon(api: DemoApi) -> Observed:
     observed |= await _timeline(api, clock["now"][:10])
     observed["Z7 panel"] = [f"{r['label']}: {r['value']}" for r in (await api.get("/api/zones/Z7"))["rows"]]
     observed |= await _anil_paid(api)
+    observed["Anil instalment paused"] = await _anil_pauses(api)
     observed |= await _explained(api)
     observed["audit chain valid"] = (await api.get("/api/audit/verify"))["valid"]
     return observed
@@ -123,6 +126,15 @@ async def _anil_paid(api: DemoApi) -> Observed:
     }
 
 
+async def _anil_pauses(api: DemoApi) -> list[str]:
+    """Anil's paused instalments from the audit log: ``HH:MM · instalment date · amount`` (SPEC §10)."""
+    return [
+        f"{hhmm(e['at'])} · {e['data']['instalment_date']} · {format_inr(e['data']['amount_paise'])}"
+        for e in await api.audit()
+        if e["action"] == "instalment.pause" and e["data"]["merchant_id"] == ANIL
+    ]
+
+
 async def _explained(api: DemoApi) -> Observed:
     """EXPLAINED (SPEC §13.6): the why question by text, the dispute by voice note."""
     why = await api.post(f"/api/merchants/{ANIL}/messages", {"text": WHY_TEXT})
@@ -143,12 +155,15 @@ async def illness(api: DemoApi) -> Observed:
     photo = await api.post(f"/api/merchants/{ANIL}/photo", {})
     decision = (await api.get(f"/api/merchants/{ANIL}"))["decisions"][-1]
     observed["slip reply"] = replies_en(photo)
-    observed["slip decision"] = f"{decision['outcome']} · {decision['amount_label']} · {hhmm(decision['decided_at'])}"
+    observed["slip decision"] = (
+        f"{decision['outcome']} · {decision['amount_label']} · {hhmm(decision['decided_at'])}"
+    )
     observed |= await _paid_later(api, "paid")
     await api.post("/api/replay/step", {"minutes": PAUSE_WAIT_MINUTES})
     detail = await api.get(f"/api/merchants/{ANIL}")
     messages = await api.get_all(f"/api/merchants/{ANIL}/messages")
     observed["instalment message"] = messages[-1]["text_en"]
+    observed["instalment paused"] = await _anil_pauses(api)
     observed["loan"] = detail["loan"]["daily_instalment_label"] if detail["loan"] else None
     observed["audit chain valid"] = (await api.get("/api/audit/verify"))["valid"]
     return observed
@@ -201,7 +216,9 @@ async def illness_mismatch(api: DemoApi) -> Observed:
     if cases:
         result = await api.post(f"/api/cases/{cases[0]['id']}/approve", {"note": "same person"}, officer=True)
         officer = result["decision"]
-        observed["officer decision"] = f"{officer['outcome']} · {officer['amount_label']} · {officer['decided_by']}"
+        observed["officer decision"] = (
+            f"{officer['outcome']} · {officer['amount_label']} · {officer['decided_by']}"
+        )
         observed["case after the officer"] = result["case"]["status"]
     observed |= await _paid_later(api, "officer")
     observed["audit chain valid"] = (await api.get("/api/audit/verify"))["valid"]
@@ -227,21 +244,28 @@ async def buy_cover(api: DemoApi) -> Observed:
         "quote": f"{quote['outcome']} · starts {quote['starts_on']}",
         "premium link": bool(premium and premium["link_url"]),
     }
-    observed |= await _pay_premium(api, premium)
+    observed |= await _pay_premium(api, premium, quote["first_payment_label"])
     observed["audit chain valid"] = (await api.get("/api/audit/verify"))["valid"]
     return observed
 
 
-async def _pay_premium(api: DemoApi, premium: Mapping[str, Any] | None) -> Observed:
-    """Simulated links only: Paytm's paid callback activates the future cover (SPEC §10, §14.3)."""
+async def _pay_premium(api: DemoApi, premium: Mapping[str, Any] | None, amount_label: str) -> Observed:
+    """Simulated links only: Paytm's paid callback activates the future cover (SPEC §10, §14.3).
+
+    The confirmation is observed with the quoted first payment replaced by ``<quote amount>``: the
+    premium comes from the backtest (``premiums.json``), so the check is that the message repeats
+    the quoted amount and the cover dates, whatever the zone premium is.
+    """
     if premium is None or not premium["link_url"].startswith(SIMULATED_LINK_PREFIX):
-        return {"premium paid": SKIPPED, "cover after payment": SKIPPED}
+        return {"premium paid": SKIPPED, "cover after payment": SKIPPED, "premium confirmation": SKIPPED}
     form = {"linkId": premium["link_id"], "STATUS": "TXN_SUCCESS", "TXNID": f"DEMO-{premium['id']}"}
     paid = await api.post_form("/api/webhooks/paytm", form)
     cover = (await api.get(f"/api/merchants/{RAMESH}"))["cover"]
+    told = (await api.get_all(f"/api/merchants/{RAMESH}/messages"))[-1]
     return {
         "premium paid": paid["status"],
         "cover after payment": f"{cover['status']} · starts {cover['starts_on']}" if cover else None,
+        "premium confirmation": (told["text_en"] or "").replace(amount_label, QUOTE_AMOUNT),
     }
 
 

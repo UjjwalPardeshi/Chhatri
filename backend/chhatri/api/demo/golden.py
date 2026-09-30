@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from types import MappingProxyType
 from typing import Any, Final
 
@@ -26,6 +26,10 @@ CREDIT_TIME: Final = "17:04"  # B1: +payout_rail_delay_minutes
 PAUSE_TIME: Final = "17:05"  # B1: +instalment_pause_delay_minutes
 CLAIM_TIME: Final = "11:21"  # the personal flows answer the 11:20 check-in a minute later
 CLAIM_CREDIT_TIME: Final = "11:25"
+CLAIM_PAUSE_TIME: Final = "11:26"  # B1: +instalment_pause_delay_minutes
+MONSOON_NEXT_DAY: Final = "2025-08-20"  # SPEC §10: the next day's instalment is paused
+ILLNESS_DAY: Final = "2025-08-21"  # SPEC §17.2: silent Wednesday → Thursday's instalment
+FIRST_PAYMENT_DAYS: Final = 30  # SPEC §9.1 premium.first_payment_days
 TRIGGERED_ZONES: Final = ("Z3", "Z7", "Z12")
 MAP_ZONES: Final = ("Z3", "Z7", "Z9", "Z12")
 MONTHS_EN: Final = (
@@ -125,11 +129,15 @@ def _monsoon_anil(n: DemoNumbers) -> Expected:
             f"Anil ji, heavy rain cut your area's sales by {drop}% today.",
         ],
         "Anil payout card": [paid, "Credited with today's settlement", "No claim needed"],
-        "Anil Soundbox": [f"Paytm par {paid} prapt hue — Chhatri se", f"{paid} received on Paytm, from Chhatri"],
+        "Anil Soundbox": [
+            f"Paytm par {paid} prapt hue — Chhatri se",
+            f"{paid} received on Paytm, from Chhatri",
+        ],
         "Anil instalment message": [
             f"कल की {instalment} की किस्त रोक दी गई है।",
             f"Tomorrow's {instalment} instalment is paused.",
         ],
+        "Anil instalment paused": [f"{PAUSE_TIME} · {MONSOON_NEXT_DAY} · {instalment}"],
         "EXPLAINED why reply": [
             f"आपका आम मंगलवार: {usual}। आज आपके इलाके की बिक्री {drop}% गिरी। छतरी खोई हुई बिक्री का आधा देती है।",
             f"Your usual Tuesday: {usual}. Your area fell {drop}%. Chhatri pays half the lost sales.",
@@ -164,6 +172,7 @@ def _illness(n: DemoNumbers) -> Expected:
         "paid payout": f"{paid} · CREDITED {CLAIM_CREDIT_TIME}",
         "paid message": f"Anil ji, your claim is approved. {paid} credited with today's settlement.",
         "instalment message": f"Today's {format_inr(n.instalment_paise)} instalment is paused.",
+        "instalment paused": [f"{CLAIM_PAUSE_TIME} · {ILLNESS_DAY} · {format_inr(n.instalment_paise)}"],
         "loan": format_inr(n.instalment_paise),
         "audit chain valid": True,
     }
@@ -193,6 +202,7 @@ def _illness_mismatch(n: DemoNumbers) -> Expected:
 def _buy_cover(n: DemoNumbers) -> Expected:
     starts = n.cover_starts_on
     starts_en = f"{starts.day} {MONTHS_EN[starts.month - 1]}"
+    paid_to = starts + timedelta(days=FIRST_PAYMENT_DAYS - 1)
     return {
         "clock": "Mumbai · buy cover replay · 18:10 · simulated",
         "demo merchant": "S-0907",
@@ -206,6 +216,10 @@ def _buy_cover(n: DemoNumbers) -> Expected:
         "premium link": True,
         "premium paid": "paid",
         "cover after payment": f"WAITING · starts {starts.isoformat()}",
+        "premium confirmation": (
+            f"Ramesh ji, we received your <quote amount> premium. Your cover starts on {starts_en} "
+            f"and is paid through {paid_to.day} {MONTHS_EN[paid_to.month - 1]}."
+        ),
         "audit chain valid": True,
     }
 

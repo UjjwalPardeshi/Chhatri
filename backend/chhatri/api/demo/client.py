@@ -65,7 +65,9 @@ class DemoApi:
         """Every item of a paged list route (``limit``/``offset`` paging)."""
         items: list[Any] = []
         while True:
-            response = await self._client.get(path, params={**params, "limit": PAGE_SIZE, "offset": len(items)})
+            response = await self._client.get(
+                path, params={**params, "limit": PAGE_SIZE, "offset": len(items)}
+            )
             body = _unwrap("GET", path, response)
             items.extend(body["data"])
             if not body["data"] or len(items) >= body["meta"]["total"]:

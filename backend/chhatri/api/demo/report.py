@@ -72,9 +72,7 @@ def _status(expected: Any, actual: Any) -> Status:
     return "PASS" if actual == expected else "FAIL"
 
 
-def compare(
-    runs: Sequence[ScenarioRun], expected: Mapping[str, Mapping[str, Any]]
-) -> tuple[CheckRow, ...]:
+def compare(runs: Sequence[ScenarioRun], expected: Mapping[str, Mapping[str, Any]]) -> tuple[CheckRow, ...]:
     """Rows for every expected check of every scenario that ran."""
     rows: list[CheckRow] = []
     for run in runs:
