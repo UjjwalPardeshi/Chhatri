@@ -1,233 +1,257 @@
-"""Fake AppState and Runtime for testing when replay module is not yet available (SPEC §24.6).
+"""FakeAppState for API tests (SPEC §24.6 AppState / Runtime / StaticContext shape).
 
-Implements the same interface as chhatri.replay.state.AppState and Runtime,
-returning canned §19.2-shaped data for testing routes without the full orchestration.
+``FakeAppState`` loads one of the four scenarios into a ``FakeRuntime`` holding a real ``ManualClock``
+and ``IdFactory`` plus the fake services in ``fake_services.py``. The views are replaced by
+``fake_views.py`` (canned §19.2 data), so these tests exercise only the HTTP layer.
 """
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
-import numpy as np
-from chhatri.config import Settings
+from pydantic import SecretStr
+
+from chhatri.clock import IST, ManualClock, at
+from chhatri.config import DATA_DIR, Settings
+from chhatri.domain.enums import IntegrationMode, Language, ShopType
+from chhatri.domain.models import Merchant, Zone
 from chhatri.events import EventBus
-from chhatri.domain.models import Merchant, Zone, Loan, Cover
-from chhatri.domain.enums import Language, ShopType, CoverStatus, PayoutStatus
-from chhatri.money import format_inr
+from chhatri.ids import IdFactory
+from chhatri.integrations.base import IntegrationError, IntegrationStatus, RainSeries
+from tests.api import canned
+from tests.api.fake_services import (
+    FakeAudit,
+    FakeChannel,
+    FakeConversation,
+    FakeEngine,
+    FakeOrchestrator,
+    FakeStore,
+    area_decision,
+    dispute_case,
+    payout,
+)
 
-IST = timezone(timedelta(hours=5, minutes=30))
+OFFICER_TOKEN: Final = "officer-token-7Qx9"
+INTERNAL_SECRET: Final = "internal-secret-4Kd2"
+WA_APP_SECRET: Final = "wa-app-secret-8Hs1"
+WA_VERIFY_TOKEN: Final = "wa-verify-token-2Lm5"
+WA_ACCESS_TOKEN: Final = "wa-access-token-9Pz3"
+PAYTM_KEY: Final = "paytmkey16chars!"
+DEMO_RECIPIENT: Final = "+919800000001"
+CONSOLE_ORIGIN: Final = "http://console.test"
+SECRETS: Final = (INTERNAL_SECRET, WA_APP_SECRET, WA_VERIFY_TOKEN, WA_ACCESS_TOKEN, PAYTM_KEY)
+DEMO_MERCHANT: Final = {
+    "monsoon": "S-0142",
+    "illness": "S-0142",
+    "illness_mismatch": "S-0142",
+    "buy_cover": "S-0907",
+}
+SCENARIO_TIMES: Final = {
+    "monsoon": (date(2025, 8, 19), 8, 20),
+    "illness": (date(2025, 8, 21), 10, 13),
+    "illness_mismatch": (date(2025, 8, 21), 10, 13),
+    "buy_cover": (date(2025, 8, 18), 18, 19),
+}
+SLIPS: Final = {"illness": "anil_admission_slip.png", "illness_mismatch": "mismatch_admission_slip.png"}
+INTEGRATION_NAMES: Final = (
+    "sarvam_stt",
+    "sarvam_tts",
+    "sarvam_chat",
+    "sarvam_vision",
+    "whatsapp",
+    "paytm",
+    "n8n",
+    "memory",
+    "weather",
+    "soundbox",
+    "sales_data",
+    "alerts",
+    "payout_rail",
+    "lender",
+    "kyc",
+)
 
 
-@dataclass
-class FakeStatic:
-    """Mimics StaticContext (SPEC §24.6)."""
+def make_settings(*, omit: tuple[str, ...] = (), **overrides: Any) -> Settings:
+    """Settings isolated from any .env / environment, with known secrets (SPEC §21).
 
-    settings: Settings
-    rules: dict[str, Any] = field(default_factory=dict)
-    data_dir: Path = field(default_factory=lambda: Path("/tmp/fake"))
-    artifacts_dir: Path = field(default_factory=lambda: Path("/tmp/fake"))
-    calibration: dict[str, Any] = field(default_factory=dict)
-    city: Any = None
-    model: Any = None
-    model_error: str | None = None
-    zones_geojson: dict[str, Any] = field(default_factory=dict)
-    hexes_geojson: dict[str, Any] = field(default_factory=dict)
-    backtest_report: dict[str, Any] | None = None
-    premiums: dict[str, int] = field(default_factory=dict)
-
-
-@dataclass
-class FakeClock:
-    """Fake ManualClock (SPEC §24.6)."""
-
-    now: datetime = field(default_factory=lambda: datetime(2025, 8, 19, 17, 0, tzinfo=IST))
-
-    def start(self, scenario_start: datetime) -> None:
-        self.now = scenario_start
-
-    def advance(self, delta: timedelta) -> None:
-        self.now += delta
+    ``omit`` leaves fields unset so their defaults apply (e.g. a generated officer token).
+    """
+    values: dict[str, Any] = {
+        "chhatri_officer_token": SecretStr(OFFICER_TOKEN),
+        "chhatri_internal_secret": SecretStr(INTERNAL_SECRET),
+        "chhatri_demo_mode": True,
+        "chhatri_console_origin": CONSOLE_ORIGIN,
+        "chhatri_data_dir": DATA_DIR,
+        "sarvam_api_key": None,
+        "whatsapp_access_token": SecretStr(WA_ACCESS_TOKEN),
+        "whatsapp_phone_number_id": "1234567890",
+        "whatsapp_app_secret": SecretStr(WA_APP_SECRET),
+        "whatsapp_verify_token": SecretStr(WA_VERIFY_TOKEN),
+        "whatsapp_demo_recipient": DEMO_RECIPIENT,
+        "paytm_mcp_url": None,
+        "paytm_mid": None,
+        "paytm_key_secret": None,
+        "n8n_base_url": None,
+        "openmeteo_live": False,
+    }
+    values.update(overrides)
+    return Settings(_env_file=None, **{key: value for key, value in values.items() if key not in omit})
 
 
-@dataclass
-class FakeRuntime:
-    """Mimics Runtime (SPEC §24.6)."""
-
-    scenario: dict[str, Any] = field(
-        default_factory=lambda: {"name": "monsoon", "day": "2025-08-19"}
+def _merchant(merchant_id: str, zone_id: str, shop: str, owner: str, owner_hi: str) -> Merchant:
+    return Merchant(
+        id=merchant_id,
+        shop_name=shop,
+        owner_name=owner,
+        owner_name_hi=owner_hi,
+        kyc_name=owner.upper(),
+        phone=f"+9199000{merchant_id[-4:]}1",
+        language=Language.HI,
+        zone_id=zone_id,
+        lat=19.0,
+        lng=72.84,
+        h3_cell="883c9e0a21fffff",
+        shop_type=ShopType.TEA_STALL,
+        weekly_off=None,
+        is_demo=True,
     )
-    clock: FakeClock = field(default_factory=FakeClock)
-    ids: Any = None
-    store: Any = None
-    audit: Any = None
-    bus: EventBus = field(default_factory=EventBus)
-    shocks: Any = None
-    history: Any = None
-    expected: Any = None
-    integrations: dict[str, Any] = field(default_factory=dict)
-    conversation: Any = None
-    orchestrator: Any = None
-    engine: Any = None
-    scheduler: Any = None
-    payouts: Any = None
-    instalments: Any = None
-    premiums: Any = None
-    cases: Any = None
-    _merchants: list[Merchant] = field(default_factory=list)
-    _zones: list[Zone] = field(default_factory=list)
 
-    def __post_init__(self) -> None:
-        """Initialize fake merchants and zones."""
-        if not self._merchants:
-            self._merchants = [
-                Merchant(
-                    id="S-0142",
-                    shop_name="Anil's Tea Stall",
-                    owner_name="Anil Jadhav",
-                    owner_name_hi="अनिल",
-                    kyc_name="ANIL RAMESH JADHAV",
-                    phone="+919900012345",
-                    language=Language.HI,
-                    zone_id="Z7",
-                    lat=19.0046,
-                    lng=72.8424,
-                    h3_cell="881f025b3ffffff",
-                    shop_type=ShopType.TEA_STALL,
-                    weekly_off=None,
-                    is_demo=True,
-                ),
-            ]
-        if not self._zones:
-            self._zones = [
-                Zone(id="Z7", ward="F/S", name="Parel · Lalbaug", centroid_lat=19.00, centroid_lng=72.84),
-                Zone(id="Z3", ward="G/S", name="Worli · Lower Parel", centroid_lat=18.98, centroid_lng=72.82),
-                Zone(id="Z12", ward="E", name="Byculla", centroid_lat=18.96, centroid_lng=72.83),
-            ]
 
-    def merchant(self, merchant_id: str) -> Merchant | None:
-        """Get a merchant by ID."""
-        for m in self._merchants:
-            if m.id == merchant_id:
-                return m
-        return None
+@dataclass(frozen=True, slots=True)
+class FakeCity:
+    zones: tuple[Zone, ...] = tuple(
+        Zone(id=zone_id, ward=values[0], name=values[1], centroid_lat=19.0, centroid_lng=72.84)
+        for zone_id, values in canned.ZONES.items()
+    )
+    merchants: tuple[Merchant, ...] = (
+        _merchant("S-0142", "Z7", "Anil's Tea Stall", "Anil Jadhav", "अनिल"),
+        _merchant("S-0907", "Z3", "Ramesh Kirana", "Ramesh Patil", "रमेश"),
+        _merchant("S-0311", "Z12", "Byculla Fruits", "Sunita More", "सुनीता"),
+    )
 
-    def zone(self, zone_id: str) -> Zone | None:
-        """Get a zone by ID."""
-        for z in self._zones:
-            if z.id == zone_id:
-                return z
-        return None
+    def merchant(self, merchant_id: str) -> Merchant:
+        for merchant in self.merchants:
+            if merchant.id == merchant_id:
+                return merchant
+        raise KeyError(merchant_id)
+
+
+@dataclass(frozen=True, slots=True)
+class FakeStatic:
+    settings: Settings
+    rules: Any = "rules"
+    data_dir: Path = DATA_DIR
+    city: FakeCity = field(default_factory=FakeCity)
+    zones_geojson: dict[str, Any] = field(default_factory=lambda: canned.geojson("zones"))
+    hexes_geojson: dict[str, Any] = field(default_factory=lambda: canned.geojson("hexes"))
+    backtest_report: dict[str, Any] | None = field(default_factory=canned.backtest_report)
+
+
+@dataclass(frozen=True, slots=True)
+class FakeScenario:
+    name: str
+    title: str
+    day: date
+    start: datetime
+    end: datetime
+    demo_merchant_id: str
+    slip_sample: str | None
+
+
+@dataclass
+class FakeWeather:
+    fail: bool = False
+
+    async def hourly_rain(self, latitude: float, longitude: float, start: date, end: date) -> RainSeries:
+        if self.fail:
+            raise IntegrationError("openmeteo", "timeout")
+        first = datetime(start.year, start.month, start.day, tzinfo=IST)
+        times = tuple(first + timedelta(hours=hour) for hour in range(24))
+        return RainSeries(latitude, longitude, times, tuple(0.5 * hour for hour in range(24)), "open-meteo")
+
+
+@dataclass
+class FakeIntegrations:
+    channel: FakeChannel = field(default_factory=FakeChannel)
+    weather: FakeWeather = field(default_factory=FakeWeather)
+    statuses: tuple[IntegrationStatus, ...] = tuple(
+        IntegrationStatus(
+            name, IntegrationMode.LIVE if name == "whatsapp" else IntegrationMode.SIMULATED, "fake"
+        )
+        for name in INTEGRATION_NAMES
+    )
+
+
+def make_scenario(name: str) -> FakeScenario:
+    day, start, end = SCENARIO_TIMES[name]
+    return FakeScenario(
+        name=name,
+        title=f"{name.replace('_', ' ')} replay",
+        day=day,
+        start=at(day, start),
+        end=at(day, end),
+        demo_merchant_id=DEMO_MERCHANT[name],
+        slip_sample=SLIPS.get(name),
+    )
+
+
+class FakeRuntime:
+    def __init__(self, state: FakeAppState, scenario: str) -> None:
+        self.scenario = make_scenario(scenario)
+        self.clock = ManualClock(self.scenario.start)
+        self.ids = IdFactory()
+        self.bus = state.bus
+        zone_of = {m.id: m.zone_id for m in state.static.city.merchants}
+        self.store = FakeStore(zone_of=zone_of)
+        self.audit = FakeAudit()
+        self.integrations = FakeIntegrations()
+        self.engine = FakeEngine(runtime=self, state=state)
+        self.orchestrator = FakeOrchestrator(runtime=self)
+        self.conversation = FakeConversation(runtime=self)
+        self._seed_records()
+
+    def _seed_records(self) -> None:
+        decision = area_decision(self.ids.next("decision"))
+        self.store.decisions_by_id[decision.id] = decision
+        self.store.payout_list.extend(
+            [payout(self.ids.next("payout")), payout(self.ids.next("payout"), "S-0907")]
+        )
+        case = dispute_case(self.ids.next_case())
+        self.store.cases_by_id[case.id] = case
 
 
 class FakeAppState:
-    """Mimics AppState (SPEC §24.6).
-
-    Used for testing when the replay module is not available.
-    """
+    """AppState double: ``runtime`` raises RuntimeError before a load; ``load`` validates the name."""
 
     def __init__(self, settings: Settings | None = None) -> None:
-        self.settings_obj = settings or Settings()
-        self.static = FakeStatic(settings=self.settings_obj)
+        self.static = FakeStatic(settings=settings or make_settings())
         self.bus = EventBus()
         self._runtime: FakeRuntime | None = None
+        self.loads: list[str] = []
+        self.shut_down = False
 
     @property
     def runtime(self) -> FakeRuntime:
-        """Get runtime (RuntimeError if not loaded, SPEC §24.6)."""
         if self._runtime is None:
             raise RuntimeError("no scenario loaded")
         return self._runtime
 
     async def load(self, scenario: str) -> FakeRuntime:
-        """Load a scenario, reset state (SPEC §24.6)."""
-        if scenario not in ("monsoon", "illness", "illness_mismatch", "buy_cover"):
-            raise ValueError(f"unknown scenario: {scenario}")
-
-        self.bus.clear()
-        self._runtime = FakeRuntime(scenario={"name": scenario, "day": "2025-08-19"})
-        self.bus.publish("scenario", self._runtime.clock.now, {"scenario": scenario})
+        if scenario not in SCENARIO_TIMES:
+            raise ValueError(f"unknown scenario {scenario!r}")
+        self.loads.append(scenario)
+        self._runtime = FakeRuntime(self, scenario)
+        self.bus.publish("scenario", self._runtime.clock.now(), {"scenario": scenario})
         return self._runtime
 
     async def shutdown(self) -> None:
-        """Shutdown AppState."""
-        pass
+        if self._runtime is not None:
+            await self._runtime.engine.pause()
+        self.shut_down = True
 
     def preflight(self) -> list[dict[str, Any]]:
-        """Preflight checks (SPEC §19)."""
-        return [
-            {"name": "artifacts", "ok": True, "detail": "loaded"},
-            {"name": "scenario", "ok": self._runtime is not None, "detail": "ready to load"},
-            {"name": "integrations", "ok": True, "detail": "initialized"},
-            {"name": "clock", "ok": self._runtime is not None, "detail": "running"},
-        ]
-
-    @property
-    def static(self) -> FakeStatic:
-        """Get static context."""
-        return self._static
-
-    @static.setter
-    def static(self, value: FakeStatic) -> None:
-        self._static = value
-
-
-# Helper functions for generating canned response data
-
-
-def fake_clock_state(runtime: FakeRuntime) -> dict[str, Any]:
-    """Generate fake ClockState (§19.2)."""
-    return {
-        "now": runtime.clock.now.isoformat(),
-        "scenario": runtime.scenario.get("name"),
-        "scenario_title": "monsoon replay",
-        "running": False,
-        "speed": 1.0,
-        "start": (runtime.clock.now - timedelta(hours=8)).isoformat(),
-        "end": (runtime.clock.now + timedelta(hours=8)).isoformat(),
-        "label": f"Mumbai · {runtime.scenario.get('name')} · 17:00 · simulated",
-    }
-
-
-def fake_zone_snapshot(zone: Zone, index_pct: int | None = None) -> dict[str, Any]:
-    """Generate fake ZoneSnapshot (§19.2)."""
-    return {
-        "zone_id": zone.id,
-        "ward": zone.ward,
-        "name": zone.name,
-        "shops": 46 if zone.id == "Z7" else 141 if zone.id == "Z3" else 125,
-        "index_pct": index_pct,
-        "live_index_pct": index_pct,
-        "lower_bound_pct": 70,
-        "status": "triggered" if index_pct and index_pct < 70 else "normal",
-        "hours_below": 3 if index_pct and index_pct < 70 else 0,
-        "alert": {
-            "id": "A-20250819-01",
-            "level": "RED",
-            "kind": "RAIN",
-            "valid_from": "2025-08-19T14:00:00+05:30",
-            "valid_to": "2025-08-19T20:00:00+05:30",
-            "headline_en": "Heavy rainfall expected",
-        } if index_pct and index_pct < 70 else None,
-        "label": f"{zone.id} · {index_pct or 100}% · {46 if zone.id == 'Z7' else 141 if zone.id == 'Z3' else 125} shops",
-    }
-
-
-def fake_payout() -> dict[str, Any]:
-    """Generate fake Payout (§19.2)."""
-    amount_paise = 138000
-    return {
-        "id": "P-000001",
-        "decision_id": "D-000001",
-        "merchant_id": "S-0142",
-        "amount_paise": amount_paise,
-        "amount_label": format_inr(amount_paise),
-        "status": "CREDITED",
-        "rail": "simulated",
-        "created_at": "2025-08-19T17:00:00+05:30",
-        "credited_at": "2025-08-19T17:04:00+05:30",
-        "reference": "SIM-20250819-001",
-    }
+        return canned.preflight()
