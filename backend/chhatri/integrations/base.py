@@ -51,17 +51,23 @@ class SynthesizedAudio:
 
 @runtime_checkable
 class SpeechToText(Protocol):
-    async def transcribe(self, audio: bytes, mime_type: str, *, language_hint: str | None = None) -> Transcript: ...
+    async def transcribe(
+        self, audio: bytes, mime_type: str, *, language_hint: str | None = None
+    ) -> Transcript: ...
 
 
 @runtime_checkable
 class TextToSpeech(Protocol):
-    async def synthesize(self, text: str, language: Language, *, for_whatsapp: bool = False) -> SynthesizedAudio: ...
+    async def synthesize(
+        self, text: str, language: Language, *, for_whatsapp: bool = False
+    ) -> SynthesizedAudio: ...
 
 
 @runtime_checkable
 class ChatModel(Protocol):
-    async def complete_json(self, system: str, user: str, schema: dict[str, Any], *, schema_name: str) -> dict[str, Any]:
+    async def complete_json(
+        self, system: str, user: str, schema: dict[str, Any], *, schema_name: str
+    ) -> dict[str, Any]:
         """Return a dict that validates against `schema`, or raise IntegrationError."""
         ...
 
@@ -129,7 +135,9 @@ class LinkPayment:
 
 @runtime_checkable
 class PaymentLinks(Protocol):
-    async def create_premium_link(self, merchant: Merchant, amount_paise: int, purpose: str) -> PaymentLink: ...
+    async def create_premium_link(
+        self, merchant: Merchant, amount_paise: int, purpose: str
+    ) -> PaymentLink: ...
 
     async def link_payment(self, link_id: str) -> LinkPayment: ...
 
