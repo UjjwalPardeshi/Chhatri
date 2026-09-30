@@ -1,243 +1,183 @@
 #!/usr/bin/env python3
-"""Live smoke tests for integrations (SPEC §14, §0.1).
+"""Manual smoke test of the LIVE integrations (SPEC §0.1, §14). Never part of the automated suite.
 
-Optional manual script that exercises each LIVE integration when its env keys exist.
-Never run in automated tests.
+Builds the adapters exactly as the app does (`build_integrations` from `.env` / the environment) and
+exercises every component whose keys are present; components without keys are reported SKIPPED.
+Calls with side effects outside Chhatri (a WhatsApp message to WHATSAPP_DEMO_RECIPIENT, a staging
+Paytm link, an n8n run) happen only with `--send`.
 
-Usage:
-    cd backend
-    . .venv/bin/activate
-    python scripts/live_smoke.py
+    cd backend && . .venv/bin/activate && python scripts/live_smoke.py [--send]
+
+Exit status 1 when any attempted check fails. Output never contains secrets.
 """
 
+from __future__ import annotations
+
+import argparse
 import asyncio
-import logging
 import sys
-from datetime import date
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
-# Add backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from chhatri.config import get_settings
-from chhatri.domain.enums import Language
-from chhatri.domain.models import Merchant
-from chhatri.integrations.sarvam import LiveSarvamChat, LiveSarvamSlipReader, LiveSarvamSTT, LiveSarvamTTS
-from chhatri.integrations.paytm import McpPaytmLinks, RestPaytmLinks
-from chhatri.integrations.whatsapp import LiveWhatsAppChannel
-from chhatri.integrations.openmeteo import LiveOpenMeteo
+from chhatri.clock import IST  # noqa: E402
+from chhatri.config import DATA_DIR, Settings, get_settings  # noqa: E402
+from chhatri.domain.enums import IntegrationMode, Language, ShopType  # noqa: E402
+from chhatri.domain.models import Merchant  # noqa: E402
+from chhatri.integrations.base import IntegrationError, OutboundMessage  # noqa: E402
+from chhatri.integrations.registry import Integrations, build_integrations  # noqa: E402
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-async def smoke_sarvam_stt(api_key: str) -> None:
-    """Test Sarvam STT."""
-    logger.info("Testing Sarvam STT...")
-
-    # Create a simple audio file (silence in OGG format) for testing
-    # For real testing, you'd provide actual audio
-    stt = LiveSarvamSTT(api_key)
-
-    # Dummy audio bytes (won't actually transcribe but will test connectivity)
-    test_audio = b"dummy_audio_data"
-
-    try:
-        result = await stt.transcribe(test_audio, "audio/ogg", language_hint="hi-IN")
-        logger.info(f"  ✓ STT working: {result.source}")
-    except Exception as e:
-        logger.error(f"  ✗ STT failed: {e}")
-
-
-async def smoke_sarvam_tts(api_key: str) -> None:
-    """Test Sarvam TTS."""
-    logger.info("Testing Sarvam TTS...")
-
-    tts = LiveSarvamTTS(api_key)
-
-    try:
-        result = await tts.synthesize("नमस्ते", Language.HI)
-        if result.audio:
-            logger.info(f"  ✓ TTS working: {result.source}, audio {len(result.audio)} bytes")
-        else:
-            logger.info(f"  ✓ TTS working: {result.source}, no audio")
-    except Exception as e:
-        logger.error(f"  ✗ TTS failed: {e}")
+MUMBAI = (19.076, 72.8777)
+SMOKE_AMOUNT_PAISE = 100
+SLIP = DATA_DIR / "slips" / "anil_admission_slip.png"
+INTENT_SCHEMA = {
+    "type": "object",
+    "properties": {"intent": {"type": "string", "enum": ["WHY_AMOUNT", "UNKNOWN"]}},
+    "required": ["intent"],
+}
+SMOKE_MERCHANT = Merchant(
+    id="S-0142",
+    shop_name="Anil's Tea Stall",
+    owner_name="Anil Jadhav",
+    owner_name_hi="अनिल",
+    kyc_name="ANIL RAMESH JADHAV",
+    phone="+919900000142",
+    language=Language.HI,
+    zone_id="Z7",
+    lat=19.0046,
+    lng=72.8424,
+    h3_cell="smoke",
+    shop_type=ShopType.TEA_STALL,
+    is_demo=True,
+)
 
 
-async def smoke_sarvam_chat(api_key: str) -> None:
-    """Test Sarvam Chat."""
-    logger.info("Testing Sarvam Chat...")
-
-    chat = LiveSarvamChat(api_key)
-    schema = {
-        "type": "object",
-        "properties": {
-            "sentiment": {"type": "string", "enum": ["positive", "negative", "neutral"]},
-        },
-        "required": ["sentiment"],
-    }
-
-    try:
-        result = await chat.complete_json(
-            system="You are a sentiment analyzer.",
-            user="I love this!",
-            schema=schema,
-            schema_name="Sentiment",
-        )
-        logger.info(f"  ✓ Chat working: {result}")
-    except Exception as e:
-        logger.error(f"  ✗ Chat failed: {e}")
+@dataclass(frozen=True, slots=True)
+class Check:
+    name: str
+    run: Callable[[], Awaitable[str]] | None
+    skip_reason: str = ""
 
 
-async def smoke_sarvam_slip(api_key: str) -> None:
-    """Test Sarvam slip reader (doc-ai)."""
-    logger.info("Testing Sarvam slip reader...")
+class _Clock:
+    def now(self) -> datetime:
+        return datetime.now(tz=IST)
 
-    reader = LiveSarvamSlipReader(api_key)
-
-    # Create a minimal PNG for testing
-    # This will fail but tests the API connectivity
-    png_header = b"\x89PNG\r\n\x1a\n"
-
-    try:
-        result = await reader.read_slip(png_header, "image/png")
-        logger.info(f"  ✓ Slip reader working: {result.source}")
-    except Exception as e:
-        logger.error(f"  ✗ Slip reader failed: {e}")
+    def schedule(self, at: datetime, name: str, fn: Callable[[], Awaitable[None]]) -> None:
+        raise RuntimeError("the smoke test never schedules workflow steps")
 
 
-async def smoke_whatsapp(token: str, phone_id: str, app_secret: str) -> None:
-    """Test WhatsApp Cloud API."""
-    logger.info("Testing WhatsApp Cloud API...")
+class _NoSteps:
+    async def run_step(self, workflow: str, step: str, payload: object) -> None:
+        raise RuntimeError("the smoke test never runs workflow steps")
 
-    _channel = LiveWhatsAppChannel(
-        access_token=token,
-        phone_number_id=phone_id,
-        app_secret=app_secret,
+
+def _live(built: Integrations, name: str) -> bool:
+    return any(s.name == name and s.mode is IntegrationMode.LIVE for s in built.statuses)
+
+
+async def _sarvam_voice(built: Integrations) -> str:
+    audio = await built.tts.synthesize("नमस्ते, मैं छतरी हूँ।", Language.HI)
+    if audio.audio is None or audio.mime_type is None:
+        raise IntegrationError("sarvam_tts", "no audio returned")
+    heard = await built.stt.transcribe(audio.audio, audio.mime_type, language_hint="hi-IN")
+    return f"TTS {len(audio.audio)} bytes → STT {heard.text!r}"
+
+
+async def _sarvam_chat(built: Integrations) -> str:
+    if built.chat is None:
+        raise IntegrationError("sarvam_chat", "chat model missing")
+    result = await built.chat.complete_json(
+        "Classify the merchant message.", "मुझे इतने ही पैसे क्यों मिले?", INTENT_SCHEMA, schema_name="intent"
     )
-
-    # Test without actually sending (no demo_recipient set)
-    logger.info("  (Skipping actual send - set WHATSAPP_DEMO_RECIPIENT to test)")
+    return f"intent {result['intent']}"
 
 
-async def smoke_paytm_mcp(url: str) -> None:
-    """Test Paytm MCP server."""
-    logger.info("Testing Paytm MCP server...")
+async def _sarvam_vision(built: Integrations) -> str:
+    slip = await built.slips.read_slip(SLIP.read_bytes(), "image/png")
+    return f"patient {slip.patient_name!r}, admitted {slip.admission_date}, confidence {slip.confidence:.2f}"
 
-    paytm = McpPaytmLinks(url)
 
-    # Create a test merchant
-    test_merchant = Merchant(
-        id="S-0001",
-        shop_name="Test Shop",
-        owner_name="Test Owner",
-        owner_name_hi="टेस्ट",
-        kyc_name="TEST OWNER",
-        phone="+919900000001",
-        language=Language.HI,
-        zone_id="Z7",
-        lat=19.0,
-        lng=72.8,
-        h3_cell="test",
-        shop_type="TEA_STALL",
+async def _weather(built: Integrations) -> str:
+    today = datetime.now(tz=IST).date()
+    series = await built.weather.hourly_rain(*MUMBAI, today, today)
+    return f"{len(series.times)} hours, {sum(series.precipitation_mm):.1f} mm today ({series.source})"
+
+
+async def _whatsapp(built: Integrations) -> str:
+    message = OutboundMessage(
+        SMOKE_MERCHANT.id,
+        SMOKE_MERCHANT.phone,
+        text="Chhatri smoke test",
+        template_name="chhatri_checkin",
+        template_params=(SMOKE_MERCHANT.owner_name_hi,),
     )
-
-    try:
-        result = await paytm.create_premium_link(test_merchant, 100000, "Test Premium")
-        logger.info(f"  ✓ MCP working: {result.url}")
-    except Exception as e:
-        logger.error(f"  ✗ MCP failed: {e}")
+    receipt = await built.channel.send(message)
+    return f"accepted={receipt.accepted} {receipt.detail}"
 
 
-async def smoke_paytm_rest(mid: str, key_secret: str) -> None:
-    """Test Paytm REST API."""
-    logger.info("Testing Paytm REST API...")
+async def _paytm(built: Integrations) -> str:
+    link = await built.payments.create_premium_link(SMOKE_MERCHANT, SMOKE_AMOUNT_PAISE, "Chhatri smoke test")
+    return f"{link.source} link {link.url}"
 
-    paytm = RestPaytmLinks(mid, key_secret, "https://securestage.paytmpayments.com")
 
-    # Create a test merchant
-    test_merchant = Merchant(
-        id="S-0001",
-        shop_name="Test Shop",
-        owner_name="Test Owner",
-        owner_name_hi="टेस्ट",
-        kyc_name="TEST OWNER",
-        phone="+919900000001",
-        language=Language.HI,
-        zone_id="Z7",
-        lat=19.0,
-        lng=72.8,
-        h3_cell="test",
-        shop_type="TEA_STALL",
+async def _n8n(built: Integrations) -> str:
+    run = await built.workflows.start("follow-up", {"case_id": "C-SMOKE"})
+    return f"{run.engine} accepted={run.accepted} {run.detail}"
+
+
+def plan(built: Integrations, send: bool) -> list[Check]:
+    def gated(
+        name: str, status: str, fn: Callable[[Integrations], Awaitable[str]], side_effect: bool
+    ) -> Check:
+        if not _live(built, status):
+            return Check(name, None, "not configured (simulated)")
+        if side_effect and not send:
+            return Check(name, None, "needs --send")
+        return Check(name, lambda: fn(built))
+
+    return [
+        gated("sarvam tts→stt", "sarvam_tts", _sarvam_voice, side_effect=False),
+        gated("sarvam chat", "sarvam_chat", _sarvam_chat, side_effect=False),
+        gated("sarvam doc-ai", "sarvam_vision", _sarvam_vision, side_effect=False),
+        gated("open-meteo", "weather", _weather, side_effect=False),
+        gated("whatsapp", "whatsapp", _whatsapp, side_effect=True),
+        gated("paytm link", "paytm", _paytm, side_effect=True),
+        gated("n8n", "n8n", _n8n, side_effect=True),
+    ]
+
+
+async def run_checks(settings: Settings, *, send: bool) -> list[tuple[str, str, str]]:
+    built = build_integrations(
+        settings, scheduler=_Clock(), step_handlers=_NoSteps(), data_dir=settings.chhatri_data_dir
     )
-
-    try:
-        result = await paytm.create_premium_link(test_merchant, 100000, "Test Premium")
-        logger.info(f"  ✓ REST API working: {result.url}")
-    except Exception as e:
-        logger.error(f"  ✗ REST API failed: {e}")
-
-
-async def smoke_openmeteo() -> None:
-    """Test Open-Meteo live API."""
-    logger.info("Testing Open-Meteo live API...")
-
-    weather = LiveOpenMeteo()
-
-    try:
-        # Test with Mumbai coordinates for a small date range
-        result = await weather.hourly_rain(19.08, 72.88, date(2024, 9, 1), date(2024, 9, 2))
-        logger.info(f"  ✓ Open-Meteo working: {len(result.precipitation_mm)} data points")
-    except Exception as e:
-        logger.error(f"  ✗ Open-Meteo failed: {e}")
+    rows: list[tuple[str, str, str]] = []
+    for check in plan(built, send):
+        if check.run is None:
+            rows.append((check.name, "SKIPPED", check.skip_reason))
+            continue
+        try:
+            rows.append((check.name, "OK", await check.run()))
+        except (IntegrationError, ValueError, KeyError) as exc:
+            detail = exc.safe_message if isinstance(exc, IntegrationError) else type(exc).__name__
+            rows.append((check.name, "FAIL", detail))
+    return rows
 
 
-async def main() -> None:
-    """Run all smoke tests for live integrations."""
-    settings = get_settings()
-
-    logger.info("=== Chhatri Live Integration Smoke Tests ===\n")
-
-    # Sarvam
-    if settings.sarvam_live:
-        api_key = settings.sarvam_api_key.get_secret_value()
-        await smoke_sarvam_stt(api_key)
-        await smoke_sarvam_tts(api_key)
-        await smoke_sarvam_chat(api_key)
-        await smoke_sarvam_slip(api_key)
-    else:
-        logger.info("Sarvam: skipped (no SARVAM_API_KEY)")
-
-    # WhatsApp
-    if settings.whatsapp_live:
-        await smoke_whatsapp(
-            settings.whatsapp_access_token.get_secret_value(),
-            settings.whatsapp_phone_number_id or "",
-            settings.whatsapp_app_secret.get_secret_value(),
-        )
-    else:
-        logger.info("WhatsApp: skipped (no WHATSAPP_* keys)")
-
-    # Paytm
-    if settings.paytm_mode == "mcp":
-        await smoke_paytm_mcp(settings.paytm_mcp_url or "")
-    elif settings.paytm_mode == "rest":
-        await smoke_paytm_rest(
-            settings.paytm_mid or "",
-            settings.paytm_key_secret.get_secret_value(),
-        )
-    else:
-        logger.info("Paytm: using simulated links")
-
-    # Open-Meteo
-    if settings.openmeteo_live:
-        await smoke_openmeteo()
-    else:
-        logger.info("Open-Meteo: using fixture data")
-
-    logger.info("\n=== Smoke tests complete ===")
+def main(argv: list[str] | None = None, settings: Settings | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Smoke-test Chhatri's live integrations")
+    parser.add_argument(
+        "--send", action="store_true", help="also send WhatsApp, create a Paytm link, start n8n"
+    )
+    args = parser.parse_args(argv)
+    rows = asyncio.run(run_checks(settings or get_settings(), send=args.send))
+    for name, outcome, detail in rows:
+        sys.stdout.write(f"{outcome:8} {name:16} {detail}\n")
+    return 1 if any(outcome == "FAIL" for _, outcome, _ in rows) else 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(main())
