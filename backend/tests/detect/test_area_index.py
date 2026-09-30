@@ -1,178 +1,108 @@
-"""Tests for detect/area_index.py (SPEC §8.1, §24.2)."""
+"""Area index (SPEC §8.1) and the live pro-rated index (decision B3)."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime, timedelta
 
 import numpy as np
 import pytest
-from zoneinfo import ZoneInfo
 
 from chhatri.clock import at
-from chhatri.detect.area_index import window_index, zone_window
+from chhatri.detect.area_index import index_rows, live_window_index, window_index, zone_window
 from chhatri.domain.models import ZoneWindowIndex
-from chhatri.sim.types import City, SalesPanel
+from chhatri.money import percent_half_up
+from chhatri.sim.types import City
+from tests.detect.conftest import DAY, flat_sales, scripted
+from tests.forecast.synthetic import make_city
 
 
-IST = ZoneInfo("Asia/Kolkata")
+def test_window_index_sums_and_percent(city: City) -> None:
+    panel, expected = flat_sales(city, scripted({"Z7": {14: 0.3, 15: 0.4, 16: 0.41}}))
+    rows = city.zone_rows("Z7")
+    actual, exp, index = window_index(panel, expected, rows, at(DAY, 14), at(DAY, 17))
+    assert (actual, exp) == (25 * (300 + 400 + 410), 25 * 3000)
+    assert index == 37  # 1110 / 3000 = 37.0 %
 
 
-class TestWindowIndex:
-    """window_index() must compute actual, expected, and index_pct correctly."""
-
-    def test_window_index_returns_tuple(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """window_index() returns (actual_paise, expected_paise, index_pct or None)."""
-        rows = list(range(min(1, len(small_city.merchants))))
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-
-        # Create dummy expected_p50 (M, H, 3) shape
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64) * 1000
-
-        actual, expected, index = window_index(sales_panel, expected_p50, rows, start, end)
-
-        assert isinstance(actual, int)
-        assert isinstance(expected, int)
-        assert index is None or isinstance(index, int)
-        assert actual >= 0
-        assert expected >= 0
-
-    def test_window_index_with_zero_expected(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """window_index() returns None when expected == 0."""
-        rows = list(range(min(1, len(small_city.merchants))))
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-
-        # All zeros in expected
-        expected_p50 = np.zeros((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64)
-
-        actual, expected, index = window_index(sales_panel, expected_p50, rows, start, end)
-
-        assert expected == 0
-        assert index is None
-
-    def test_window_index_covered_merchants_only(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """window_index() sums only over provided rows."""
-        covered_rows = list(range(min(3, len(small_city.merchants))))
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64) * 1000
-
-        actual, expected, _ = window_index(sales_panel, expected_p50, covered_rows, start, end)
-
-        assert actual >= 0
-        assert expected >= 0
-
-    def test_window_index_2d_expected_array(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """window_index() handles 2D expected array (M, H)."""
-        rows = list(range(min(1, len(small_city.merchants))))
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-
-        # 2D array instead of 3D
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours), dtype=np.float64) * 1000
-
-        actual, expected, index = window_index(sales_panel, expected_p50, rows, start, end)
-
-        assert isinstance(actual, int)
-        assert isinstance(expected, int)
-        assert index is None or isinstance(index, int)
-
-    def test_window_index_empty_rows(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """window_index() handles empty rows list."""
-        rows = []  # No merchants
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64) * 100
-
-        actual, expected, index = window_index(sales_panel, expected_p50, rows, start, end)
-
-        assert actual == 0
-        assert expected == 0
-        assert index is None
+def test_expected_rounds_half_up_and_index_half_up(city: City) -> None:
+    panel, expected = flat_sales(city, scripted({}))
+    expected = expected.copy()
+    expected[0, :] = np.where(expected[0] > 0, 0.5, 0.0)
+    amount, exp, index = window_index(panel, expected, [0], at(DAY, 10), at(DAY, 11))
+    assert exp == 1 and index == percent_half_up(amount, 1)
 
 
-class TestZoneWindow:
-    """zone_window() must create ZoneWindowIndex with correct values."""
+def test_nothing_expected_gives_none(city: City) -> None:
+    panel, expected = flat_sales(city, scripted({}))
+    assert window_index(panel, expected, city.zone_rows("Z3"), at(DAY, 1), at(DAY, 4)) == (0, 0, None)
+    assert window_index(panel, expected, (), at(DAY, 10), at(DAY, 13)) == (0, 0, None)
 
-    def test_zone_window_returns_zone_window_index(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """zone_window() returns a ZoneWindowIndex."""
-        zone_id = "Z1"
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-        lower_bound = 50
 
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64) * 1000
+def test_window_must_be_inside_panel(city: City) -> None:
+    panel, expected = flat_sales(city, scripted({}))
+    visible = panel.window(panel.start, at(DAY, 17))  # B4: hours from 17:00 are not visible
+    with pytest.raises(IndexError):
+        window_index(visible, expected, city.zone_rows("Z7"), at(DAY, 15), at(DAY, 18))
+    assert window_index(visible, expected, city.zone_rows("Z7"), at(DAY, 14), at(DAY, 17))[2] == 100
 
-        zw = zone_window(small_city, sales_panel, expected_p50, zone_id, start, end, lower_bound)
 
-        assert isinstance(zw, ZoneWindowIndex)
-        assert zw.zone_id == zone_id
-        assert zw.window_start == start
-        assert zw.window_end == end
-        assert zw.lower_bound_pct == lower_bound
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (at(DAY, 14) + timedelta(minutes=5), at(DAY, 17)),
+        (at(DAY, 17), at(DAY, 14)),
+        (at(DAY, 14), at(DAY, 14)),
+    ],
+)
+def test_bad_window_bounds(city: City, start: datetime, end: datetime) -> None:
+    panel, expected = flat_sales(city, scripted({}))
+    with pytest.raises(ValueError):
+        window_index(panel, expected, [0], start, end)
 
-    def test_zone_window_shops_in_index_covered_only(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """zone_window() counts only covered merchants in shops_in_index."""
-        zone_id = "Z1"
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-        lower_bound = 50
 
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64) * 1000
+@pytest.mark.parametrize("shape", [(5, 48), (104,), (104, 10)])
+def test_expected_shape_is_validated(city: City, shape: tuple[int, ...]) -> None:
+    panel, _ = flat_sales(city, scripted({}))
+    with pytest.raises(ValueError, match="expected_p50"):
+        window_index(panel, np.zeros(shape), [0], at(DAY, 14), at(DAY, 17))
 
-        zw = zone_window(small_city, sales_panel, expected_p50, zone_id, start, end, lower_bound)
 
-        # Count covered merchants in zone
-        expected_shops = sum(1 for m in small_city.merchants
-                            if m.zone_id == zone_id and m.id in small_city.covers)
-        assert zw.shops_in_index == expected_shops
+def test_zone_window_counts_covered_open_merchants(city: City) -> None:
+    panel, expected = flat_sales(city, scripted({"Z3": {14: 0.5, 15: 0.5, 16: 0.5}}))
+    result = zone_window(city, panel, expected, "Z3", at(DAY, 14), at(DAY, 17), 71)
+    assert isinstance(result, ZoneWindowIndex)
+    assert result.shops_in_index == 29  # S-0003 is uncovered
+    assert (result.index_pct, result.lower_bound_pct, result.actual_paise) == (50, 71, 29 * 1500)
+    assert result.window_start == at(DAY, 14) and result.window_end == at(DAY, 17)
 
-    def test_zone_window_multiple_zones(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """zone_window() can be called for different zones."""
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-        lower_bound = 50
 
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64) * 1000
+def test_index_rows_need_cover_and_schedule() -> None:
+    city = make_city((("Z1", 14),), uncovered=frozenset({"S-0001"}), weekly_off_every=7)
+    rows = index_rows(city, "Z1", at(DAY, 14), at(DAY, 17))
+    ids = {city.merchants[r].id for r in rows}
+    assert "S-0001" not in ids
+    off_today = {m.id for m in city.merchants if m.weekly_off == DAY.weekday()}
+    assert not ids & off_today
+    early = index_rows(city, "Z1", at(DAY, 6), at(DAY, 7))
+    assert all(city.profiles[city.merchants[r].id].open_hour <= 6 for r in early)
+    assert index_rows(city, "Z1", at(DAY, 2), at(DAY, 5)) == ()
+    assert index_rows(city, "Z9", at(DAY, 14), at(DAY, 17)) == ()
 
-        zones_results = {}
-        for zone in small_city.zones:
-            zw = zone_window(small_city, sales_panel, expected_p50, zone.id, start, end, lower_bound)
-            zones_results[zone.id] = zw
-            assert zw.zone_id == zone.id
 
-        assert len(zones_results) == len(small_city.zones)
+class TestLiveIndex:
+    def test_on_the_hour_equals_window_index_without_reading_current_hour(self, city: City) -> None:
+        panel, expected = flat_sales(city, scripted({"Z7": {14: 0.3, 15: 0.4, 16: 0.41}}))
+        visible = panel.window(panel.start, at(DAY, 17))
+        rows = city.zone_rows("Z7")
+        assert live_window_index(visible, expected, rows, at(DAY, 17), 3) == window_index(
+            visible, expected, rows, at(DAY, 14), at(DAY, 17)
+        )
 
-    def test_zone_window_actual_expected_paise_integers(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """zone_window() returns actual and expected as integers (paise)."""
-        zone_id = "Z1"
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-        lower_bound = 50
-
-        expected_p50 = np.ones((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64) * 1000.5
-
-        zw = zone_window(small_city, sales_panel, expected_p50, zone_id, start, end, lower_bound)
-
-        assert isinstance(zw.actual_paise, int)
-        assert isinstance(zw.expected_paise, int)
-        assert zw.actual_paise >= 0
-        assert zw.expected_paise >= 0
-
-    def test_zone_window_index_pct_none_when_zero_expected(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """zone_window() returns None for index_pct when expected == 0."""
-        zone_id = "Z1"
-        start = at(date(2025, 8, 18), 10)
-        end = at(date(2025, 8, 18), 13)
-        lower_bound = 50
-
-        # All zeros
-        expected_p50 = np.zeros((len(small_city.merchants), sales_panel.hours, 3), dtype=np.float64)
-
-        zw = zone_window(small_city, sales_panel, expected_p50, zone_id, start, end, lower_bound)
-
-        assert zw.expected_paise == 0
-        assert zw.index_pct is None
+    def test_partial_hour_is_pro_rated(self, city: City) -> None:
+        panel, expected = flat_sales(city, scripted({"Z7": {14: 0.2, 15: 0.4, 16: 0.6, 17: 0.8}}))
+        rows = city.zone_rows("Z7")
+        actual, exp, index = live_window_index(panel, expected, rows, at(DAY, 17, 15), 3)
+        f = 0.25
+        assert actual == round(25 * (200 * (1 - f) + 400 + 600 + 800 * f))
+        assert exp == round(25 * 1000 * 3)
+        assert index == 45  # (150 + 400 + 600 + 200) / (750 + 1000 + 1000 + 250) = 45 %
