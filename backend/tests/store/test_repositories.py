@@ -1,386 +1,382 @@
-"""Tests for Store (SPEC §24.3). Thread-safe in-memory repository."""
+"""SPEC §24.3 Store: duplicates, replace semantics, queries, rolling limit, thread safety."""
+
+from __future__ import annotations
+
+import threading
+from datetime import date, datetime, timedelta
 
 import pytest
-from datetime import datetime, date, timedelta
-from zoneinfo import ZoneInfo
 
+from chhatri.clock import ist
 from chhatri.domain.enums import (
+    CaseKind,
     CaseStatus,
+    Channel,
     ClaimKind,
-    CoverStatus,
     DecisionOutcome,
+    Direction,
+    MessageKind,
     PayoutStatus,
+    PremiumMethod,
     PremiumStatus,
 )
-from chhatri.domain.models import (
-    AreaTrigger,
-    Case,
-    Claim,
-    Cover,
-    Decision,
-    InstalmentPause,
-    Loan,
-    Merchant,
-    Message,
-    Payout,
-    PremiumPayment,
-    CheckResult,
-    Zone,
-)
+from chhatri.domain.models import Case, Decision, InstalmentPause, Message, Payout, PremiumPayment
 from chhatri.money import rupees
+from chhatri.store.protocols import MessageLog
 from chhatri.store.repositories import Store
-from chhatri.sim.types import City
+from tests.policy import builders as b
 
-IST = ZoneInfo("Asia/Kolkata")
-
-
-@pytest.fixture
-def city():
-    """Minimal city for testing."""
-    zone = Zone(
-        id="Z7", ward="F/S", name="Parel", centroid_lat=19.0, centroid_lng=72.8,
-        waterlogging_prone=False
-    )
-    merchant = Merchant(
-        id="S-0142", shop_name="Tea", owner_name="Anil", owner_name_hi="अनिल",
-        kyc_name="ANIL RAMESH JADHAV", phone="+919900000142", language="hi",
-        zone_id="Z7", lat=19.0, lng=72.8, h3_cell="test", shop_type="TEA_STALL",
-        weekly_off=None, is_demo=True
-    )
-    loan = Loan(id="L-001", merchant_id="S-0142", lender_name="NBFC", daily_instalment_paise=60000, outstanding_paise=3600000)
-    cover = Cover(
-        id="COV-001", merchant_id="S-0142",
-        purchased_at=datetime(2025, 6, 20, 10, 0, tzinfo=IST),
-        starts_on=date(2025, 6, 20), premium_per_day_paise=rupees(2),
-        prepaid_through=date(2025, 8, 20), status=CoverStatus.ACTIVE
-    )
-
-    return City(
-        seed=20251019,
-        geography=None,  # Not used in tests
-        merchants=(merchant,),
-        profiles={},
-        covers={"S-0142": cover},
-        loans={"S-0142": loan},
-    )
+AT = ist(2025, 8, 19, 17)
 
 
 @pytest.fixture
-def store(city):
-    """Fresh store for each test."""
-    return Store(city)
+def store() -> Store:
+    return Store(b.city())
 
 
-class TestCover:
-    """Cover operations."""
-
-    def test_put_and_get_cover(self, store):
-        """Put and get a cover."""
-        cover = Cover(
-            id="C-001", merchant_id="S-0142",
-            purchased_at=datetime(2025, 6, 20, 10, 0, tzinfo=IST),
-            starts_on=date(2025, 6, 20), premium_per_day_paise=rupees(2),
-            prepaid_through=date(2025, 8, 20), status=CoverStatus.ACTIVE
-        )
-        store.put_cover(cover)
-        assert store.cover("S-0142") == cover
-
-    def test_get_nonexistent_cover(self, store):
-        """Get cover for merchant with no cover."""
-        assert store.cover("S-0999") is None
+def decision(
+    did: str = "D-000001", outcome: DecisionOutcome = DecisionOutcome.APPROVED, **kw: object
+) -> Decision:
+    base = {
+        "id": did,
+        "claim_id": "CL-000001",
+        "merchant_id": "S-0142",
+        "outcome": outcome,
+        "amount_paise": rupees(1380),
+        "checks": (),
+        "rules_version": "pilot-0.1",
+        "decided_at": AT,
+        "decided_by": "policy-engine",
+    }
+    return Decision(**{**base, **kw})
 
 
-class TestClaim:
-    """Claim operations."""
+def payout(pid: str = "P-000001", did: str = "D-000001", **kw: object) -> Payout:
+    base = {
+        "id": pid,
+        "decision_id": did,
+        "merchant_id": "S-0142",
+        "amount_paise": rupees(1380),
+        "status": PayoutStatus.PENDING,
+        "rail": "Paytm settlement (simulated)",
+        "created_at": AT,
+        "reference": f"REF-{pid}",
+    }
+    return Payout(**{**base, **kw})
 
-    def test_add_and_get_claim(self, store):
-        """Add and get a claim."""
-        claim = Claim(
-            id="CL-000001", kind=ClaimKind.AREA, merchant_id="S-0142",
-            created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            event_date=date(2025, 8, 19), expected_day_paise=rupees(4380),
-            drop_pct=63
-        )
+
+def premium(pid: str = "PR-000001", link: str | None = "LNK-1", **kw: object) -> PremiumPayment:
+    base = {
+        "id": pid,
+        "cover_id": None,
+        "merchant_id": "S-0907",
+        "amount_paise": rupees(90),
+        "method": PremiumMethod.PAYMENT_LINK,
+        "covers_from": date(2025, 8, 25),
+        "covers_to": date(2025, 9, 23),
+        "status": PremiumStatus.PENDING,
+        "link_id": link,
+        "source": "simulated",
+        "created_at": AT,
+    }
+    return PremiumPayment(**{**base, **kw})
+
+
+def case(cid: str = "C-2291", **kw: object) -> Case:
+    base = {
+        "id": cid,
+        "kind": CaseKind.DISPUTE,
+        "merchant_id": "S-0142",
+        "status": CaseStatus.OPEN,
+        "opened_at": AT,
+        "due_by": AT + timedelta(hours=24),
+        "summary_en": "Merchant says the loss was bigger",
+    }
+    return Case(**{**base, **kw})
+
+
+def message(mid: str, merchant: str = "S-0142") -> Message:
+    return Message(
+        id=mid,
+        merchant_id=merchant,
+        direction=Direction.OUTBOUND,
+        channel=Channel.SIMULATOR,
+        kind=MessageKind.TEXT,
+        text_en="hi",
+        created_at=AT,
+    )
+
+
+def test_seeded_with_city_covers(store: Store) -> None:
+    assert store.cover("S-0142") == b.cover()
+    assert store.cover("S-0907") is None
+    assert set(store.covers()) == {"S-0142"}
+    with pytest.raises(TypeError):
+        store.covers()["S-0907"] = b.cover("S-0907")  # type: ignore[index]
+
+
+def test_put_cover_replaces_and_requires_known_merchant(store: Store) -> None:
+    new = b.cover("S-0907")
+    store.put_cover(new)
+    assert store.cover("S-0907") is new
+    with pytest.raises(KeyError):
+        store.put_cover(b.cover("S-9999"))
+
+
+def test_claims(store: Store) -> None:
+    claim = b.area_claim()
+    store.add_claim(claim)
+    assert store.claim(claim.id) is claim
+    with pytest.raises(ValueError, match="already exists"):
         store.add_claim(claim)
-        assert store.claim("CL-000001") == claim
-
-    def test_add_duplicate_claim_raises(self, store):
-        """Adding duplicate claim raises ValueError."""
-        claim = Claim(
-            id="CL-000001", kind=ClaimKind.AREA, merchant_id="S-0142",
-            created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            event_date=date(2025, 8, 19), expected_day_paise=rupees(4380),
-            drop_pct=63
-        )
-        store.add_claim(claim)
-        with pytest.raises(ValueError, match="already exists"):
-            store.add_claim(claim)
+    with pytest.raises(KeyError, match="unknown claim"):
+        store.claim("CL-404")
 
 
-class TestDecision:
-    """Decision operations."""
-
-    def test_add_and_get_decision(self, store):
-        """Add and get a decision."""
-        decision = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=rupees(1380),
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
-        store.add_decision(decision)
-        assert store.decision("D-000001") == decision
-
-    def test_decisions_for_merchant_oldest_first(self, store):
-        """decisions_for returns oldest first."""
-        d1 = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=rupees(1380),
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
-        d2 = Decision(
-            id="D-000002", claim_id="CL-000002", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=rupees(1500),
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 20, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
+def test_decisions_oldest_first(store: Store) -> None:
+    d1, d2 = decision("D-000001"), decision("D-000002", claim_id="CL-000002")
+    other = decision("D-000003", merchant_id="S-0907")
+    for d in (d1, d2, other):
+        store.add_decision(d)
+    assert store.decisions_for("S-0142") == (d1, d2)
+    assert store.decisions_for_claim("CL-000002") == (d2,)
+    assert store.decision("D-000003") is other
+    with pytest.raises(ValueError):
         store.add_decision(d1)
-        store.add_decision(d2)
-        decisions = store.decisions_for("S-0142")
-        assert decisions == (d1, d2)
+    with pytest.raises(KeyError):
+        store.decision("D-404")
 
 
-class TestPayout:
-    """Payout operations."""
-
-    def test_add_and_get_payout(self, store):
-        """Add and get a payout."""
-        payout = Payout(
-            id="P-000001", decision_id="D-000001", merchant_id="S-0142",
-            amount_paise=rupees(1380), status=PayoutStatus.PENDING,
-            rail="Paytm settlement (simulated)", created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            credited_at=None, reference="CHH-P-000001"
-        )
-        store.add_payout(payout)
-        assert store.payout_for_decision("D-000001") == payout
-
-    def test_add_duplicate_payout_raises(self, store):
-        """Adding duplicate payout raises ValueError."""
-        payout = Payout(
-            id="P-000001", decision_id="D-000001", merchant_id="S-0142",
-            amount_paise=rupees(1380), status=PayoutStatus.PENDING,
-            rail="Paytm settlement (simulated)", created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            credited_at=None, reference="CHH-P-000001"
-        )
-        store.add_payout(payout)
-        with pytest.raises(ValueError, match="already exists"):
-            store.add_payout(payout)
-
-    def test_replace_payout(self, store):
-        """Replace an existing payout."""
-        payout1 = Payout(
-            id="P-000001", decision_id="D-000001", merchant_id="S-0142",
-            amount_paise=rupees(1380), status=PayoutStatus.PENDING,
-            rail="Paytm settlement (simulated)", created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            credited_at=None, reference="CHH-P-000001"
-        )
-        store.add_payout(payout1)
-
-        payout2 = payout1.model_copy(update={"status": PayoutStatus.CREDITED, "credited_at": datetime(2025, 8, 19, 17, 4, tzinfo=IST)})
-        store.replace_payout(payout2)
-
-        assert store.payout_for_decision("D-000001") == payout2
-
-    def test_payouts_filter_by_zone(self, store):
-        """Filter payouts by zone."""
-        decision = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=rupees(1380),
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
-        payout = Payout(
-            id="P-000001", decision_id="D-000001", merchant_id="S-0142",
-            amount_paise=rupees(1380), status=PayoutStatus.CREDITED,
-            rail="Paytm settlement (simulated)", created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            credited_at=datetime(2025, 8, 19, 17, 4, tzinfo=IST), reference="CHH-P-000001"
-        )
-        store.add_decision(decision)
-        store.add_payout(payout)
-
-        # Filter by Z7 (merchant is in Z7)
-        payouts = store.payouts(zone_id="Z7")
-        assert len(payouts) == 1
-        assert payouts[0] == payout
-
-        # Filter by Z3 (merchant not in Z3)
-        payouts = store.payouts(zone_id="Z3")
-        assert len(payouts) == 0
-
-    def test_payouts_filter_by_day(self, store):
-        """Filter payouts by day."""
-        decision = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=rupees(1380),
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
-        payout = Payout(
-            id="P-000001", decision_id="D-000001", merchant_id="S-0142",
-            amount_paise=rupees(1380), status=PayoutStatus.CREDITED,
-            rail="Paytm settlement (simulated)", created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            credited_at=datetime(2025, 8, 19, 17, 4, tzinfo=IST), reference="CHH-P-000001"
-        )
-        store.add_decision(decision)
-        store.add_payout(payout)
-
-        # Filter by Aug 19
-        payouts = store.payouts(day=date(2025, 8, 19))
-        assert len(payouts) == 1
-
-        # Filter by Aug 20
-        payouts = store.payouts(day=date(2025, 8, 20))
-        assert len(payouts) == 0
-
-    def test_paid_last_365_days_paise(self, store):
-        """SPEC §4.3: sum PENDING+CREDITED payouts in (on-365d, on]."""
-        # Create claim on Aug 19
-        claim = Claim(
-            id="CL-000001", kind=ClaimKind.AREA, merchant_id="S-0142",
-            created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            event_date=date(2025, 8, 19), expected_day_paise=rupees(4380),
-            drop_pct=63
-        )
-        store.add_claim(claim)
-
-        # Create decision with APPROVED outcome
-        decision = Decision(
-            id="D-000001", claim_id="CL-000001", merchant_id="S-0142",
-            outcome=DecisionOutcome.APPROVED, amount_paise=rupees(1380),
-            checks=(), rules_version="pilot-0.1",
-            decided_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            decided_by="policy-engine", explanation=None, referral_reason=None, supersedes=None
-        )
-        store.add_decision(decision)
-
-        # Create PENDING payout
-        payout = Payout(
-            id="P-000001", decision_id="D-000001", merchant_id="S-0142",
-            amount_paise=rupees(1380), status=PayoutStatus.PENDING,
-            rail="Paytm settlement (simulated)", created_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            credited_at=None, reference="CHH-P-000001"
-        )
-        store.add_payout(payout)
-
-        # Check on Aug 20 (should include Aug 19 payout in 365-day window)
-        total = store.paid_last_365_days_paise("S-0142", date(2025, 8, 20))
-        assert total == rupees(1380)
-
-        # Check on date 366 days later (should exclude)
-        far_future = date(2025, 8, 20) + timedelta(days=366)
-        total = store.paid_last_365_days_paise("S-0142", far_future)
-        assert total == 0
+def test_latest_paid_decision_requires_approved_and_credited(store: Store) -> None:
+    assert store.latest_paid_decision("S-0142") is None
+    d1, d2 = decision("D-000001"), decision("D-000002")
+    store.add_decision(d1)
+    store.add_decision(d2)
+    store.add_decision(decision("D-000003", DecisionOutcome.REFERRED))
+    store.add_payout(payout("P-000001", "D-000001", status=PayoutStatus.CREDITED, credited_at=AT))
+    store.add_payout(payout("P-000002", "D-000002"))  # still PENDING
+    assert store.latest_paid_decision("S-0142") is d1
+    store.replace_payout(payout("P-000002", "D-000002", status=PayoutStatus.CREDITED, credited_at=AT))
+    assert store.latest_paid_decision("S-0142") is d2
 
 
-class TestInstalmentPause:
-    """Instalment pause operations."""
+def test_payout_rules(store: Store) -> None:
+    p = payout()
+    store.add_payout(p)
+    assert store.payout("P-000001") is p
+    assert store.payout_for_decision("D-000001") is p
+    assert store.payout_for_decision("D-404") is None
+    with pytest.raises(ValueError, match="already has a payout"):
+        store.add_payout(payout("P-000002", "D-000001"))
+    with pytest.raises(ValueError, match="already exists"):
+        store.add_payout(payout("P-000001", "D-000009"))
+    with pytest.raises(KeyError):
+        store.replace_payout(payout("P-000404"))
+    with pytest.raises(ValueError, match="cannot move"):
+        store.replace_payout(payout("P-000001", "D-000009"))
+    with pytest.raises(KeyError):
+        store.payout("P-404")
+    with pytest.raises(KeyError):
+        store.add_payout(payout("P-000005", "D-000005", merchant_id="S-9999"))
 
-    def test_add_and_get_pauses(self, store):
-        """Add and get pauses."""
-        pause = InstalmentPause(
-            id="IP-000001", loan_id="L-001", merchant_id="S-0142",
-            instalment_date=date(2025, 8, 20), amount_paise=60000,
-            reason="Payout from decision", decision_id="D-000001",
-            created_at=datetime(2025, 8, 19, 17, 5, tzinfo=IST)
-        )
+
+def test_payout_filters(store: Store) -> None:
+    anil = payout("P-000001", "D-1")
+    ramesh = payout("P-000002", "D-2", merchant_id="S-0907")
+    tomorrow = payout("P-000003", "D-3", created_at=AT + timedelta(days=1))
+    for p in (anil, ramesh, tomorrow):
+        store.add_payout(p)
+    assert store.payouts() == (anil, ramesh, tomorrow)
+    assert store.payouts(zone_id="Z7") == (anil, tomorrow)
+    assert store.payouts(zone_id="Z3") == (ramesh,)
+    assert store.payouts(zone_id="Z99") == ()
+    assert store.payouts(day=date(2025, 8, 19)) == (anil, ramesh)
+    assert store.payouts(zone_id="Z7", day=date(2025, 8, 20)) == (tomorrow,)
+    assert store.payouts(merchant_id="S-0907") == (ramesh,)
+
+
+def test_payout_day_uses_ist() -> None:
+    store = Store(b.city())
+    utc_late = datetime.fromisoformat("2025-08-19T20:00:00+00:00")  # 01:30 IST on 20 Aug
+    store.add_payout(payout(created_at=utc_late))
+    assert store.payouts(day=date(2025, 8, 20)) != ()
+
+
+def test_paid_last_365_days_window_and_statuses(store: Store) -> None:
+    on = date(2025, 8, 19)
+    rows = [
+        ("P-1", AT, PayoutStatus.CREDITED, 100_000),
+        ("P-2", AT - timedelta(days=364), PayoutStatus.PENDING, 20_000),
+        ("P-3", AT - timedelta(days=365), PayoutStatus.CREDITED, 4_000),  # boundary: excluded
+        ("P-4", AT + timedelta(days=1), PayoutStatus.CREDITED, 800),  # after `on`: excluded
+        ("P-5", AT, PayoutStatus.FAILED, 60),
+    ]
+    for pid, created, status, amount in rows:
+        store.add_payout(payout(pid, f"D-{pid}", created_at=created, status=status, amount_paise=amount))
+    store.add_payout(payout("P-6", "D-6", merchant_id="S-0907", amount_paise=7))
+    assert store.paid_last_365_days_paise("S-0142", on) == 120_000
+    assert store.paid_last_365_days_paise("S-0907", on) == 7
+
+
+def test_paid_event_dates(store: Store) -> None:
+    area = b.area_claim()
+    personal = b.personal_claim(days=(date(2025, 8, 20), date(2025, 8, 21)))
+    store.add_claim(area)
+    store.add_claim(personal)
+    store.add_decision(decision("D-1", claim_id=area.id))
+    store.add_decision(decision("D-2", claim_id=personal.id))
+    store.add_decision(decision("D-3", claim_id="CL-missing"))
+    store.add_decision(decision("D-4", DecisionOutcome.REFERRED, claim_id=personal.id))
+    store.add_payout(payout("P-1", "D-1"))
+    store.add_payout(payout("P-2", "D-2", status=PayoutStatus.CREDITED, credited_at=AT))
+    store.add_payout(payout("P-3", "D-3"))
+    assert store.paid_event_dates("S-0142", ClaimKind.AREA) == (date(2025, 8, 19),)
+    assert store.paid_event_dates("S-0142", ClaimKind.PERSONAL) == (date(2025, 8, 20), date(2025, 8, 21))
+    store.replace_payout(payout("P-1", "D-1", status=PayoutStatus.FAILED))
+    assert store.paid_event_dates("S-0142", ClaimKind.AREA) == ()
+
+
+def test_pauses(store: Store) -> None:
+    pause = InstalmentPause(
+        id="IP-000001",
+        loan_id="L-S-0142",
+        merchant_id="S-0142",
+        instalment_date=date(2025, 8, 20),
+        amount_paise=rupees(600),
+        reason="payout",
+        decision_id="D-1",
+        created_at=AT,
+    )
+    store.add_pause(pause)
+    assert store.pauses() == (pause,)
+    assert store.pauses("S-0142") == (pause,)
+    assert store.pauses("S-0907") == ()
+    with pytest.raises(ValueError):
         store.add_pause(pause)
-        pauses = store.pauses(merchant_id="S-0142")
-        assert len(pauses) == 1
-        assert pauses[0] == pause
 
 
-class TestCase:
-    """Case operations."""
-
-    def test_add_and_get_case(self, store):
-        """Add and get a case."""
-        case = Case(
-            id="C-2291", kind="PERSONAL_CLAIM_REVIEW", merchant_id="S-0142",
-            claim_id="CL-000001", decision_id="D-000001", status=CaseStatus.OPEN,
-            opened_at=datetime(2025, 8, 20, 11, 30, tzinfo=IST),
-            due_by=datetime(2025, 8, 21, 11, 30, tzinfo=IST),
-            summary_en="Slip name mismatch", summary_hi=None, evidence={},
-            resolution=None, resolved_by=None, resolved_at=None
-        )
-        store.add_case(case)
-        assert store.case("C-2291") == case
-
-    def test_cases_filter_by_status(self, store):
-        """Filter cases by status."""
-        case = Case(
-            id="C-2291", kind="PERSONAL_CLAIM_REVIEW", merchant_id="S-0142",
-            claim_id="CL-000001", decision_id="D-000001", status=CaseStatus.OPEN,
-            opened_at=datetime(2025, 8, 20, 11, 30, tzinfo=IST),
-            due_by=datetime(2025, 8, 21, 11, 30, tzinfo=IST),
-            summary_en="Slip name mismatch", summary_hi=None, evidence={},
-            resolution=None, resolved_by=None, resolved_at=None
-        )
-        store.add_case(case)
-
-        open_cases = store.cases(status=CaseStatus.OPEN)
-        assert len(open_cases) == 1
-
-        approved_cases = store.cases(status=CaseStatus.APPROVED)
-        assert len(approved_cases) == 0
+def test_premiums_and_links(store: Store) -> None:
+    p = premium()
+    store.add_premium(p)
+    store.add_premium(premium("PR-000002", link=None, method=PremiumMethod.SETTLEMENT_DEDUCTION))
+    assert store.premium_by_link("LNK-1") is p
+    assert store.premium_by_link("LNK-404") is None
+    with pytest.raises(ValueError, match="already recorded"):
+        store.add_premium(premium("PR-000003", link="LNK-1"))
+    with pytest.raises(ValueError, match="already exists"):
+        store.add_premium(premium("PR-000001", link="LNK-2"))
+    paid = p.model_copy(update={"status": PremiumStatus.PAID, "paid_at": AT})
+    store.replace_premium(paid)
+    assert store.premium_by_link("LNK-1") is paid
+    with pytest.raises(ValueError, match="cannot change"):
+        store.replace_premium(paid.model_copy(update={"link_id": "LNK-9"}))
+    with pytest.raises(KeyError):
+        store.replace_premium(premium("PR-404"))
+    assert [x.id for x in store.premiums("S-0907")] == ["PR-000001", "PR-000002"]
+    assert store.premiums("S-0142") == ()
 
 
-class TestMessage:
-    """Message operations."""
+def test_quotes(store: Store) -> None:
+    from chhatri.policy.engine import evaluate_cover_purchase
+    from chhatri.policy.rules import default_rules
 
-    def test_add_and_get_messages(self, store):
-        """Add and get messages."""
-        msg = Message(
-            id="M-000001", merchant_id="S-0142", direction="OUTBOUND", channel="WHATSAPP",
-            kind="TEXT", text_hi="नमस्ते", text_en="Hello", audio_url=None, media_url=None,
-            card=None, created_at=datetime(2025, 8, 20, 11, 30, tzinfo=IST), meta={}
-        )
-        store.add_message(msg)
-        messages = store.messages("S-0142")
-        assert len(messages) == 1
-        assert messages[0] == msg
-
-
-class TestMedia:
-    """Media storage."""
-
-    def test_put_and_get_media(self, store):
-        """Store and retrieve media."""
-        data = b"PNG image data"
-        store.put_media(data, "image/png", "MD-000001")
-        retrieved_data, mime = store.media("MD-000001")
-        assert retrieved_data == data
-        assert mime == "image/png"
+    q = evaluate_cover_purchase(
+        b.ramesh(),
+        None,
+        now=AT,
+        alerts=(),
+        premium_per_day_paise=300,
+        rules=default_rules(),
+        quote_id="Q-000001",
+    )
+    store.add_quote(q)
+    assert store.quote("Q-000001") is q
+    with pytest.raises(ValueError):
+        store.add_quote(q)
+    with pytest.raises(KeyError):
+        store.quote("Q-404")
 
 
-class TestAreaTrigger:
-    """Area trigger operations."""
+def test_cases(store: Store) -> None:
+    c1, c2 = case("C-2291"), case("C-2292")
+    store.add_case(c1)
+    store.add_case(c2)
+    closed = c1.model_copy(update={"status": CaseStatus.CLOSED})
+    store.replace_case(closed)
+    assert store.case("C-2291") is closed
+    assert store.cases() == (closed, c2)
+    assert store.cases(CaseStatus.OPEN) == (c2,)
+    assert store.cases(CaseStatus.CLOSED) == (closed,)
+    assert store.cases("OPEN") == (c2,)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        store.add_case(c1)
+    with pytest.raises(KeyError):
+        store.replace_case(case("C-9999"))
+    with pytest.raises(ValueError, match="cannot change"):
+        store.replace_case(closed.model_copy(update={"merchant_id": "S-0907"}))
+    with pytest.raises(KeyError):
+        store.case("C-1")
 
-    def test_add_and_get_trigger(self, store):
-        """Add and get a trigger."""
-        trigger = AreaTrigger(
-            id="E-Z7-20250819", zone_id="Z7", alert_id="A-20250818-01",
-            window_start=datetime(2025, 8, 19, 14, 0, tzinfo=IST),
-            window_end=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            index_pct=37, drop_pct=63,
-            hourly_index_pct=(41, 40, 39),
-            lower_bound_pct=42, shops_in_index=46,
-            fired_at=datetime(2025, 8, 19, 17, 0, tzinfo=IST)
-        )
-        store.add_trigger(trigger)
-        assert store.area_trigger("E-Z7-20250819") == trigger
+
+def test_messages_and_media(store: Store) -> None:
+    assert isinstance(store, MessageLog)
+    m1, m2, m3 = message("M-000001"), message("M-000002", "S-0907"), message("M-000003")
+    for m in (m1, m2, m3):
+        store.add_message(m)
+    assert store.messages("S-0142") == (m1, m3)
+    with pytest.raises(ValueError):
+        store.add_message(m1)
+    store.put_media(b"\x89PNG", "image/png", "MD-000001")
+    store.put_media(b"\x89PNG", "image/png", "MD-000001")  # identical re-put is a no-op
+    assert store.media("MD-000001") == (b"\x89PNG", "image/png")
+    with pytest.raises(ValueError, match="different content"):
+        store.put_media(b"other", "image/png", "MD-000001")
+    with pytest.raises(ValueError, match="non-empty"):
+        store.put_media(b"", "image/png", "MD-000002")
+    with pytest.raises(KeyError):
+        store.media("MD-404")
+
+
+def test_triggers(store: Store) -> None:
+    t = b.trigger()
+    store.add_trigger(t)
+    assert store.area_trigger(t.id) is t
+    assert store.area_trigger("E-404") is None
+    assert store.triggers() == (t,)
+    with pytest.raises(ValueError):
+        store.add_trigger(t)
+
+
+def test_concurrent_adds_are_safe(store: Store) -> None:
+    per_thread, threads = 200, 8
+
+    def work(n: int) -> None:
+        for i in range(per_thread):
+            store.add_payout(payout(f"P-{n}-{i}", f"D-{n}-{i}", amount_paise=1))
+            if i % 20 == 0:
+                store.paid_last_365_days_paise("S-0142", date(2025, 8, 19))
+
+    pool = [threading.Thread(target=work, args=(n,)) for n in range(threads)]
+    for t in pool:
+        t.start()
+    for t in pool:
+        t.join()
+    assert len(store.payouts()) == per_thread * threads
+    assert store.paid_last_365_days_paise("S-0142", date(2025, 8, 19)) == per_thread * threads
+
+
+def test_duplicate_race_only_one_wins(store: Store) -> None:
+    errors: list[Exception] = []
+
+    def add() -> None:
+        try:
+            store.add_payout(payout())
+        except ValueError as exc:
+            errors.append(exc)
+
+    pool = [threading.Thread(target=add) for _ in range(10)]
+    for t in pool:
+        t.start()
+    for t in pool:
+        t.join()
+    assert len(store.payouts()) == 1 and len(errors) == 9

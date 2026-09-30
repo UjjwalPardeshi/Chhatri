@@ -1,94 +1,137 @@
-"""Audit log (SPEC §11, §24.3). Append-only SQLite with tamper-evident hashing.
+"""Tamper-evident, append-only audit log on SQLite (SPEC §11, §24.3).
 
-Canonical JSON: json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=False, default=str)
-Hash: sha256(canonical JSON of all fields except recorded_at and hash itself)
-Genesis prev_hash: 64 zeros
-Verify: recompute chain and detect tampering
+`hash = sha256(canonical_json({seq, at, actor, action, subject_type, subject_id, data, prev_hash}))`
+with `canonical_json = json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+default=str)`. The genesis `prev_hash` is 64 zeros. `recorded_at` (wall clock) is stored but excluded
+from the hash, so the same scenario yields the same chain (SPEC §0.2).
+
+Implementation notes: `at` is normalised to IST and hashed as `str(at)` — exactly what
+`default=str` produces — and stored as that same text; `data` is round-tripped through canonical
+JSON so the returned entry, the stored row and the hashed value agree. SQLite triggers reject
+UPDATE and DELETE so the table is append-only through normal use; `verify()` still detects rows
+edited behind the triggers' back. Actors must be one of SPEC §11's forms.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import re
 import sqlite3
 import threading
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
+from chhatri.clock import IST, require_aware
 from chhatri.domain.models import AuditEntry
+from chhatri.store.db import connect
+
+logger = logging.getLogger(__name__)
+
+GENESIS_HASH: Final = "0" * 64
+MAX_PAGE: Final = 5000
+ACTOR_PATTERN: Final = re.compile(
+    r"^(system|model|policy-engine|ai-agent)$|^(officer|merchant|workflow):[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$"
+)
+_SCHEMA: Final = (
+    """CREATE TABLE IF NOT EXISTS audit_entries (
+        seq INTEGER PRIMARY KEY, at TEXT NOT NULL, recorded_at TEXT NOT NULL, actor TEXT NOT NULL,
+        action TEXT NOT NULL, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL,
+        data TEXT NOT NULL, prev_hash TEXT NOT NULL, hash TEXT NOT NULL)""",
+    """CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_entries
+        BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END""",
+    """CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_entries
+        BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END""",
+)
+_INSERT: Final = (
+    "INSERT INTO audit_entries (seq, at, recorded_at, actor, action, subject_type, subject_id, data, prev_hash, hash)"
+    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
+_SELECT_ONE: Final = "SELECT * FROM audit_entries WHERE seq = ?"
+_SELECT_PAGE: Final = "SELECT * FROM audit_entries WHERE seq > ? ORDER BY seq LIMIT ?"
+_SELECT_ALL: Final = "SELECT * FROM audit_entries ORDER BY seq"
 
 
-def _canonical_json(data: dict[str, Any]) -> str:
-    """JSON with sort_keys, compact separators, and ensure_ascii=False."""
-    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+def canonical_json(value: Any) -> str:
+    """SPEC §11 canonical JSON."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
 
 
-def _compute_hash(data: dict[str, Any]) -> str:
-    """SHA256 of canonical JSON."""
-    canonical = _canonical_json(data)
-    return hashlib.sha256(canonical.encode()).hexdigest()
+def entry_hash(
+    *,
+    seq: int,
+    at: str,
+    actor: str,
+    action: str,
+    subject_type: str,
+    subject_id: str,
+    data: Any,
+    prev_hash: str,
+) -> str:
+    """sha256 over the hashed fields of one entry (SPEC §11); `at` is the stored `str(at)` text."""
+    payload = {
+        "seq": seq,
+        "at": at,
+        "actor": actor,
+        "action": action,
+        "subject_type": subject_type,
+        "subject_id": subject_id,
+        "data": data,
+        "prev_hash": prev_hash,
+    }
+    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def _row_hash(row: sqlite3.Row) -> str:
+    return entry_hash(
+        seq=row["seq"],
+        at=row["at"],
+        actor=row["actor"],
+        action=row["action"],
+        subject_type=row["subject_type"],
+        subject_id=row["subject_id"],
+        data=json.loads(row["data"]),
+        prev_hash=row["prev_hash"],
+    )
+
+
+def _to_entry(row: sqlite3.Row) -> AuditEntry:
+    return AuditEntry(
+        seq=row["seq"],
+        at=datetime.fromisoformat(row["at"]),
+        recorded_at=datetime.fromisoformat(row["recorded_at"]),
+        actor=row["actor"],
+        action=row["action"],
+        subject_type=row["subject_type"],
+        subject_id=row["subject_id"],
+        data=json.loads(row["data"]),
+        prev_hash=row["prev_hash"],
+        hash=row["hash"],
+    )
+
+
+def _validate(actor: str, action: str, subject_type: str, subject_id: str) -> None:
+    if not ACTOR_PATTERN.fullmatch(actor):
+        raise ValueError(f"unknown audit actor {actor!r} (SPEC §11)")
+    if not (action.strip() and subject_type.strip() and subject_id.strip()):
+        raise ValueError("audit action, subject_type and subject_id must be non-empty")
 
 
 class AuditLog:
-    """Append-only audit log on SQLite. Thread-safe. Satisfies AuditSink protocol."""
+    """Hash-chained audit log; satisfies `store.protocols.AuditSink` (SPEC §11, §24.3)."""
 
     def __init__(self, path: Path | None = None) -> None:
-        """Initialize audit log.
-
-        Args:
-            path: Path to SQLite file, or None for in-memory.
-        """
         self._lock = threading.RLock()
-        self._path = path
-
-        # Initialize database
-        db_path = ":memory:" if path is None else str(path)
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._init_schema()
-        self._next_seq = self._load_next_seq()
-
-    def _init_schema(self) -> None:
-        """Create the audit table if it doesn't exist."""
-        with self._lock:
-            cursor = self._conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS audit_entries (
-                    seq INTEGER PRIMARY KEY,
-                    at TEXT NOT NULL,
-                    recorded_at TEXT NOT NULL,
-                    actor TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    subject_type TEXT NOT NULL,
-                    subject_id TEXT NOT NULL,
-                    data TEXT NOT NULL,
-                    prev_hash TEXT NOT NULL,
-                    hash TEXT NOT NULL
-                )
-            """)
-            self._conn.commit()
-
-    def _load_next_seq(self) -> int:
-        """Load the next sequence number from the database."""
-        with self._lock:
-            cursor = self._conn.cursor()
-            cursor.execute("SELECT MAX(seq) FROM audit_entries")
-            row = cursor.fetchone()
-            if row and row[0] is not None:
-                return row[0] + 1
-            return 1
-
-    def _get_prev_hash(self) -> str:
-        """Get the hash of the last entry, or genesis (64 zeros)."""
-        with self._lock:
-            cursor = self._conn.cursor()
-            cursor.execute("SELECT hash FROM audit_entries ORDER BY seq DESC LIMIT 1")
-            row = cursor.fetchone()
-            if row:
-                return row[0]
-            return "0" * 64
+        self._conn = connect(path)
+        with self._lock, self._conn:
+            for statement in _SCHEMA:
+                self._conn.execute(statement)
+        last = self._conn.execute("SELECT seq, hash FROM audit_entries ORDER BY seq DESC LIMIT 1").fetchone()
+        self._seq: int = last["seq"] if last else 0
+        self._head: str = last["hash"] if last else GENESIS_HASH
 
     def append(
         self,
@@ -100,191 +143,88 @@ class AuditLog:
         subject_id: str,
         data: Mapping[str, Any],
     ) -> AuditEntry:
-        """Append an entry to the audit log.
-
-        Args:
-            at: Simulated/business time (included in hash).
-            actor: Who performed the action.
-            action: What was done.
-            subject_type: Type of subject (e.g., "decision", "payout").
-            subject_id: ID of the subject.
-            data: Arbitrary data (included in hash).
-
-        Returns:
-            The created AuditEntry with seq, hash, prev_hash, and recorded_at set.
-        """
+        """Append one entry at simulated time `at`; returns it with seq, prev_hash and hash."""
+        _validate(actor, action, subject_type, subject_id)
+        at_text = str(require_aware(at))
+        data_json = canonical_json(dict(data))
+        data_value = json.loads(data_json)
+        recorded_at = datetime.now(tz=IST).isoformat()
         with self._lock:
-            seq = self._next_seq
-            self._next_seq += 1
-
-            # Get wall-clock time
-            recorded_at = datetime.now(datetime.now().astimezone().tzinfo)
-
-            # Get previous hash
-            prev_hash = self._get_prev_hash()
-
-            # Compute hash (excludes recorded_at)
-            hash_data = {
-                "seq": seq,
-                "at": at.isoformat(),
-                "actor": actor,
-                "action": action,
-                "subject_type": subject_type,
-                "subject_id": subject_id,
-                "data": dict(data),
-                "prev_hash": prev_hash,
-            }
-            entry_hash = _compute_hash(hash_data)
-
-            # Store in database
-            cursor = self._conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO audit_entries
-                (seq, at, recorded_at, actor, action, subject_type, subject_id, data, prev_hash, hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    seq,
-                    at.isoformat(),
-                    recorded_at.isoformat(),
-                    actor,
-                    action,
-                    subject_type,
-                    subject_id,
-                    _canonical_json(dict(data)),
-                    prev_hash,
-                    entry_hash,
-                ),
-            )
-            self._conn.commit()
-
-            # Return the entry
-            return AuditEntry(
+            seq, prev = self._seq + 1, self._head
+            digest = entry_hash(
                 seq=seq,
-                at=at,
-                recorded_at=recorded_at,
+                at=at_text,
                 actor=actor,
                 action=action,
                 subject_type=subject_type,
                 subject_id=subject_id,
-                data=dict(data),
-                prev_hash=prev_hash,
-                hash=entry_hash,
+                data=data_value,
+                prev_hash=prev,
             )
+            row = (
+                seq,
+                at_text,
+                recorded_at,
+                actor,
+                action,
+                subject_type,
+                subject_id,
+                data_json,
+                prev,
+                digest,
+            )
+            try:
+                with self._conn:
+                    self._conn.execute(_INSERT, row)
+            except sqlite3.Error:
+                logger.exception("audit append failed at seq %d (%s %s)", seq, action, subject_type)
+                raise
+            self._seq, self._head = seq, digest
+            fetched = self._conn.execute(_SELECT_ONE, (seq,)).fetchone()
+        return _to_entry(fetched)
 
     def entries(self, *, after: int = 0, limit: int = 200) -> tuple[AuditEntry, ...]:
-        """Get entries after a sequence number.
-
-        Args:
-            after: Get entries with seq > after. Default 0 (all from start).
-            limit: Maximum number of entries to return.
-
-        Returns:
-            Tuple of AuditEntry objects.
-        """
+        """Entries with seq > after, oldest first, at most `limit` (1..5000)."""
+        if after < 0 or not 1 <= limit <= MAX_PAGE:
+            raise ValueError(f"after must be ≥ 0 and limit within 1..{MAX_PAGE}")
         with self._lock:
-            cursor = self._conn.cursor()
-            cursor.execute(
-                "SELECT * FROM audit_entries WHERE seq > ? ORDER BY seq ASC LIMIT ?",
+            rows = self._conn.execute(
+                _SELECT_PAGE,
                 (after, limit),
-            )
-            rows = cursor.fetchall()
+            ).fetchall()
+        return tuple(_to_entry(r) for r in rows)
 
-            result = []
-            for row in rows:
-                result.append(
-                    AuditEntry(
-                        seq=row["seq"],
-                        at=datetime.fromisoformat(row["at"]),
-                        recorded_at=datetime.fromisoformat(row["recorded_at"]),
-                        actor=row["actor"],
-                        action=row["action"],
-                        subject_type=row["subject_type"],
-                        subject_id=row["subject_id"],
-                        data=json.loads(row["data"]),
-                        prev_hash=row["prev_hash"],
-                        hash=row["hash"],
-                    )
-                )
-
-            return tuple(result)
+    def _rows(self) -> Iterator[sqlite3.Row]:
+        yield from self._conn.execute(_SELECT_ALL)
 
     def verify(self) -> dict[str, Any]:
-        """Verify the integrity of the audit chain.
-
-        Returns:
-            {
-                "valid": bool,
-                "entries": int (number of entries in the chain),
-                "head_hash": str (hash of the last entry, or 64 zeros if empty),
-                "first_bad_seq": int | None (seq of first tampered entry, or None if all valid)
-            }
-        """
+        """Recompute the chain: {valid, entries, head_hash, first_bad_seq} (SPEC §11)."""
         with self._lock:
-            cursor = self._conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM audit_entries")
-            count = cursor.fetchone()[0]
-
-            if count == 0:
-                return {
-                    "valid": True,
-                    "entries": 0,
-                    "head_hash": "0" * 64,
-                    "first_bad_seq": None,
-                }
-
-            # Verify the chain
-            cursor.execute("SELECT * FROM audit_entries ORDER BY seq ASC")
-            rows = cursor.fetchall()
-
-            expected_prev_hash = "0" * 64
-            first_bad_seq = None
-
-            for row in rows:
-                # Recompute hash (exclude recorded_at)
-                hash_data = {
-                    "seq": row["seq"],
-                    "at": row["at"],
-                    "actor": row["actor"],
-                    "action": row["action"],
-                    "subject_type": row["subject_type"],
-                    "subject_id": row["subject_id"],
-                    "data": json.loads(row["data"]),
-                    "prev_hash": row["prev_hash"],
-                }
-                computed_hash = _compute_hash(hash_data)
-
-                # Check hash
-                if computed_hash != row["hash"] and first_bad_seq is None:
-                    first_bad_seq = row["seq"]
-
-                # Check prev_hash
-                if row["prev_hash"] != expected_prev_hash and first_bad_seq is None:
-                    first_bad_seq = row["seq"]
-
-                expected_prev_hash = row["hash"]
-
-            return {
-                "valid": first_bad_seq is None,
-                "entries": count,
-                "head_hash": expected_prev_hash,
-                "first_bad_seq": first_bad_seq,
-            }
+            count, expected_prev, head, first_bad = 0, GENESIS_HASH, GENESIS_HASH, None
+            for row in self._rows():
+                count += 1
+                intact = (
+                    row["seq"] == count
+                    and row["prev_hash"] == expected_prev
+                    and _row_hash(row) == row["hash"]
+                )
+                if not intact and first_bad is None:
+                    first_bad = row["seq"]
+                expected_prev = head = row["hash"]
+        if first_bad is not None:
+            logger.warning("audit chain broken at seq %d", first_bad)
+        return {"valid": first_bad is None, "entries": count, "head_hash": head, "first_bad_seq": first_bad}
 
     def head_hash(self) -> str:
-        """Get the hash of the last entry, or genesis (64 zeros)."""
+        """Hash of the newest entry, or the genesis hash when empty."""
         with self._lock:
-            cursor = self._conn.cursor()
-            cursor.execute("SELECT hash FROM audit_entries ORDER BY seq DESC LIMIT 1")
-            row = cursor.fetchone()
-            if row:
-                return row[0]
-            return "0" * 64
+            return self._head
 
     def __len__(self) -> int:
-        """Number of entries in the log."""
         with self._lock:
-            cursor = self._conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM audit_entries")
-            return cursor.fetchone()[0]
+            return int(self._conn.execute("SELECT COUNT(*) FROM audit_entries").fetchone()[0])
+
+    def close(self) -> None:
+        """Close the SQLite connection."""
+        with self._lock:
+            self._conn.close()

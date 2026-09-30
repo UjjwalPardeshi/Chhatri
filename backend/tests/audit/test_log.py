@@ -1,291 +1,245 @@
-"""Tests for AuditLog (SPEC §11, §24.3). Append-only with tamper detection."""
+"""SPEC §11 audit log: canonical JSON, chain, verify, tamper detection, paging, actors."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+import threading
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
 
 import pytest
-from datetime import datetime
-from zoneinfo import ZoneInfo
-import sqlite3
 
-from chhatri.audit.log import AuditLog
+from chhatri.audit.log import GENESIS_HASH, AuditLog, canonical_json
+from chhatri.audit.records import decision_data
+from chhatri.clock import ist
+from chhatri.domain.enums import CheckCode
+from chhatri.policy.engine import evaluate_area_claim
+from chhatri.policy.rules import default_rules
+from chhatri.store.protocols import AuditSink
+from tests.policy import builders as b
 
-IST = ZoneInfo("Asia/Kolkata")
+AT = ist(2025, 8, 19, 17)
 
 
-class TestAuditLogInMemory:
-    """In-memory audit log tests."""
-
-    @pytest.fixture
-    def log(self):
-        """Fresh in-memory log."""
-        return AuditLog()
-
-    def test_append_entry(self, log):
-        """Append an entry and get it back."""
+def add(log: AuditLog, n: int = 1, **kw: object):
+    entry = None
+    for i in range(n):
         entry = log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="policy-engine",
-            action="payout-execute",
+            at=kw.get("at", AT),  # type: ignore[arg-type]
+            actor=kw.get("actor", "system"),  # type: ignore[arg-type]
+            action="payout.execute",
             subject_type="payout",
-            subject_id="P-000001",
-            data={"amount_paise": 138000, "merchant_id": "S-0142"}
+            subject_id=f"P-{i:06d}",
+            data=kw.get("data", {"amount_paise": 138000, "i": i}),  # type: ignore[arg-type]
         )
+    return entry
 
-        assert entry.seq == 1
-        assert entry.actor == "policy-engine"
-        assert entry.subject_id == "P-000001"
-        assert entry.hash != ""
-        assert len(entry.hash) == 64  # SHA256 hex
 
-    def test_genesis_prev_hash(self, log):
-        """First entry has genesis prev_hash (64 zeros)."""
-        entry = log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
-        assert entry.prev_hash == "0" * 64
+def test_protocol_and_empty_state() -> None:
+    log = AuditLog()
+    assert isinstance(log, AuditSink)
+    assert len(log) == 0
+    assert log.head_hash() == GENESIS_HASH == "0" * 64
+    assert log.verify() == {"valid": True, "entries": 0, "head_hash": GENESIS_HASH, "first_bad_seq": None}
 
-    def test_chain_linking(self, log):
-        """Entries link to previous via prev_hash."""
-        entry1 = log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test1",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
 
-        entry2 = log.append(
-            at=datetime(2025, 8, 19, 17, 1, tzinfo=IST),
-            actor="system",
-            action="test2",
-            subject_type="test",
-            subject_id="T-2",
-            data={}
-        )
+def test_hash_is_spec_canonical_json_without_recorded_at() -> None:
+    log = AuditLog()
+    e = log.append(
+        at=AT, actor="policy-engine", action="decision.area", subject_type="decision", subject_id="D-000001",
+        data={"z": 1, "a": "अनिल", "when": date(2025, 8, 19)},
+    )  # fmt: skip
+    payload = {
+        "seq": 1,
+        "at": AT,
+        "actor": "policy-engine",
+        "action": "decision.area",
+        "subject_type": "decision",
+        "subject_id": "D-000001",
+        "data": {"z": 1, "a": "अनिल", "when": date(2025, 8, 19)},
+        "prev_hash": "0" * 64,
+    }
+    text = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+    assert e.hash == hashlib.sha256(text.encode()).hexdigest()
+    assert e.prev_hash == GENESIS_HASH
+    assert e.data == {"z": 1, "a": "अनिल", "when": "2025-08-19"}
+    assert e.at == AT and e.recorded_at.tzinfo is not None
 
-        # Entry 2 should link to entry 1
-        assert entry2.prev_hash == entry1.hash
-        assert entry2.seq == 2
 
-    def test_entries_after(self, log):
-        """Get entries after a sequence number."""
-        for i in range(5):
-            log.append(
-                at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-                actor="system",
-                action=f"test{i}",
-                subject_type="test",
-                subject_id=f"T-{i}",
-                data={}
-            )
+def test_chain_links_and_same_inputs_same_hashes() -> None:
+    a, b_ = AuditLog(), AuditLog()
+    add(a, 3)
+    add(b_, 3)
+    ea, eb = a.entries(), b_.entries()
+    assert [e.hash for e in ea] == [e.hash for e in eb]
+    assert [e.seq for e in ea] == [1, 2, 3]
+    assert ea[1].prev_hash == ea[0].hash and ea[2].prev_hash == ea[1].hash
+    assert a.head_hash() == ea[-1].hash
+    assert a.verify() == {"valid": True, "entries": 3, "head_hash": ea[-1].hash, "first_bad_seq": None}
 
-        # Get after seq 2
-        entries = log.entries(after=2, limit=10)
-        assert len(entries) == 3  # seq 3, 4, 5
-        assert entries[0].seq == 3
-        assert entries[-1].seq == 5
 
-    def test_verify_valid_chain(self, log):
-        """Verify returns valid when chain is intact."""
-        for i in range(3):
-            log.append(
-                at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-                actor="system",
-                action=f"test{i}",
-                subject_type="test",
-                subject_id=f"T-{i}",
-                data={}
-            )
+def test_entries_paging_and_validation() -> None:
+    log = AuditLog()
+    add(log, 5)
+    assert [e.seq for e in log.entries(after=2, limit=2)] == [3, 4]
+    assert log.entries(after=5) == ()
+    assert len(log.entries()) == 5
+    for bad in ({"after": -1}, {"limit": 0}, {"limit": 5001}):
+        with pytest.raises(ValueError):
+            log.entries(**bad)  # type: ignore[arg-type]
 
-        result = log.verify()
-        assert result["valid"] is True
-        assert result["entries"] == 3
-        assert result["first_bad_seq"] is None
 
-    def test_verify_empty_log(self, log):
-        """Verify empty log."""
-        result = log.verify()
-        assert result["valid"] is True
-        assert result["entries"] == 0
-        assert result["head_hash"] == "0" * 64
+def test_append_only_triggers_block_update_and_delete(tmp_path: Path) -> None:
+    path = tmp_path / "audit.db"
+    log = AuditLog(path)
+    add(log, 2)
+    conn = sqlite3.connect(path)
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        conn.execute("UPDATE audit_entries SET actor = 'model' WHERE seq = 1")
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        conn.execute("DELETE FROM audit_entries WHERE seq = 1")
+    conn.close()
 
-    def test_head_hash(self, log):
-        """Get head hash (last entry or genesis)."""
-        assert log.head_hash() == "0" * 64  # Empty
 
-        entry = log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
-        assert log.head_hash() == entry.hash
+def _tamper(path: Path, sql: str, *args: object) -> None:
+    conn = sqlite3.connect(path)
+    conn.execute("DROP TRIGGER audit_no_update")
+    conn.execute("DROP TRIGGER audit_no_delete")
+    conn.execute(sql, args)
+    conn.commit()
+    conn.close()
 
-    def test_len(self, log):
-        """Count entries."""
-        assert len(log) == 0
 
+def test_tamper_data_detected_via_direct_sqlite_edit(tmp_path: Path) -> None:
+    path = tmp_path / "audit.db"
+    log = AuditLog(path)
+    add(log, 4)
+    _tamper(
+        path,
+        "UPDATE audit_entries SET data = ? WHERE seq = 2",
+        canonical_json({"amount_paise": 999999, "i": 1}),
+    )
+    result = log.verify()
+    assert result["valid"] is False and result["first_bad_seq"] == 2 and result["entries"] == 4
+
+
+def test_tamper_with_rehash_still_breaks_next_link(tmp_path: Path) -> None:
+    path = tmp_path / "audit.db"
+    log = AuditLog(path)
+    add(log, 3)
+    _tamper(path, "UPDATE audit_entries SET hash = ? WHERE seq = 2", "f" * 64)
+    assert log.verify()["first_bad_seq"] == 2
+
+
+def test_deleted_row_detected(tmp_path: Path) -> None:
+    path = tmp_path / "audit.db"
+    log = AuditLog(path)
+    add(log, 3)
+    _tamper(path, "DELETE FROM audit_entries WHERE seq = ?", 2)
+    assert log.verify() | {"head_hash": None} == {
+        "valid": False,
+        "entries": 2,
+        "head_hash": None,
+        "first_bad_seq": 3,
+    }
+
+
+def test_recorded_at_edit_does_not_break_chain(tmp_path: Path) -> None:
+    path = tmp_path / "audit.db"
+    log = AuditLog(path)
+    add(log, 2)
+    _tamper(path, "UPDATE audit_entries SET recorded_at = ? WHERE seq = 1", "2030-01-01T00:00:00+05:30")
+    assert log.verify()["valid"] is True
+
+
+def test_reopen_file_continues_chain(tmp_path: Path) -> None:
+    path = tmp_path / "audit.db"
+    first = AuditLog(path)
+    add(first, 2)
+    head = first.head_hash()
+    first.close()
+    again = AuditLog(path)
+    assert len(again) == 2 and again.head_hash() == head
+    e = add(again, 1)
+    assert e is not None and e.seq == 3 and e.prev_hash == head
+    assert again.verify()["valid"] is True
+
+
+@pytest.mark.parametrize(
+    "actor",
+    ["system", "model", "policy-engine", "ai-agent", "officer:priya", "merchant:S-0142", "workflow:payout"],
+)
+def test_spec_actors_accepted(actor: str) -> None:
+    assert add(AuditLog(), actor=actor) is not None
+
+
+@pytest.mark.parametrize("actor", ["", "robot", "officer:", "officer: x", "workflow:a b", "System"])
+def test_unknown_actors_rejected(actor: str) -> None:
+    with pytest.raises(ValueError, match="actor"):
+        add(AuditLog(), actor=actor)
+
+
+def test_empty_subject_rejected_and_naive_time_rejected() -> None:
+    log = AuditLog()
+    with pytest.raises(ValueError, match="non-empty"):
+        log.append(at=AT, actor="system", action=" ", subject_type="x", subject_id="y", data={})
+    with pytest.raises(ValueError, match="aware"):
         log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
+            at=datetime(2025, 8, 19, 17),
             actor="system",
-            action="test",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
-        assert len(log) == 1
-
-
-class TestAuditLogFileBased:
-    """File-based audit log tests (to verify SQLite works)."""
-
-    def test_file_based_log(self, tmp_path):
-        """Create log on disk."""
-        db_path = tmp_path / "audit.db"
-        log = AuditLog(path=db_path)
-
-        entry = log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test",
-            subject_type="test",
-            subject_id="T-1",
-            data={"key": "value"}
+            action="a",
+            subject_type="x",
+            subject_id="y",
+            data={},
         )
 
-        assert db_path.exists()
-        assert entry.seq == 1
 
-    def test_file_persistence(self, tmp_path):
-        """Data persists across log instances."""
-        db_path = tmp_path / "audit.db"
-
-        # Write
-        log1 = AuditLog(path=db_path)
-        entry1 = log1.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
-
-        # Read from new instance
-        log2 = AuditLog(path=db_path)
-        assert len(log2) == 1
-        entries = log2.entries(after=0)
-        assert entries[0].seq == 1
-        assert entries[0].actor == "system"
+def test_non_json_values_use_str_and_utc_time_normalised_to_ist() -> None:
+    log = AuditLog()
+    utc = datetime.fromisoformat("2025-08-19T11:30:00+00:00")
+    e = add(log, at=utc, data={"amount": Decimal("1.50")})
+    assert e is not None and e.data == {"amount": "1.50"}
+    assert e.at == AT and str(e.at) == "2025-08-19 17:00:00+05:30"
+    assert log.verify()["valid"] is True
 
 
-class TestAuditTamperDetection:
-    """Tamper detection tests."""
+def test_decision_data_contains_every_check() -> None:
+    d = evaluate_area_claim(b.area_facts(), default_rules(), decision_id="D-000001", now=AT)
+    data = decision_data(d)
+    assert [c["code"] for c in data["checks"]] == [c.code.value for c in d.checks]
+    assert CheckCode.BELOW_FLOOR.value in {c["code"] for c in data["checks"]}
+    log = AuditLog()
+    entry = log.append(
+        at=AT,
+        actor="policy-engine",
+        action="decision.area",
+        subject_type="decision",
+        subject_id=d.id,
+        data=data,
+    )
+    assert entry.data["explanation"]["formula_en"] == "½ × ₹4,380 × 63% = ₹1,380"
 
-    def test_tamper_detection_hash_modification(self, tmp_path):
-        """Verify detects modified hash."""
-        db_path = tmp_path / "audit.db"
-        log = AuditLog(path=db_path)
 
-        # Append entries
-        log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test1",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
-        log.append(
-            at=datetime(2025, 8, 19, 17, 1, tzinfo=IST),
-            actor="system",
-            action="test2",
-            subject_type="test",
-            subject_id="T-2",
-            data={}
-        )
+def test_concurrent_appends_keep_a_valid_chain() -> None:
+    log = AuditLog()
+    pool = [threading.Thread(target=add, args=(log, 50)) for _ in range(6)]
+    for t in pool:
+        t.start()
+    for t in pool:
+        t.join()
+    result = log.verify()
+    assert result["valid"] is True and result["entries"] == 300 and len(log) == 300
 
-        # Verify valid before tampering
-        result = log.verify()
-        assert result["valid"] is True
 
-        # Tamper with first entry
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        cursor.execute("UPDATE audit_entries SET hash='0'*64 WHERE seq=1")
-        conn.commit()
-        conn.close()
-
-        # Verify detects tampering
-        log2 = AuditLog(path=db_path)
-        result = log2.verify()
-        assert result["valid"] is False
-        assert result["first_bad_seq"] == 1
-
-    def test_tamper_detection_prev_hash_modification(self, tmp_path):
-        """Verify detects broken chain (modified prev_hash)."""
-        db_path = tmp_path / "audit.db"
-        log = AuditLog(path=db_path)
-
-        # Append entries
-        log.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test1",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
-        log.append(
-            at=datetime(2025, 8, 19, 17, 1, tzinfo=IST),
-            actor="system",
-            action="test2",
-            subject_type="test",
-            subject_id="T-2",
-            data={}
-        )
-
-        # Tamper with chain (change prev_hash of entry 2)
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        cursor.execute("UPDATE audit_entries SET prev_hash='0'*64 WHERE seq=2")
-        conn.commit()
-        conn.close()
-
-        # Verify detects broken chain
-        log2 = AuditLog(path=db_path)
-        result = log2.verify()
-        assert result["valid"] is False
-        assert result["first_bad_seq"] == 2
-
-    def test_recorded_at_not_in_hash(self, tmp_path):
-        """recorded_at field is not included in hash (per spec)."""
-        db_path = tmp_path / "audit.db"
-        log1 = AuditLog(path=db_path)
-
-        entry1 = log1.append(
-            at=datetime(2025, 8, 19, 17, 0, tzinfo=IST),
-            actor="system",
-            action="test",
-            subject_type="test",
-            subject_id="T-1",
-            data={}
-        )
-
-        hash1 = entry1.hash
-
-        # Close and reopen with same data (recorded_at will be different)
-        log1._conn.close()
-        del log1
-
-        # If recorded_at was in the hash, re-computing would give different result
-        # But since it's excluded, we can verify by checking the hash is reproducible
-        log2 = AuditLog(path=db_path)
-        result = log2.verify()
-        assert result["valid"] is True  # Valid means hashes are reproducible
+def test_append_failure_is_logged_and_raised(caplog: pytest.LogCaptureFixture) -> None:
+    log = AuditLog()
+    add(log, 1)
+    head = log.head_hash()
+    log.close()
+    with pytest.raises(sqlite3.ProgrammingError):
+        add(log, 1)
+    assert "audit append failed at seq 2" in caplog.text
+    assert log.head_hash() == head
