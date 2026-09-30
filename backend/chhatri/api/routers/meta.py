@@ -1,111 +1,89 @@
-"""Meta endpoints (SPEC §19: health, integrations, session, preflight, weather).
-
-GET /api/health — {status, version, seed}
-GET /api/integrations — list of {name, mode, detail}
-GET /api/session — demo mode only: {officer_token} (404 when CHHATRI_DEMO_MODE=false)
-GET /api/preflight — readiness checks
-GET /api/weather/now — live Open-Meteo rain for Mumbai (when OPENMETEO_LIVE=true)
-"""
+"""Service routes: health, integrations, session, preflight, live weather (SPEC §19, §0.1, §14.4)."""
 
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from datetime import datetime
+from typing import Any, Final
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Request
 
-from chhatri.api.deps import get_state
-from chhatri.api.envelope import ok
-from chhatri.api.schemas import HealthResponse, SessionResponse, PrefightItem
-from chhatri.money import format_inr
+from chhatri.api.deps import RuntimeDep, SettingsDep, StateDep
+from chhatri.api.envelope import ok, ok_list
+from chhatri.api.errors import ApiError
+from chhatri.clock import IST, SystemClock, floor_hour
+from chhatri.integrations.base import IntegrationError
+from chhatri.replay import views
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["meta"])
+
+MUMBAI_LATITUDE: Final = 19.076
+MUMBAI_LONGITUDE: Final = 72.8777
+OPEN_METEO_ATTRIBUTION: Final = "Weather data by Open-Meteo.com"
+HEALTH_STATUS: Final = "ok"
 
 
 @router.get("/health")
-async def health(state: Annotated = Depends(get_state)) -> dict:
-    """Health check endpoint (SPEC §19).
-
-    Returns version and seed from package metadata and settings.
-    """
-    from importlib.metadata import version as pkg_version, PackageNotFoundError
-
-    try:
-        version = pkg_version("chhatri")
-    except PackageNotFoundError:
-        version = "dev"
-
-    return ok(
-        HealthResponse(
-            status="ok",
-            version=version,
-            seed=state.static.settings.chhatri_seed,
-        ).model_dump()
-    )
+async def health(request: Request, settings: SettingsDep) -> dict[str, Any]:
+    """``{status, version, seed}`` (SPEC §19). Never needs a loaded scenario."""
+    return ok({"status": HEALTH_STATUS, "version": request.app.version, "seed": settings.chhatri_seed})
 
 
 @router.get("/integrations")
-async def integrations(state: Annotated = Depends(get_state)) -> dict:
-    """List integration statuses (SPEC §19, §0.1).
-
-    Each integration is LIVE or SIMULATED based on environment.
-    """
-    # Default statuses based on settings (integrations package not yet available)
-    defaults = [
-        {"name": "sarvam_stt", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
-        {"name": "sarvam_tts", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
-        {"name": "sarvam_chat", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
-        {"name": "sarvam_vision", "mode": "LIVE" if state.static.settings.sarvam_live else "SIMULATED", "detail": ""},
-        {"name": "whatsapp", "mode": "LIVE" if state.static.settings.whatsapp_live else "SIMULATED", "detail": ""},
-        {"name": "paytm", "mode": state.static.settings.paytm_mode.upper(), "detail": ""},
-        {"name": "n8n", "mode": "LIVE" if state.static.settings.n8n_live else "SIMULATED", "detail": ""},
-        {"name": "memory", "mode": "LIVE" if state.static.settings.cognee_enabled else "SIMULATED", "detail": ""},
-        {"name": "weather", "mode": "LIVE" if state.static.settings.openmeteo_live else "SIMULATED", "detail": ""},
-        {"name": "soundbox", "mode": "SIMULATED", "detail": ""},
-        {"name": "sales_data", "mode": "SIMULATED", "detail": ""},
-        {"name": "alerts", "mode": "SIMULATED", "detail": ""},
-        {"name": "payout_rail", "mode": "SIMULATED", "detail": ""},
-        {"name": "lender", "mode": "SIMULATED", "detail": ""},
-        {"name": "kyc", "mode": "SIMULATED", "detail": ""},
-    ]
-    return ok(defaults)
+async def integrations(runtime: RuntimeDep) -> dict[str, Any]:
+    """Each component as LIVE or SIMULATED (SPEC §0.1)."""
+    items = views.integrations_view(tuple(runtime.integrations.statuses))
+    return ok_list(items, total=len(items), limit=len(items), offset=0)
 
 
 @router.get("/session")
-async def session(state: Annotated = Depends(get_state)) -> dict:
-    """Demo mode session endpoint (SPEC §19).
-
-    Returns officer token when CHHATRI_DEMO_MODE=true.
-    404 when CHHATRI_DEMO_MODE=false.
-    """
-    if not state.static.settings.chhatri_demo_mode:
-        raise HTTPException(status_code=404, detail="demo mode disabled")
-
-    token = state.static.settings.chhatri_officer_token.get_secret_value()
-    return ok(SessionResponse(officer_token=token).model_dump())
+async def session(settings: SettingsDep) -> dict[str, Any]:
+    """Demo mode only: hands the console the officer token; 404 otherwise (SPEC §19)."""
+    if not settings.chhatri_demo_mode:
+        raise ApiError(404, "not found")
+    return ok({"officer_token": settings.chhatri_officer_token.get_secret_value()})
 
 
 @router.get("/preflight")
-async def preflight(state: Annotated = Depends(get_state)) -> dict:
-    """Readiness check endpoint (SPEC §19).
-
-    Verifies artifacts, scenario, integrations, and clock.
-    """
-    checks = state.preflight()
-    return ok([PrefightItem(**c).model_dump() for c in checks])
+async def preflight(state: StateDep) -> dict[str, Any]:
+    """Readiness: artefacts, scenario, integrations, clock — each ``{name, ok, detail}`` (SPEC §19)."""
+    items = state.preflight()
+    return ok_list(items, total=len(items), limit=len(items), offset=0)
 
 
 @router.get("/weather/now")
-async def weather_now(state: Annotated = Depends(get_state)) -> dict:
-    """Live Open-Meteo rain for Mumbai (SPEC §19, §14.4).
+async def weather_now(settings: SettingsDep, runtime: RuntimeDep) -> dict[str, Any]:
+    """Live Open-Meteo rain for Mumbai this hour; only when ``OPENMETEO_LIVE=true`` (SPEC §14.4).
 
-    Only available when OPENMETEO_LIVE=true.
+    Uses wall-clock time on purpose: this widget shows the real sky, not the replay.
     """
-    if not state.static.settings.openmeteo_live:
-        raise HTTPException(status_code=404, detail="weather live mode disabled")
+    if not settings.openmeteo_live:
+        raise ApiError(404, "live weather is disabled (OPENMETEO_LIVE=false)")
+    hour = floor_hour(SystemClock().now())
+    try:
+        series = await runtime.integrations.weather.hourly_rain(
+            MUMBAI_LATITUDE, MUMBAI_LONGITUDE, hour.date(), hour.date()
+        )
+    except IntegrationError as exc:
+        logger.warning("live weather failed: %s", exc.safe_message)
+        raise ApiError(502, "weather service unavailable") from exc
+    return ok(_rain_at(series.times, series.precipitation_mm, hour, series.source))
 
-    # TODO: Call live Open-Meteo API
-    # For now, return a placeholder
-    return ok({"mode": "live", "rainfall_mm": None, "temperature_c": None, "timestamp": None})
+
+def _rain_at(
+    times: tuple[datetime, ...], rain: tuple[float, ...], hour: datetime, source: str
+) -> dict[str, Any]:
+    for at, mm in zip(times, rain, strict=True):
+        if at.astimezone(IST) == hour:
+            return {
+                "mode": "LIVE",
+                "latitude": MUMBAI_LATITUDE,
+                "longitude": MUMBAI_LONGITUDE,
+                "hour": hour.isoformat(),
+                "rain_mm": float(mm),
+                "source": source,
+                "attribution": OPEN_METEO_ATTRIBUTION,
+            }
+    raise ApiError(502, "weather service returned no value for this hour")
