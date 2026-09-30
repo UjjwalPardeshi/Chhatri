@@ -1,683 +1,256 @@
-"""Orchestrator: wires detection → claims → decisions → workflows (SPEC §17.3, design notes).
+"""The orchestrator: one code path from detection to money (SPEC §17.3, §24.6).
 
-Orchestrator implements StepHandlers (for workflows) and ClaimsPort (for conversation).
-on_hour: evaluate triggers, create claims, run policy engine, publish decisions, start workflows.
-on_minute: scenario hooks (e.g., 11:20 check-in).
+It implements `ClaimsPort` (SPEC §24.4) for the conversation and `StepHandlers` (SPEC §24.5) for
+the workflow engines, and delegates each concern to a flow of this package:
+
+- `on_minute` (every simulated minute, after due workflow steps): alert announcements
+  (`timed.AlertAnnouncer`), the 11:20 silence check-in round (SPEC §8.3, `PersonalFlow.outreach`),
+  the 21:00 evening settlement (SPEC §9.7) and a ``kpis`` event when the numbers changed.
+- `on_hour` (hour boundaries): detection → triggers → area claims → decisions → payout workflows
+  (`AreaFlow`), then the steps due now (``execute_payout`` at +0) run before it returns (B2).
+- `run_step`: the workflow steps (`WorkflowSteps`), in process or reported by n8n.
+- `handle_callback` (n8n, SPEC §14.5, B1): the step's effect is scheduled at the run's start
+  (the decision time for ``payout``, the case's opening time for ``human-review`` and
+  ``follow-up``) plus the step's offset, so the timeline is the same as in process. Idempotent per
+  (run_id, step): a step already scheduled — by an earlier callback or by the in-process fallback —
+  answers ``skipped``. Unknown subjects raise KeyError; bad workflow/step/payload/run id ValueError.
+- `officer_decide`, `paytm_paid`, `submit_personal_claim`, `open_dispute`, `quote_cover`: the
+  officer and merchant actions; each runs the workflow steps due now before returning, so the API
+  answers with their effects applied.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from collections.abc import Mapping
+from datetime import date, datetime, time, timedelta
+from typing import Any, Final
 
-from chhatri.clock import floor_hour
-from chhatri.conversation.intents import classify
-from chhatri.conversation.messages import bilingual
-from chhatri.detect.area_index import zone_window
-from chhatri.detect.silent import find_silent, silent_this_morning
-from chhatri.detect.triggers import evaluate_hour
-from chhatri.domain.enums import (
-    CaseKind,
-    Channel,
-    ClaimKind,
-    CoverQuoteOutcome,
-    DecisionOutcome,
-    Direction,
-    MessageKind,
-)
-from chhatri.domain.models import Claim, Message, SlipExtraction
+from chhatri.clock import IST
+from chhatri.domain.enums import DecisionOutcome, PremiumStatus
+from chhatri.domain.models import Case, CoverQuote, Decision, PremiumPayment, SlipExtraction
+from chhatri.integrations.base import IntegrationError
 from chhatri.money import format_inr
-from chhatri.policy.engine import (
-    apply_officer_decision,
-    evaluate_area_claim,
-    evaluate_cover_purchase,
-    evaluate_personal_claim,
-    publish_expected_day,
-)
-from chhatri.policy.facts import AreaClaimFacts, PersonalClaimFacts
-from chhatri.workflows.definitions import WORKFLOWS
+from chhatri.policy.cover import evaluate_cover_purchase
+from chhatri.replay.area import AreaFlow
+from chhatri.replay.cases_flow import CaseFlow
+from chhatri.replay.decisions import DecisionRecorder
+from chhatri.replay.fmt import day_month
+from chhatri.replay.officer import OfficerFlow
+from chhatri.replay.personal import PersonalFlow
+from chhatri.replay.publish import Publisher, RuntimeLink
+from chhatri.replay.steps import WorkflowSteps
+from chhatri.replay.timed import AlertAnnouncer, EveningSettlement
+from chhatri.workflows import definitions as wf
 
-if TYPE_CHECKING:
-    from chhatri.conversation.service import ConversationService
-    from chhatri.replay.engine import ReplayEngine
-    from chhatri.replay.state import Runtime, StaticContext
-    from chhatri.sim.weather import ShockCalendar
+__all__ = ["OUTREACH_AT", "Orchestrator"]
 
 logger = logging.getLogger(__name__)
 
+OUTREACH_AT: Final = time(11, 20)  # SPEC §8.3 "Outreach happens the next day at 11:20"
+SYSTEM_ACTOR: Final = "system"
+POLICY_ACTOR: Final = "policy-engine"
+
 
 class Orchestrator:
-    """Orchestrator: detection → claims → decisions → workflows (SPEC §17.3; design notes).
+    """SPEC §24.6 orchestrator of one loaded scenario."""
 
-    Wires every component together. Implements StepHandlers (workflow step execution)
-    and ClaimsPort (conversation integration).
-    """
+    def __init__(self, link: RuntimeLink, publisher: Publisher) -> None:
+        self._link = link
+        self._publisher = publisher
+        recorder = DecisionRecorder(link, publisher)
+        self._area = AreaFlow(link, publisher, recorder)
+        self._cases = CaseFlow(link, publisher)
+        self._personal = PersonalFlow(link, recorder, self._cases)
+        self._officer = OfficerFlow(link, publisher, recorder, self._personal)
+        self._steps = WorkflowSteps(link, publisher)
+        self._alerts = AlertAnnouncer(link, publisher)
+        self._settlement = EveningSettlement(link)
+        self._outreach_days: frozenset[date] = frozenset()
 
-    def __init__(
-        self,
-        static: StaticContext,
-        runtime_getter: Callable[[], Runtime],
-        ids: "IdFactory",  # noqa: F821
-        store: "Store",  # noqa: F821
-        audit: "AuditLog",  # noqa: F821
-        clock: "ManualClock",  # noqa: F821
-        bus: "EventBus",  # noqa: F821
-    ) -> None:
-        self.static = static
-        self.runtime_getter = runtime_getter
-        self.ids = ids
-        self.store = store
-        self.audit = audit
-        self.clock = clock
-        self.bus = bus
-
-        # Injected during load()
-        self.conversation: ConversationService | None = None
-        self.engine: ReplayEngine | None = None
-
-        # Track triggered zones per day to avoid re-triggering
-        self._triggered_today: frozenset[tuple[str, date]] = frozenset()
+    async def start(self) -> None:
+        """At load: audit the load, initial zone states, alerts already issued, first KPIs."""
+        rt = self._link.rt
+        scenario = rt.scenario
+        rt.audit.append(
+            at=scenario.start,
+            actor=SYSTEM_ACTOR,
+            action="scenario.loaded",
+            subject_type="scenario",
+            subject_id=scenario.name,
+            data={
+                "day": scenario.day.isoformat(),
+                "start": scenario.start.isoformat(),
+                "end": scenario.end.isoformat(),
+                "seed": rt.static.settings.chhatri_seed,
+                "rules_version": rt.static.rules.version,
+            },
+        )
+        self._area.initial_board(scenario.start)
+        self._alerts.on_minute(scenario.start)
+        rt.feed.add(scenario.start, "scenario", f"{scenario.title} · replay loaded, paused at the start")
+        self._publisher.kpis(force=True)
 
     async def on_minute(self, at: datetime) -> None:
-        """Scenario hooks at specific minutes (SPEC design notes, §17.2).
-
-        Examples:
-            - 11:20: check-in for silent merchants
-            - Other scenario-specific events
-        """
-        rt = self.runtime_getter()
-        scenario = rt.scenario
-
-        if at.hour == 11 and at.minute == 20 and self.conversation is not None:
-            # Silence check-in (SPEC §17.2: illness, illness_mismatch scenarios)
-            day = at.date()
-            yesterday = day - timedelta(days=1)
-
-            # Find merchants who were silent yesterday + still silent this morning
-            day_ranges = {
-                m.id: rt.static.model.day_range_paise(rt.static.city, rt.history, m.id, yesterday)
-                for m in rt.static.city.merchants
-            }
-
-            silent = find_silent(
-                yesterday,
-                rt.static.city,
-                rt.history,
-                day_ranges,
-                area_event_zones=frozenset(),  # No area events on these days
-            )
-
-            for finding in silent:
-                merchant = rt.static.city.merchant(finding.merchant_id)
-
-                # Check if still silent this morning
-                if await silent_this_morning(
-                    finding.merchant_id, day, rt.static.city, rt.history, until_hour=11
-                ):
-                    msg = await self.conversation.checkin_silent(
-                        finding.merchant_id, yesterday
-                    )
-                    logger.info(
-                        "Check-in sent to %s at %s for silence on %s",
-                        finding.merchant_id,
-                        at,
-                        yesterday,
-                    )
+        """Scheduled scenario hooks for simulated minute `at` (SPEC §24.6)."""
+        self._alerts.on_minute(at)
+        local = at.astimezone(IST)
+        if local.time() == OUTREACH_AT and local.date() not in self._outreach_days:
+            self._outreach_days = self._outreach_days | {local.date()}
+            await self._personal.outreach(at)
+        self._settlement.on_minute(at)
+        await self._drain()
 
     async def on_hour(self, at: datetime) -> None:
-        """Hour boundary: detect, claim, decide, workflow (SPEC design notes).
-
-        at: hour boundary datetime (minute = 0)
-        """
-        rt = self.runtime_getter()
-        now = at.date()
-
-        # Evaluate triggers for this hour
-        triggers, zone_states = evaluate_hour(
-            at,
-            rt.static.city,
-            rt.history,
-            rt.expected[:, :, 1],  # P50 only
-            await self._alerts_for_hour(at),
-            {z.id: rt.static.model.lower_bound_pct(z.id) for z in rt.static.city.zones},
-            rt.static.rules,
-            self._triggered_today,
-        )
-
-        # Publish zone states
-        for zone_id, state in zone_states.items():
-            zone_snapshot = {
-                "zone_id": zone_id,
-                "status": state.status,
-                "index_pct": state.index_pct,
-                "hourly_pct": state.hourly_pct,
-                "hours_below": state.hours_below,
-            }
-            self.bus.publish("zone", at, {"zone": zone_snapshot})
-
-        # Process triggers
-        for trigger in triggers:
-            self._triggered_today = self._triggered_today | {(trigger.zone_id, now)}
-
-            # Add to store
-            self.store.add_trigger(trigger)
-
-            # Audit
-            self.audit.append(
-                at=at,
-                actor="system",
-                action="detect.trigger",
-                subject_type="trigger",
-                subject_id=trigger.id,
-                data={"zone_id": trigger.zone_id, "index_pct": trigger.index_pct},
-            )
-
-            # Publish trigger event
-            self.bus.publish("trigger", at, {"trigger": {}})
-
-            # Create area claims for covered merchants in the zone
-            zone_merchants = [
-                rt.static.city.merchant(mid)
-                for i in rt.static.city.zone_rows(trigger.zone_id)
-                for mid in [rt.static.city.merchants[i].id]
-            ]
-
-            for merchant in zone_merchants:
-                cover = rt.store.cover(merchant.id)
-                if cover is None or cover.merchant_id in [m.id for m in zone_merchants if m.id == merchant.id]:
-                    # Only covered merchants
-                    await self._area_claim(merchant.id, trigger, at)
-
-    async def _area_claim(self, merchant_id: str, trigger: "AreaTrigger", at: datetime) -> None:  # noqa: F821
-        """Create and evaluate an area claim."""
-        rt = self.runtime_getter()
-        claim_id = self.ids.next("claim")
-
-        # Get expected day (published, rounded to ₹10)
-        expected_paise = rt.static.model.expected_day_paise(
-            rt.static.city, rt.history, merchant_id, at.date()
-        )
-        expected_published = publish_expected_day(expected_paise)
-
-        # Create claim
-        claim = Claim(
-            id=claim_id,
-            kind=ClaimKind.AREA,
-            merchant_id=merchant_id,
-            created_at=at,
-            event_date=at.date(),
-            trigger_id=trigger.id,
-            expected_day_paise=expected_published,
-            drop_pct=trigger.drop_pct,
-        )
-        rt.store.add_claim(claim)
-
-        # Evaluate
-        merchant = rt.static.city.merchant(merchant_id)
-        cover = rt.store.cover(merchant_id)
-        alert = await self._get_alert(trigger.alert_id)
-
-        facts = AreaClaimFacts(
-            claim=claim,
-            merchant=merchant,
-            cover=cover,
-            trigger=trigger,
-            alert=alert,
-            paid_last_365_days_paise=rt.store.paid_last_365_days_paise(merchant_id, at.date()),
-            already_paid=rt.store.latest_paid_decision(merchant_id) is not None,
-            weekday=at.weekday(),
-        )
-
-        decision_id = self.ids.next("decision")
-        decision = evaluate_area_claim(
-            facts, rt.static.rules, decision_id=decision_id, now=at
-        )
-
-        rt.store.add_decision(decision)
-        self.audit.append(
-            at=at,
-            actor="policy-engine",
-            action="decision.area",
-            subject_type="decision",
-            subject_id=decision.id,
-            data={"outcome": decision.outcome},
-        )
-
-        self.bus.publish("decision", at, {"decision": {}})
-
-        # If APPROVED, start payout workflow
-        if decision.outcome == DecisionOutcome.APPROVED:
-            await self._start_payout_workflow(decision, merchant_id, at)
-
-    async def _start_payout_workflow(self, decision: "Decision", merchant_id: str, at: datetime) -> None:  # noqa: F821
-        """Start the payout workflow (execute → credit → pause → notify)."""
-        rt = self.runtime_getter()
-        workflow_name = "payout"
-        payload = {"decision_id": decision.id, "merchant_id": merchant_id}
-
-        # Execute step 0 (execute_payout)
-        await self.run_step(workflow_name, "execute_payout", payload)
-
-        # Schedule other steps at their delays
-        payout_rail_delay = rt.static.rules.payout_rail_delay_minutes
-        pause_delay = rt.static.rules.instalment_pause_delay_minutes
-
-        rt.scheduler.schedule(
-            at + timedelta(minutes=payout_rail_delay),
-            f"payout.credit_payout:{decision.id}",
-            lambda: self.run_step(workflow_name, "credit_payout", payload),
-        )
-
-        rt.scheduler.schedule(
-            at + timedelta(minutes=pause_delay),
-            f"payout.pause_instalment:{decision.id}",
-            lambda: self.run_step(workflow_name, "pause_instalment", payload),
-        )
-
-        rt.scheduler.schedule(
-            at + timedelta(minutes=payout_rail_delay),
-            f"payout.notify_merchant:{decision.id}",
-            lambda: self.run_step(workflow_name, "notify_merchant", payload),
-        )
+        """Detection → claims → decisions → workflows at hour boundary `at` (SPEC §8.2, §17.1)."""
+        await self._area.on_hour(at)
+        await self._drain()
 
     async def run_step(self, workflow: str, step: str, payload: Mapping[str, Any]) -> None:
-        """Execute a workflow step (SPEC §24.5; workflows/definitions.py)."""
-        rt = self.runtime_getter()
-        logger.debug("Running step %s.%s with payload %s", workflow, step, payload)
-
-        if step == "execute_payout":
-            await self._step_execute_payout(payload)
-        elif step == "credit_payout":
-            await self._step_credit_payout(payload)
-        elif step == "pause_instalment":
-            await self._step_pause_instalment(payload)
-        elif step == "notify_merchant":
-            await self._step_notify_merchant(payload)
-        else:
-            logger.warning("Unknown step: %s.%s", workflow, step)
-
-    async def _step_execute_payout(self, payload: Mapping[str, Any]) -> None:
-        """Execute step: create payout record."""
-        rt = self.runtime_getter()
-        decision_id = payload["decision_id"]
-        decision = rt.store.decision(decision_id)
-
-        if decision.outcome != DecisionOutcome.APPROVED:
-            logger.warning("Cannot execute payout for non-approved decision %s", decision_id)
-            return
-
-        payout = rt.payouts.execute(decision)
-        self.bus.publish("payout", rt.clock.now(), {"payout": {}})
-        logger.info("Payout %s executed for %s", payout.id, decision.merchant_id)
-
-    async def _step_credit_payout(self, payload: Mapping[str, Any]) -> None:
-        """Credit step: mark payout as credited."""
-        rt = self.runtime_getter()
-        decision_id = payload["decision_id"]
-        payout = rt.store.payout_for_decision(decision_id)
-
-        if payout is None:
-            logger.warning("No payout for decision %s", decision_id)
-            return
-
-        payout = rt.payouts.credit(payout.id, rt.clock.now())
-        logger.info("Payout %s credited at %s", payout.id, rt.clock.now())
-
-    async def _step_pause_instalment(self, payload: Mapping[str, Any]) -> None:
-        """Pause step: pause next instalment if applicable."""
-        rt = self.runtime_getter()
-        decision_id = payload["decision_id"]
-        merchant_id = payload["merchant_id"]
-        decision = rt.store.decision(decision_id)
-
-        pause = rt.instalments.pause_next(merchant_id, rt.clock.now().date(), decision, rt.clock.now())
-        if pause is not None:
-            self.bus.publish("instalment", rt.clock.now(), {"pause": {}})
-            logger.info("Instalment %s paused for %s", pause.id, merchant_id)
-
-    async def _step_notify_merchant(self, payload: Mapping[str, Any]) -> None:
-        """Notify step: send messages to merchant."""
-        rt = self.runtime_getter()
-        decision_id = payload["decision_id"]
-        merchant_id = payload["merchant_id"]
-        decision = rt.store.decision(decision_id)
-        payout = rt.store.payout_for_decision(decision_id)
-
-        if payout is None or self.conversation is None:
-            return
-
-        # Find trigger to get the area info
-        claim = rt.store.claim(decision.claim_id)
-        trigger = rt.store.area_trigger(claim.trigger_id) if claim.trigger_id else None
-
-        if trigger is not None:
-            msgs = await self.conversation.notify_area_payout(decision, payout, trigger)
-            for msg in msgs:
-                self.bus.publish("message", rt.clock.now(), {"message": {}})
+        """StepHandlers (SPEC §24.5)."""
+        await self._steps.run(workflow, step, payload)
 
     async def handle_callback(
         self, run_id: str, workflow: str, step: str, payload: Mapping[str, Any]
-    ) -> dict:
-        """N8n callback: schedule the step at decision time + offset (SPEC design notes).
+    ) -> dict[str, Any]:
+        """An n8n step report (SPEC §14.5): schedule its effect once; ``{step, status}``."""
+        rt = self._link.rt
+        spec = wf.step_spec(workflow, step, wf.build_workflows(rt.static.rules))
+        checked = wf.validate_payload(workflow, payload)
+        if run_id != wf.run_id_for(workflow, checked):
+            raise ValueError(f"run id {run_id!r} does not match the {workflow} payload")
+        start = self._run_start(workflow, checked)
+        name = f"{run_id}:{step}"
+        if rt.scheduler.was_scheduled(name):
+            logger.info("workflow step %s already scheduled; callback skipped", name)
+            return {"step": step, "status": "skipped"}
 
-        Idempotent per (run_id, step).
-        """
-        rt = self.runtime_getter()
-        logger.info("N8n callback: %s.%s (run_id=%s)", workflow, step, run_id)
+        async def job() -> None:
+            await self.run_step(workflow, step, checked)
 
-        # Get the workflow spec to find the step delay
-        if workflow not in WORKFLOWS:
-            logger.warning("Unknown workflow: %s", workflow)
-            return {"ok": False, "error": f"Unknown workflow {workflow}"}
+        rt.scheduler.schedule(start + timedelta(minutes=spec.delay_minutes_from_start), name, job)
+        await self._drain()
+        return {"step": step, "status": "done"}
 
-        step_specs = WORKFLOWS[workflow]
-        step_spec = next((s for s in step_specs if s.name == step), None)
-        if step_spec is None:
-            logger.warning("Unknown step %s in workflow %s", step, workflow)
-            return {"ok": False, "error": f"Unknown step {step}"}
+    def _run_start(self, workflow: str, payload: Mapping[str, Any]) -> datetime:
+        """When the run started: its decision's time (payout) or its case's opening time."""
+        rt = self._link.rt
+        if workflow == wf.PAYOUT:
+            decision = rt.store.decision(payload["decision_id"])
+            if decision.outcome is not DecisionOutcome.APPROVED:
+                raise ValueError(f"decision {decision.id} is {decision.outcome.value}; only APPROVED pays")
+            if decision.merchant_id != payload["merchant_id"]:
+                raise ValueError(f"decision {decision.id} is not for merchant {payload['merchant_id']}")
+            return decision.decided_at
+        case = rt.store.case(payload["case_id"])
+        if workflow == wf.HUMAN_REVIEW and case.merchant_id != payload["merchant_id"]:
+            raise ValueError(f"case {case.id} is not for merchant {payload['merchant_id']}")
+        return case.opened_at
 
-        # Schedule at decision time + offset
-        decision_id = payload.get("decision_id")
-        if decision_id:
-            decision = rt.store.decision(decision_id)
-            scheduled_at = decision.decided_at + timedelta(minutes=step_spec.delay_minutes_from_start)
-            logger.debug("Scheduling %s.%s at %s (offset %d min)", workflow, step, scheduled_at, step_spec.delay_minutes_from_start)
-
-            rt.scheduler.schedule(
-                scheduled_at,
-                f"{workflow}.{step}:{run_id}",
-                lambda: self.run_step(workflow, step, payload),
-            )
-
-        return {"ok": True, "data": {"step": step, "status": "done"}}
-
-    async def officer_decide(
-        self, case_id: str, *, approve: bool, officer_id: str, note: str
-    ) -> "Decision":  # noqa: F821
-        """Officer decision on a referred case (SPEC §9.4, design notes)."""
-        rt = self.runtime_getter()
-        case = rt.store.case(case_id)
-
-        if case.decision_id is None:
-            raise ValueError(f"Case {case_id} has no decision")
-
-        referred = rt.store.decision(case.decision_id)
-        if referred.outcome != DecisionOutcome.REFERRED:
-            raise ValueError(f"Decision {referred.id} is not REFERRED")
-
-        # Get facts
-        merchant = rt.static.city.merchant(case.merchant_id)
-        cover = rt.store.cover(case.merchant_id)
-
-        if referred.claim_id:
-            claim = rt.store.claim(referred.claim_id)
-            if claim.kind == ClaimKind.AREA:
-                trigger = rt.store.area_trigger(claim.trigger_id) if claim.trigger_id else None
-                alert = await self._get_alert(trigger.alert_id) if trigger else None
-                facts = AreaClaimFacts(
-                    claim=claim,
-                    merchant=merchant,
-                    cover=cover,
-                    trigger=trigger,
-                    alert=alert,
-                    paid_last_365_days_paise=rt.store.paid_last_365_days_paise(case.merchant_id, rt.clock.now().date()),
-                    already_paid=rt.store.latest_paid_decision(case.merchant_id) is not None,
-                    weekday=rt.clock.now().weekday(),
-                )
-            else:
-                # Personal claim
-                facts = PersonalClaimFacts(
-                    claim=claim,
-                    merchant=merchant,
-                    cover=cover,
-                    verified_silent_dates=claim.silent_dates,
-                    kyc_name=merchant.kyc_name,
-                    paid_last_365_days_paise=rt.store.paid_last_365_days_paise(case.merchant_id, rt.clock.now().date()),
-                    already_paid_dates=tuple(
-                        p.created_at.date() for p in rt.store.payouts(merchant_id=case.merchant_id)
-                    ),
-                    weekday=rt.clock.now().weekday(),
-                )
-        else:
-            raise ValueError(f"Decision {referred.id} has no claim")
-
-        # Apply officer decision
-        new_decision = apply_officer_decision(
-            referred,
-            facts,
-            approve=approve,
-            officer_id=officer_id,
-            note=note,
-            rules=rt.static.rules,
-            decision_id=self.ids.next("decision"),
-            now=rt.clock.now(),
-        )
-
-        rt.store.add_decision(new_decision)
-        rt.audit.append(
-            at=rt.clock.now(),
-            actor=f"officer:{officer_id}",
-            action="decision.officer",
-            subject_type="decision",
-            subject_id=new_decision.id,
-            data={"outcome": new_decision.outcome, "note": note},
-        )
-
-        # Resolve case
-        rt.cases.resolve(
-            case_id,
-            status=("APPROVED" if approve else "DECLINED"),
-            by=f"officer:{officer_id}",
-            resolution=note,
-            at=rt.clock.now(),
-        )
-
-        # If approved, start payout workflow
-        if new_decision.outcome == DecisionOutcome.APPROVED:
-            await self._start_payout_workflow(new_decision, case.merchant_id, rt.clock.now())
-
-        # Notify merchant
-        if self.conversation is not None:
-            case = rt.store.case(case_id)
-            msgs = await self.conversation.notify_officer_result(new_decision, case)
-            for msg in msgs:
-                self.bus.publish("message", rt.clock.now(), {"message": {}})
-
-        return new_decision
-
-    async def paytm_paid(self, link_id: str, txn_id: str | None) -> "PremiumPayment":  # noqa: F821
-        """Premium paid via Paytm (SPEC §9.7, design notes)."""
-        rt = self.runtime_getter()
-        premium = rt.premiums.mark_paid(link_id, rt.clock.now(), txn_id)
-
-        # Notify merchant
-        if self.conversation is not None:
-            merchant = rt.static.city.merchant(premium.merchant_id)
-            msg_hi, msg_en = bilingual(
-                "COVER_LINK",
-                first_payment=format_inr(premium.amount_paise),
-                per_day=format_inr(premium.amount_paise // 30),
-            )
-            # ... send message
-
-        return premium
-
-    # ClaimsPort methods
-
-    async def submit_personal_claim(
-        self, merchant_id: str, slip: SlipExtraction, media_id: str
-    ) -> "Decision":  # noqa: F821
-        """Personal claim submission (SPEC §13.5, design notes)."""
-        rt = self.runtime_getter()
-        now = rt.clock.now()
-        claim_id = self.ids.next("claim")
-
-        # Verify silent dates
-        merchant = rt.static.city.merchant(merchant_id)
-        day = now.date()
-        day_ranges = {
-            m.id: rt.static.model.day_range_paise(rt.static.city, rt.history, m.id, day - timedelta(days=1))
-            for m in rt.static.city.merchants
-        }
-
-        silent = find_silent(
-            day - timedelta(days=1),
-            rt.static.city,
-            rt.history,
-            day_ranges,
-            area_event_zones=frozenset(),
-        )
-        verified_silent_dates = tuple(
-            s.day for s in silent if s.merchant_id == merchant_id
-        )
-
-        expected_paise = rt.static.model.expected_day_paise(
-            rt.static.city, rt.history, merchant_id, day - timedelta(days=1)
-        )
-        expected_published = publish_expected_day(expected_paise)
-
-        # Create claim
-        claim = Claim(
-            id=claim_id,
-            kind=ClaimKind.PERSONAL,
-            merchant_id=merchant_id,
-            created_at=now,
-            event_date=day - timedelta(days=1),
-            silent_dates=verified_silent_dates,
-            slip=slip,
-            slip_media_id=media_id,
-            expected_day_paise=expected_published,
-        )
-        rt.store.add_claim(claim)
-
-        # Evaluate
-        cover = rt.store.cover(merchant_id)
-        facts = PersonalClaimFacts(
-            claim=claim,
-            merchant=merchant,
-            cover=cover,
-            verified_silent_dates=verified_silent_dates,
-            kyc_name=merchant.kyc_name,
-            paid_last_365_days_paise=rt.store.paid_last_365_days_paise(merchant_id, day),
-            already_paid_dates=tuple(
-                p.created_at.date() for p in rt.store.payouts(merchant_id=merchant_id)
-            ),
-            weekday=now.weekday(),
-        )
-
-        decision_id = self.ids.next("decision")
-        decision = evaluate_personal_claim(
-            facts, rt.static.rules, decision_id=decision_id, now=now
-        )
-
-        rt.store.add_decision(decision)
-        rt.audit.append(
-            at=now,
-            actor="policy-engine",
-            action="decision.personal",
-            subject_type="decision",
-            subject_id=decision.id,
-            data={"outcome": decision.outcome},
-        )
-
-        self.bus.publish("decision", now, {"decision": {}})
-
-        # If APPROVED, execute payout immediately
-        if decision.outcome == DecisionOutcome.APPROVED:
-            await self._start_payout_workflow(decision, merchant_id, now)
-
-        # If REFERRED, open a case
-        if decision.outcome == DecisionOutcome.REFERRED:
-            case = rt.cases.open(
-                kind=CaseKind.PERSONAL_CLAIM_REVIEW,
-                merchant_id=merchant_id,
-                at=now,
-                summary_en="Personal claim review",
-                summary_hi="व्यक्तिगत दावा समीक्षा",
-                evidence={
-                    "slip": slip.dict() if slip else None,
-                    "silent_days": verified_silent_dates,
-                },
-                claim_id=claim_id,
-                decision_id=decision.id,
-            )
-            self.bus.publish("case", now, {"case": {}})
-
+    async def officer_decide(self, case_id: str, *, approve: bool, officer_id: str, note: str) -> Decision:
+        """One-tap officer decision (SPEC §9.4); ValueError unless the case is OPEN."""
+        decision = await self._officer.decide(case_id, approve=approve, officer_id=officer_id, note=note)
+        await self._drain()
         return decision
 
-    async def open_dispute(self, merchant_id: str, text: str) -> "Case":  # noqa: F821
-        """Open a dispute case (SPEC §13.5)."""
-        rt = self.runtime_getter()
-        now = rt.clock.now()
+    async def paytm_paid(self, link_id: str, txn_id: str | None) -> PremiumPayment:
+        """Paid callback (SPEC §14.3): activates or extends the cover; KeyError for an unknown link."""
+        rt = self._link.rt
+        before = rt.store.premium_by_link(link_id)
+        paid = rt.premiums.mark_paid(link_id, rt.clock.now(), txn_id)
+        if before is not None and before.status is not PremiumStatus.PAID:
+            shop = rt.static.city.merchant(paid.merchant_id).shop_name
+            text = (
+                f"{shop} paid {format_inr(paid.amount_paise)} premium · covered "
+                f"{day_month(paid.covers_from)}–{day_month(paid.covers_to)}"
+            )
+            rt.feed.add(rt.clock.now(), "premium", text, merchant_id=paid.merchant_id)
+        await self._drain()
+        return paid
 
-        case = rt.cases.open(
-            kind=CaseKind.DISPUTE,
-            merchant_id=merchant_id,
-            at=now,
-            summary_en=f"Merchant dispute: {text}",
-            summary_hi=f"व्यापारी विवाद: {text}",
-            evidence={"merchant_text": text},
-        )
+    async def submit_personal_claim(self, merchant_id: str, slip: SlipExtraction, media_id: str) -> Decision:
+        """ClaimsPort: decide a personal claim for the open check-in (SPEC §8.3, §9.2)."""
+        decision = await self._personal.submit(merchant_id, slip, media_id)
+        await self._drain()
+        return decision
 
-        self.bus.publish("case", now, {"case": {}})
+    async def open_dispute(self, merchant_id: str, text: str) -> Case:
+        """ClaimsPort: a DISPUTE case for a human (SPEC §13.5)."""
+        case = await self._cases.open_dispute(merchant_id, text)
+        await self._drain()
         return case
 
-    async def quote_cover(self, merchant_id: str) -> tuple["CoverQuote", "PremiumPayment | None"]:  # noqa: F821
-        """Quote cover purchase (SPEC §9.5)."""
-        rt = self.runtime_getter()
+    async def quote_cover(self, merchant_id: str) -> tuple[CoverQuote, PremiumPayment | None]:
+        """ClaimsPort: quote cover and create the premium link (SPEC §9.5, §14.3).
+
+        The quote is always stored and audited. A payment-link failure is logged, audited and fed
+        and returns ``None`` for the payment, so the merchant is told the link is unavailable
+        (COVER_LINK_UNAVAILABLE) instead of losing the quote.
+        """
+        rt = self._link.rt
         now = rt.clock.now()
-
         merchant = rt.static.city.merchant(merchant_id)
-        existing = rt.store.cover(merchant_id)
-
-        # Get alerts
-        alerts = await self._alerts_for_hour(now)
-
-        # Get premium
-        premium_per_day = rt.static.premiums.get(merchant.zone_id)
-        if premium_per_day is None:
-            premium_per_day = rt.static.rules.premium.get("min_per_day_rupees", 2) * 100
-
+        lookahead = timedelta(hours=rt.static.rules.cover.alert_lookahead_hours)
         quote = evaluate_cover_purchase(
             merchant,
-            existing,
+            rt.store.cover(merchant_id),
             now=now,
-            alerts=alerts,
-            premium_per_day_paise=premium_per_day,
+            alerts=rt.world.shocks.alerts_between(now, now + lookahead),
+            premium_per_day_paise=rt.premiums.premium_per_day(merchant.zone_id),
             rules=rt.static.rules,
-            quote_id=self.ids.next("quote"),
+            quote_id=rt.ids.next("quote"),
         )
-
         rt.store.add_quote(quote)
-
-        # Create payment link if not blocked
-        payment = None
-        if quote.outcome != CoverQuoteOutcome.BLOCKED:
-            payment = await rt.premiums.create_link(merchant, quote, now)
-
+        rt.audit.append(
+            at=now,
+            actor=POLICY_ACTOR,
+            action="cover.quoted",
+            subject_type="quote",
+            subject_id=quote.id,
+            data={
+                "merchant_id": merchant_id,
+                "outcome": quote.outcome.value,
+                "starts_on": quote.starts_on.isoformat(),
+                "premium_per_day_paise": quote.premium_per_day_paise,
+                "first_payment_paise": quote.first_payment_paise,
+                "blocking_alert_id": quote.blocking_alert_id,
+            },
+        )
+        payment = await self._premium_link(merchant_id, quote, now)
+        text = f"{merchant.shop_name} asked for cover: {quote.outcome.value}, starts {day_month(quote.starts_on)}"
+        rt.feed.add(now, "cover", text, merchant_id=merchant_id)
+        await self._drain()
         return quote, payment
 
-    def latest_paid_decision(self, merchant_id: str) -> "Decision | None":  # noqa: F821
-        """Get latest paid decision for a merchant."""
-        rt = self.runtime_getter()
-        return rt.store.latest_paid_decision(merchant_id)
+    async def _premium_link(
+        self, merchant_id: str, quote: CoverQuote, now: datetime
+    ) -> PremiumPayment | None:
+        rt = self._link.rt
+        try:
+            return await rt.premiums.create_link(rt.static.city.merchant(merchant_id), quote, now)
+        except IntegrationError as exc:
+            logger.error("premium link for quote %s failed: %s", quote.id, exc.safe_message)
+            rt.audit.append(
+                at=now,
+                actor=SYSTEM_ACTOR,
+                action="premium.link_failed",
+                subject_type="quote",
+                subject_id=quote.id,
+                data={"merchant_id": merchant_id, "error": exc.safe_message},
+            )
+            rt.feed.add(now, "error", f"Premium link for quote {quote.id} could not be created")
+            return None
+
+    def latest_paid_decision(self, merchant_id: str) -> Decision | None:
+        """ClaimsPort: the latest APPROVED decision with a CREDITED payout."""
+        return self._link.rt.store.latest_paid_decision(merchant_id)
 
     def open_silence(self, merchant_id: str) -> date | None:
-        """Get first silent day if a check-in is open."""
-        # TODO: implement when conversation service is ready
-        return None
+        """ClaimsPort: first silent day of the open check-in, if any."""
+        return self._personal.open_silence(merchant_id)
 
-    async def _get_alert(self, alert_id: str) -> "Alert | None":  # noqa: F821
-        """Get an alert by ID."""
-        rt = self.runtime_getter()
-        # Alerts are generated by the simulator; search in history
-        # For now, return None; would need to store alerts in Store
-        return None
-
-    async def _alerts_for_hour(self, at: datetime) -> list["Alert"]:  # noqa: F821
-        """Get active alerts for a given hour."""
-        rt = self.runtime_getter()
-        # Get from shocks
-        alerts = rt.shocks.alerts_between(at, at + timedelta(hours=1))
-        return list(alerts)
+    async def _drain(self) -> None:
+        """Run the workflow steps due now and publish KPIs when they changed."""
+        rt = self._link.rt
+        await rt.scheduler.run_due(rt.clock.now())
+        self._publisher.kpis()
