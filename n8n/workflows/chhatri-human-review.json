@@ -1,172 +1,218 @@
 {
+  "id": "chhatri-human-review",
+  "name": "chhatri-human-review",
   "active": true,
   "nodes": [
     {
-      "id": "webhook-trigger",
-      "icon": "fa:code",
-      "name": "Webhook Trigger",
+      "id": "503f5fe0-4146-59ea-88f9-0d17284c6ff4",
+      "name": "Chhatri webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
       "position": [
-        250,
+        0,
         300
       ],
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "webhookId": "chhatri-human-review",
       "parameters": {
-        "path": "chhatri-human-review",
         "httpMethod": "POST",
-        "responseMode": "responseNode"
+        "path": "chhatri-human-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "ab6bd6d4-923a-5bbd-aec2-8ce976319cdd"
+    },
+    {
+      "id": "034b29b5-1932-52c9-b3b3-aec2d0954cb2",
+      "name": "Verify X-Chhatri-Secret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d75867a3-ab09-58c3-b8dd-36c2abdf2966",
+              "leftValue": "={{ $env.CHHATRI_INTERNAL_SECRET ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "4a1db793-be2f-5396-9597-9defacffbdc8",
+              "leftValue": "={{ $json.headers['x-chhatri-secret'] ?? '' }}",
+              "rightValue": "={{ $env.CHHATRI_INTERNAL_SECRET ?? '' }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": false,
+        "options": {}
       }
     },
     {
-      "id": "verify-secret",
-      "icon": "fa:shield",
-      "name": "Verify Secret Header",
+      "id": "6c8a9a6d-8f9a-52b4-9108-802568beecb7",
+      "name": "Accept (202)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
       "position": [
-        450,
+        480,
         300
       ],
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $request.headers['x-chhatri-secret'] }}",
-              "value2": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}",
-              "operation": "equals"
-            }
-          ]
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'accepted' } }) }}",
+        "options": {
+          "responseCode": 202
         }
       }
     },
     {
-      "id": "open-case",
-      "icon": "fa:square",
-      "name": "Open Case",
+      "id": "334859c7-26d9-5084-9116-d44df8ce2f95",
+      "name": "Reject (403)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
       "position": [
-        650,
-        200
+        480,
+        500
       ],
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
       "parameters": {
-        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/open_case",
+        "respondWith": "json",
+        "responseBody": "{\"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"missing or invalid X-Chhatri-Secret\"}}",
+        "options": {
+          "responseCode": 403
+        }
+      }
+    },
+    {
+      "id": "99066ce3-bde1-5be4-8f98-51e66fd4bf8b",
+      "name": "Step 1 · open_case",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
         "method": "POST",
+        "url": "={{ $env.CHHATRI_PUBLIC_URL }}/internal/workflows/open_case",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Chhatri-Secret",
-              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
+              "value": "={{ $env.CHHATRI_INTERNAL_SECRET }}"
             }
           ]
         },
-        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'human-review', step: 'open_case', payload: $request.body.payload }) }}"
-      }
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run_id: $('Chhatri webhook').first().json.body.run_id, workflow: 'human-review', step: 'open_case', payload: $('Chhatri webhook').first().json.body.payload }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
-      "id": "notify-officer",
-      "icon": "fa:square",
-      "name": "Notify Officer",
-      "position": [
-        850,
-        200
-      ],
+      "id": "a1efa4d6-28ce-5652-8440-e85c384ab79b",
+      "name": "Step 2 · notify_officer",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        300
+      ],
       "parameters": {
-        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/notify_officer",
         "method": "POST",
+        "url": "={{ $env.CHHATRI_PUBLIC_URL }}/internal/workflows/notify_officer",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Chhatri-Secret",
-              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
+              "value": "={{ $env.CHHATRI_INTERNAL_SECRET }}"
             }
           ]
         },
-        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'human-review', step: 'notify_officer', payload: $request.body.payload }) }}"
-      }
-    },
-    {
-      "id": "respond-202",
-      "icon": "fa:arrow-right",
-      "name": "Respond 202",
-      "position": [
-        450,
-        400
-      ],
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "parameters": {
-        "responseCode": 202,
-        "responseBody": "={{ JSON.stringify({ ok: true, data: { status: 'queued' } }) }}"
-      }
-    },
-    {
-      "id": "error-response",
-      "icon": "fa:times-circle",
-      "name": "Respond 403 (secret mismatch)",
-      "position": [
-        650,
-        400
-      ],
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "parameters": {
-        "responseCode": 403,
-        "responseBody": "={{ JSON.stringify({ ok: false, error: { code: 'invalid_secret', message: 'X-Chhatri-Secret header mismatch' } }) }}"
-      }
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run_id: $('Chhatri webhook').first().json.body.run_id, workflow: 'human-review', step: 'notify_officer', payload: $('Chhatri webhook').first().json.body.payload }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
-    "webhook-trigger": {
+    "Chhatri webhook": {
       "main": [
         [
           {
-            "node": "verify-secret",
+            "node": "Verify X-Chhatri-Secret",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "verify-secret": {
+    "Verify X-Chhatri-Secret": {
       "main": [
         [
           {
-            "node": "open-case",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "respond-202",
+            "node": "Accept (202)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "error-response",
+            "node": "Reject (403)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "open-case": {
+    "Accept (202)": {
       "main": [
         [
           {
-            "node": "notify-officer",
+            "node": "Step 1 · open_case",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1 · open_case": {
+      "main": [
+        [
+          {
+            "node": "Step 2 · notify_officer",
             "type": "main",
             "index": 0
           }
@@ -174,5 +220,16 @@
       ]
     }
   },
-  "pinData": null
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "meta": {
+    "generatedBy": "scripts/n8n_workflows.py",
+    "steps": [
+      "open_case",
+      "notify_officer"
+    ]
+  }
 }

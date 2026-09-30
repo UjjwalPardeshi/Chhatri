@@ -1,278 +1,325 @@
 #!/usr/bin/env python3
-"""
-Chhatri n8n workflow self-test (SPEC §14.5, §23)
+"""Self-test of the n8n workflows against a real n8n (SPEC §14.5, §15, §23; decision B1).
 
-Tests n8n workflow definitions by:
-1. Running a mock backend server that listens to /internal/workflows/{step}
-2. Verifying X-Chhatri-Secret header
-3. Recording step calls in order
-4. Posting to n8n webhooks (via N8N_BASE_URL)
-5. Asserting steps arrive in the correct order
+Proves, against a running n8n 2.x and a local stub of `POST /internal/workflows/{step}`
+(`selftest_stub.py`), that for each workflow in `chhatri.workflows.definitions.WORKFLOWS`:
 
-Usage:
-    python scripts/n8n_selftest.py
+1. the webhook `POST /webhook/chhatri-{workflow}` with the right `X-Chhatri-Secret` answers 2xx;
+2. n8n calls back every step in exactly the WORKFLOWS order, each with the secret header and the body
+   `{run_id, workflow, step, payload}` where the payload is passed through unchanged (nested/Unicode);
+3. a wrong or missing secret is refused with 403 and causes no callback;
+4. a non-2xx answer to a callback stops the run (later steps are never called).
 
-Environment:
-    N8N_BASE_URL: n8n base URL (default: http://localhost:5678)
-    CHHATRI_INTERNAL_SECRET: shared secret (will be auto-set in test)
-    CHHATRI_PUBLIC_URL: backend URL (will point to mock server)
-
-Workflows tested:
-    - chhatri-payout: execute_payout -> credit_payout -> notify_merchant -> pause_instalment
-    - chhatri-human-review: open_case -> notify_officer
-    - chhatri-follow-up: wait (24h configured as 0s for test) -> check_case_sla
+Modes (run with the backend venv so WORKFLOWS can be imported):
+    python scripts/n8n_selftest.py --start-container   # starts the compose n8n image itself (default)
+    python scripts/n8n_selftest.py --n8n-url URL --secret S --stub-host H --stub-port P
+        # uses an n8n you started with CHHATRI_INTERNAL_SECRET=S and CHHATRI_PUBLIC_URL=http://H:P
+Exit status 0 when every check passes, 1 otherwise.
 """
 
-import asyncio
+from __future__ import annotations
+
+import argparse
 import json
 import logging
-import os
+import secrets
 import sys
-import threading
 import time
+import urllib.error
+import urllib.request
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+from pathlib import Path
+from typing import Any, Final
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(message)s"
+import yaml
+
+from selftest_docker import (
+    DOCKER_HOST_ALIAS,
+    ContainerSpec,
+    N8nContainer,
+    bridge_gateway,
 )
-logger = logging.getLogger(__name__)
+from selftest_stub import SECRET_HEADER, Callback, Recorder, StubBackend
 
-# Configuration
-N8N_BASE_URL = os.getenv("N8N_BASE_URL", "http://localhost:5678")
-CHHATRI_INTERNAL_SECRET = "test-secret-key"
-MOCK_BACKEND_PORT = 9999
-MOCK_BACKEND_URL = f"http://127.0.0.1:{MOCK_BACKEND_PORT}"
+REPO_ROOT: Final = Path(__file__).resolve().parent.parent
+BACKEND_DIR: Final = REPO_ROOT / "backend"
+COMPOSE_FILE: Final = REPO_ROOT / "docker-compose.yml"
+WORKFLOW_DIR: Final = REPO_ROOT / "n8n" / "workflows"
+ENTRYPOINT: Final = REPO_ROOT / "n8n" / "entrypoint.sh"
+DEFAULT_N8N_PORT: Final = 15679
+DEFAULT_STUB_PORT: Final = 18701
+READY_TIMEOUT_S: Final = 180.0
+CALLBACK_TIMEOUT_S: Final = 30.0
+QUIET_PERIOD_S: Final = 4.0
+POLL_S: Final = 0.25
+HTTP_TIMEOUT_S: Final = 10.0
+WEBHOOK_NOT_READY_RETRIES: Final = 20
+STOP_WORKFLOW: Final = "payout"  # its second step answers 500 in the stop-on-error check
+FAILING_STEP_INDEX: Final = 1
+CALLBACK_MAX_TRIES: Final = 3  # n8n retries a failed callback (scripts/n8n_workflows.py)
+EXTRA_PAYLOAD: Final = {"trace": {"note": "अनिल जी ₹1,380", "n": [1, 2.5, None, True]}}
+SUBJECTS: Final = {
+    "payout": "decision_id",
+    "human-review": "case_id",
+    "follow-up": "case_id",
+}
 
-# Recorded workflow calls
-recorded_calls: list[dict[str, Any]] = []
-lock = threading.Lock()
+logger = logging.getLogger("n8n_selftest")
 
 
-@dataclass
-class WorkflowTest:
-    """Test case for a workflow."""
+@dataclass(frozen=True, slots=True)
+class CheckResult:
     name: str
-    webhook_path: str
-    payload: dict[str, str]
-    expected_steps: list[str]
-    delay: float = 0.5  # seconds between checks
+    ok: bool
+    detail: str
 
 
-def record_call(workflow: str, step: str, run_id: str, payload: dict) -> None:
-    """Record a workflow step call."""
-    with lock:
-        recorded_calls.append({
-            "workflow": workflow,
-            "step": step,
-            "run_id": run_id,
-            "payload": payload,
-            "timestamp": time.time()
-        })
-        logger.info(f"  ✓ {workflow}/{step} called")
+def load_workflows() -> Mapping[str, tuple[str, ...]]:
+    """Step names per workflow from the backend (the contract the JSON files must mirror)."""
+    if str(BACKEND_DIR) not in sys.path:
+        sys.path.insert(0, str(BACKEND_DIR))
+    from chhatri.workflows.definitions import WORKFLOWS
+
+    return {name: tuple(spec.name for spec in specs) for name, specs in WORKFLOWS.items()}
 
 
-class MockBackendHandler(BaseHTTPRequestHandler):
-    """HTTP handler for mock backend /internal/workflows/<step> endpoints."""
-
-    def do_POST(self):
-        """Handle POST to /internal/workflows/<step>."""
-        # Verify path
-        if not self.path.startswith("/internal/workflows/"):
-            self.send_error(404, "Not Found")
-            return
-
-        step = self.path.split("/")[-1]
-
-        # Verify secret header
-        secret = self.headers.get("X-Chhatri-Secret", "")
-        if secret != CHHATRI_INTERNAL_SECRET:
-            logger.warning(f"  ✗ Invalid secret for {step}")
-            self.send_error(403, "Invalid secret")
-            return
-
-        # Parse body
-        try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
-            data = json.loads(body)
-        except (ValueError, json.JSONDecodeError) as e:
-            logger.warning(f"  ✗ Invalid JSON body: {e}")
-            self.send_error(400, "Invalid JSON")
-            return
-
-        # Verify body shape
-        required = {"run_id", "workflow", "step", "payload"}
-        if not required.issubset(data.keys()):
-            logger.warning(f"  ✗ Missing fields: {required - set(data.keys())}")
-            self.send_error(400, "Missing required fields")
-            return
-
-        # Record call
-        record_call(data["workflow"], data["step"], data["run_id"], data["payload"])
-
-        # Respond 200
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        response = json.dumps({"ok": True, "data": {"step": step, "status": "done"}})
-        self.wfile.write(response.encode())
-
-    def log_message(self, format, *args):
-        """Suppress default HTTP logging."""
-        pass
+def compose_n8n_image(compose_file: Path = COMPOSE_FILE) -> str:
+    """The pinned n8n image of the compose stack (so the self-test runs exactly that version)."""
+    doc = yaml.safe_load(compose_file.read_text(encoding="utf-8"))
+    image = doc.get("services", {}).get("n8n", {}).get("image")
+    if not isinstance(image, str) or not image:
+        raise ValueError(f"{compose_file} has no services.n8n.image")
+    return image
 
 
-def start_mock_backend() -> threading.Thread:
-    """Start mock backend server in a thread."""
-    server = HTTPServer(("127.0.0.1", MOCK_BACKEND_PORT), MockBackendHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    logger.info(f"Mock backend listening on {MOCK_BACKEND_URL}")
-    return thread
+def payload_for(workflow: str, subject: str) -> dict[str, Any]:
+    """A SPEC §14.5 payload for `workflow` plus a nested Unicode field that must pass through unchanged."""
+    if workflow not in SUBJECTS:
+        raise ValueError(f"unknown workflow {workflow!r}")
+    payload: dict[str, Any] = {SUBJECTS[workflow]: subject, **EXTRA_PAYLOAD}
+    if workflow != "follow-up":
+        payload["merchant_id"] = "S-0142"
+    return payload
 
 
-def post_to_webhook(workflow_name: str, payload: dict) -> bool:
-    """POST to n8n webhook and return success."""
-    url = f"{N8N_BASE_URL}/webhook/chhatri-{workflow_name}"
-    headers = {
-        "X-Chhatri-Secret": CHHATRI_INTERNAL_SECRET,
-        "Content-Type": "application/json"
-    }
-    body = json.dumps(payload).encode("utf-8")
-
+def post_json(url: str, body: Mapping[str, Any], headers: Mapping[str, str]) -> int:
+    """POST JSON and return the HTTP status (non-2xx statuses are returned, not raised)."""
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(  # noqa: S310 - http(s) URL given by the operator
+        url,
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/json", **headers},
+    )
     try:
-        req = Request(url, data=body, headers=headers, method="POST")
-        with urlopen(req, timeout=5) as response:
-            status = response.status
-            logger.info(f"  → n8n webhook responded: {status}")
-            return status in (200, 202)
-    except URLError as e:
-        logger.error(f"  ✗ Failed to reach n8n: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"  ✗ Unexpected error: {e}")
-        return False
+        with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_S) as response:  # noqa: S310
+            return int(response.status)
+    except urllib.error.HTTPError as exc:
+        return int(exc.code)
 
 
-def wait_for_calls(run_id: str, expected_count: int, timeout: float = 10.0) -> list[dict[str, Any]]:
-    """Wait for expected number of calls to arrive."""
-    start = time.time()
-    while time.time() - start < timeout:
-        with lock:
-            calls = [c for c in recorded_calls if c.get("run_id") == run_id]
-        if len(calls) >= expected_count:
-            return calls
-        time.sleep(0.1)
-    return calls
+def start_run(
+    n8n_url: str,
+    workflow: str,
+    run_id: str,
+    payload: Mapping[str, Any],
+    secret: str | None,
+) -> int:
+    """POST the workflow webhook; retries while n8n has not registered the webhook yet (404)."""
+    headers = {SECRET_HEADER: secret} if secret is not None else {}
+    body = {"run_id": run_id, "workflow": workflow, "payload": dict(payload)}
+    url = f"{n8n_url.rstrip('/')}/webhook/chhatri-{workflow}"
+    status = post_json(url, body, headers)
+    for _ in range(WEBHOOK_NOT_READY_RETRIES):
+        if status != 404:
+            break
+        time.sleep(1.0)
+        status = post_json(url, body, headers)
+    return status
 
 
-def test_workflow(test: WorkflowTest) -> bool:
-    """Test a single workflow."""
-    logger.info(f"\nTesting: {test.name}")
-    logger.info(f"  Webhook: POST {N8N_BASE_URL}/webhook/{test.webhook_path}")
-
-    # Generate run ID
-    run_id = f"test-run-{int(time.time() * 1000)}"
-
-    # POST to webhook
-    payload = {"run_id": run_id, **test.payload}
-    if not post_to_webhook(test.webhook_path.replace("chhatri-", ""), payload):
-        logger.error(f"  ✗ Failed to post to webhook")
-        return False
-
-    # Wait for steps to be called
-    calls = wait_for_calls(run_id, len(test.expected_steps), timeout=15.0)
-
-    # Verify order
-    actual_steps = [c["step"] for c in calls]
-    if actual_steps != test.expected_steps:
-        logger.error(f"  ✗ Step order mismatch")
-        logger.error(f"    Expected: {test.expected_steps}")
-        logger.error(f"    Got:      {actual_steps}")
-        return False
-
-    logger.info(f"  ✓ All {len(test.expected_steps)} steps arrived in correct order")
-    return True
+def wait_for(predicate: Callable[[], bool], timeout_s: float) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(POLL_S)
+    return predicate()
 
 
-def main() -> int:
-    """Run all workflow tests."""
-    logger.info("Chhatri n8n workflow self-test")
-    logger.info("=" * 50)
+def callback_problems(
+    calls: Sequence[Callback], workflow: str, run_id: str, payload: Mapping[str, Any]
+) -> list[str]:
+    """Every way the received callbacks differ from SPEC §14.5 (secret, keys, run, payload)."""
+    problems = []
+    for call in calls:
+        if not call.secret_ok:
+            problems.append(f"{call.path_step}: missing/wrong {SECRET_HEADER}")
+        if call.status == 422:
+            problems.append(f"{call.path_step}: malformed body")
+            continue
+        if call.body.get("workflow") != workflow or call.body.get("run_id") != run_id:
+            problems.append(f"{call.path_step}: wrong workflow/run_id")
+        if call.body.get("payload") != payload:
+            problems.append(f"{call.path_step}: payload changed in transit")
+    return problems
 
-    # Check n8n connectivity
-    logger.info(f"\nChecking n8n at {N8N_BASE_URL}...")
+
+def check_workflow(
+    n8n_url: str, secret: str, recorder: Recorder, workflow: str, steps: Sequence[str]
+) -> CheckResult:
+    run_id = f"{workflow}:selftest-{workflow}"
+    payload = payload_for(workflow, f"selftest-{workflow}")
+    status = start_run(n8n_url, workflow, run_id, payload, secret)
+    if not 200 <= status < 300:
+        return CheckResult(f"{workflow}: steps", False, f"webhook answered HTTP {status}")
+    wait_for(lambda: len(recorder.for_run(run_id)) >= len(steps), CALLBACK_TIMEOUT_S)
+    time.sleep(QUIET_PERIOD_S)  # nothing may arrive after the last step
+    calls = recorder.for_run(run_id)
+    order = [c.path_step for c in calls]
+    problems = callback_problems(calls, workflow, run_id, payload)
+    if order != list(steps):
+        problems.insert(0, f"order {order} != {list(steps)}")
+    detail = "; ".join(problems) if problems else f"{' -> '.join(order)} (secret + payload pass-through ok)"
+    return CheckResult(f"{workflow}: steps", not problems, detail)
+
+
+def check_secret_refused(n8n_url: str, recorder: Recorder, workflow: str, secret: str | None) -> CheckResult:
+    label = "missing" if secret is None else "wrong"
+    run_id = f"{workflow}:selftest-{label}-secret"
+    status = start_run(n8n_url, workflow, run_id, payload_for(workflow, f"selftest-{label}"), secret)
+    time.sleep(QUIET_PERIOD_S)
+    called = [c.path_step for c in recorder.for_run(run_id)]
+    ok = status == 403 and not called
+    return CheckResult(f"{workflow}: {label} secret", ok, f"HTTP {status}, callbacks {called}")
+
+
+def check_stops_on_error(
+    n8n_url: str,
+    secret: str,
+    recorder: Recorder,
+    workflow: str,
+    steps: Sequence[str],
+    run_id: str,
+) -> CheckResult:
+    failing = steps[FAILING_STEP_INDEX]
+    status = start_run(
+        n8n_url,
+        workflow,
+        run_id,
+        payload_for(workflow, run_id.split(":", 1)[1]),
+        secret,
+    )
+    wait_for(
+        lambda: [c.path_step for c in recorder.for_run(run_id)].count(failing) >= CALLBACK_MAX_TRIES,
+        CALLBACK_TIMEOUT_S,
+    )
+    time.sleep(QUIET_PERIOD_S)
+    called = [c.path_step for c in recorder.for_run(run_id)]
+    expected = [*steps[:FAILING_STEP_INDEX], *[failing] * CALLBACK_MAX_TRIES]
+    ok = 200 <= status < 300 and called == expected
+    return CheckResult(
+        f"{workflow}: stops on non-2xx",
+        ok,
+        f"{failing} answered 500; callbacks {called}",
+    )
+
+
+def failing_call(workflows: Mapping[str, Sequence[str]]) -> tuple[str, str]:
+    """(run_id, step) the stub answers with 500: the second step of the stop-on-error run."""
+    if STOP_WORKFLOW not in workflows or len(workflows[STOP_WORKFLOW]) <= FAILING_STEP_INDEX + 1:
+        raise ValueError(
+            f"{STOP_WORKFLOW!r} needs more than {FAILING_STEP_INDEX + 1} steps for the stop check"
+        )
+    return f"{STOP_WORKFLOW}:selftest-failing", workflows[STOP_WORKFLOW][FAILING_STEP_INDEX]
+
+
+def run_checks(
+    n8n_url: str,
+    secret: str,
+    recorder: Recorder,
+    workflows: Mapping[str, Sequence[str]],
+) -> list[CheckResult]:
+    """All self-test checks, in a fixed order."""
+    run_id, _ = failing_call(workflows)
+    results = [check_workflow(n8n_url, secret, recorder, name, workflows[name]) for name in sorted(workflows)]
+    results.append(check_secret_refused(n8n_url, recorder, STOP_WORKFLOW, "not-the-secret"))
+    results.append(check_secret_refused(n8n_url, recorder, STOP_WORKFLOW, None))
+    results.append(
+        check_stops_on_error(n8n_url, secret, recorder, STOP_WORKFLOW, workflows[STOP_WORKFLOW], run_id)
+    )
+    return results
+
+
+def report(results: Sequence[CheckResult]) -> int:
+    for result in results:
+        (logger.info if result.ok else logger.error)(
+            "%s  %s: %s", "PASS" if result.ok else "FAIL", result.name, result.detail
+        )
+    passed = sum(r.ok for r in results)
+    logger.info("n8n self-test: %d/%d checks passed", passed, len(results))
+    return 0 if results and passed == len(results) else 1
+
+
+def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Chhatri n8n workflow self-test (SPEC §14.5)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--start-container",
+        action="store_true",
+        default=True,
+        help="run the compose n8n image (default)",
+    )
+    mode.add_argument("--n8n-url", help="use an already running n8n instead")
+    parser.add_argument("--secret", help="its CHHATRI_INTERNAL_SECRET (required with --n8n-url)")
+    parser.add_argument("--stub-host", help="interface for the stub (default: docker bridge gateway)")
+    parser.add_argument("--stub-port", type=int, default=DEFAULT_STUB_PORT)
+    parser.add_argument(
+        "--n8n-port",
+        type=int,
+        default=DEFAULT_N8N_PORT,
+        help="host port for the container",
+    )
+    parser.add_argument("--image", help="n8n image (default: services.n8n.image of docker-compose.yml)")
+    args = parser.parse_args(argv)
+    if args.n8n_url and not (args.secret and args.stub_host):
+        parser.error("--n8n-url needs --secret and --stub-host")
+    return args
+
+
+def _run_external(args: argparse.Namespace, workflows: Mapping[str, Sequence[str]]) -> int:
+    with StubBackend(args.stub_host, args.stub_port, args.secret, [failing_call(workflows)]) as stub:
+        return report(run_checks(args.n8n_url, args.secret, stub.recorder, workflows))
+
+
+def _run_container(args: argparse.Namespace, workflows: Mapping[str, Sequence[str]]) -> int:
+    secret = secrets.token_urlsafe(24)
+    host = args.stub_host or bridge_gateway()
+    spec = ContainerSpec(
+        image=args.image or compose_n8n_image(),
+        name=f"chhatri-n8n-selftest-{secrets.token_hex(4)}",
+        host_port=args.n8n_port,
+        secret=secret,
+        public_url=f"http://{DOCKER_HOST_ALIAS}:{args.stub_port}",
+        workflow_dir=WORKFLOW_DIR,
+        entrypoint=ENTRYPOINT,
+    )
+    with (
+        StubBackend(host, args.stub_port, secret, [failing_call(workflows)]) as stub,
+        N8nContainer(spec, READY_TIMEOUT_S) as n8n,
+    ):
+        return report(run_checks(n8n.url, secret, stub.recorder, workflows))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    args = parse_args(argv)
+    workflows = load_workflows()
     try:
-        req = Request(f"{N8N_BASE_URL}/healthz", method="GET")
-        with urlopen(req, timeout=3) as response:
-            if response.status != 200:
-                logger.warning(f"  ⚠ n8n health check returned {response.status}")
-    except Exception as e:
-        logger.error(f"  ✗ Cannot reach n8n: {e}")
-        logger.error(f"  Ensure n8n is running at {N8N_BASE_URL}")
-        logger.error(f"  Tip: docker compose --profile n8n up")
-        return 1
-
-    logger.info(f"  ✓ n8n is reachable")
-
-    # Start mock backend
-    logger.info(f"\nStarting mock backend...")
-    start_mock_backend()
-    time.sleep(0.5)
-
-    # Define tests
-    tests = [
-        WorkflowTest(
-            name="Payout workflow",
-            webhook_path="chhatri-payout",
-            payload={
-                "workflow": "payout",
-                "payload": {"decision_id": "D-000001", "merchant_id": "S-0142"}
-            },
-            expected_steps=["execute_payout", "credit_payout", "notify_merchant", "pause_instalment"]
-        ),
-        WorkflowTest(
-            name="Human review workflow",
-            webhook_path="chhatri-human-review",
-            payload={
-                "workflow": "human-review",
-                "payload": {"case_id": "C-2291", "merchant_id": "S-0142"}
-            },
-            expected_steps=["open_case", "notify_officer"]
-        ),
-        WorkflowTest(
-            name="Follow-up workflow",
-            webhook_path="chhatri-follow-up",
-            payload={
-                "workflow": "follow-up",
-                "payload": {"case_id": "C-2291"}
-            },
-            expected_steps=["check_case_sla"]  # Wait step is not a backend call
-        ),
-    ]
-
-    # Run tests
-    logger.info(f"\nRunning workflow tests...")
-    results = []
-    for test in tests:
-        results.append(test_workflow(test))
-
-    # Summary
-    logger.info(f"\n{'=' * 50}")
-    passed = sum(results)
-    total = len(results)
-    logger.info(f"Results: {passed}/{total} tests passed")
-
-    if passed == total:
-        logger.info("✓ All n8n workflows are working correctly!")
-        return 0
-    else:
-        logger.error(f"✗ {total - passed} test(s) failed")
+        return _run_external(args, workflows) if args.n8n_url else _run_container(args, workflows)
+    except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
+        logger.error("n8n self-test could not run: %s", exc)
         return 1
 
 

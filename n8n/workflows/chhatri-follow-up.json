@@ -1,170 +1,218 @@
 {
+  "id": "chhatri-follow-up",
+  "name": "chhatri-follow-up",
   "active": true,
   "nodes": [
     {
-      "id": "webhook-trigger",
-      "icon": "fa:code",
-      "name": "Webhook Trigger",
+      "id": "493265e8-34ca-5e07-8dfe-3a3efc63a7fb",
+      "name": "Chhatri webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
       "position": [
-        250,
+        0,
         300
       ],
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "webhookId": "chhatri-follow-up",
       "parameters": {
-        "path": "chhatri-follow-up",
         "httpMethod": "POST",
-        "responseMode": "responseNode"
+        "path": "chhatri-follow-up",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "b7d410b1-ab83-5ee9-9f49-e7dae7e7415d"
+    },
+    {
+      "id": "c3411331-3431-5f54-a8d3-630cd2d72974",
+      "name": "Verify X-Chhatri-Secret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0b24f056-4aee-540f-bc67-1219b1971af5",
+              "leftValue": "={{ $env.CHHATRI_INTERNAL_SECRET ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "22d89f36-eed9-52c6-b71a-7a0c986dff18",
+              "leftValue": "={{ $json.headers['x-chhatri-secret'] ?? '' }}",
+              "rightValue": "={{ $env.CHHATRI_INTERNAL_SECRET ?? '' }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": false,
+        "options": {}
       }
     },
     {
-      "id": "verify-secret",
-      "icon": "fa:shield",
-      "name": "Verify Secret Header",
+      "id": "c8698a0e-e2f0-54ab-a62b-bc27766037dc",
+      "name": "Accept (202)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
       "position": [
-        450,
+        480,
         300
       ],
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $request.headers['x-chhatri-secret'] }}",
-              "value2": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}",
-              "operation": "equals"
-            }
-          ]
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'accepted' } }) }}",
+        "options": {
+          "responseCode": 202
         }
       }
     },
     {
-      "id": "wait-dispute-sla",
-      "icon": "fa:clock",
-      "name": "Wait Dispute SLA (24h)",
+      "id": "301d8630-9323-5d0c-8399-be3c3bd6a037",
+      "name": "Reject (403)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
       "position": [
-        650,
-        200
+        480,
+        500
       ],
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
       "parameters": {
-        "amount": 24,
-        "unit": "hours"
+        "respondWith": "json",
+        "responseBody": "{\"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"missing or invalid X-Chhatri-Secret\"}}",
+        "options": {
+          "responseCode": 403
+        }
       }
     },
     {
-      "id": "check-case-sla",
-      "icon": "fa:square",
-      "name": "Check Case SLA",
-      "position": [
-        850,
-        200
-      ],
+      "id": "a9cd1c0d-1598-5cc0-a71b-a306bd6ad907",
+      "name": "Step 1 · check_case_sla",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        300
+      ],
       "parameters": {
-        "url": "={{ $env['CHHATRI_PUBLIC_URL'] }}/internal/workflows/check_case_sla",
         "method": "POST",
+        "url": "={{ $env.CHHATRI_PUBLIC_URL }}/internal/workflows/check_case_sla",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Chhatri-Secret",
-              "value": "={{ $env['CHHATRI_INTERNAL_SECRET'] }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
+              "value": "={{ $env.CHHATRI_INTERNAL_SECRET }}"
             }
           ]
         },
-        "body": "={{ JSON.stringify({ run_id: $request.body.run_id, workflow: 'follow-up', step: 'check_case_sla', payload: $request.body.payload }) }}"
-      }
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run_id: $('Chhatri webhook').first().json.body.run_id, workflow: 'follow-up', step: 'check_case_sla', payload: $('Chhatri webhook').first().json.body.payload }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
-      "id": "respond-202",
-      "icon": "fa:arrow-right",
-      "name": "Respond 202",
+      "id": "1ad29146-68af-5a77-b575-df12459fcb53",
+      "name": "Step 2 · notify_officer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
       "position": [
-        450,
-        400
+        960,
+        300
       ],
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
       "parameters": {
-        "responseCode": 202,
-        "responseBody": "={{ JSON.stringify({ ok: true, data: { status: 'queued' } }) }}"
-      }
-    },
-    {
-      "id": "error-response",
-      "icon": "fa:times-circle",
-      "name": "Respond 403 (secret mismatch)",
-      "position": [
-        650,
-        400
-      ],
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "parameters": {
-        "responseCode": 403,
-        "responseBody": "={{ JSON.stringify({ ok: false, error: { code: 'invalid_secret', message: 'X-Chhatri-Secret header mismatch' } }) }}"
-      }
+        "method": "POST",
+        "url": "={{ $env.CHHATRI_PUBLIC_URL }}/internal/workflows/notify_officer",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Chhatri-Secret",
+              "value": "={{ $env.CHHATRI_INTERNAL_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run_id: $('Chhatri webhook').first().json.body.run_id, workflow: 'follow-up', step: 'notify_officer', payload: $('Chhatri webhook').first().json.body.payload }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
-    "webhook-trigger": {
+    "Chhatri webhook": {
       "main": [
         [
           {
-            "node": "verify-secret",
+            "node": "Verify X-Chhatri-Secret",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "verify-secret": {
+    "Verify X-Chhatri-Secret": {
       "main": [
         [
           {
-            "node": "wait-dispute-sla",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "respond-202",
+            "node": "Accept (202)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "error-response",
+            "node": "Reject (403)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "wait-dispute-sla": {
+    "Accept (202)": {
       "main": [
         [
           {
-            "node": "check-case-sla",
+            "node": "Step 1 · check_case_sla",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-case-sla": {
+    "Step 1 · check_case_sla": {
       "main": [
         [
           {
-            "node": "respond-202",
+            "node": "Step 2 · notify_officer",
             "type": "main",
             "index": 0
           }
@@ -172,5 +220,16 @@
       ]
     }
   },
-  "pinData": null
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "meta": {
+    "generatedBy": "scripts/n8n_workflows.py",
+    "steps": [
+      "check_case_sla",
+      "notify_officer"
+    ]
+  }
 }
