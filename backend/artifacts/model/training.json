@@ -1,0 +1,20 @@
+{
+  "calib_weeks": 4,
+  "history_calibration": {
+    "anil_base_day_paise": 420000,
+    "z7_other_scale": 1.0,
+    "z7_tune_base_day_paise": null,
+    "z7_tune_merchant_id": null
+  },
+  "history_digest": "29fa97f4efb5d9a76639df3317d0867741518c8d399996c13999bc1d4db5b5f8",
+  "history_first_day": "2024-11-26",
+  "history_last_day": "2025-08-18",
+  "lightgbm": "4.7.0",
+  "num_threads": 4,
+  "record_version": 2,
+  "sample_frac": 0.35,
+  "scale": "full",
+  "seed": 20251019,
+  "train_end": "2025-08-18",
+  "train_weeks": 26
+}

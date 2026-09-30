@@ -1,0 +1,12 @@
+{
+  "anil_base_day_paise": 505554,
+  "z7_other_scale": 0.862203,
+  "z7_tune_base_day_paise": 347510,
+  "z7_tune_merchant_id": "S-0652",
+  "z9_slow_depth": 0.39,
+  "zone_rain_scale": {
+    "Z12": 0.859333,
+    "Z3": 1.168475,
+    "Z7": 0.703081
+  }
+}
