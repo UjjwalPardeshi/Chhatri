@@ -1,44 +1,86 @@
-import { useEffect, useState } from 'react'
-import { apiClient } from '../api/client'
-import type { Case } from '../api/types'
+/** Claims officer page (SPEC §20 "Claims"): queue on the left, the selected case on the right. */
+import { useState } from 'react'
+import { useSearchParams } from 'react-router'
+
+import type { ApiError } from '../api/client'
+import type { Case, CaseStatus } from '../api/types'
+import { CaseDetail } from '../components/claims/CaseDetail'
+import { CaseQueue } from '../components/claims/CaseQueue'
+import { AsyncView } from '../components/common/Status'
+import { useLive, useLiveEvent } from '../state/live'
+import { toApiError, useAsync } from '../state/useAsync'
+
+type Filter = CaseStatus | 'ALL'
+const FILTERS: readonly { value: Filter; label: string }[] = [
+  { value: 'OPEN', label: 'Open' },
+  { value: 'ALL', label: 'All' },
+]
 
 export default function Claims() {
-  const [cases, setCases] = useState<Case[]>([])
-  const [loading, setLoading] = useState(true)
+  const { api, snapshot, officerReady } = useLive()
+  const [params, setParams] = useSearchParams()
+  const [filter, setFilter] = useState<Filter>('ALL')
+  const [version, setVersion] = useState(0)
+  /** The last officer action error, shown only while its case stays selected. */
+  const [failure, setFailure] = useState<{ caseId: string; error: ApiError } | null>(null)
+  const scenarioKey = `${snapshot?.clock.scenario}|${snapshot?.clock.start}`
+  useLiveEvent(['case', 'decision', 'payout'], () => setVersion((v) => v + 1))
+  const list = useAsync((signal) => api.cases(filter, signal), [api, filter, version, scenarioKey])
+  const selected = params.get('case') ?? list.data?.[0]?.id ?? null
+  const detail = useAsync((signal) => (selected ? api.caseDetail(selected, signal) : Promise.resolve(null)), [api, selected, version, scenarioKey])
+  const actionError = failure && failure.caseId === selected ? failure.error : null
 
-  useEffect(() => {
-    const loadCases = async () => {
-      try {
-        const data = await apiClient.get<Case[]>('/api/cases?status=')
-        setCases(data)
-      } catch (err) {
-        console.error('Failed to load cases:', err)
-      } finally {
-        setLoading(false)
-      }
+  const decide = async (item: Case, approve: boolean, note: string) => {
+    try {
+      await (approve ? api.approve(item.id, note) : api.decline(item.id, note))
+      setFailure(null)
+    } catch (reason) {
+      setFailure({ caseId: item.id, error: toApiError(reason) })
+    } finally {
+      setVersion((v) => v + 1)
     }
-
-    loadCases()
-  }, [])
+  }
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6">Claims</h1>
-      {loading ? (
-        <p>Loading cases...</p>
-      ) : cases.length === 0 ? (
-        <p className="text-gray-600">No cases</p>
-      ) : (
-        <div className="space-y-4">
-          {cases.map((c) => (
-            <div key={c.id} className="bg-white p-4 rounded border">
-              <div className="font-bold">{c.id}</div>
-              <div className="text-gray-600">{c.merchant_name}</div>
-              <div className="text-sm mt-2">Status: {c.status}</div>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="claims">
+      <aside className="claims__queue card">
+        <header className="claims__queue-head">
+          <h2>Claims queue</h2>
+          <fieldset className="segmented" aria-label="Filter cases">
+            {FILTERS.map((f) => (
+              <button key={f.value} type="button" aria-pressed={filter === f.value} className={filter === f.value ? 'is-on' : ''} onClick={() => setFilter(f.value)}>
+                {f.label}
+              </button>
+            ))}
+          </fieldset>
+        </header>
+        <AsyncView {...list} label="Loading cases…">
+          {(cases) => <CaseQueue cases={cases} selected={selected} now={snapshot?.clock.now ?? ''} onSelect={(id) => setParams({ case: id })} />}
+        </AsyncView>
+      </aside>
+      <section className="claims__detail card">
+        {selected ? (
+          <AsyncView {...detail} label="Loading case…">
+            {(item) =>
+              item ? (
+                <CaseDetail
+                  item={item}
+                  now={snapshot?.clock.now ?? ''}
+                  officerReady={officerReady}
+                  actionError={actionError}
+                  onDecide={(approve, note) => decide(item, approve, note)}
+                  onDismissError={() => setFailure(null)}
+                />
+              ) : null
+            }
+          </AsyncView>
+        ) : (
+          <div className="status-box">
+            <span className="status-box__title">No case selected</span>
+            <span>Cases open when a slip needs a human or a merchant disputes an amount.</span>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

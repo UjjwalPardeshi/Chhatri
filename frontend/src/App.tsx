@@ -1,73 +1,54 @@
-import { useEffect, useState } from 'react'
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router'
-import { apiClient } from './api/client'
-import { sseStream } from './api/stream'
-import type { SessionData } from './api/types'
+/** Routes (SPEC §20): / overview · /live map · /claims · /merchant/:id · /audit · /backtest · /policy. */
+import { lazy, Suspense } from 'react'
+import { BrowserRouter, Link, Route, Routes } from 'react-router'
 
-// Import pages
-const HomePage = React.lazy(() => import('./pages/Home'))
-const ClaimsPage = React.lazy(() => import('./pages/Claims'))
-const MerchantPage = React.lazy(() => import('./pages/Merchant'))
-const AuditPage = React.lazy(() => import('./pages/Audit'))
-const BacktestPage = React.lazy(() => import('./pages/Backtest'))
-const PolicyPage = React.lazy(() => import('./pages/Policy'))
+import type { Api } from './api/endpoints'
+import { AppShell } from './components/layout/AppShell'
+import { Loading } from './components/common/Status'
+import { LiveProvider } from './state/live'
 
-function App() {
-  const [sessionLoading, setSessionLoading] = useState(true)
+const Overview = lazy(() => import('./pages/Overview'))
+const Live = lazy(() => import('./pages/Live'))
+const Claims = lazy(() => import('./pages/Claims'))
+const Merchant = lazy(() => import('./pages/Merchant'))
+const Audit = lazy(() => import('./pages/Audit'))
+const Backtest = lazy(() => import('./pages/Backtest'))
+const Policy = lazy(() => import('./pages/Policy'))
 
-  useEffect(() => {
-    // Initialize session if in demo mode
-    const initSession = async () => {
-      try {
-        const session = await apiClient.get<SessionData>('/api/session').catch(() => null)
-        if (session?.officer_token) {
-          apiClient.setToken(session.officer_token)
-          sseStream.setToken(session.officer_token)
-        }
-      } catch {
-        // Not in demo mode or session failed
-      } finally {
-        setSessionLoading(false)
-      }
-    }
-
-    initSession()
-  }, [])
-
-  if (sessionLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-2xl font-bold mb-2">Chhatri</div>
-          <div className="text-gray-600">Initializing...</div>
-        </div>
-      </div>
-    )
-  }
-
+function NotFound() {
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        <React.Suspense
-          fallback={
-            <div className="flex items-center justify-center min-h-screen">
-              <div>Loading...</div>
-            </div>
-          }
-        >
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/claims" element={<ClaimsPage />} />
-            <Route path="/merchant/:id" element={<MerchantPage />} />
-            <Route path="/audit" element={<AuditPage />} />
-            <Route path="/backtest" element={<BacktestPage />} />
-            <Route path="/policy" element={<PolicyPage />} />
-          </Routes>
-        </React.Suspense>
-      </div>
-    </Router>
+    <div className="status-box">
+      <span className="status-box__title">Page not found</span>
+      <Link to="/">Back to the overview</Link>
+    </div>
   )
 }
 
-export default App
+export function AppRoutes() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <Routes>
+        <Route path="/" element={<Overview />} />
+        <Route path="/live" element={<Live />} />
+        <Route path="/claims" element={<Claims />} />
+        <Route path="/merchant/:id" element={<Merchant />} />
+        <Route path="/audit" element={<Audit />} />
+        <Route path="/backtest" element={<Backtest />} />
+        <Route path="/policy" element={<Policy />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
+  )
+}
+
+export default function App({ api, mock }: { api: Api; mock: boolean }) {
+  return (
+    <BrowserRouter>
+      <LiveProvider api={api} mock={mock}>
+        <AppShell>
+          <AppRoutes />
+        </AppShell>
+      </LiveProvider>
+    </BrowserRouter>
+  )
+}
