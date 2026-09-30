@@ -1,7 +1,7 @@
 {
   "artifacts": {
-    "backtest/report.json": "968f52c7adbf074aa4325ffc6bf36800f5fdcb8c34ba7b358589552e0f8e2782",
-    "backtest/report.md": "45e74c2875d8a61621f9fc5e58cff228e1e788bdf23fc313dd73d0eccdc573df",
+    "backtest/report.json": "d618694844b55cabf0848696aa8593a0d082e05503f22d5b826624f763eff575",
+    "backtest/report.md": "4a9c509d5553d416c2a365ef86aa7c5cc76f3fadd4a527b0243fd97c00b7eefd",
     "calibration.json": "ebf4288fd13001527dcd90855d6425782edffc6aef274fb5f0b154feb1975d1f",
     "model/manifest.json": "bfc8df52d428612bb2706581b4fd0a31b867eb4a7922b3cccccd96579d3868b5",
     "model/p10.txt": "590e93b78ac531c756dafe2d586f5ad670003bc8e1a448d713cf3bb946e72ce6",
@@ -9,9 +9,9 @@
     "model/p90.txt": "64ae1d9ab9a7e157e160a0b5b0f8a1628ae046f997ae479b76c24da781e1bd8b",
     "model/schema.json": "117b6946a69c8176ec6c368e5e37742b1891ca247d8918655b8ef2bf0c41074b",
     "model/training.json": "4c221be77c19f42901e0f03e7ad80aea17d054bd203e724675ecaeac65a67f8c",
-    "premiums.json": "5639ea0b74f4f3b33a101c2e229460576d8941106392a6fe40ba578b64a38ee4"
+    "premiums.json": "0a278b194f3e1701272a31a9565a3408d97579776bf315e9cf3495d5c633115d"
   },
-  "backtest_inputs": null,
+  "backtest_inputs": "d3e4791c59393e59ae9de81b2334dc1298a9dfa7c9067dfe79ba30e239411101",
   "calibration": {
     "anil_base_day_paise": 505554,
     "z7_other_scale": 0.862203,
@@ -24,8 +24,8 @@
       "Z7": 0.703081
     }
   },
-  "created_at": "2026-09-30T13:44:35+00:00",
-  "git_commit": "2e9eb4320bd8e87ab4097b07e9144d8fadc9315e",
+  "created_at": "2026-09-30T16:20:47+00:00",
+  "git_commit": "83852b2434d0480d78b2544dace2d29e3954734a",
   "model": {
     "calib_end": "2025-08-18",
     "calib_start": "2025-07-22",
