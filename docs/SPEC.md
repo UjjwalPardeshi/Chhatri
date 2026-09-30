@@ -894,7 +894,7 @@ type BacktestReport = { label: string; seasons: string[]; generated_at: string;
 
 ## 20. Console (`frontend/`)
 
-Routes: `/` Live map · `/claims` officer queue · `/merchant/:id` phone · `/audit` · `/backtest`
+Routes: `/` Overview homepage (the whole idea, deck-grade: problem, how it works, the storm example, WhatsApp journeys, humans in control, backtest proof, tech, roadmap, team, with calls to action into the live demo) · `/live` Live map · `/claims` officer queue · `/merchant/:id` phone · `/audit` · `/backtest`
 · `/policy`. Header: Chhatri wordmark, scenario picker, clock ("Mumbai · monsoon replay · 17:00 ·
 simulated"), play/pause/speed/seek, integration badges (LIVE green / SIMULATED grey).
 
