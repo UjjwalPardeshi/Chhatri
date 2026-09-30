@@ -1,136 +1,117 @@
-"""Tests for slip rendering and extraction (SPEC §17.2, §24.1)."""
+"""SPEC §17.2, §24.1: sample slips, their embedded extraction and the committed PNGs."""
 
+from __future__ import annotations
+
+import struct
+import zlib
 from datetime import date
+from pathlib import Path
 
+import numpy as np
 import pytest
+from PIL import Image
 
-from chhatri.sim.slips import render_slip, read_embedded_slip
+from chhatri.sim.slips import (
+    READABLE_CONFIDENCE,
+    SLIP_KEY,
+    read_embedded_slip,
+    render_slip,
+    render_unreadable_slip,
+)
+
+from .conftest import load_script
+
+ADMITTED = date(2025, 8, 20)
 
 
-def test_render_anil_slip():
-    """Test rendering Anil's admission slip (SPEC §17.2)."""
-    slip = render_slip(
-        patient_name="Anil R. Jadhav",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        confidence=0.94
+def test_render_and_read_round_trip() -> None:
+    png = render_slip("Anil R. Jadhav", ADMITTED, "KEM Hospital, Parel", "Viral fever")
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert read_embedded_slip(png) == {
+        "patient_name": "Anil R. Jadhav",
+        "admission_date": "2025-08-20",
+        "discharge_date": None,
+        "hospital_name": "KEM Hospital, Parel",
+        "diagnosis": "Viral fever",
+        "document_type": "admission_slip",
+        "confidence": READABLE_CONFIDENCE,
+        "sample": True,
+    }
+    assert png == render_slip("Anil R. Jadhav", ADMITTED, "KEM Hospital, Parel", "Viral fever")
+    assert Image.open(__import__("io").BytesIO(png)).text[SLIP_KEY]  # a real tEXt chunk PIL can read
+
+
+def test_sample_label_is_drawn() -> None:
+    labelled = np.asarray(Image.open(__import__("io").BytesIO(render_slip("A B", ADMITTED, "H", "D"))))
+    plain = np.asarray(
+        Image.open(__import__("io").BytesIO(render_slip("A B", ADMITTED, "H", "D", sample_label=False)))
     )
-
-    assert isinstance(slip, bytes)
-    assert len(slip) > 0
-    assert slip.startswith(b"\x89PNG")  # PNG signature
+    red = (labelled[..., 0] > 150) & (labelled[..., 1] < 90) & (labelled[..., 2] < 90)
+    assert red.sum() > 500 and not ((plain[..., 0] > 150) & (plain[..., 1] < 90) & (plain[..., 2] < 90)).any()
 
 
-def test_render_mismatch_slip():
-    """Test rendering slip with different name (SPEC §17.2)."""
-    slip = render_slip(
-        patient_name="Sunil Pawar",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        confidence=0.93
+def test_unreadable_slip_is_blurred_and_empty() -> None:
+    sharp = np.asarray(
+        Image.open(__import__("io").BytesIO(render_slip("Anil R. Jadhav", ADMITTED, "H", "D"))), float
     )
-
-    assert isinstance(slip, bytes)
-    assert len(slip) > 0
-    assert slip.startswith(b"\x89PNG")
-
-
-def test_render_blurry_slip():
-    """Test rendering blurry slip with low confidence (SPEC §17.2)."""
-    slip = render_slip(
-        patient_name="Anil R. Jadhav",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        confidence=0.55
+    png = render_unreadable_slip("Anil R. Jadhav", ADMITTED, "H", "D")
+    blurred = np.asarray(Image.open(__import__("io").BytesIO(png)), float)
+    body = (slice(200, 440), slice(40, 700))  # the field rows, away from the SAMPLE stamp
+    assert (
+        np.abs(np.diff(blurred[body].mean(axis=2), axis=1)).max()
+        < 0.2 * np.abs(np.diff(sharp[body].mean(axis=2), axis=1)).max()
     )
-
-    assert isinstance(slip, bytes)
-    assert len(slip) > 0
-    assert slip.startswith(b"\x89PNG")
+    data = read_embedded_slip(png)
+    assert data is not None and data["patient_name"] is None and data["confidence"] < 0.5
 
 
-def test_read_embedded_slip_anil():
-    """Test reading Anil's slip metadata (SPEC §17.2)."""
-    slip = render_slip(
-        patient_name="Anil R. Jadhav",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        confidence=0.94
+def test_render_validates_inputs() -> None:
+    with pytest.raises(ValueError, match="patient_name"):
+        render_slip(" ", ADMITTED, "KEM", "fever")
+    with pytest.raises(ValueError, match="hospital"):
+        render_unreadable_slip("A", ADMITTED, "", "fever")
+
+
+def _chunk(kind: bytes, body: bytes) -> bytes:
+    return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+
+
+def test_read_embedded_slip_rejects_bad_input() -> None:
+    signature = b"\x89PNG\r\n\x1a\n"
+    assert read_embedded_slip(b"GIF89a....") is None
+    assert read_embedded_slip(signature + _chunk(b"IEND", b"")) is None  # no chunk
+    assert (
+        read_embedded_slip(
+            signature + _chunk(b"tEXt", SLIP_KEY.encode() + b"\x00{bad") + _chunk(b"IEND", b"")
+        )
+        is None
     )
-
-    metadata = read_embedded_slip(slip)
-    assert metadata is not None
-    assert metadata["patient_name"] == "Anil R. Jadhav"
-    assert metadata["admission_date"] == "2025-08-20"
-    assert metadata["hospital_name"] == "KEM Hospital, Parel"
-    assert metadata["document_type"] == "admission_slip"
-    assert metadata["confidence"] == 0.94
-
-
-def test_read_embedded_slip_mismatch():
-    """Test reading mismatch slip metadata."""
-    slip = render_slip(
-        patient_name="Sunil Pawar",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        confidence=0.93
+    assert (
+        read_embedded_slip(signature + _chunk(b"tEXt", SLIP_KEY.encode() + b"\x00[1]") + _chunk(b"IEND", b""))
+        is None
     )
-
-    metadata = read_embedded_slip(slip)
-    assert metadata is not None
-    assert metadata["patient_name"] == "Sunil Pawar"
-    assert metadata["confidence"] == 0.93
-
-
-def test_read_embedded_slip_blurry():
-    """Test reading blurry slip with low confidence."""
-    slip = render_slip(
-        patient_name="Anil R. Jadhav",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        confidence=0.55
-    )
-
-    metadata = read_embedded_slip(slip)
-    assert metadata is not None
-    assert metadata["confidence"] == 0.55
+    good = signature + _chunk(b"tEXt", SLIP_KEY.encode() + b'\x00{"a": 1}') + _chunk(b"IEND", b"")
+    assert read_embedded_slip(good) == {"a": 1}
+    assert read_embedded_slip(good[:-3]) is None  # truncated
+    corrupt = bytearray(good)
+    corrupt[20] ^= 0xFF
+    assert read_embedded_slip(bytes(corrupt)) is None
+    assert read_embedded_slip(signature + _chunk(b"tEXt", b"other\x00x")) is None  # no IEND
 
 
-def test_read_invalid_slip():
-    """Test reading non-slip PNG returns None."""
-    # Random bytes that aren't a valid slip
-    invalid_png = b"\x89PNG\r\n\x1a\n" + b"x" * 100
-
-    metadata = read_embedded_slip(invalid_png)
-    # Should return None because metadata isn't embedded
-    # (or raise an exception, depending on implementation)
-    assert metadata is None
-
-
-def test_slip_round_trip():
-    """Test that rendering and reading a slip preserves data."""
-    original_name = "Anil R. Jadhav"
-    original_admitted = date(2025, 8, 20)
-    original_hospital = "KEM Hospital, Parel"
-    original_diagnosis = "Viral fever"
-    original_confidence = 0.94
-
-    slip = render_slip(
-        patient_name=original_name,
-        admitted=original_admitted,
-        hospital=original_hospital,
-        diagnosis=original_diagnosis,
-        confidence=original_confidence
-    )
-
-    metadata = read_embedded_slip(slip)
-    assert metadata["patient_name"] == original_name
-    assert metadata["admission_date"] == original_admitted.isoformat()
-    assert metadata["hospital_name"] == original_hospital
-    assert metadata["confidence"] == original_confidence
+def test_committed_slips_are_regenerated_by_make_slips(tmp_path: Path, data_dir: Path) -> None:
+    make_slips = load_script("make_slips")
+    assert make_slips.main(["--out", str(tmp_path)]) == 0
+    sizes = set()
+    for name in ("anil_admission_slip.png", "mismatch_admission_slip.png", "blurry_slip.png"):
+        committed = (data_dir / "slips" / name).read_bytes()
+        assert committed == (tmp_path / name).read_bytes(), f"{name} is stale: run scripts/make_slips.py"
+        sizes.add(len(committed))
+    assert len(sizes) == 3
+    anil = read_embedded_slip((data_dir / "slips" / "anil_admission_slip.png").read_bytes())
+    mismatch = read_embedded_slip((data_dir / "slips" / "mismatch_admission_slip.png").read_bytes())
+    assert anil is not None and mismatch is not None
+    assert (anil["patient_name"], anil["admission_date"], anil["diagnosis"], anil["hospital_name"]) == (
+        "Anil R. Jadhav", "2025-08-20", "Viral fever", "KEM Hospital, Parel",
+    )  # fmt: skip
+    assert (mismatch["patient_name"], mismatch["admission_date"]) == ("Sunil Pawar", "2025-08-20")
