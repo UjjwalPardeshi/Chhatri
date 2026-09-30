@@ -1,6 +1,7 @@
 /*
- * Static storm map (deck slide 6) and the pieces it shares with the live map: the rain pill and
- * the dark zone label chips. Land and sea come from the ward polygons (tokens --land, --sea).
+ * Static storm map (deck slide 6) and the pieces it shares with the live map: the rain pill, the
+ * dark zone label chips on leader lines (.zone-anchor, live-map.css), the hatch and stipple
+ * patterns (MapPatternDefs). Land and sea come from the ward polygons (tokens --land, --sea).
  */
 .storm-map {
   position: relative;
@@ -12,6 +13,11 @@
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 8%),
     var(--shadow-navy);
+}
+
+.storm-map__frame {
+  position: relative;
+  overflow: hidden;
   aspect-ratio: 4 / 3;
 }
 
@@ -41,12 +47,8 @@
 }
 
 .storm-map__land path {
-  fill: var(--land);
+  fill: url(#storm-stipple);
   fill-rule: evenodd;
-}
-
-.storm-map__rain-fill path {
-  fill: url(#storm-hatch);
 }
 
 .storm-map__hexes path {
@@ -56,37 +58,37 @@
   fill-opacity: 0.86;
 }
 
+/* Ward borders: white over the hexes (structure, not roads), as on the live map. */
 .storm-map__wards path {
   fill: none;
-  stroke: var(--ward-line);
-  stroke-width: 0.6;
+  stroke: rgb(255 255 255 / 70%);
+  stroke-width: 1.2;
 }
 
 .storm-map__rain-edge path {
   fill: none;
   stroke: var(--rain);
-  stroke-width: 1.2;
-  stroke-dasharray: 5 5;
-  stroke-opacity: 0.55;
+  stroke-width: 1.6;
+  stroke-dasharray: 6 5;
+  stroke-opacity: 0.75;
 }
 
-.storm-map__triggered path {
+/* Anil's zone: a navy outline over a white halo (the live map's selected zone). */
+.storm-map__focus-halo path,
+.storm-map__focus path {
   fill: none;
-  stroke: var(--red);
-  stroke-width: 2;
-  stroke-opacity: 0.7;
   stroke-linejoin: round;
 }
 
-.storm-map__leaders line {
-  stroke: var(--navy);
-  stroke-width: 1.4;
+.storm-map__focus-halo path {
+  stroke: #fff;
+  stroke-width: 6;
+  stroke-opacity: 0.9;
 }
 
-.storm-map__leaders circle {
-  fill: var(--navy);
-  stroke: #fff;
-  stroke-width: 1.5;
+.storm-map__focus path {
+  stroke: var(--navy);
+  stroke-width: 2.5;
 }
 
 .storm-map__overlay {
@@ -102,9 +104,15 @@
   left: var(--x);
 }
 
+.storm-map__overlay > .zone-anchor {
+  position: absolute;
+}
+
 .storm-label {
+  position: absolute;
+  top: 0;
+  left: 0;
   padding: 0.38em 0.8em;
-  border-left: 3px solid #ef4444;
   border-radius: var(--radius-sm);
   background: var(--navy);
   box-shadow: 0 2px 8px rgb(15 23 42 / 30%);
@@ -112,7 +120,13 @@
   font-weight: 500;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)));
+}
+
+.storm-label--triggered {
+  box-shadow:
+    inset 3px 0 0 #ef4444,
+    0 2px 8px rgb(15 23 42 / 30%);
 }
 
 .storm-label--slow {
@@ -231,21 +245,53 @@
   bottom: 12px;
 }
 
+/* Narrow frames: the legend becomes a strip under the map, so it covers none of the storm. */
 @container (max-width: 520px) {
   .storm-map .map-legend {
-    right: 8px;
-    bottom: 8px;
-    left: 8px;
-    justify-content: space-between;
-    padding: 6px 10px;
+    position: static;
+    grid-template-columns: minmax(110px, 136px) 1fr;
+    column-gap: 14px;
+    row-gap: 3px;
+    width: auto;
+    padding: 10px 12px 8px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .storm-map .map-legend__title,
+  .storm-map .map-legend__keys,
+  .storm-map__water {
+    display: none;
   }
 
   .storm-map .map-legend__bar {
-    width: 120px;
+    grid-row: 1;
+    grid-column: 1;
+    height: 8px;
+    margin-top: 0;
+  }
+
+  .storm-map .map-legend__ticks {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .storm-map .map-legend__rule {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    align-self: center;
+    font-size: var(--fs-2xs);
   }
 
   .storm-map__chip {
     top: 8px;
     left: 8px;
+    padding: 4px 10px;
+    font-size: var(--fs-2xs);
+  }
+
+  .storm-map .north-arrow {
+    top: 8px;
+    right: 10px;
   }
 }

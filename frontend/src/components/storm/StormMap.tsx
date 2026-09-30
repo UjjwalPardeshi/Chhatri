@@ -1,17 +1,19 @@
 /**
  * The storm at 17:05 as a static, non-interactive map (deck slide 6; SPEC §17.2 golden labels;
- * B3 hex values): sea and land built from the ward polygons, hexes on the deck's colour scale, the
- * rain band under the hexes with a dashed edge, triggered zones outlined in red, dark zone labels
- * with leader lines, the Z9 callout, Anil's pin card and the legend in the corner. Drawn from
+ * B3 hex values): sea and land built from the ward polygons (land without shops stippled), hexes
+ * on the deck's colour scale, white ward borders, the rain band hatched above the hexes with a
+ * dashed edge, Anil's zone (Z7) outlined in navy, dark zone labels on leader lines placed clear of
+ * every overlay (useStormLabels), the Z9 callout, Anil's pin card and the legend. Drawn from
  * `content/stormMap.json` (see stormMapData.ts), so it needs no tiles, no Leaflet and no network.
  */
-import type { CSSProperties } from 'react'
+import { useRef, type CSSProperties } from 'react'
 
 import stormMap from '../../content/stormMap.json'
 import { indexColour } from '../../lib/colour'
 import { Icon } from '../common/Icon'
-import { Legend, NorthArrow } from '../map/overlays'
+import { Legend, MapPatternDefs, NorthArrow } from '../map/overlays'
 import type { Point, StormLabel, StormMapData } from './stormMapData'
+import { useStormLabels } from './useStormLabels'
 
 export const STORM_MAP: StormMapData = stormMap as unknown as StormMapData
 
@@ -22,46 +24,51 @@ export const LABEL_OFFSETS: Readonly<Record<string, Point>> = Object.freeze({
   Z12: [96, 58],
   Z9: [58, -70],
 })
+/** The direction each label prefers when it has to move (radians, from LABEL_OFFSETS). */
+export const LABEL_PREFER: Readonly<Record<string, number>> = Object.freeze(
+  Object.fromEntries(Object.entries(LABEL_OFFSETS).map(([id, [dx, dy]]) => [id, Math.atan2(dy, dx)])),
+)
+/** Anil's zone (B5 demo merchant S-0142): outlined in navy like the live map's selected zone. */
+export const FOCUS_ZONE = 'Z7'
+/** SVG pattern ids of this map (MapPatternDefs): `storm-hatch`, `storm-stipple`. */
+const PATTERNS = 'storm'
 /** Where the water names sit in the frame (SVG units). */
 const WATER: readonly { name: string; at: Point }[] = [
   { name: 'Arabian Sea', at: [96, 548] },
   { name: 'Harbour', at: [705, 470] },
 ]
 const RAIN_CAPTION = 'Heavy rain band · since 14:00'
+const PCT = 100
 
-type Positioned = CSSProperties & { '--x': string; '--y': string }
+type Positioned = CSSProperties & Record<`--${string}`, string>
 
 function at(point: Point, data: StormMapData): Positioned {
-  return { '--x': `${(point[0] / data.w) * 100}%`, '--y': `${(point[1] / data.h) * 100}%` }
+  return { '--x': `${(point[0] / data.w) * PCT}%`, '--y': `${(point[1] / data.h) * PCT}%` }
 }
 
-function offset(label: StormLabel): Point {
+/**
+ * First-paint position of a label: the deck offset in container-width units (the frame keeps the
+ * SVG's aspect ratio), with the leader line's length and angle. useStormLabels refines it.
+ */
+export function deckOffset(label: StormLabel, data: StormMapData): Positioned {
   const [dx, dy] = LABEL_OFFSETS[label.id] ?? [0, 0]
-  return [label.at[0] + dx, label.at[1] + dy]
+  const unit = (n: number) => `${(n / data.w) * PCT}cqw`
+  return { ...at(label.at, data), '--dx': unit(dx), '--dy': unit(dy), '--len': unit(Math.hypot(dx, dy)), '--angle': `${Math.atan2(dy, dx)}rad` }
 }
 
 function Paths({ data }: { data: StormMapData }) {
-  const rain = new Set(data.rain)
-  const triggered = new Set(data.triggered)
+  const rain = data.land.filter((z) => data.rain.includes(z.id))
+  const focus = data.land.filter((z) => z.id === FOCUS_ZONE)
   return (
     <>
       <rect className="storm-map__sea" width={data.w} height={data.h} />
-      <g className="storm-map__shallows">
-        {data.land.map((z) => (
-          <path key={z.id} d={z.d} />
-        ))}
-      </g>
-      <g className="storm-map__coast">
-        {data.land.map((z) => (
-          <path key={z.id} d={z.d} />
-        ))}
-      </g>
-      <g className="storm-map__land">
-        {data.land.map((z) => (
-          <path key={z.id} d={z.d} />
-        ))}
-      </g>
-      <g className="storm-map__rain-fill">{data.land.filter((z) => rain.has(z.id)).map((z) => <path key={z.id} d={z.d} />)}</g>
+      {['shallows', 'coast', 'land'].map((layer) => (
+        <g key={layer} className={`storm-map__${layer}`}>
+          {data.land.map((z) => (
+            <path key={z.id} d={z.d} />
+          ))}
+        </g>
+      ))}
       <g className="storm-map__hexes">
         {data.hexes.map((h, i) => (
           <path key={i} d={h.d} fill={indexColour(h.v)} />
@@ -72,19 +79,15 @@ function Paths({ data }: { data: StormMapData }) {
           <path key={z.id} d={z.d} />
         ))}
       </g>
-      <g className="storm-map__rain-edge">{data.land.filter((z) => rain.has(z.id)).map((z) => <path key={z.id} d={z.d} />)}</g>
-      <g className="storm-map__triggered">{data.land.filter((z) => triggered.has(z.id)).map((z) => <path key={z.id} d={z.d} />)}</g>
-      <g className="storm-map__leaders">
-        {data.labels.map((l) => {
-          const [x, y] = offset(l)
-          return (
-            <g key={l.id}>
-              <line x1={l.at[0]} y1={l.at[1]} x2={x} y2={y} />
-              <circle cx={l.at[0]} cy={l.at[1]} r={4} />
-            </g>
-          )
-        })}
-      </g>
+      <g className="storm-map__rain-fill">{rain.map((z) => <path key={z.id} d={z.d} fill={`url(#${PATTERNS}-hatch)`} />)}</g>
+      <g className="storm-map__rain-edge">{rain.map((z) => <path key={z.id} d={z.d} />)}</g>
+      {['focus-halo', 'focus'].map((layer) => (
+        <g key={layer} className={`storm-map__${layer}`}>
+          {focus.map((z) => (
+            <path key={z.id} d={z.d} />
+          ))}
+        </g>
+      ))}
     </>
   )
 }
@@ -92,29 +95,33 @@ function Paths({ data }: { data: StormMapData }) {
 function Labels({ data }: { data: StormMapData }) {
   return (
     <>
-      {data.labels.map((l) =>
-        l.status === 'slow_day' ? (
-          <div key={l.id} className="storm-label storm-label--slow" style={at(offset(l), data)}>
-            <strong>{l.text}</strong>
-            <span>Slow day, no alert: no payout</span>
-          </div>
-        ) : (
-          <div key={l.id} className="storm-label" style={at(offset(l), data)}>
-            {l.text}
-          </div>
-        ),
-      )}
+      {data.labels.map((l) => (
+        <div key={l.id} className="zone-anchor storm-anchor" data-label={l.id} data-moved="true" style={deckOffset(l, data)}>
+          <span className="zone-anchor__line" />
+          <span className="zone-anchor__dot" />
+          {l.status === 'slow_day' ? (
+            <div className="storm-label storm-label--slow" data-box>
+              <strong>{l.text}</strong>
+              <span>Slow day, no alert: no payout</span>
+            </div>
+          ) : (
+            <div className={`storm-label storm-label--${l.status}`} data-box>
+              {l.text}
+            </div>
+          )}
+        </div>
+      ))}
       {data.pin ? (
         <div className="storm-pin" style={at(data.pin.at, data)}>
-          <span className="storm-pin__dot" />
-          <div className="storm-pin__card">
+          <span className="storm-pin__dot" data-obstacle />
+          <div className="storm-pin__card" data-obstacle>
             <strong>{data.pin.name}</strong>
             <span>{data.pin.caption}</span>
           </div>
         </div>
       ) : null}
       {data.rainTop ? (
-        <span className="rain-pill storm-map__rain-pill" style={at(data.rainTop, data)}>
+        <span className="rain-pill storm-map__rain-pill" style={at(data.rainTop, data)} data-obstacle>
           <Icon name="drop" size={12} />
           {RAIN_CAPTION}
         </span>
@@ -129,29 +136,26 @@ function Labels({ data }: { data: StormMapData }) {
 }
 
 export function StormMap({ data = STORM_MAP, when }: { data?: StormMapData; when: string }) {
+  const ref = useRef<HTMLElement>(null)
+  useStormLabels(ref, LABEL_PREFER)
   return (
-    <figure className="storm-map" aria-label={`Storm replay map at ${when}`}>
-      <svg className="storm-map__svg" viewBox={`0 0 ${data.w} ${data.h}`} aria-hidden="true" focusable="false">
-        <defs>
-          <pattern id="storm-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(32)">
-            <rect width="8" height="8" fill="rgb(56 163 232 / 16%)" />
-            <line x1="4" y1="0" x2="4" y2="8" stroke="rgb(11 99 201 / 55%)" strokeWidth="1.3" />
-          </pattern>
-          <filter id="storm-soft" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="5" />
-          </filter>
-        </defs>
-        <Paths data={data} />
-      </svg>
-      <div className="storm-map__overlay">
-        <Labels data={data} />
+    <figure ref={ref} className="storm-map" aria-label={`Storm replay map at ${when}`}>
+      <MapPatternDefs prefix={PATTERNS} />
+      <div className="storm-map__frame">
+        <svg className="storm-map__svg" viewBox={`0 0 ${data.w} ${data.h}`} aria-hidden="true" focusable="false">
+          <Paths data={data} />
+        </svg>
+        <div className="storm-map__overlay">
+          <Labels data={data} />
+        </div>
+        <span className="storm-map__chip" data-obstacle>
+          <span className="storm-map__chip-dot" />
+          {when}
+        </span>
+        <NorthArrow />
       </div>
-      <span className="storm-map__chip">
-        <span className="storm-map__chip-dot" />
-        {when}
-      </span>
-      <NorthArrow />
-      <Legend />
+      {/* Over the map's corner on wide frames, a strip under the map on narrow ones (storm.css). */}
+      <Legend patterns={PATTERNS} />
     </figure>
   )
 }

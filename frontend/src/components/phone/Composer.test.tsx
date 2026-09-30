@@ -57,6 +57,15 @@ describe('Composer', () => {
     expect(a.sendText).toHaveBeenCalledWith('Red alert tomorrow. Cover me today.')
   })
 
+  it('highlights the hinted chip until any chip is used', () => {
+    render(<Composer scenario="illness" busy={false} actions={actions()} hint="ill" />)
+    const ill = screen.getByTitle("I'm in hospital with a fever.")
+    expect(ill.className).toContain('chip--hint')
+    expect(screen.getByTitle('My loss was bigger.').className).not.toContain('chip--hint')
+    fireEvent.click(screen.getByTitle('My loss was bigger.'))
+    expect(ill.className).not.toContain('chip--hint')
+  })
+
   it('ignores blank text, uploads photos and sends sample slips', () => {
     const a = actions()
     render(<Composer scenario="illness" busy={false} actions={a} />)

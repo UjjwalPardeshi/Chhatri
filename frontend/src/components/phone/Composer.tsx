@@ -36,9 +36,11 @@ export type ComposerActions = {
   sendSample: (file: string) => Promise<boolean>
 }
 
-type Props = { scenario: ScenarioName | null; busy: boolean; actions: ComposerActions }
+/** `hint`: the chip a launcher asked the presenter to tap next (highlighted until used). */
+type Props = { scenario: ScenarioName | null; busy: boolean; actions: ComposerActions; hint?: string | null }
 
-export function Composer({ scenario, busy, actions }: Props) {
+export function Composer({ scenario, busy, actions, hint = null }: Props) {
+  const [used, setUsed] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [slipsOpen, setSlipsOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -50,14 +52,17 @@ export function Composer({ scenario, busy, actions }: Props) {
     if (text.trim() === '') return
     if (await actions.sendText(text)) setText('')
   }
-  const chip = (c: QuickChip) => void (c.voice ? actions.sendVoiceDemo(c.voice) : actions.sendText(c.hi ?? c.en))
+  const chip = (c: QuickChip) => {
+    setUsed(c.id)
+    void (c.voice ? actions.sendVoiceDemo(c.voice) : actions.sendText(c.hi ?? c.en))
+  }
   const recording = recorder.state.status === 'recording'
 
   return (
     <div className="composer">
       <fieldset className="chips" aria-label="Demo replies">
         {orderedChips(scenario).map((c) => (
-          <button key={c.id} type="button" className={`chip ${relevant.has(c.id) ? 'chip--hot' : ''}`} disabled={busy} title={c.en} onClick={() => chip(c)}>
+          <button key={c.id} type="button" className={`chip ${relevant.has(c.id) ? 'chip--hot' : ''} ${hint === c.id && used === null ? 'chip--hint' : ''}`} disabled={busy} title={c.en} onClick={() => chip(c)}>
             {c.voice ? <Icon name="mic" size={14} title="Sent as a voice note" /> : null}
             <span className={c.hi ? 'hi' : undefined} lang={c.hi ? 'hi' : undefined}>
               {c.hi ?? c.en}

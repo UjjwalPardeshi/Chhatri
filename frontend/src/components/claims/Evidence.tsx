@@ -1,42 +1,21 @@
 /**
- * Case evidence (SPEC §12): expected vs actual by hour, slip image + extraction + KYC name +
- * match score, silent days, the merchant's words, precedents ("No similar past cases yet").
+ * Case evidence (SPEC §12): expected vs actual by hour, slip image (opens large) + extraction +
+ * KYC name + match score, silent days, the merchant's words, precedents ("No similar past cases
+ * yet").
  */
+import { useState } from 'react'
+
 import type { CaseEvidence } from '../../api/types'
-import { formatInr } from '../../lib/money'
-import { dayLabel, hhmm } from '../../lib/time'
+import { dayLabel } from '../../lib/time'
+import { Icon } from '../common/Icon'
+import { HourlyChart } from './HourlyChart'
 import { NAME_SCORE_MIN } from './labels'
+import { SlipLightbox } from './SlipLightbox'
 
-const CHART_HEIGHT = 110
-
-export function HourlyChart({ rows }: { rows: NonNullable<CaseEvidence['expected_vs_actual']> }) {
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.expected_paise, r.actual_paise)))
-  const expected = rows.reduce((sum, r) => sum + r.expected_paise, 0)
-  const actual = rows.reduce((sum, r) => sum + r.actual_paise, 0)
-  return (
-    <figure className="ev-chart">
-      <figcaption>
-        <span>Expected vs actual sales by hour · {dayLabel(rows[0]?.hour)}</span>
-        <span className="num">
-          <span className="swatch swatch--expected" /> expected {formatInr(expected)} <span className="swatch swatch--actual" /> actual {formatInr(actual)}
-        </span>
-      </figcaption>
-      <div className="ev-chart__bars" style={{ height: CHART_HEIGHT }}>
-        {rows.map((r) => (
-          <div key={r.hour} className="ev-chart__hour" title={`${hhmm(r.hour)} · expected ${formatInr(r.expected_paise)} · actual ${formatInr(r.actual_paise)}`}>
-            <span className="ev-chart__plot">
-              <span className="ev-chart__expected" style={{ height: `${(r.expected_paise / max) * 100}%` }} />
-              <span className="ev-chart__actual" style={{ height: `${(r.actual_paise / max) * 100}%` }} />
-            </span>
-            <span className="ev-chart__label num">{hhmm(r.hour).slice(0, 2)}</span>
-          </div>
-        ))}
-      </div>
-    </figure>
-  )
-}
+export { HourlyChart } from './HourlyChart'
 
 function SlipBlock({ evidence }: { evidence: CaseEvidence }) {
+  const [open, setOpen] = useState(false)
   const slip = evidence.slip
   if (!slip) return null
   const score = evidence.name_score
@@ -50,9 +29,13 @@ function SlipBlock({ evidence }: { evidence: CaseEvidence }) {
   ]
   return (
     <div className="slip-evidence">
-      <a className="slip-evidence__img" href={slip.media_url} target="_blank" rel="noreferrer">
+      <button type="button" className="slip-evidence__img" aria-label="Open the slip large" onClick={() => setOpen(true)}>
         <img src={slip.media_url} alt="Hospital slip sent by the merchant" />
-      </a>
+        <span className="slip-evidence__zoom" aria-hidden="true">
+          <Icon name="zoom" size={14} /> Compare names
+        </span>
+      </button>
+      {open ? <SlipLightbox evidence={evidence} onClose={() => setOpen(false)} /> : null}
       <div>
         <table className="table table--compact">
           <tbody>
@@ -115,7 +98,7 @@ export function Evidence({ evidence }: { evidence: CaseEvidence }) {
           <ul>
             {precedents.map((p) => (
               <li key={`${p.subject_id}-${p.at}`}>
-                <strong>{p.subject_id}</strong> · {p.kind} · {dayLabel(p.at)} — {p.text}
+                <strong>{p.subject_id}</strong> · {p.kind} · {dayLabel(p.at)}: {p.text}
               </li>
             ))}
           </ul>

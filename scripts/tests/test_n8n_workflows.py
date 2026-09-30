@@ -59,7 +59,8 @@ def test_true_branch_calls_back_every_step_in_order(name: str, workflows: dict[s
     doc = gen.build_workflow(name, workflows[name])
     assert _steps(doc) == list(workflows[name])
     path = _true_path(doc)
-    assert path[:3] == [gen.WEBHOOK_NODE, gen.VERIFY_NODE, gen.ACCEPT_NODE]
+    step_names = [n for n in path if CALLBACK.search(_index(doc)[n]["parameters"].get("url", ""))]
+    assert path == [gen.WEBHOOK_NODE, gen.VERIFY_NODE, *step_names, gen.DONE_NODE]
 
 
 @pytest.mark.parametrize("name", ["payout", "human-review", "follow-up"])
@@ -88,7 +89,11 @@ def test_webhook_and_no_real_time_waits(name: str, workflows: dict[str, tuple[st
     }
     assert doc["id"] == doc["name"] == f"chhatri-{name}"
     assert doc["active"] is True
-    assert _index(doc)[gen.ACCEPT_NODE]["parameters"]["options"]["responseCode"] == 202
+    done = _index(doc)[gen.DONE_NODE]["parameters"]
+    assert done["options"]["responseCode"] == 200
+    assert done["responseBody"] == gen.done_body(workflows[name])
+    assert "status: 'completed'" in done["responseBody"]
+    assert str(list(workflows[name])).replace(" ", "") in done["responseBody"].replace(" ", "")
 
 
 @pytest.mark.parametrize("name", ["payout", "human-review", "follow-up"])

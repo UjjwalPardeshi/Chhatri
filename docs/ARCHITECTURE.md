@@ -31,7 +31,7 @@ loan instalments                                                  |             
 | Package | Role |
 |---|---|
 | `config`, `clock`, `money`, `ids`, `events`, `domain/` | scaffold: settings, IST clock, paise + `format_inr`, deterministic ids, event bus, frozen pydantic models |
-| `sim/` | 24 real BMC wards as zones (§5), 1,820 simulated pilot shops at seed 20251019 (`backend/data/zones.json`), hourly sales with rain/slow-day/bandh/closure shocks, scripted scenarios (§6, §17.2), sample slips |
+| `sim/` | 24 real BMC wards as zones (§5), 1,820 simulated pilot shops at seed 20251019 (`backend/data/zones.json`) plus the uncovered demo merchant S-0907 (1,821 merchants), hourly sales with rain/slow-day/bandh/closure shocks, scripted scenarios (§6, §17.2), sample slips |
 | `forecast/` | LightGBM quantile models (P10/P50/P90) over shop-hours with `zone_id` and `shop_type` features ("LightGBM per area and shop type", §7.1); per-zone conformal lower bound (§7.4) |
 | `detect/` | trailing 3-hour zone index, trigger rule, silent-shop finder (§8) |
 | `policy/` | `rules.yaml` (`pilot-0.1`), checks, amounts, explanation strings, cover purchase (§9) |
@@ -114,15 +114,26 @@ decision time:
 - **n8n** (`N8nWorkflowEngine`, used when `N8N_BASE_URL` is set):
   ```
   backend --POST /webhook/chhatri-{workflow} {run_id, workflow, payload} + X-Chhatri-Secret--> n8n
-  n8n: verify secret (403 otherwise) -> respond 202 -> for each step in WORKFLOWS order:
+  n8n: verify secret (403 otherwise) -> for each step in WORKFLOWS order:
        POST {CHHATRI_PUBLIC_URL}/internal/workflows/{step} {run_id, workflow, step, payload} + secret
-  backend: Orchestrator.handle_callback re-validates and schedules the step effect at
-           decision time + offset on the SimScheduler (idempotent per (run_id, step)) -> 200
+         backend: Orchestrator.handle_callback re-validates and schedules the step effect at
+                  decision time + offset on the SimScheduler (idempotent per (run_id, step)) -> 200
+     -> answer the webhook 200 {"ok": true, "data": {"run_id", "status": "completed", "steps"}}
   ```
-  The n8n workflows contain no Wait nodes. n8n only orders the steps; it never decides and never sets
-  the timing. So the replay timeline is identical in both modes. A non-2xx callback stops the n8n run,
-  after 3 tries. If n8n cannot be reached when a workflow starts, the backend runs that workflow
-  in-process and logs the fallback.
+  The backend's start call waits for that final answer, so by the time it returns every step of the
+  run is on the simulated scheduler, and the simulated clock cannot pass a step's due minute before n8n
+  reported it. The n8n workflows contain no Wait nodes. n8n only orders the steps; it never decides and
+  never sets the timing. So the replay timeline is identical in both modes (verified: `demo_check.py
+  --url` against the compose stack gives credits at 17:04 and pauses at 17:05 in n8n mode).
+- **Cost of n8n mode**: each run costs n8n about 0.1–0.2 s of real time, and the monsoon burst starts
+  312 payout runs one after another at 17:00. With n8n on, the simulated clock therefore holds at
+  17:00 for roughly 30–60 s of real time while the runs complete (measured on the 8-CPU dev machine),
+  then continues exactly on schedule. The in-process runner does the same minute in about a second.
+- **Failures**: a callback answered non-2xx stops the n8n run after 3 tries and n8n answers the webhook
+  500; if n8n cannot be reached, answers non-2xx, or answers without the completion body, the backend
+  hands the run to the in-process runner, which schedules only the steps n8n had not already reported
+  (so nothing runs twice), and logs it at ERROR. A start that times out (30 s) is not handed over, since
+  n8n may still be running it; it is audited as `workflow.start_failed`.
 - The JSON files in `n8n/workflows/` are **generated** from `WORKFLOWS` by `scripts/n8n_workflows.py`.
   `make test-infra` and CI fail if they drift. `make n8n-selftest` proves the behaviour against a real
   n8n container.

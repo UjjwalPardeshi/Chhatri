@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ageLabel, clipDuration, dayLabel, durationLabel, hhmm, minutesBetween, slaState, weekdayDayLabel } from './time'
+import { ageLabel, clipDuration, dayLabel, durationLabel, hhmm, hhmmAfter, minutesBetween, slaState, weekdayDayLabel } from './time'
 
 const AT = '2025-08-19T17:04:00+05:30'
 
@@ -9,6 +9,10 @@ describe('time helpers (IST wall clock, simulated spans)', () => {
     expect(hhmm(AT)).toBe('17:04')
     expect(hhmm(null)).toBe('—')
     expect(hhmm('nonsense')).toBe('—')
+    expect(hhmmAfter('2025-08-21T11:25:00+05:30', 4)).toBe('11:29')
+    expect(hhmmAfter('2025-08-19T23:58:00+05:30', 5)).toBe('00:03')
+    expect(hhmmAfter(null, 4)).toBe('—')
+    expect(hhmmAfter('nonsense', 4)).toBe('—')
   })
 
   it('labels days', () => {

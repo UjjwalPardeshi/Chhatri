@@ -58,13 +58,18 @@ describe('clock controls', () => {
     expect(b.play(6).running).toBe(false)
   })
 
-  it('pauses, keeps speed across loads and keeps playing through a backward seek', () => {
+  it('pauses on a seek or step like the backend engine, and keeps speed across loads', () => {
     vi.useFakeTimers()
     const b = fresh()
     b.play(30)
     b.seek('12:00')
+    expect(b.clock).toMatchObject({ running: false, speed: 30, now: '2025-08-19T12:00:00+05:30' })
+    b.play(30)
     b.seek('09:00')
-    expect(b.clock).toMatchObject({ running: true, speed: 30, now: '2025-08-19T09:00:00+05:30' })
+    expect(b.clock).toMatchObject({ running: false, speed: 30, now: '2025-08-19T09:00:00+05:30' })
+    b.play(30)
+    expect(b.step(1).running).toBe(false)
+    expect(b.play(30).running).toBe(true)
     expect(b.pause().running).toBe(false)
     expect(b.load('illness').speed).toBe(30)
     expect(b.step(500).now).toBe('2025-08-21T13:00:00+05:30')

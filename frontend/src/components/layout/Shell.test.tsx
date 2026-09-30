@@ -56,6 +56,24 @@ describe('control bar', () => {
   })
 })
 
+describe('control bar on a phone', () => {
+  it('closes the "More" popover after a seek, so the page is visible again', async () => {
+    renderApp('/live', backend)
+    await waitFor(() => expect(clockText()).toContain('08:00'))
+    const more = screen.getByRole('button', { name: 'More replay controls' })
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Seek to time (HH:MM)' }), { target: { value: '17:05' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Seek' }))
+    await waitFor(() => expect(clockText()).toContain('17:05'))
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(more)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    await waitFor(() => expect(clockText()).toContain('08:00'))
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+  })
+})
+
 describe('header', () => {
   it('shows integration badges, the sound toggle and the open case count', async () => {
     backend.seek('17:05')

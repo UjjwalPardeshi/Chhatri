@@ -1,0 +1,453 @@
+/*
+ * Merchant context beside the phone (SPEC §20 "Merchant phone", deck slides 1, 7 and 8): the
+ * two-column panel, merchant file, money with the decision formula, the BLOCKED cover result, the
+ * simulated Soundbox device, the Paytm premium link card and the folded presenter notes.
+ */
+/*
+ * Beside the phone: Soundbox and money side by side, then "What happened" and the merchant's
+ * file across the full width, the presenter notes at the bottom.
+ */
+.merchant-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--sp-3);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.merchant-panel__soundbox {
+  display: grid;
+  min-width: 0;
+}
+
+.merchant-panel > .happened,
+.merchant-panel > .merchant-file,
+.merchant-panel > .presenter {
+  grid-column: 1 / -1;
+}
+
+/* The shop's file: short key-value rows in two columns on wide screens, long ones across. */
+.merchant-file .kv-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--sp-6);
+}
+
+.merchant-file .kv--wide {
+  grid-column: 1 / -1;
+}
+
+.merchant-file .kv dt {
+  white-space: nowrap;
+}
+
+/* "What happened": decision, credit, pause as a left-to-right timeline. */
+.happened__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin: 10px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+
+.happened__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 20px;
+}
+
+/* The line joining one step's dot to the next, at the dots' height. */
+.happened__step:not(:last-child)::after {
+  position: absolute;
+  top: 5px;
+  left: 18px;
+  right: calc(-1 * var(--sp-3) + 6px);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line);
+  content: '';
+}
+
+.happened__at {
+  color: var(--navy);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.happened__dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 1.5px var(--blue);
+}
+
+.happened__step[data-tone='green'] .happened__dot {
+  background: var(--green);
+  box-shadow: 0 0 0 1.5px var(--green);
+}
+
+.happened__step[data-tone='amber'] .happened__dot {
+  background: var(--amber);
+  box-shadow: 0 0 0 1.5px var(--amber);
+}
+
+.happened__step[data-tone='red'] .happened__dot {
+  background: var(--red);
+  box-shadow: 0 0 0 1.5px var(--red);
+}
+
+.happened__title {
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.happened__detail {
+  font-size: var(--fs-xs);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .happened__step {
+    animation: fade-in var(--dur-ui) var(--ease-out) both;
+  }
+}
+
+.merchant-card {
+  padding: 14px 16px;
+}
+
+.merchant-card h2 {
+  margin: 2px 0;
+  font-size: var(--fs-xl);
+}
+
+.kv-list {
+  margin: 10px 0 0;
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  margin: 0;
+  text-align: right;
+}
+
+.money-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.money-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.money-list strong {
+  min-width: 70px;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+
+.formula {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.formula__en {
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+.formula__hi {
+  margin: 2px 0 4px;
+  font-size: var(--fs-base);
+}
+
+/* Presenter notes: folded away behind a quiet button (?presenter=1 opens them). */
+.presenter {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.presenter__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+
+.presenter__toggle:hover {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.presenter__list {
+  margin: 0;
+  padding: 12px 16px 12px 32px;
+}
+
+.presenter__list li {
+  margin: 4px 0;
+  font-size: var(--fs-sm);
+}
+
+/* The BLOCKED live test (deck slide 8) inside the Money card. */
+.blocked {
+  margin-top: var(--sp-2);
+  padding: 10px 12px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  animation: fade-in var(--dur-ui) var(--ease-out);
+}
+
+.blocked__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.blocked__text {
+  margin: 6px 0 2px;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+/* The Soundbox: a dark speaker whose LED ring lights up while it announces. */
+.soundbox-device {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 14px 16px;
+}
+
+.soundbox-device__speaker {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 22px;
+  background: linear-gradient(160deg, #26324f, #0f1a33);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    0 6px 16px rgb(15 26 51 / 28%);
+}
+
+.soundbox-device__grille {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 255 255 / 22%) 1.2px, transparent 1.6px) 0 0 / 6px 6px;
+}
+
+.soundbox-device__ring {
+  position: absolute;
+  inset: 12px;
+  border: 2px solid rgb(56 163 232 / 25%);
+  border-radius: 50%;
+  transition:
+    border-color 300ms ease,
+    box-shadow 300ms ease;
+}
+
+.soundbox-device__brand {
+  position: absolute;
+  bottom: 5px;
+  color: rgb(255 255 255 / 55%);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.soundbox-device.is-announcing .soundbox-device__ring {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgb(56 163 232 / 65%);
+  animation: led 0.8s ease-in-out 3;
+}
+
+@keyframes led {
+  50% {
+    box-shadow: 0 0 4px rgb(56 163 232 / 30%);
+  }
+}
+
+.soundbox-device__text {
+  min-width: 0;
+}
+
+.soundbox-device__sim {
+  color: var(--faint);
+  letter-spacing: 0.06em;
+}
+
+.soundbox-device__hi {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+.soundbox-device__en {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+.soundbox-device__at {
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+}
+
+.soundbox-device[data-idle='true'] .soundbox-device__ring {
+  border-color: rgb(255 255 255 / 10%);
+}
+
+/* The Paytm premium link as a payment card (COVER_LINK). */
+.pay-card {
+  width: 86%;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 1px 0.5px rgb(0 0 0 / 13%);
+}
+
+.pay-card__head {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 11px;
+  background: var(--navy);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.pay-card__brand {
+  color: var(--accent);
+}
+
+.pay-card__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 9px 11px 6px;
+}
+
+.pay-card__label {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+
+.pay-card__amount {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.pay-card__rate {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.pay-card__hi {
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.pay-card__pay {
+  display: inline-flex;
+  align-self: stretch;
+  justify-content: center;
+  margin-top: 8px;
+  padding: 7px 0;
+  border-radius: var(--radius-pill);
+  background: var(--blue);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.pay-card__pay:hover {
+  background: var(--blue-hover);
+  text-decoration: none;
+}
+
+.pay-card__url {
+  margin-top: 6px;
+  font-size: var(--fs-2xs);
+  overflow-wrap: anywhere;
+}
+
+.pay-card .bubble__stamp {
+  align-self: flex-end;
+}
+
+@media (max-width: 1100px) {
+  .merchant-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .merchant-file .kv-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .happened__steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .happened__step {
+    padding-top: 0;
+    padding-left: 22px;
+  }
+
+  .happened__dot {
+    top: 3px;
+  }
+
+  .happened__step:not(:last-child)::after {
+    top: 18px;
+    bottom: -8px;
+    left: 5px;
+    right: auto;
+    width: 2px;
+    height: auto;
+  }
+}

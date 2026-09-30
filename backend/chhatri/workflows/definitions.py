@@ -64,11 +64,17 @@ class StepSpec:
 
 
 class Scheduler(Protocol):
-    """Simulated-time scheduler (implemented by `replay.scheduler.SimScheduler`)."""
+    """Simulated-time scheduler (implemented by `replay.scheduler.SimScheduler`).
+
+    `was_scheduled(name)` extends SPEC §24.5: job names are ``{run_id}:{step}``, so an engine that
+    takes over a run n8n could not finish schedules only the steps n8n did not already report (B1).
+    """
 
     def schedule(self, at: datetime, name: str, fn: Callable[[], Awaitable[None]]) -> None: ...
 
     def now(self) -> datetime: ...
+
+    def was_scheduled(self, name: str) -> bool: ...
 
 
 class StepHandlers(Protocol):
@@ -119,6 +125,11 @@ def validate_payload(workflow: str, payload: Mapping[str, Any]) -> Mapping[str, 
     if missing:
         raise ValueError(f"workflow {workflow!r} payload needs non-empty {', '.join(missing)}")
     return MappingProxyType(dict(payload))
+
+
+def job_name(run_id: str, step: str) -> str:
+    """Scheduler job name of one step of one run, ``{run_id}:{step}`` (idempotency key, B1)."""
+    return f"{run_id}:{step}"
 
 
 def run_id_for(workflow: str, payload: Mapping[str, Any]) -> str:

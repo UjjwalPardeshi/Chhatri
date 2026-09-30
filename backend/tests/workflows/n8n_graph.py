@@ -10,6 +10,7 @@ CALLBACK_URL = re.compile(r"/internal/workflows/([a-z_]+)")
 WEBHOOK_TYPE = "n8n-nodes-base.webhook"
 HTTP_TYPE = "n8n-nodes-base.httpRequest"
 WAIT_TYPE = "n8n-nodes-base.wait"
+RESPOND_TYPE = "n8n-nodes-base.respondToWebhook"
 
 
 def _node_index(doc: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
@@ -58,3 +59,14 @@ def callback_nodes(doc: Mapping[str, Any]) -> list[Mapping[str, Any]]:
         for n in doc["nodes"]
         if n["type"] == HTTP_TYPE and CALLBACK_URL.search(str(n.get("parameters", {}).get("url", "")))
     ]
+
+
+def true_path(doc: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Nodes from the webhook along each node's first output link (the happy path), in order."""
+    index = _node_index(doc)
+    path = [webhook_node(doc)]
+    while True:
+        successors = _successors(doc, path[-1])
+        if not successors or index[successors[0]] in path:
+            return path
+        path.append(index[successors[0]])

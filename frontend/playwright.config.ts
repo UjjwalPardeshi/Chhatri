@@ -1,7 +1,10 @@
 /**
  * Playwright E2E (SPEC §22, binding decision B7): chromium only.
- * - project "mock": starts the console in mock mode on E2E_PORT (default 4273) and runs the smoke suite.
- * - project "live": runs the same suite against a running backend + console at CONSOLE_URL.
+ * - project "mock": starts the console in mock mode on E2E_PORT (default 4273) and runs the suites.
+ * - project "live": runs the same suites against a running backend + console at CONSOLE_URL
+ *   (`npm run test:e2e`); screens.spec.ts also saves the key-moment screenshots there.
+ * Playwright's own artefacts go to test-results/playwright (it empties that folder on every run), so
+ * the screenshots in test-results/screens survive a later run of the other project.
  */
 import { defineConfig, devices } from '@playwright/test'
 
@@ -11,6 +14,7 @@ const MOCK_URL = `http://127.0.0.1:${E2E_PORT}`
 
 export default defineConfig({
   testDir: './tests/e2e',
+  outputDir: './test-results/playwright',
   fullyParallel: false,
   workers: 1,
   retries: 0,

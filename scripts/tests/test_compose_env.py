@@ -92,6 +92,13 @@ def test_compose_services_ports_and_n8n(repo_root: Path) -> None:
     assert services["frontend"]["depends_on"]["backend"]["condition"] == "service_healthy"
 
 
+def test_console_basemap_is_a_documented_build_argument(repo_root: Path) -> None:
+    """VITE_TILE_URL (a keyed tile URL, SPEC §20) reaches the frontend build; empty = no-tile map."""
+    build = _compose(repo_root)["services"]["frontend"]["build"]
+    assert build["args"] == {"VITE_TILE_URL": "${VITE_TILE_URL:-}"}
+    assert re.search(r"^# VITE_TILE_URL=$", (repo_root / ".env.example").read_text(encoding="utf-8"), re.M)
+
+
 def test_compose_config_validates_and_resolves(repo_root: Path, tmp_path: Path) -> None:
     env_file = tmp_path / "stack.env"
     env_file.write_text(

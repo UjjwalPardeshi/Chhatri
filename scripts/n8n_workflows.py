@@ -6,14 +6,19 @@ the n8n step order can never drift from the in-process runner. Each workflow is:
 
     Chhatri webhook (POST /webhook/chhatri-{workflow}, body {run_id, workflow, payload})
       -> Verify X-Chhatri-Secret (header == $env.CHHATRI_INTERNAL_SECRET, secret non-empty)
-           true  -> Accept (202) -> Step 1 -> Step 2 -> ...   (one HTTP callback per WORKFLOWS step)
+           true  -> Step 1 -> Step 2 -> ... -> Completed (200)   (one HTTP callback per WORKFLOWS step)
            false -> Reject (403)
 
 Every step node POSTs `{run_id, workflow, step, payload}` (payload passed through unchanged) to
 `$env.CHHATRI_PUBLIC_URL/internal/workflows/{step}` with header `X-Chhatri-Secret`. There are no Wait
 nodes: step offsets are *simulated* minutes, and the backend schedules each effect at decision time +
 offset on the simulated scheduler (B1). An HTTP node fails on any non-2xx answer (after 3 tries), which
-stops the run (SPEC §14.5).
+stops the run (SPEC §14.5); the webhook then answers 500.
+
+The webhook answers only from the last node, `Completed (200)`, with
+`{"ok": true, "data": {"run_id", "status": "completed", "steps": [...]}}`: the backend's start call
+(`chhatri.integrations.n8n`) returns once every step was reported, so the simulated clock can never pass
+a step's due minute before n8n reported it and the n8n timeline equals the in-process one.
 
 Usage (backend venv):
     python scripts/n8n_workflows.py          # write the files
@@ -41,9 +46,9 @@ PUBLIC_URL_ENV: Final = "CHHATRI_PUBLIC_URL"
 CALLBACK_PATH: Final = "/internal/workflows"
 WEBHOOK_NODE: Final = "Chhatri webhook"
 VERIFY_NODE: Final = "Verify X-Chhatri-Secret"
-ACCEPT_NODE: Final = "Accept (202)"
+DONE_NODE: Final = "Completed (200)"
 REJECT_NODE: Final = "Reject (403)"
-HTTP_ACCEPTED: Final = 202
+HTTP_OK: Final = 200
 HTTP_FORBIDDEN: Final = 403
 CALLBACK_TIMEOUT_MS: Final = 10_000  # SPEC §14: 10 s default timeout for live calls
 CALLBACK_MAX_TRIES: Final = 3  # SPEC §14: at most 3 attempts
@@ -163,8 +168,13 @@ def respond_node(workflow: str, name: str, code: int, body: str, x: int, y: int)
     )
 
 
-def accept_body() -> str:
-    return f"={{{{ JSON.stringify({{ ok: true, data: {{ run_id: {_body_ref('run_id')}, status: 'accepted' }} }}) }}}}"
+def done_body(steps: Sequence[str]) -> str:
+    """The completion answer the backend requires (`chhatri.integrations.n8n.check_completion`)."""
+    names = json.dumps(list(steps)).replace('"', "'")
+    return (
+        f"={{{{ JSON.stringify({{ ok: true, data: {{ run_id: {_body_ref('run_id')}, "
+        f"status: 'completed', steps: {names} }} }}) }}}}"
+    )
 
 
 REJECT_BODY: Final = json.dumps(
@@ -217,28 +227,29 @@ def build_workflow(workflow: str, steps: Sequence[str]) -> dict[str, Any]:
     """The importable n8n workflow document for one Chhatri workflow."""
     if not steps:
         raise ValueError(f"workflow {workflow!r} has no steps")
-    accept_x = ORIGIN_X + 2 * NODE_SPACING_X
+    first_x = ORIGIN_X + 2 * NODE_SPACING_X
+    step_nodes = [
+        step_node(workflow, i, step, first_x + (i - 1) * NODE_SPACING_X)
+        for i, step in enumerate(steps, start=1)
+    ]
+    done_x = first_x + len(steps) * NODE_SPACING_X
     nodes = [
         webhook_node(workflow),
         verify_node(workflow),
-        respond_node(workflow, ACCEPT_NODE, HTTP_ACCEPTED, accept_body(), accept_x, ROW_Y),
-        respond_node(workflow, REJECT_NODE, HTTP_FORBIDDEN, REJECT_BODY, accept_x, REJECT_Y),
+        *step_nodes,
+        respond_node(workflow, DONE_NODE, HTTP_OK, done_body(steps), done_x, ROW_Y),
+        respond_node(workflow, REJECT_NODE, HTTP_FORBIDDEN, REJECT_BODY, first_x, REJECT_Y),
     ]
-    step_nodes = [
-        step_node(workflow, i, step, accept_x + i * NODE_SPACING_X) for i, step in enumerate(steps, start=1)
-    ]
-    chain = [ACCEPT_NODE, *(n["name"] for n in step_nodes)]
-    connections: dict[str, Any] = {
-        WEBHOOK_NODE: {"main": [[_link(VERIFY_NODE)]]},
-        VERIFY_NODE: {"main": [[_link(ACCEPT_NODE)], [_link(REJECT_NODE)]]},
-    }
+    chain = [VERIFY_NODE, *(n["name"] for n in step_nodes), DONE_NODE]
+    connections: dict[str, Any] = {WEBHOOK_NODE: {"main": [[_link(VERIFY_NODE)]]}}
     for source, target in zip(chain, chain[1:], strict=False):
         connections[source] = {"main": [[_link(target)]]}
+    connections[VERIFY_NODE] = {"main": [[_link(step_nodes[0]["name"])], [_link(REJECT_NODE)]]}
     return {
         "id": f"chhatri-{workflow}",
         "name": f"chhatri-{workflow}",
         "active": True,
-        "nodes": nodes + step_nodes,
+        "nodes": nodes,
         "connections": connections,
         "settings": {"executionOrder": "v1", "timezone": "Asia/Kolkata"},
         "pinData": {},

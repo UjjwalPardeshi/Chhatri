@@ -62,7 +62,12 @@ make down
 Ports bind to `127.0.0.1` by default. Change them with `CHHATRI_BIND_ADDR`, `CHHATRI_BACKEND_PORT`,
 `CHHATRI_CONSOLE_PORT` and `CHHATRI_N8N_PORT` in `.env`. The stack runs workflows on n8n. To use the
 in-process runner instead, set `CHHATRI_STACK_N8N_URL=` (an empty value). If the backend cannot reach
-n8n, it falls back to the in-process runner and logs an error.
+n8n, it falls back to the in-process runner and logs an error. Both modes give the same simulated
+timeline, but with n8n the monsoon replay holds at 17:00 for about 30–60 s of real time while its 312
+payout runs go through n8n (see [docs/DEMO.md](docs/DEMO.md) for the stage set-up).
+
+Check a running stack with `backend/.venv/bin/python backend/scripts/demo_check.py --url
+http://localhost:8000` (it reloads scenarios on that backend).
 
 ## Commands (SPEC §23)
 
@@ -108,6 +113,8 @@ docker-compose.yml  Makefile  .env.example  .github/workflows/ci.yml
 ## Credits and data
 
 Ward boundaries: DataMeet Mumbai BMC wards (CC BY-SA 2.5 India). Weather data by Open-Meteo.com
-(CC BY 4.0). Map tiles: © OpenStreetMap contributors, © CARTO. Sales, alerts, KYC, payouts and the
+(CC BY 4.0). Map tiles, when enabled: © OpenStreetMap contributors, © CARTO. CARTO now needs an API key,
+so by default the console draws its own no-tile map from the ward outlines; set `VITE_TILE_URL` (a keyed
+tile URL) to show tiles. Sales, alerts, KYC, payouts and the
 lender are simulated and labelled as such. Built with Sarvam AI (Saaras, Bulbul, chat, vision),
 Paytm payment MCP server, WhatsApp Cloud API, n8n, LightGBM and Cognee.

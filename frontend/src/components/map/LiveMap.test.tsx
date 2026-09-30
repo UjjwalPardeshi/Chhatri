@@ -11,7 +11,7 @@ import { testBackend } from '../../mock/testkit'
 import { merchantDetailView, snapshotView } from '../../mock/views'
 import { centroidsById } from './geo'
 import { LiveMap, pinCaption, rainCaption, waterSpecs, zoneLabelSpecs } from './LiveMap'
-import { offlineText } from './overlays'
+import { alertStatus, basemapTitle, offlineText } from './overlays'
 
 let backend: MockBackend
 let snapshot: StateSnapshot
@@ -36,6 +36,15 @@ describe('map labels', () => {
     expect(waterSpecs().map((s) => s.movable)).toEqual([false, false])
   })
 
+  it('labels a slow day with the trailing 3-hour index, not the live one (B3: Z9 reads 61% like its explanation)', () => {
+    const z9 = snapshot.zones.find((z) => z.zone_id === 'Z9')
+    if (!z9) throw new Error('Z9 missing from the mock snapshot')
+    const midHour = [{ ...z9, index_pct: 61, live_index_pct: 62 }]
+    const [spec] = zoneLabelSpecs(midHour, centroidsById(backend.geo.zones as FeatureCollection), [])
+    expect(spec.html).toContain('Z9 · 61% of expected')
+    expect(spec.html).not.toContain('62%')
+  })
+
   it('captions the pin by payout state', () => {
     expect(pinCaption(anil, '2025-08-19')).toBe('₹1,380 paid · 17:04')
     expect(pinCaption(anil, '2025-08-20')).toBe('Covered · Z7')
@@ -51,9 +60,24 @@ describe('map labels', () => {
   })
 
   it('explains the tile fallback honestly', () => {
-    expect(offlineText('watermark')).toBe('Ward basemap · no CARTO tile key')
+    expect(offlineText('watermark')).toBeNull()
     expect(offlineText('unreachable')).toBe('Basemap offline · wards shown')
     expect(offlineText('errors')).toBe('Basemap offline · wards shown')
+    expect(basemapTitle(null)).toBe('Basemap: CARTO Positron')
+    expect(basemapTitle('watermark')).toBe('Ward basemap (no CARTO tile key configured)')
+    expect(basemapTitle('unreachable')).toBe('Ward basemap (tiles unavailable)')
+  })
+
+  it('states the alert in one chip: upcoming, active, triggered, then gone', () => {
+    expect(alertStatus(snapshot.zones, snapshot.clock)).toEqual({ tone: 'red', text: 'Red alert · 3 zones triggered', live: true })
+    const calm = snapshot.zones.map((z) => ({ ...z, status: 'watch' as const }))
+    const alert = snapshot.zones.find((z) => z.alert !== null)?.alert
+    expect(alert).toBeTruthy()
+    if (!alert) return
+    expect(alertStatus(calm, { now: alert.valid_from })?.text).toMatch(/^Red alert active · \d+ zones on watch$/)
+    expect(alertStatus(calm, { now: '2025-08-19T00:00:00+05:30' })?.text).toMatch(/^Red alert from 14:00 · \d+ zones$/)
+    expect(alertStatus(calm, { now: alert.valid_to })).toBeNull()
+    expect(alertStatus(snapshot.zones.map((z) => ({ ...z, alert: null })), snapshot.clock)).toBeNull()
   })
 })
 
@@ -84,15 +108,18 @@ describe('LiveMap', () => {
     fireEvent.click(document.querySelector('.water-label-icon') as Element)
     expect(document.querySelector('.rain-label')?.textContent).toBe('Heavy rain band · since 14:00')
     expect(document.querySelector('.map-legend__rule')?.getAttribute('title')).toBe('Pays below 50% for 3 h, with alert')
-    expect(document.querySelector('.map-legend__ticks')?.textContent).toBe('40%70%100%+')
+    expect(document.querySelector('.map-legend__ticks')?.textContent).toBe('40%50%70%100%+')
   })
 
   it('falls back to ward outlines when CARTO returns the keyless watermark', async () => {
     const digest = vi.spyOn(crypto.subtle, 'digest').mockResolvedValue(Uint8Array.from(CARTO_WATERMARK_SHA256.match(/../g) ?? [], (h) => parseInt(h, 16)).buffer)
     vi.stubGlobal('fetch', () => tileResponse(new Uint8Array([9])))
-    const { getByTestId, getByText } = renderMap()
+    const { getByTestId } = renderMap()
     await waitFor(() => expect(getByTestId('live-map').dataset.tiles).toBe('fallback'))
-    expect(getByText('Ward basemap · no CARTO tile key')).toBeTruthy()
+    expect(getByTestId('live-map').dataset.reason).toBe('watermark')
+    expect(getByTestId('live-map').getAttribute('title')).toBe('Ward basemap (no CARTO tile key configured)')
+    expect(document.querySelector('.map-offline')).toBeNull()
+    expect(document.querySelector('.leaflet-control-attribution')).toBeNull()
     expect(digest).toHaveBeenCalled()
   })
 

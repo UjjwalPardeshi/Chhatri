@@ -1,0 +1,564 @@
+/*
+ * Live page frame and right panel (SPEC §20 "Live map", deck slide 6): the zone card with its big
+ * 3-hour number and hourly bars, the KPI tiles, the Z9 note and the grouped event feed. The live
+ * moments (status change, the 17:04 credit) animate once: the badge settles, changed rows and
+ * tiles flash, the toast slides in. Reduced motion keeps only the colour changes.
+ */
+.home {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 392px;
+  gap: var(--gutter);
+  height: 100%;
+  min-height: 0;
+  padding: var(--gutter);
+}
+
+.home__map {
+  position: relative;
+  min-height: 0;
+}
+
+.home__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Zone card */
+.zone-card {
+  padding: 12px 16px 10px;
+}
+
+.zone-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+}
+
+.zone-card__title {
+  font-size: var(--fs-xl);
+}
+
+.zone-card__sub {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.zone-card__badge {
+  animation: badge-in var(--dur-ui) var(--ease-out);
+}
+
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+.zone-card__hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--sp-3);
+  margin: 6px 0 6px;
+}
+
+.zone-card__pct {
+  font-size: var(--fs-4xl);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+.zone-card[data-status='triggered'] .zone-card__pct {
+  color: var(--red);
+}
+
+.zone-card__hero-text {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 1px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+}
+
+.zone-card__window {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.zone-card__live {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+/*
+ * Hourly bars (10 px, 3 px apart, flat baseline, top corners only) against the dashed 50% floor;
+ * the floor's label sits above the line's right end, hour ticks under the bars.
+ */
+/* Three hourly bars against the 50% floor; the floor's label sits at the end of its line. */
+.spark {
+  display: inline-grid;
+  grid-template-rows: 40px auto;
+  row-gap: 3px;
+  padding-right: 36px;
+}
+
+.spark__plot {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 40px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.spark__bar {
+  width: 16px;
+  border-radius: 2px 2px 0 0;
+  background: #9fb8a5;
+}
+
+.spark__bar[data-low='true'] {
+  background: var(--red);
+}
+
+.spark__rule {
+  position: absolute;
+  right: -6px;
+  left: -3px;
+  border-top: 1px dashed var(--ink-3);
+}
+
+.spark__rule-label {
+  position: absolute;
+  top: -6px;
+  left: calc(100% + 4px);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.spark__ticks {
+  display: flex;
+  gap: 5px;
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.spark__ticks span {
+  width: 16px;
+  text-align: center;
+}
+
+.zone-card__rows {
+  margin: 0;
+}
+
+.zone-card__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -8px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--line);
+  border-radius: 4px;
+  line-height: 19px;
+  transition: background-color 900ms ease;
+}
+
+.zone-card__row dt {
+  color: var(--muted);
+}
+
+.zone-card__row dd {
+  margin: 0;
+  text-align: right;
+}
+
+.zone-card__row.is-changed,
+.kpi.is-changed {
+  background: var(--blue-soft);
+  transition-duration: 120ms;
+}
+
+/* KPI strip: one card, three equal cells, the number over its label (labels never wrap word by word). */
+.kpis {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 64px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 14px;
+  transition: background-color 900ms ease;
+}
+
+.kpi + .kpi {
+  border-left: 1px solid var(--line);
+}
+
+.kpi__value {
+  flex: none;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.kpi__caption {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+/* Why Zone 9 got nothing (after 17:00) or a quiet note before. */
+.explanations {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explanation {
+  padding: 9px 13px;
+  border-left: 4px solid var(--blue);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  text-align: left;
+  animation: fade-in var(--dur-ui) var(--ease-out);
+}
+
+.explanation strong {
+  font-weight: 500;
+}
+
+/* In the live panel: tighter, but always the whole sentence (deck slide 6's punchline). */
+.explanation--compact {
+  padding: 7px 12px;
+  font-size: var(--fs-sm);
+  line-height: 1.38;
+}
+
+.explanation--quiet {
+  border-left-color: var(--line-strong);
+  box-shadow: none;
+  color: var(--muted);
+}
+
+/* Event feed */
+/* The feed keeps at least three rows in view; the panel scrolls before the feed shrinks further. */
+.feed {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  min-height: 156px;
+  overflow: hidden;
+}
+
+.feed__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 6px;
+}
+
+.feed__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.feed__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s ease-in-out 3;
+}
+
+.feed__live[data-tone='down'] {
+  color: var(--amber-ink);
+}
+
+.feed__live[data-tone='down'] .feed__live-dot {
+  background: var(--amber);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.feed__empty {
+  padding: 8px 14px 14px;
+}
+
+.feed__body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.feed__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 14px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.feed__body--more .feed__list {
+  padding-bottom: 28px;
+  mask-image: linear-gradient(180deg, #000 calc(100% - 44px), transparent);
+}
+
+.feed__more {
+  position: absolute;
+  right: 14px;
+  bottom: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-2);
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  pointer-events: none;
+}
+
+.feed__item {
+  display: grid;
+  grid-template-columns: 40px 10px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  animation: fade-in 0.35s var(--ease-out);
+}
+
+.feed__item--money {
+  margin-left: -14px;
+  padding-left: 11px;
+  border-left: 3px solid var(--green);
+}
+
+.feed__item--money strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.feed__time {
+  color: var(--muted);
+}
+
+.feed__title {
+  display: block;
+  font-weight: 500;
+}
+
+.feed__parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  color: var(--ink-3);
+}
+
+.feed__part + .feed__part::before {
+  margin-right: 6px;
+  color: var(--faint);
+  content: '·';
+}
+
+.feed__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.feed__item[data-type='trigger'] .feed__dot,
+.feed__item[data-type='alert'] .feed__dot {
+  background: var(--red);
+}
+
+.feed__item[data-type='decision'] .feed__dot {
+  background: var(--blue);
+}
+
+.feed__item[data-type='payout'] .feed__dot,
+.feed__item[data-type='soundbox'] .feed__dot {
+  background: var(--green);
+}
+
+.feed__item[data-type='instalment'] .feed__dot,
+.feed__item[data-type='weather'] .feed__dot {
+  background: var(--accent);
+}
+
+.feed__item[data-type='case'] .feed__dot,
+.feed__item[data-type='watch'] .feed__dot,
+.feed__item[data-type='silence'] .feed__dot,
+.feed__item[data-type='slow_day'] .feed__dot,
+.feed__item[data-type='cover'] .feed__dot {
+  background: var(--amber);
+}
+
+/*
+ * The 17:04 toast drops in at the top centre of the map: the status chip holds the top left, the
+ * north arrow the top right, and the zone labels of the storm cluster sit in the lower half.
+ */
+.toast {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 10px;
+  border-radius: var(--radius);
+  background: var(--navy);
+  box-shadow: var(--shadow-lg);
+  color: var(--on-navy);
+}
+
+.toast__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+}
+
+.toast__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.toast__body strong {
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+
+.toast__body span {
+  color: var(--on-navy-2);
+  font-size: var(--fs-xs);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: toast-in 420ms var(--ease-out);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: fade 200ms ease;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .home {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .home__map {
+    height: 60vh;
+    min-height: 380px;
+  }
+
+  .home__panel {
+    overflow: visible;
+  }
+
+  /* One column: the page scrolls, so the feed shows every row it has. */
+  .feed {
+    max-height: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .home {
+    padding: 10px var(--sp-4) var(--sp-4);
+  }
+
+  .kpi__value {
+    font-size: 32px;
+  }
+
+  /* Phones: the map keeps its height and the payout toast becomes a banner under it. */
+  .home__map {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    height: auto;
+    min-height: 0;
+  }
+
+  .home__map > .map-frame {
+    height: max(380px, 60vh);
+  }
+
+  .toast {
+    position: static;
+    width: 100%;
+    translate: none;
+  }
+}
+
+/* While a load, seek or reset rebuilds the replay: the map dims after a beat, so quick seeks never flicker. */
+.map-veil {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  border-radius: var(--radius-lg);
+  background: rgb(243 245 248 / 62%);
+  color: var(--ink-2);
+  font-weight: 500;
+  animation: veil-in 180ms ease 250ms both;
+}
+
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+}

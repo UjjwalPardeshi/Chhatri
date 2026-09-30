@@ -22,7 +22,7 @@ function Engine() {
             <span className="engine__text">{step.text}</span>
             {i < ENGINE_STEPS.length - 1 ? (
               <span className="engine__arrow" aria-hidden="true">
-                <Icon name="arrow" size={16} />
+                <Icon name="arrow" size={14} />
               </span>
             ) : null}
           </li>
@@ -64,7 +64,7 @@ function TwoWaysCards() {
 
 export function HowItWorks() {
   return (
-    <RevealSection label="How it works" className="ov-how">
+    <RevealSection label="How it works" id="ov-how" className="ov-how">
       <h2 className="ov-h2">One engine, two ways a claim starts itself.</h2>
       <Engine />
       <table className="two-ways">

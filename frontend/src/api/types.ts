@@ -303,6 +303,9 @@ export type Case = {
   resolved_at: string | null
 }
 
+/** POST /api/cases/{id}/approve and /decline (SPEC §19): the officer's decision and the resolved case. */
+export type OfficerResult = { decision: Decision; case: Case }
+
 export type AuditEntry = {
   seq: number
   at: string

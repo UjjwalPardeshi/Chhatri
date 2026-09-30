@@ -71,6 +71,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_TILE_URL: ${VITE_TILE_URL:-}
     image: chhatri-frontend:local
     restart: unless-stopped
     ports:

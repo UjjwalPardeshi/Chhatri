@@ -34,3 +34,20 @@ export function spokenText(message: Message): { text: string; lang: 'hi-IN' | 'e
   if (hindi) return { text: hindi, lang: 'hi-IN' }
   return { text: message.text_en ?? '', lang: 'en-IN' }
 }
+
+/**
+ * The audio to play for a bubble, or null when the console speaks it itself (SPEC §0.1, §20
+ * "Sound"): `browser-simulated` notes carry only a silent WAV clip (the canned deck voice notes), so
+ * playing that clip would be silent, and calling it Sarvam would present a simulation as live.
+ */
+export function voiceAudioUrl(message: Message): string | null {
+  return message.meta.voice_source === 'browser-simulated' ? null : message.audio_url
+}
+
+export type VoiceSourceLabel = 'Sarvam voice' | 'recording' | 'browser voice'
+
+/** Who speaks a voice bubble: Sarvam Bulbul audio, the merchant's own recording, or the browser (hi-IN). */
+export function voiceSourceLabel(message: Message): VoiceSourceLabel {
+  if (!voiceAudioUrl(message)) return 'browser voice'
+  return message.direction === 'OUTBOUND' && message.meta.voice_source === 'sarvam' ? 'Sarvam voice' : 'recording'
+}

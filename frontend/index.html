@@ -8,9 +8,17 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/fonts/fonts.css" />
     <title>Chhatri · Claims console</title>
+    <!-- First paint before the bundle runs: the Overview ("/") opens on navy, every other page on paper (no white flash on a projector). -->
+    <script>
+      document.documentElement.dataset.route = window.location.pathname === '/' ? 'overview' : 'console'
+    </script>
+    <style>
+      .boot-splash { position: fixed; inset: 0; background: #f3f5f8; }
+      html[data-route='overview'] .boot-splash { background: #0f1a33; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot-splash"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

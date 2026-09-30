@@ -1,17 +1,20 @@
 /**
  * WhatsApp bubbles (SPEC §13.1, §20 "Merchant phone", deck slides 1 and 7): Hindi line + English
- * line, payout card with badge, case chip, voice note with play button and duration, slip photo.
+ * line, payout card with badge, case chip, voice note (waveform that fills while it plays, with
+ * its duration; a compact grey one beside Chhatri's spoken lines), slip photo, and the Paytm premium link drawn as a payment card (§13.4 COVER_LINK).
  */
+import { useState } from 'react'
 import { Link } from 'react-router'
 
 import type { Message } from '../../api/types'
 import { clipDuration, hhmm } from '../../lib/time'
 import { useLive } from '../../state/live'
 import { Icon } from '../common/Icon'
+import { coverLink } from './coverOffer'
 import { linkify } from './linkify'
-import { spokenText, voiceSeconds } from './messages'
-
-const WAVE = [4, 9, 6, 12, 8, 14, 7, 11, 5, 10, 13, 6, 9, 4]
+import { spokenText, voiceAudioUrl, voiceSeconds, voiceSourceLabel, type VoiceSourceLabel } from './messages'
+import { PaytmLinkCard } from './PaytmLinkCard'
+import { Waveform } from './Waveform'
 
 function Stamp({ message }: { message: Message }) {
   const mine = message.direction === 'INBOUND'
@@ -25,24 +28,50 @@ function Stamp({ message }: { message: Message }) {
 
 /** "0:05 · browser voice" beside an outgoing message's play button (SPEC §20 "Sound": labelled). */
 export function voiceNote(message: Message): string {
-  const source = message.audio_url ? 'Sarvam voice' : 'browser voice'
-  return `${clipDuration(voiceSeconds(message))} · ${source}`
+  return `${clipDuration(voiceSeconds(message))} · ${voiceSourceLabel(message)}`
 }
 
-function PlayButton({ message, small = false }: { message: Message; small?: boolean }) {
+const PLAY_TITLES: Readonly<Record<VoiceSourceLabel, string>> = Object.freeze({
+  'Sarvam voice': 'Play Sarvam Bulbul audio',
+  recording: 'Play the recording',
+  'browser voice': 'Play with the browser voice (hi-IN), simulated',
+})
+
+const VOICE_TAGS: Readonly<Record<VoiceSourceLabel, string>> = Object.freeze({
+  'Sarvam voice': 'Sarvam voice',
+  recording: 'recorded voice note',
+  'browser voice': 'browser voice · simulated',
+})
+
+function PlayButton({ message, small = false, onPlay }: { message: Message; small?: boolean; onPlay?: () => void }) {
   const { sound } = useLive()
   const { text, lang } = spokenText(message)
-  const source = message.audio_url ? 'Sarvam voice' : 'browser voice'
+  const source = voiceSourceLabel(message)
   return (
     <button
       type="button"
       className={`play-btn ${small ? 'play-btn--small' : ''}`}
       aria-label={`Play voice note (${source})`}
-      title={message.audio_url ? 'Play Sarvam Bulbul audio' : 'Play with the browser voice (hi-IN), simulated'}
-      onClick={() => void sound.play(text, message.audio_url, lang)}
+      title={PLAY_TITLES[source]}
+      onClick={() => {
+        onPlay?.()
+        void sound.play(text, voiceAudioUrl(message), lang)
+      }}
     >
       <Icon name="play" size={small ? 12 : 16} />
     </button>
+  )
+}
+
+/** Play button, a small grey waveform and "0:05 · browser voice" under one of Chhatri's lines. */
+function SpokenFoot({ message }: { message: Message }) {
+  const [playKey, setPlayKey] = useState(0)
+  return (
+    <>
+      <PlayButton message={message} small onPlay={() => setPlayKey((k) => k + 1)} />
+      <Waveform seed={message.id} seconds={voiceSeconds(message)} playKey={playKey} compact />
+      <span className="bubble__voice num">{voiceNote(message)}</span>
+    </>
   )
 }
 
@@ -60,20 +89,18 @@ function Lines({ message }: { message: Message }) {
 }
 
 function VoiceBubble({ message }: { message: Message }) {
-  const browserVoice = !message.audio_url || message.meta.voice_source === 'browser-simulated'
+  const source = voiceSourceLabel(message)
+  const [playKey, setPlayKey] = useState(0)
+  const seconds = voiceSeconds(message)
   return (
     <div className="voice">
       <div className="voice__row">
-        <PlayButton message={message} />
-        <span className="voice__wave" aria-hidden="true">
-          {WAVE.map((h, i) => (
-            <span key={i} style={{ height: `${h}px` }} />
-          ))}
-        </span>
-        <span className="voice__time num">{clipDuration(voiceSeconds(message))}</span>
+        <PlayButton message={message} onPlay={() => setPlayKey((k) => k + 1)} />
+        <Waveform seed={message.id} seconds={seconds} playKey={playKey} />
+        <span className="voice__time num">{clipDuration(seconds)}</span>
       </div>
       <Lines message={message} />
-      {browserVoice ? <span className="voice__tag">browser voice · simulated</span> : <span className="voice__tag voice__tag--live">Sarvam voice</span>}
+      <span className={`voice__tag ${source === 'Sarvam voice' ? 'voice__tag--live' : ''}`}>{VOICE_TAGS[source]}</span>
     </div>
   )
 }
@@ -116,7 +143,7 @@ export function CaseChip({ message }: { message: Message }) {
   const caseId = message.meta.case_id
   const text = message.text_en ?? `Sent to a claims officer · case ${caseId ?? ''}`
   return (
-    <div className="case-chip-row">
+    <div className="case-chip-row" data-at={message.created_at}>
       {caseId ? (
         <Link className="case-chip" to={`/claims?case=${encodeURIComponent(caseId)}`}>
           {text}
@@ -134,25 +161,28 @@ export function MessageBubble({ message }: { message: Message }) {
   const side = mine ? 'bubble--mine' : 'bubble--theirs'
   if (message.kind === 'PAYOUT_CARD') {
     return (
-      <div className={`bubble-row ${side}`} data-kind={message.kind}>
+      <div className={`bubble-row ${side}`} data-kind={message.kind} data-at={message.created_at}>
         <PayoutCard message={message} />
+      </div>
+    )
+  }
+  const link = coverLink(message)
+  if (link) {
+    return (
+      <div className={`bubble-row ${side}`} data-kind="PAYTM_LINK" data-at={message.created_at}>
+        <PaytmLinkCard message={message} link={link} stamp={<Stamp message={message} />} />
       </div>
     )
   }
   const speakable = !mine && (message.text_hi || message.text_en) && message.kind !== 'VOICE'
   return (
-    <div className={`bubble-row ${side}`} data-kind={message.kind}>
+    <div className={`bubble-row ${side}`} data-kind={message.kind} data-at={message.created_at}>
       <div className={`bubble ${side}`}>
         {message.kind === 'VOICE' ? <VoiceBubble message={message} /> : null}
         {message.kind === 'IMAGE' ? <ImageBubble message={message} /> : null}
         {message.kind !== 'VOICE' && message.kind !== 'IMAGE' ? <Lines message={message} /> : null}
         <div className="bubble__foot">
-          {speakable ? (
-            <>
-              <PlayButton message={message} small />
-              <span className="bubble__voice num">{voiceNote(message)}</span>
-            </>
-          ) : null}
+          {speakable ? <SpokenFoot message={message} /> : null}
           <Stamp message={message} />
         </div>
       </div>

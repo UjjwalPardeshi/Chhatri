@@ -65,46 +65,12 @@
       }
     },
     {
-      "id": "6c8a9a6d-8f9a-52b4-9108-802568beecb7",
-      "name": "Accept (202)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        480,
-        300
-      ],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'accepted' } }) }}",
-        "options": {
-          "responseCode": 202
-        }
-      }
-    },
-    {
-      "id": "334859c7-26d9-5084-9116-d44df8ce2f95",
-      "name": "Reject (403)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        480,
-        500
-      ],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"missing or invalid X-Chhatri-Secret\"}}",
-        "options": {
-          "responseCode": 403
-        }
-      }
-    },
-    {
       "id": "99066ce3-bde1-5be4-8f98-51e66fd4bf8b",
       "name": "Step 1 · open_case",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        720,
+        480,
         300
       ],
       "parameters": {
@@ -138,7 +104,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        960,
+        720,
         300
       ],
       "parameters": {
@@ -165,6 +131,40 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000
+    },
+    {
+      "id": "8672473f-77a7-58ff-b87d-45956b216485",
+      "name": "Completed (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'completed', steps: ['open_case', 'notify_officer'] } }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "334859c7-26d9-5084-9116-d44df8ce2f95",
+      "name": "Reject (403)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        480,
+        500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"missing or invalid X-Chhatri-Secret\"}}",
+        "options": {
+          "responseCode": 403
+        }
+      }
     }
   ],
   "connections": {
@@ -183,7 +183,7 @@
       "main": [
         [
           {
-            "node": "Accept (202)",
+            "node": "Step 1 · open_case",
             "type": "main",
             "index": 0
           }
@@ -197,22 +197,22 @@
         ]
       ]
     },
-    "Accept (202)": {
+    "Step 1 · open_case": {
       "main": [
         [
           {
-            "node": "Step 1 · open_case",
+            "node": "Step 2 · notify_officer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Step 1 · open_case": {
+    "Step 2 · notify_officer": {
       "main": [
         [
           {
-            "node": "Step 2 · notify_officer",
+            "node": "Completed (200)",
             "type": "main",
             "index": 0
           }

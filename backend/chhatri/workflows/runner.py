@@ -5,6 +5,10 @@ start + offset (start = `scheduler.now()`, i.e. the decision time) and runs it t
 `StepHandlers.run_step`. `N8nWorkflowEngine` (implemented in `chhatri.integrations.n8n`, re-exported
 here) hands the same workflow to n8n. Run ids are deterministic (`{workflow}:{subject}`) and a run is
 started at most once per engine, so a repeated start never double-pays or double-notifies.
+
+When the in-process engine takes over a run that n8n could not finish (the n8n engine's fallback),
+steps n8n already reported are on the scheduler under the same job name (``{run_id}:{step}``) and
+are not scheduled a second time (`Scheduler.was_scheduled`).
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from chhatri.workflows.definitions import (
     Scheduler,
     StepHandlers,
     StepSpec,
+    job_name,
     run_id_for,
     validate_payload,
 )
@@ -60,12 +65,16 @@ class InProcessWorkflowEngine:
                 return WorkflowRun(workflow, run_id, ENGINE, False, "already started")
             self._started.add(run_id)
         start = self._scheduler.now()
+        scheduled = 0
         for spec in steps:
+            name = job_name(run_id, spec.name)
+            if self._scheduler.was_scheduled(name):
+                logger.info("workflow step %s already scheduled; not scheduled again", name)
+                continue
             at = start + timedelta(minutes=spec.delay_minutes_from_start)
-            self._scheduler.schedule(
-                at, f"{run_id}:{spec.name}", self._job(workflow, run_id, spec.name, checked)
-            )
-        return WorkflowRun(workflow, run_id, ENGINE, True, f"{len(steps)} steps scheduled from {start:%H:%M}")
+            self._scheduler.schedule(at, name, self._job(workflow, run_id, spec.name, checked))
+            scheduled += 1
+        return WorkflowRun(workflow, run_id, ENGINE, True, f"{scheduled} steps scheduled from {start:%H:%M}")
 
     def _job(
         self, workflow: str, run_id: str, step: str, payload: Mapping[str, Any]

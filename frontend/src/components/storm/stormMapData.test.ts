@@ -12,25 +12,37 @@ import { pinCaption } from '../map/LiveMap'
 import { ANIL } from '../../mock/fixtures'
 import { testBackend } from '../../mock/testkit'
 import { merchantDetailView, snapshotView } from '../../mock/views'
-import { buildStormMap, featurePath, frameProjection, STORM_VIEW, topPoint, type StormMapData } from './stormMapData'
+import { buildStormMap, featurePath, frameProjection, STORM_VIEW, topPoint, type StormInput, type StormMapData } from './stormMapData'
 
-function monsoonAt1705(): StormMapData {
+function monsoonInput(): StormInput {
   const backend = testBackend()
   try {
     backend.seek('17:05')
     const snapshot = snapshotView(backend.runtime, backend.geo)
     const anil = merchantDetailView(backend.runtime, ANIL)
-    return buildStormMap({
+    return {
       zones: backend.geo.zones as FeatureCollection,
       hexes: backend.geo.hexes as FeatureCollection,
       snapshot,
       focus: FOCUS_ZONES,
       pin: { lat: anil.lat, lng: anil.lng, name: anil.shop_name, caption: pinCaption(anil, '2025-08-19') },
-    })
+    }
   } finally {
     backend.dispose()
   }
 }
+
+function monsoonAt1705(): StormMapData {
+  return buildStormMap(monsoonInput())
+}
+
+const square = (d: number) => [
+  [0, 0],
+  [d, 0],
+  [d, d],
+  [0, d],
+  [0, 0],
+]
 
 describe('projection', () => {
   it('centres the bounds in the frame and keeps north up', () => {
@@ -50,13 +62,6 @@ describe('projection', () => {
       [0, 0],
       [1, 1],
     ])
-    const square = (d: number) => [
-      [0, 0],
-      [d, 0],
-      [d, d],
-      [0, d],
-      [0, 0],
-    ]
     const poly = { type: 'Feature' as const, properties: {}, geometry: { type: 'Polygon' as const, coordinates: [square(1), square(0.5)] } }
     expect(featurePath(poly, project).match(/M/g)).toHaveLength(2)
     const empty = { type: 'Feature' as const, properties: {}, geometry: { type: 'Polygon' as const, coordinates: [[[0, 0], [0, 0], [0, 0]]] } }
@@ -100,6 +105,13 @@ describe('monsoon replay at 17:05', () => {
     expect(data.hourly.Z7).toHaveLength(3)
     expect(data.rainTop?.[1]).toBeLessThan(data.labels.find((l) => l.id === 'Z7')?.at[1] ?? 0)
     expect(data.hexes.length).toBeGreaterThan(100)
+  })
+
+  it('labels the slow day with the trailing 3-hour index even mid-hour (B3)', () => {
+    const input = monsoonInput()
+    const zones = input.snapshot.zones.map((z) => (z.zone_id === 'Z9' ? { ...z, index_pct: 61, live_index_pct: 62 } : z))
+    const labels = buildStormMap({ ...input, snapshot: { ...input.snapshot, zones } }).labels
+    expect(labels.find((l) => l.id === 'Z9')?.text).toBe('Z9 · 61% of expected')
   })
 
   it('matches the committed content/stormMap.json', async () => {

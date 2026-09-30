@@ -1,16 +1,25 @@
-/** Audit log (SPEC §11, §20 "Audit"): the tamper-evident chain, newest first, and "Verify chain". */
+/**
+ * Audit log (SPEC §11, §20 "Audit"): the tamper-evident chain, newest first, grouped by simulated
+ * minute (AuditTable), and "Verify chain". While the run has only its first few entries, a card
+ * says what will appear here and starts the storm replay.
+ */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ApiError } from '../api/client'
 import type { Api } from '../api/endpoints'
 import type { AuditEntry, AuditVerify } from '../api/types'
+import { AuditTable, HASH_CHARS } from '../components/audit/AuditTable'
 import { ErrorState, InlineError, Loading } from '../components/common/Status'
-import { hhmm, dayLabel } from '../lib/time'
+import { LaunchButton } from '../components/overview/LaunchButton'
+import { LaunchError } from '../components/overview/LaunchError'
 import { useLive, useLiveEvent } from '../state/live'
 import { toApiError } from '../state/useAsync'
+import { useLaunch } from '../state/useLaunch'
 
 export const AUDIT_PAGE = 200
-const HASH_CHARS = 10
+/** Up to this many entries the run has barely started (scenario load, an alert or two). */
+export const EARLY_ENTRIES = 5
+const EARLY_KEYS = ['audit-storm'] as const
 
 /** Reads every entry after `after`, page by page (GET /api/audit?after=&limit=). */
 export async function fetchAuditAfter(api: Api, after: number, signal?: AbortSignal): Promise<AuditEntry[]> {
@@ -72,18 +81,35 @@ function VerifyResult({ result }: { result: AuditVerify }) {
   )
 }
 
+function EarlyRun() {
+  const launcher = useLaunch()
+  return (
+    <section className="card audit-early" aria-label="The log fills as the replay runs">
+      <div>
+        <h2>The log fills as the replay runs</h2>
+        <p className="muted">Every trigger, decision, payout and instalment pause gets an entry here, each one hashing the one before it.</p>
+        <LaunchError launcher={launcher} keys={EARLY_KEYS} />
+      </div>
+      <LaunchButton launcher={launcher} id="audit-storm" target="stormLive" label="Watch the 17:00 storm" busyLabel="Loading the storm…" />
+    </section>
+  )
+}
+
 export default function Audit() {
   const { api } = useLive()
   const { entries, error, reload } = useAuditEntries()
   const [filter, setFilter] = useState('')
   const [verify, setVerify] = useState<AuditVerify | null>(null)
+  const [verified, setVerified] = useState(0)
   const [verifyError, setVerifyError] = useState<ApiError | null>(null)
   const [verifying, setVerifying] = useState(false)
 
   const runVerify = async () => {
     setVerifying(true)
     try {
-      setVerify(await api.verifyAudit())
+      const result = await api.verifyAudit()
+      setVerify(result)
+      setVerified((n) => (result.valid ? n + 1 : 0))
       setVerifyError(null)
     } catch (reason) {
       setVerifyError(toApiError(reason))
@@ -114,44 +140,10 @@ export default function Audit() {
       {error && entries === null ? <ErrorState error={error} title="Could not load the audit log" onRetry={reload} /> : null}
       {error && entries !== null ? <InlineError error={error} onDismiss={reload} /> : null}
       {entries === null && !error ? <Loading label="Loading audit log…" /> : null}
+      {entries !== null && entries.length <= EARLY_ENTRIES && needle === '' ? <EarlyRun /> : null}
       {entries !== null ? (
-        <div className="card table-wrap">
-          <table className="table audit-table">
-            <thead>
-              <tr>
-                <th className="num">#</th>
-                <th>Simulated time</th>
-                <th>Actor</th>
-                <th>Action</th>
-                <th>Subject</th>
-                <th>Hash</th>
-                <th>Previous</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((e) => (
-                <tr key={e.seq}>
-                  <td className="num">{e.seq}</td>
-                  <td className="tnum">
-                    {dayLabel(e.at)} {hhmm(e.at)}
-                  </td>
-                  <td>
-                    <span className="actor">{e.actor}</span>
-                  </td>
-                  <td className="mono">{e.action}</td>
-                  <td>
-                    {e.subject_type} <span className="mono">{e.subject_id}</span>
-                  </td>
-                  <td className="mono" title={e.hash}>
-                    {e.hash.slice(0, HASH_CHARS)}
-                  </td>
-                  <td className="mono muted" title={e.prev_hash}>
-                    {e.prev_hash.slice(0, HASH_CHARS)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="card audit-wrap">
+          <AuditTable entries={shown} verified={verified} />
           {shown.length === 0 ? <p className="status-box">No entries match.</p> : null}
         </div>
       ) : null}

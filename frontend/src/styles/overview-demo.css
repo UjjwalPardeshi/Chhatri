@@ -64,6 +64,13 @@
   height: 640px;
 }
 
+/* On the light surface the phones sit on a soft, tinted shadow instead of the navy glow. */
+.journey__phone .phone {
+  box-shadow:
+    0 24px 40px -18px rgb(15 26 51 / 35%),
+    0 2px 6px rgb(15 26 51 / 10%);
+}
+
 .journey__go {
   display: flex;
   flex-direction: column;
@@ -203,8 +210,16 @@
 }
 
 .proof-pair figcaption {
-  margin-bottom: 14px;
+  margin-bottom: var(--sp-1);
   font-size: var(--fs-md);
+}
+
+/* Deck slide 11's target column, computed from the two triggers. */
+.proof-pair__verdict {
+  margin: 0 0 var(--sp-3);
+  color: var(--blue);
+  font-size: var(--fs-sm);
+  font-weight: 500;
 }
 
 .proof-pair figcaption strong {
@@ -330,12 +345,19 @@
     height: 600px;
   }
 
+  /* Phones: name · bar · value, with "58 of 64" on a second line under the percentage. */
   .proof-bar {
-    grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-columns: 84px minmax(0, 1fr) auto;
   }
 
   .proof-bar__value {
-    grid-column: 2;
+    line-height: 1.15;
+    text-align: right;
+  }
+
+  .proof-bar__value .muted {
+    display: block;
+    font-size: var(--fs-xs);
   }
 
   .ov-humans .authority td,
@@ -351,4 +373,56 @@
   .live-test {
     grid-template-columns: 96px minmax(0, 1fr);
   }
+}
+
+/* Humans: the way into the audit log under the authority table. */
+.audit-teaser {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    transform 160ms var(--ease-out);
+}
+
+.audit-teaser:hover {
+  border-color: var(--blue);
+}
+
+.audit-teaser:active {
+  transform: scale(0.99);
+}
+
+.audit-teaser strong {
+  display: block;
+  font-weight: 500;
+}
+
+.audit-teaser__text {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.audit-teaser__icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.audit-teaser > svg {
+  color: var(--blue);
 }

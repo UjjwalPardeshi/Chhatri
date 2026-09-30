@@ -6,11 +6,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { ApiError } from '../api/client'
-import type { Api } from '../api/endpoints'
+import { isScenarioName, type Api } from '../api/endpoints'
 import { EventStream, type StreamStatus } from '../api/stream'
-import type { ClockState, IntegrationStatus, SseEvent, SseEventType, StateSnapshot } from '../api/types'
+import type { ClockState, IntegrationStatus, ScenarioName, SseEvent, SseEventType, StateSnapshot } from '../api/types'
 import { SoundManager } from '../lib/sound'
 import { EventHub, type EventHandler } from './eventHub'
+import { shouldStop, type StopAt } from './stopAt'
 import { applyEvent, mergeSnapshot, needsRefresh } from './reducer'
 import { toApiError } from './useAsync'
 import { useLatest } from './useLatest'
@@ -33,7 +34,11 @@ export type LiveValue = {
   sound: SoundManager
   replayError: ApiError | null
   replayBusy: ReplayAction | null
+  /** The scenario a load in flight is switching to (B5: links follow it before the load returns). */
+  loadingScenario: ScenarioName | null
   replay: (action: ReplayAction, arg?: string | number) => Promise<void>
+  /** Pause the running replay when its clock reaches `at` (a launcher's story beat); any replay control cancels it. */
+  pauseAt: (stop: StopAt) => void
   refresh: () => void
   on: (types: readonly (SseEventType | '*')[], handler: EventHandler) => () => void
 }
@@ -134,6 +139,7 @@ export function LiveProvider({ api, mock, children }: Props) {
   const [stream, setStream] = useState<StreamStatus>('connecting')
   const [replayError, setReplayError] = useState<ApiError | null>(null)
   const [replayBusy, setReplayBusy] = useState<ReplayAction | null>(null)
+  const [loadingScenario, setLoadingScenario] = useState<ScenarioName | null>(null)
   const hub = useMemo(() => new EventHub(), [])
   const sound = useMemo(() => new SoundManager(), [])
 
@@ -155,9 +161,12 @@ export function LiveProvider({ api, mock, children }: Props) {
     })
   }, [hub, sound])
 
+  const stopAt = useRef<StopAt | null>(null)
   const replay = useCallback(
     async (action: ReplayAction, arg?: string | number) => {
+      stopAt.current = null
       setReplayBusy(action)
+      if (action === 'load' && typeof arg === 'string' && isScenarioName(arg)) setLoadingScenario(arg)
       try {
         const clock: ClockState = await runReplay(api, action, arg)
         setSnapshot((current) => (current ? { ...current, clock } : current))
@@ -167,10 +176,21 @@ export function LiveProvider({ api, mock, children }: Props) {
         setReplayError(toApiError(reason))
       } finally {
         setReplayBusy(null)
+        setLoadingScenario(null)
       }
     },
     [api, refresh, setSnapshot],
   )
+
+  const pauseAt = useCallback((stop: StopAt) => {
+    stopAt.current = stop
+  }, [])
+  useEffect(() => {
+    return hub.on(['tick'], (event) => {
+      if (event.type !== 'tick' || !shouldStop(stopAt.current, event.data.clock)) return
+      void replay('pause')
+    })
+  }, [hub, replay])
 
   const on = useCallback((types: readonly (SseEventType | '*')[], handler: EventHandler) => hub.on(types, handler), [hub])
 
@@ -184,7 +204,9 @@ export function LiveProvider({ api, mock, children }: Props) {
     sound,
     replayError,
     replayBusy,
+    loadingScenario,
     replay,
+    pauseAt,
     refresh,
     on,
   }

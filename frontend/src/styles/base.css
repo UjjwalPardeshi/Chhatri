@@ -94,6 +94,7 @@ button:disabled {
 
 .card {
   background: var(--card);
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -274,6 +275,28 @@ button:disabled {
   background: var(--red-soft);
   color: var(--red);
   font-size: var(--fs-sm);
+}
+
+/* Stale content through a network blip: a quiet amber line, not a red banner. */
+.stale-note {
+  display: block;
+  margin: 0 0 var(--sp-2);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--amber-soft);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+}
+
+.stale-note__retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .visually-hidden {

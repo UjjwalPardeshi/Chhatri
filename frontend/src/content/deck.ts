@@ -16,13 +16,15 @@ export type LaunchAction = { kind: 'voice'; merchant: string; key: VoiceDemoKey 
 /**
  * A scenario jump (SPEC §17.2, B5): load `scenario`, optionally seek to `seek`, run `actions`, open
  * `to` (with an optional `hint` for the page, e.g. which phone chip to highlight), then optionally
- * start playing at `play` simulated minutes per second so the story happens live on screen.
+ * start playing at `play` simulated minutes per second so the story happens live on screen, and
+ * pause again at `pauseAt` (HH:MM) once the story beat is over.
  */
 export type Launch = {
   scenario: ScenarioName
   seek: string | null
   to: string
   play?: number
+  pauseAt?: string
   actions?: readonly LaunchAction[]
   hint?: string
 }
@@ -31,11 +33,13 @@ export type Launch = {
 export const WATCH_SPEED = 1
 /** The storm launchers start three simulated minutes before the 17:00 trigger. */
 export const STORM_LEAD_IN = '16:57'
+/** …and pause one minute after the 17:05 instalment pause, holding the whole storm on screen. */
+export const STORM_BEAT_END = '17:06'
 
 export const LAUNCHES = Object.freeze({
   storm: { scenario: 'monsoon', seek: '17:05', to: '/live' },
-  stormLive: { scenario: 'monsoon', seek: STORM_LEAD_IN, to: '/live', play: WATCH_SPEED },
-  rainDay: { scenario: 'monsoon', seek: '17:02', to: `/merchant/${DEMO_MERCHANT}`, play: WATCH_SPEED },
+  stormLive: { scenario: 'monsoon', seek: STORM_LEAD_IN, to: '/live', play: WATCH_SPEED, pauseAt: STORM_BEAT_END },
+  rainDay: { scenario: 'monsoon', seek: '17:02', to: `/merchant/${DEMO_MERCHANT}`, play: WATCH_SPEED, pauseAt: STORM_BEAT_END },
   questions: { scenario: 'monsoon', seek: '17:05', to: `/merchant/${DEMO_MERCHANT}`, hint: 'why' },
   illness: { scenario: 'illness', seek: '11:20', to: `/merchant/${DEMO_MERCHANT}`, hint: 'ill' },
   mismatch: { scenario: 'illness_mismatch', seek: '11:20', to: `/merchant/${DEMO_MERCHANT}`, hint: 'ill' },
@@ -165,10 +169,10 @@ export const ROADMAP: readonly { when: string; title: string; items: readonly st
 ]
 
 /** The 10-second takeaway under the hero (SPEC §17.2 golden numbers, deck slide 3). */
-export const HERO_FIGURES: readonly { value: string; label: string }[] = [
-  { value: '17:04', label: '₹1,380 credited' },
-  { value: String(STORM.shopsPaid), label: 'shops paid' },
-  { value: `${STORM.triggerToMoneyMin} min`, label: 'trigger to money' },
+export const HERO_FIGURES: readonly { value: string; label: string; count?: boolean }[] = [
+  { value: '₹1,380', label: 'credited at 17:04' },
+  { value: String(STORM.shopsPaid), label: 'shops paid', count: true },
+  { value: `${STORM.triggerToMoneyMin} min`, label: 'trigger to money', count: true },
   { value: '0', label: 'forms or documents' },
 ]
 

@@ -1,20 +1,23 @@
 /**
- * Overview hero (deck slide 1): the name, the one-line idea, two launchers into the live demo, the
- * 10-second takeaway (SPEC §17.2 golden numbers) and Anil's phone with the Soundbox line.
+ * Overview hero (deck slide 1): the name, the one-line idea, two launchers into the live demo and
+ * a quiet third into the claims console, the 10-second takeaway (SPEC §17.2 golden numbers, two of
+ * them counting up once) over a faint hex field, and Anil's phone, whose bubbles arrive one by one
+ * before the Soundbox line slides up.
  */
 import { HERO_FIGURES } from '../../content/deck'
 import { HERO_THREAD, RAIN_SOUNDBOX } from '../../content/story'
 import type { LaunchState } from '../../state/useLaunch'
 import { LaunchButton } from './LaunchButton'
+import { CountUp } from './CountUp'
 import { LaunchError } from './LaunchError'
 import { StoryPhone } from './StoryPhone'
 
 const HERO_NOW = '2025-08-19T17:06:00+05:30'
-export const HERO_LAUNCH_KEYS = ['hero-storm', 'hero-phone'] as const
+export const HERO_LAUNCH_KEYS = ['hero-storm', 'hero-phone', 'hero-case'] as const
 
 export function Hero({ launcher }: { launcher: LaunchState }) {
   return (
-    <section className="ov-hero" aria-label="Chhatri">
+    <section className="ov-hero" id="ov-top" aria-label="Chhatri">
       <div className="ov-hero__inner">
         <div className="ov-hero__copy">
           <p className="ov-kicker">Build for India AI Hackathon · Track 2: AI-powered financial journeys</p>
@@ -34,13 +37,14 @@ export function Hero({ launcher }: { launcher: LaunchState }) {
           <div className="ov-hero__ctas">
             <LaunchButton launcher={launcher} id="hero-storm" target="stormLive" label="Watch the storm replay" busyLabel="Loading the storm…" />
             <LaunchButton launcher={launcher} id="hero-phone" target="questions" tone="ghost" label="See Anil’s WhatsApp" busyLabel="Opening the phone…" />
+            <LaunchButton launcher={launcher} id="hero-case" target="reviewCase" tone="link" label="Open the claims console" busyLabel="Opening the case…" />
           </div>
           <LaunchError launcher={launcher} keys={HERO_LAUNCH_KEYS} />
           <dl className="ov-figures" aria-label="The storm replay in numbers">
             {HERO_FIGURES.map((f) => (
               <div key={f.label} className="ov-figure">
                 <dt>{f.label}</dt>
-                <dd className="num">{f.value}</dd>
+                <dd className="num">{f.count ? <CountUp value={f.value} /> : f.value}</dd>
               </div>
             ))}
           </dl>

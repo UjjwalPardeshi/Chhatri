@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Message } from '../../api/types'
-import { chatMessages, latestSoundbox, spokenText, upsertMessage, voiceSeconds } from './messages'
+import { chatMessages, latestSoundbox, spokenText, upsertMessage, voiceAudioUrl, voiceSeconds, voiceSourceLabel } from './messages'
 import { pickMimeType } from './useRecorder'
 
 function msg(id: string, at: string, extra: Partial<Message> = {}): Message {
@@ -52,6 +52,20 @@ describe('phone messages', () => {
     expect(spokenText(msg('M', '', { meta: { transcript: 'बुखार' } }))).toEqual({ text: 'बुखार', lang: 'hi-IN' })
     expect(spokenText(msg('M', '', { text_en: 'Hello' }))).toEqual({ text: 'Hello', lang: 'en-IN' })
     expect(spokenText(msg('M', ''))).toEqual({ text: '', lang: 'en-IN' })
+  })
+
+  it('never plays or labels a browser-simulated clip as Sarvam audio (SPEC §0.1, §20 "Sound")', () => {
+    const canned = msg('M', '', { kind: 'VOICE', audio_url: '/api/media/MD-000001', meta: { voice_source: 'browser-simulated', transcript: 'बुखार' } })
+    expect(voiceAudioUrl(canned)).toBeNull()
+    expect(voiceSourceLabel(canned)).toBe('browser voice')
+    const bulbul = msg('M', '', { audio_url: '/api/media/MD-000002', meta: { voice_source: 'sarvam' } })
+    expect(voiceAudioUrl(bulbul)).toBe('/api/media/MD-000002')
+    expect(voiceSourceLabel(bulbul)).toBe('Sarvam voice')
+    const recorded = msg('M', '', { kind: 'VOICE', direction: 'INBOUND', audio_url: '/api/media/MD-000003' })
+    expect(voiceAudioUrl(recorded)).toBe('/api/media/MD-000003')
+    expect(voiceSourceLabel(recorded)).toBe('recording')
+    expect(voiceAudioUrl(msg('M', ''))).toBeNull()
+    expect(voiceSourceLabel(msg('M', ''))).toBe('browser voice')
   })
 
   it('picks the first supported recording type', () => {

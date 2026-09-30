@@ -13,7 +13,7 @@ export function Closing({ launcher }: { launcher: LaunchState }) {
         <div className="ov-closing__ctas">
           <LaunchButton launcher={launcher} id="end-storm" target="stormLive" label="Watch the storm replay" busyLabel="Loading the storm…" />
           <LaunchButton launcher={launcher} id="end-phone" target="questions" tone="ghost" label="See Anil’s WhatsApp" busyLabel="Opening the phone…" />
-          <LaunchButton launcher={launcher} id="end-case" target="reviewCase" tone="ghost" label="Review case C-2291" busyLabel="Opening the case…" />
+          <LaunchButton launcher={launcher} id="end-case" target="reviewCase" tone="ghost" label="Review the slip mismatch" busyLabel="Opening the case…" />
         </div>
         <LaunchError launcher={launcher} keys={CLOSING_KEYS} />
       </div>

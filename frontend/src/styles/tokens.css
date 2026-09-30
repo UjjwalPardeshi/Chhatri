@@ -100,10 +100,12 @@
   --dur-ui: 220ms;
   --dur-reveal: 600ms;
 
-  /* Z ladder: map overlays < header popovers < toasts. */
+  /* Z ladder: sticky page bars < map overlays < header popovers < toasts < modal dialogs. */
+  --z-sticky: 20;
   --z-map: 1000;
   --z-popover: 1200;
   --z-toast: 1300;
+  --z-modal: 1400;
 
   --header-h: 52px;
   --controls-h: 46px;

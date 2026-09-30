@@ -1,90 +1,106 @@
-/** Policy (SPEC §9, §20 "Policy", deck slide 8): payout authority table, rules and checks. */
+/**
+ * Policy (SPEC §9, §20 "Policy", deck slide 8): two independent columns, so neither leaves a
+ * hole under a short card: the payout authority table and the checks on the left, the three live
+ * tests and the rules (values in their units, ruleFormat.ts) on the right. Checks become one card
+ * per check on a phone.
+ */
 import type { PolicyView } from '../api/types'
 import { AsyncView } from '../components/common/Status'
 import { authorityTone } from '../components/overview/Humans'
 import { LiveTests } from '../components/overview/LiveTests'
+import { ruleRows } from '../components/policy/ruleFormat'
 import { useLive } from '../state/live'
 import { useAsync } from '../state/useAsync'
 import { useLaunch, type LaunchState } from '../state/useLaunch'
 
-export function humanise(key: string): string {
-  const text = key.replace(/_/g, ' ')
-  return text.charAt(0).toUpperCase() + text.slice(1)
+export { humanise, ruleRows } from '../components/policy/ruleFormat'
+
+function Authority({ policy }: { policy: PolicyView }) {
+  return (
+    <section className="card section">
+      <h2>Payout authority</h2>
+      <table className="table authority">
+        <thead>
+          <tr>
+            <th>Case</th>
+            <th>Chhatri alone</th>
+            <th>Goes to a human</th>
+          </tr>
+        </thead>
+        <tbody>
+          {policy.authority.map((row) => (
+            <tr key={row.case}>
+              <td>{row.case}</td>
+              <td className={authorityTone(row.alone)}>{row.alone}</td>
+              <td>{row.human}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted">
+        New cover starts only after a <strong>waiting period</strong>, so nobody can buy it once a storm is forecast.
+      </p>
+    </section>
+  )
 }
 
-/** Flattens nested rules into [section, key, value] rows. */
-export function ruleRows(rules: Record<string, unknown>, prefix = ''): [string, string][] {
-  return Object.entries(rules).flatMap(([key, value]) => {
-    const name = prefix ? `${prefix} · ${humanise(key)}` : humanise(key)
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) return ruleRows(value as Record<string, unknown>, name)
-    return [[name, Array.isArray(value) ? value.join(', ') : String(value)]]
-  })
+function Checks({ policy }: { policy: PolicyView }) {
+  return (
+    <section className="card section">
+      <h2>Checks before any payout</h2>
+      <table className="table policy-checks">
+        <thead>
+          <tr>
+            <th>Check</th>
+            <th>Applies</th>
+            <th>Severity</th>
+            <th>Passes when</th>
+          </tr>
+        </thead>
+        <tbody>
+          {policy.checks.map((c) => (
+            <tr key={c.code}>
+              <td className="mono policy-checks__code">{c.code}</td>
+              <td data-label="Applies">{c.applies}</td>
+              <td className="policy-checks__severity">
+                <span className={`badge ${c.severity === 'HARD' ? 'badge--navy' : 'badge--amber'}`}>{c.severity}</span>
+              </td>
+              <td data-label="Passes when">{c.passes_when}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+function Rules({ policy }: { policy: PolicyView }) {
+  return (
+    <section className="card section">
+      <h2>Rules</h2>
+      <dl className="rules">
+        {ruleRows(policy.rules).map(([k, v]) => (
+          <div key={k} className="rules__row">
+            <dt>{k}</dt>
+            <dd className="num">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
 }
 
 function PolicyContent({ policy, launcher }: { policy: PolicyView; launcher: LaunchState }) {
   return (
     <div className="policy-grid">
-      <section className="card section">
-        <h2>Payout authority</h2>
-        <table className="table authority">
-          <thead>
-            <tr>
-              <th>Case</th>
-              <th>Chhatri alone</th>
-              <th>Goes to a human</th>
-            </tr>
-          </thead>
-          <tbody>
-            {policy.authority.map((row) => (
-              <tr key={row.case}>
-                <td>{row.case}</td>
-                <td className={authorityTone(row.alone)}>{row.alone}</td>
-                <td>{row.human}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="muted">
-          New cover starts only after a <strong>waiting period</strong>, so nobody can buy it once a storm is forecast.
-        </p>
-      </section>
-      <LiveTests launcher={launcher} />
-      <section className="card section">
-        <h2>Checks before any payout</h2>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Check</th>
-              <th>Applies</th>
-              <th>Severity</th>
-              <th>Passes when</th>
-            </tr>
-          </thead>
-          <tbody>
-            {policy.checks.map((c) => (
-              <tr key={c.code}>
-                <td className="mono">{c.code}</td>
-                <td>{c.applies}</td>
-                <td>
-                  <span className={`badge ${c.severity === 'HARD' ? 'badge--navy' : 'badge--amber'}`}>{c.severity}</span>
-                </td>
-                <td>{c.passes_when}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <section className="card section">
-        <h2>Rules</h2>
-        <dl className="rules">
-          {ruleRows(policy.rules).map(([k, v]) => (
-            <div key={k} className="rules__row">
-              <dt>{k}</dt>
-              <dd className="num">{v}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
+      <div className="policy-grid__col">
+        <Authority policy={policy} />
+        <Checks policy={policy} />
+      </div>
+      <div className="policy-grid__col">
+        <LiveTests launcher={launcher} />
+        <Rules policy={policy} />
+      </div>
     </div>
   )
 }

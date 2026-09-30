@@ -4,11 +4,14 @@
 Proves, against a running n8n 2.x and a local stub of `POST /internal/workflows/{step}`
 (`selftest_stub.py`), that for each workflow in `chhatri.workflows.definitions.WORKFLOWS`:
 
-1. the webhook `POST /webhook/chhatri-{workflow}` with the right `X-Chhatri-Secret` answers 2xx;
+1. the webhook `POST /webhook/chhatri-{workflow}` with the right `X-Chhatri-Secret` answers 200 with
+   `{"ok": true, "data": {"run_id", "status": "completed"}}` only after the last step's callback (the
+   backend's start call waits for it, so the simulated timeline equals the in-process one);
 2. n8n calls back every step in exactly the WORKFLOWS order, each with the secret header and the body
    `{run_id, workflow, step, payload}` where the payload is passed through unchanged (nested/Unicode);
 3. a wrong or missing secret is refused with 403 and causes no callback;
-4. a non-2xx answer to a callback stops the run (later steps are never called).
+4. a non-2xx answer to a callback stops the run (later steps are never called) and the webhook answers
+   non-2xx, so the backend hands the rest of the run to its in-process runner.
 
 Modes (run with the backend venv so WORKFLOWS can be imported):
     python scripts/n8n_selftest.py --start-container   # starts the compose n8n image itself (default)
@@ -53,11 +56,15 @@ READY_TIMEOUT_S: Final = 180.0
 CALLBACK_TIMEOUT_S: Final = 30.0
 QUIET_PERIOD_S: Final = 4.0
 POLL_S: Final = 0.25
-HTTP_TIMEOUT_S: Final = 10.0
+HTTP_TIMEOUT_S: Final = 60.0  # the webhook answers when the whole run is done
 WEBHOOK_NOT_READY_RETRIES: Final = 20
 STOP_WORKFLOW: Final = "payout"  # its second step answers 500 in the stop-on-error check
 FAILING_STEP_INDEX: Final = 1
 CALLBACK_MAX_TRIES: Final = 3  # n8n retries a failed callback (scripts/n8n_workflows.py)
+HTTP_OK_MIN: Final = 200
+HTTP_OK_MAX: Final = 300
+HTTP_FORBIDDEN: Final = 403
+HTTP_NOT_FOUND: Final = 404
 EXTRA_PAYLOAD: Final = {"trace": {"note": "अनिल जी ₹1,380", "n": [1, 2.5, None, True]}}
 SUBJECTS: Final = {
     "payout": "decision_id",
@@ -103,8 +110,18 @@ def payload_for(workflow: str, subject: str) -> dict[str, Any]:
     return payload
 
 
-def post_json(url: str, body: Mapping[str, Any], headers: Mapping[str, str]) -> int:
-    """POST JSON and return the HTTP status (non-2xx statuses are returned, not raised)."""
+@dataclass(frozen=True, slots=True)
+class WebhookAnswer:
+    status: int
+    body: bytes
+
+    @property
+    def ok(self) -> bool:
+        return HTTP_OK_MIN <= self.status < HTTP_OK_MAX
+
+
+def post_json(url: str, body: Mapping[str, Any], headers: Mapping[str, str]) -> WebhookAnswer:
+    """POST JSON and return status and body (non-2xx statuses are returned, not raised)."""
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(  # noqa: S310 - http(s) URL given by the operator
         url,
@@ -114,9 +131,25 @@ def post_json(url: str, body: Mapping[str, Any], headers: Mapping[str, str]) -> 
     )
     try:
         with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_S) as response:  # noqa: S310
-            return int(response.status)
+            return WebhookAnswer(int(response.status), response.read())
     except urllib.error.HTTPError as exc:
-        return int(exc.code)
+        return WebhookAnswer(int(exc.code), exc.read())
+
+
+def completion_problem(answer: WebhookAnswer, run_id: str) -> str | None:
+    """Why `answer` is not the completion body the backend requires; None when it is."""
+    if answer.status != HTTP_OK_MIN:
+        return f"webhook answered HTTP {answer.status}"
+    try:
+        doc = json.loads(answer.body)
+    except ValueError:
+        return "webhook answer is not JSON"
+    data = doc.get("data") if isinstance(doc, dict) else None
+    if not isinstance(data, dict) or doc.get("ok") is not True:
+        return "webhook answer has no ok/data"
+    if data.get("run_id") != run_id or data.get("status") != "completed":
+        return f"webhook answer is not a completion of {run_id}: {data}"
+    return None
 
 
 def start_run(
@@ -125,18 +158,18 @@ def start_run(
     run_id: str,
     payload: Mapping[str, Any],
     secret: str | None,
-) -> int:
+) -> WebhookAnswer:
     """POST the workflow webhook; retries while n8n has not registered the webhook yet (404)."""
     headers = {SECRET_HEADER: secret} if secret is not None else {}
     body = {"run_id": run_id, "workflow": workflow, "payload": dict(payload)}
     url = f"{n8n_url.rstrip('/')}/webhook/chhatri-{workflow}"
-    status = post_json(url, body, headers)
+    answer = post_json(url, body, headers)
     for _ in range(WEBHOOK_NOT_READY_RETRIES):
-        if status != 404:
+        if answer.status != HTTP_NOT_FOUND:
             break
         time.sleep(1.0)
-        status = post_json(url, body, headers)
-    return status
+        answer = post_json(url, body, headers)
+    return answer
 
 
 def wait_for(predicate: Callable[[], bool], timeout_s: float) -> bool:
@@ -171,28 +204,37 @@ def check_workflow(
 ) -> CheckResult:
     run_id = f"{workflow}:selftest-{workflow}"
     payload = payload_for(workflow, f"selftest-{workflow}")
-    status = start_run(n8n_url, workflow, run_id, payload, secret)
-    if not 200 <= status < 300:
-        return CheckResult(f"{workflow}: steps", False, f"webhook answered HTTP {status}")
-    wait_for(lambda: len(recorder.for_run(run_id)) >= len(steps), CALLBACK_TIMEOUT_S)
+    answer = start_run(n8n_url, workflow, run_id, payload, secret)
+    if not answer.ok:
+        return CheckResult(f"{workflow}: steps", False, f"webhook answered HTTP {answer.status}")
+    reported = [c.path_step for c in recorder.for_run(run_id)]  # all of them before the answer
     time.sleep(QUIET_PERIOD_S)  # nothing may arrive after the last step
     calls = recorder.for_run(run_id)
     order = [c.path_step for c in calls]
     problems = callback_problems(calls, workflow, run_id, payload)
     if order != list(steps):
         problems.insert(0, f"order {order} != {list(steps)}")
-    detail = "; ".join(problems) if problems else f"{' -> '.join(order)} (secret + payload pass-through ok)"
+    if reported != order:
+        problems.append(f"webhook answered before the last callback (had {reported})")
+    completion = completion_problem(answer, run_id)
+    if completion:
+        problems.append(completion)
+    detail = (
+        "; ".join(problems)
+        if problems
+        else f"{' -> '.join(order)}, then 200 completed (secret + payload pass-through ok)"
+    )
     return CheckResult(f"{workflow}: steps", not problems, detail)
 
 
 def check_secret_refused(n8n_url: str, recorder: Recorder, workflow: str, secret: str | None) -> CheckResult:
     label = "missing" if secret is None else "wrong"
     run_id = f"{workflow}:selftest-{label}-secret"
-    status = start_run(n8n_url, workflow, run_id, payload_for(workflow, f"selftest-{label}"), secret)
+    answer = start_run(n8n_url, workflow, run_id, payload_for(workflow, f"selftest-{label}"), secret)
     time.sleep(QUIET_PERIOD_S)
     called = [c.path_step for c in recorder.for_run(run_id)]
-    ok = status == 403 and not called
-    return CheckResult(f"{workflow}: {label} secret", ok, f"HTTP {status}, callbacks {called}")
+    ok = answer.status == HTTP_FORBIDDEN and not called
+    return CheckResult(f"{workflow}: {label} secret", ok, f"HTTP {answer.status}, callbacks {called}")
 
 
 def check_stops_on_error(
@@ -204,7 +246,7 @@ def check_stops_on_error(
     run_id: str,
 ) -> CheckResult:
     failing = steps[FAILING_STEP_INDEX]
-    status = start_run(
+    answer = start_run(
         n8n_url,
         workflow,
         run_id,
@@ -218,11 +260,11 @@ def check_stops_on_error(
     time.sleep(QUIET_PERIOD_S)
     called = [c.path_step for c in recorder.for_run(run_id)]
     expected = [*steps[:FAILING_STEP_INDEX], *[failing] * CALLBACK_MAX_TRIES]
-    ok = 200 <= status < 300 and called == expected
+    ok = not answer.ok and called == expected
     return CheckResult(
         f"{workflow}: stops on non-2xx",
         ok,
-        f"{failing} answered 500; callbacks {called}",
+        f"{failing} answered 500; webhook HTTP {answer.status}; callbacks {called}",
     )
 
 

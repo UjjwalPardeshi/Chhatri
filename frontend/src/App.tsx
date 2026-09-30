@@ -1,6 +1,6 @@
 /** Routes (SPEC §20): / overview · /live map · /claims · /merchant/:id · /audit · /backtest · /policy. */
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Link, Route, Routes } from 'react-router'
+import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router'
 
 import type { Api } from './api/endpoints'
 import { AppShell } from './components/layout/AppShell'
@@ -24,9 +24,15 @@ function NotFound() {
   )
 }
 
+/** While a page's chunk loads: the Overview's navy ground (no spinner on the landing page), a spinner elsewhere. */
+export function RouteFallback() {
+  const { pathname } = useLocation()
+  return pathname === '/' ? <div className="ov-fallback" aria-busy="true" /> : <Loading />
+}
+
 export function AppRoutes() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<Overview />} />
         <Route path="/live" element={<Live />} />

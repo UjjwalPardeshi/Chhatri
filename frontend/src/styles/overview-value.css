@@ -1,0 +1,281 @@
+/*
+ * Overview additions (deck slides 10, 11, 13): the sticky section rail, the USP comparison with
+ * the Chhatri column tinted, "Who benefits" cards, and the honesty tiers beside the technology
+ * with each integration folded under one button. Tokens only (tokens.css).
+ */
+
+/* Section rail: a slim table of contents, sticky under the header after the hero. */
+.ov-rail {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  border-bottom: 1px solid var(--line);
+  background: rgb(255 255 255 / 86%);
+  backdrop-filter: saturate(1.4) blur(10px);
+}
+
+.ov-rail__list {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  max-width: var(--ov-max);
+  margin: 0 auto;
+  padding: 6px var(--ov-pad-x);
+  list-style: none;
+}
+
+.ov-rail__link {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.ov-rail__link:hover {
+  color: var(--ink);
+}
+
+.ov-rail__link[aria-current='location'] {
+  background: var(--navy);
+  color: #fff;
+}
+
+/* Anchored sections land below the rail. */
+.overview [id^='ov-'] {
+  scroll-margin-top: 44px;
+}
+
+/* USP (deck slide 10). */
+.usp {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-base);
+  line-height: 1.45;
+}
+
+.usp th,
+.usp td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.usp thead th {
+  border-bottom-color: var(--line-strong);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.usp tbody th {
+  width: 22%;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.usp td {
+  color: var(--ink-2);
+}
+
+/* The answer column: tinted blue, with rounded ends. */
+.usp .usp__ours {
+  background: var(--blue-soft);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.usp thead .usp__ours {
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--blue);
+  font-size: var(--fs-md);
+}
+
+.usp tbody tr:last-child .usp__ours {
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.usp tbody tr:last-child th,
+.usp tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.usp__caption {
+  max-width: 44ch;
+  margin-top: var(--sp-6);
+  color: var(--ink);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+/* Who benefits (deck slide 11). */
+.benefits {
+  margin-top: var(--sp-10);
+}
+
+.benefits__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+}
+
+.benefit {
+  padding: var(--sp-5) var(--sp-6);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--blue);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.benefit__who {
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+
+.benefit__what {
+  margin-top: var(--sp-2);
+  color: var(--ink-2);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+}
+
+/* Honesty tiers on the white Technology surface. */
+.ov-tech .tiers {
+  margin-top: var(--sp-10);
+  padding-top: var(--sp-6);
+  border-top: 1px solid var(--line);
+}
+
+.ov-tech .tier {
+  border-left-color: var(--line-strong);
+}
+
+.ov-tech .tier--real {
+  border-left-color: var(--green);
+}
+
+.ov-tech .tier--keyed {
+  border-left-color: var(--blue);
+}
+
+.ov-tech .tier__title,
+.ov-tech .tier__now {
+  color: var(--ink);
+}
+
+.ov-tech .tier__text {
+  color: var(--ink-2);
+}
+
+/* Every integration, folded under one button on every screen; no leading dots in the list. */
+.ov-tech .live-now {
+  margin-top: var(--sp-5);
+}
+
+.ov-tech .live-now__toggle {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.ov-tech .integration-grid {
+  display: none;
+  margin-top: var(--sp-3);
+}
+
+.ov-tech .live-now[data-open='true'] .integration-grid {
+  display: grid;
+}
+
+.ov-tech .integration-grid .integration {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ov-tech .integration-grid .integration__dot {
+  display: none;
+}
+
+.ov-tech .integration-grid .integration__detail {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .ov-rail {
+    display: none;
+  }
+
+  .benefits__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The USP table becomes one card per question, the Chhatri answer tinted. */
+  .usp thead {
+    display: none;
+  }
+
+  .usp,
+  .usp tbody,
+  .usp tr,
+  .usp th,
+  .usp td {
+    display: block;
+    width: auto;
+  }
+
+  .usp tr {
+    margin-bottom: var(--sp-3);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .usp tbody th {
+    width: auto;
+    padding: 12px 14px 4px;
+    border: 0;
+  }
+
+  .usp td {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: var(--sp-3);
+    padding: 8px 14px;
+    border: 0;
+  }
+
+  .usp td::before {
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    content: attr(data-label);
+  }
+
+  .usp tbody tr:last-child .usp__ours {
+    border-radius: 0;
+  }
+
+  .usp__caption {
+    font-size: var(--fs-lg);
+  }
+}

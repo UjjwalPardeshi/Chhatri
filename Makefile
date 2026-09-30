@@ -35,8 +35,9 @@ data: ## Build every artefact: python backend/scripts/build_data.py (slow; the o
 
 test: test-backend test-frontend ## Fast suite: backend (not slow, coverage >= 80%) + frontend typecheck, lint, test
 
+# COVERAGE_CORE=sysmon: Python 3.12's low-overhead tracer (coverage >= 7.4); several times faster here.
 test-backend: ## Backend pytest -m "not slow" with coverage >= 80% (COVERAGE_MIN)
-	cd $(ROOT)/backend && $(PY) -m pytest -m "not slow" --cov=chhatri --cov-report=term-missing --cov-fail-under=$(COVERAGE_MIN)
+	cd $(ROOT)/backend && COVERAGE_CORE=sysmon $(PY) -m pytest -m "not slow" --cov=chhatri --cov-report=term-missing --cov-fail-under=$(COVERAGE_MIN)
 
 test-frontend: ## Frontend typecheck, lint and unit tests (B7 scripts)
 	cd $(ROOT)/frontend && $(NPM) run typecheck && $(NPM) run lint && $(NPM) run test

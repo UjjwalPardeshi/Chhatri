@@ -39,8 +39,33 @@ describe('Claims', () => {
     fireEvent.click(approve)
     expect(await screen.findByText('Officer decision')).toBeTruthy()
     expect(await screen.findByText(/Hospital confirmed by phone/)).toBeTruthy()
+    expect(await screen.findByText('Policy engine decision')).toBeTruthy()
+    expect(screen.getByText(/^Personal claim ₹1,500 for Anil.s Tea Stall sent to a human: the name on the slip/)).toBeTruthy()
+    expect(await screen.findByText(/₹1,500 credited to Anil.s Tea Stall at 11:24, with the settlement\./)).toBeTruthy()
+    await waitFor(() => expect(backend.runtime.payouts.at(-1)?.status).toBe('CREDITED'))
+    expect(screen.getByRole('link', { name: 'Open the phone' }).getAttribute('href')).toBe('/merchant/S-0142')
     fireEvent.click(screen.getByRole('button', { name: 'Open' }))
     await waitFor(() => expect(screen.queryByText('No case selected')).toBeTruthy())
+  })
+
+  it('opens the slip large to compare names and closes it with Escape', async () => {
+    await referMismatch()
+    renderApp('/claims', backend)
+    const detail = await screen.findByRole('article', { name: 'Case C-2291' })
+    expect(within(detail).getByText('Name on the slip doesn’t match KYC')).toBeTruthy()
+    fireEvent.click(within(detail).getByRole('button', { name: 'Open the slip large' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Hospital slip' }))
+    expect(dialog.getByText('Sunil Pawar')).toBeTruthy()
+    expect(dialog.getByText(/Match score 41 \/ 100/)).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('drops a case link from another run instead of showing an error', async () => {
+    await referMismatch()
+    renderApp('/claims?case=C-9999', backend)
+    expect(await screen.findByRole('article', { name: 'Case C-2291' })).toBeTruthy()
+    expect(screen.queryByText(/NOT_FOUND/)).toBeNull()
   })
 
   it('declines a dispute from a deep link', async () => {
@@ -53,7 +78,7 @@ describe('Claims', () => {
     const decline = within(detail).getByRole('button', { name: 'Decline' })
     await waitFor(() => expect((decline as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(decline)
-    expect(await screen.findByText(/Declined by the claims officer/)).toBeTruthy()
+    expect(await screen.findByText(/Dispute declined by a claims officer/)).toBeTruthy()
   })
 
   it('shows an inline error when the decision fails', async () => {

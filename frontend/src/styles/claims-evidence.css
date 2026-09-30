@@ -1,0 +1,264 @@
+/*
+ * Evidence chart and policy checks on a case (SPEC §12 "expected vs actual", §9.2 checks): a
+ * quiet bar chart with gridlines labelled in a left gutter, a labelled low-sales band and red
+ * zero ticks; checks sorted with failures tinted, stacking into small cards on a phone.
+ */
+.ev-chart {
+  margin: 14px 0 var(--sp-8);
+}
+
+.ev-chart figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 8px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.swatch--expected {
+  background: #cfd9e5;
+}
+
+.swatch--actual {
+  background: var(--blue);
+}
+
+/* The left margin is the gridline gutter. */
+.ev-chart__area {
+  position: relative;
+  margin-left: 48px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.ev-chart__band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  container-type: inline-size;
+  border-inline: 1px dashed var(--red-line);
+  background: rgb(185 28 28 / 6%);
+}
+
+.ev-chart__band-label {
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--red-line);
+  color: var(--red);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ev-chart__grid {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 1px dashed var(--line-strong);
+  pointer-events: none;
+}
+
+.ev-chart__grid span {
+  position: absolute;
+  right: calc(100% + 6px);
+  bottom: 0;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(50%);
+}
+
+.ev-chart__band-short {
+  display: none;
+}
+
+@container (max-width: 96px) {
+  .ev-chart__band-long {
+    display: none;
+  }
+
+  .ev-chart__band-short {
+    display: inline;
+  }
+}
+
+.ev-chart__bars {
+  position: relative;
+  display: flex;
+  height: 100%;
+  gap: 4px;
+}
+
+.ev-chart__hour {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.ev-chart__plot {
+  position: relative;
+  flex: 1;
+}
+
+.ev-chart__expected,
+.ev-chart__actual,
+.ev-chart__zero {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ev-chart__expected,
+.ev-chart__actual {
+  border-radius: 4px 4px 0 0;
+}
+
+.ev-chart__expected {
+  width: 80%;
+  background: #cfd9e5;
+}
+
+.ev-chart__actual {
+  width: 44%;
+  background: var(--blue);
+}
+
+.ev-chart__zero {
+  width: 44%;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--red);
+}
+
+.ev-chart__label {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  text-align: center;
+}
+
+/* Checks. */
+.checks td {
+  font-size: var(--fs-sm);
+  vertical-align: middle;
+}
+
+.checks tr[data-status='FAIL'] td {
+  background: var(--red-soft);
+}
+
+.checks tr[data-status='UNSURE'] td {
+  background: var(--amber-soft);
+}
+
+.checks__label {
+  display: block;
+}
+
+.checks__code {
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+}
+
+.check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.check-pill--green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.check-pill--red {
+  background: #fff;
+  color: var(--red);
+  box-shadow: inset 0 0 0 1px var(--red-line);
+}
+
+.check-pill--amber {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.check-pill--grey {
+  background: var(--grey-soft);
+  color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .checks thead {
+    display: none;
+  }
+
+  .checks,
+  .checks tbody,
+  .checks tr,
+  .checks td {
+    display: block;
+  }
+
+  .checks tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px var(--sp-2);
+    margin-bottom: var(--sp-2);
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+  }
+
+  .checks tr[data-status='FAIL'] {
+    border-color: var(--red-line);
+    background: var(--red-soft);
+  }
+
+  .checks tr[data-status='UNSURE'] {
+    background: var(--amber-soft);
+  }
+
+  .checks td,
+  .checks tr[data-status] td {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .checks td[data-label] {
+    grid-column: 1 / -1;
+    font-size: var(--fs-xs);
+  }
+
+  .checks td[data-label]::before {
+    color: var(--muted);
+    content: attr(data-label) ': ';
+  }
+}

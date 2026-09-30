@@ -1,6 +1,9 @@
 /**
  * Live map page "/live" (SPEC §20, deck slide 6): the city heat map on the left; on the right the
- * triggered-zone card, KPI tiles, "Why Zone 9 got nothing" and the live event feed.
+ * zone card (with its 3-hour headline), KPI tiles, "Why Zone 9 got nothing" (only once the 17:00
+ * evaluation has paid other zones; a neutral note before) and the live event feed. The demo
+ * merchant's credit at 17:04 raises a toast over the map. While a load, seek or reset rebuilds the
+ * replay (1-3 s), a veil says so, so the old frame never reads as the new time.
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -8,11 +11,13 @@ import { useNavigate } from 'react-router'
 import type { StateSnapshot } from '../api/types'
 import { LiveMap } from '../components/map/LiveMap'
 import { EventFeed } from '../components/panel/EventFeed'
-import { Explanations } from '../components/panel/Explanations'
+import { ZoneExplanations } from '../components/panel/Explanations'
 import { KpiTiles } from '../components/panel/KpiTiles'
+import { PayoutToast } from '../components/panel/PayoutToast'
 import { ZoneCard } from '../components/panel/ZoneCard'
+import { liveNow, zoneTrend } from '../components/panel/zoneTrend'
 import { AsyncView, ErrorState, Loading } from '../components/common/Status'
-import { useLive } from '../state/live'
+import { useLive, type ReplayAction } from '../state/live'
 import { useAsync } from '../state/useAsync'
 import { useGeo } from '../state/useGeo'
 import { useMerchant } from '../state/useMerchant'
@@ -30,11 +35,26 @@ function ZonePanelCard({ zoneId, snapshot }: { zoneId: string; snapshot: StateSn
   const zone = snapshot.zones.find((z) => z.zone_id === zoneId)
   const key = `${JSON.stringify(zone)}|${JSON.stringify(snapshot.kpis)}|${snapshot.triggers.length}`
   const panel = useAsync((signal) => api.zonePanel(zoneId, signal), [api, zoneId, key])
-  return <AsyncView {...panel} label="Loading zone…">{(data) => <ZoneCard panel={data} />}</AsyncView>
+  return (
+    <AsyncView {...panel} label="Loading zone…">
+      {(data) => {
+        const trend = zoneTrend(data, snapshot.triggers)
+        return <ZoneCard key={data.zone.zone_id} panel={data} trend={trend} live={liveNow(data.zone, trend)} />
+      }}
+    </AsyncView>
+  )
+}
+
+/** The veil's words for a replay action that rebuilds the city (null for quick ones). */
+export function rebuildLabel(action: ReplayAction | null): string | null {
+  if (action === 'load') return 'Loading the replay…'
+  if (action === 'seek' || action === 'reset') return 'Moving the replay clock…'
+  return null
 }
 
 export default function Live() {
-  const { api, snapshot, snapshotError, refresh } = useLive()
+  const { api, snapshot, snapshotError, refresh, replayBusy } = useLive()
+  const rebuilding = rebuildLabel(replayBusy)
   const navigate = useNavigate()
   const geo = useGeo(api)
   const merchant = useMerchant(snapshot?.demo_merchant_id ?? null)
@@ -63,11 +83,18 @@ export default function Live() {
             />
           )}
         </AsyncView>
+        <PayoutToast merchantId={snapshot.demo_merchant_id} shopName={merchant.data?.shop_name ?? null} />
+        {rebuilding ? (
+          <output className="map-veil" aria-live="polite">
+            <span className="spinner" />
+            {rebuilding}
+          </output>
+        ) : null}
       </div>
       <aside className="home__panel">
         {zoneId ? <ZonePanelCard zoneId={zoneId} snapshot={snapshot} /> : null}
         <KpiTiles kpis={snapshot.kpis} />
-        <Explanations explanations={snapshot.explanations} />
+        <ZoneExplanations snapshot={snapshot} />
         <EventFeed items={snapshot.feed} />
       </aside>
     </div>

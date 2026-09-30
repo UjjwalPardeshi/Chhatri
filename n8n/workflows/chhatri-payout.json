@@ -65,46 +65,12 @@
       }
     },
     {
-      "id": "5700a1b8-4971-59b2-9024-c208fbcfd68c",
-      "name": "Accept (202)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        480,
-        300
-      ],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'accepted' } }) }}",
-        "options": {
-          "responseCode": 202
-        }
-      }
-    },
-    {
-      "id": "e5d70f00-f43f-57d9-a780-eb21c8c4210c",
-      "name": "Reject (403)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        480,
-        500
-      ],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"missing or invalid X-Chhatri-Secret\"}}",
-        "options": {
-          "responseCode": 403
-        }
-      }
-    },
-    {
       "id": "0c1873d7-1f07-5e1e-8218-5980eb8a9614",
       "name": "Step 1 · execute_payout",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        720,
+        480,
         300
       ],
       "parameters": {
@@ -138,7 +104,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        960,
+        720,
         300
       ],
       "parameters": {
@@ -172,7 +138,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        1200,
+        960,
         300
       ],
       "parameters": {
@@ -206,7 +172,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        1440,
+        1200,
         300
       ],
       "parameters": {
@@ -233,6 +199,40 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000
+    },
+    {
+      "id": "639782e1-9444-5233-b587-34490a1b1516",
+      "name": "Completed (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1440,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'completed', steps: ['execute_payout', 'credit_payout', 'notify_merchant', 'pause_instalment'] } }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "e5d70f00-f43f-57d9-a780-eb21c8c4210c",
+      "name": "Reject (403)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        480,
+        500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"missing or invalid X-Chhatri-Secret\"}}",
+        "options": {
+          "responseCode": 403
+        }
+      }
     }
   ],
   "connections": {
@@ -251,7 +251,7 @@
       "main": [
         [
           {
-            "node": "Accept (202)",
+            "node": "Step 1 · execute_payout",
             "type": "main",
             "index": 0
           }
@@ -259,17 +259,6 @@
         [
           {
             "node": "Reject (403)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Accept (202)": {
-      "main": [
-        [
-          {
-            "node": "Step 1 · execute_payout",
             "type": "main",
             "index": 0
           }
@@ -303,6 +292,17 @@
         [
           {
             "node": "Step 4 · pause_instalment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 4 · pause_instalment": {
+      "main": [
+        [
+          {
+            "node": "Completed (200)",
             "type": "main",
             "index": 0
           }

@@ -31,7 +31,7 @@ export function Proof() {
   const { api } = useLive()
   const report = useAsync((signal) => api.backtest(signal), [api])
   return (
-    <RevealSection label="Backtest" className="ov-proof">
+    <RevealSection label="Backtest" id="ov-proof" className="ov-proof">
       <h2 className="ov-h2">Backtest first: two past monsoons, replayed.</h2>
       <AsyncView {...report} label="Loading the backtest…">
         {(data) => <ProofBody report={data} />}

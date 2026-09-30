@@ -103,6 +103,7 @@ def test_frontend_dockerfile_and_nginx_template(repo_root: Path) -> None:
     docker = (repo_root / "frontend" / "Dockerfile").read_text(encoding="utf-8")
     assert (
         "RUN npm run build" in docker
+        and 'ARG VITE_TILE_URL=""' in docker
         and "COPY nginx.conf /etc/nginx/templates/default.conf.template" in docker
     )
     conf = (repo_root / "frontend" / "nginx.conf").read_text(encoding="utf-8")

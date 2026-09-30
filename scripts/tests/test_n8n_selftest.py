@@ -62,6 +62,30 @@ def test_wrong_order_is_reported(workflows: dict[str, tuple[str, ...]]) -> None:
     assert st.report(results) == 1
 
 
+def test_answer_before_the_last_callback_is_reported(workflows: dict[str, tuple[str, ...]]) -> None:
+    by_name = {r.name: r for r in _run(workflows, early=True)}
+    assert not by_name["payout: steps"].ok
+    assert "webhook answered before the last callback" in by_name["payout: steps"].detail
+
+
+@pytest.mark.parametrize(
+    ("answer", "problem"),
+    [
+        (st.WebhookAnswer(200, b'{"ok": true, "data": {"run_id": "r", "status": "completed"}}'), None),
+        (st.WebhookAnswer(202, b""), "HTTP 202"),
+        (st.WebhookAnswer(200, b"<html>"), "not JSON"),
+        (st.WebhookAnswer(200, b'{"ok": false}'), "no ok/data"),
+        (
+            st.WebhookAnswer(200, b'{"ok": true, "data": {"run_id": "x", "status": "completed"}}'),
+            "not a completion",
+        ),
+    ],
+)
+def test_completion_problem(answer: st.WebhookAnswer, problem: str | None) -> None:
+    found = st.completion_problem(answer, "r")
+    assert found is None if problem is None else problem in (found or "")
+
+
 def test_webhook_error_and_missing_workflow_fail(
     workflows: dict[str, tuple[str, ...]],
 ) -> None:

@@ -1,11 +1,13 @@
+/* Phone and panel as one centred group; the phone takes the full height of the page. */
 .merchant-page {
   display: grid;
-  grid-template-columns: 390px minmax(0, 520px);
-  justify-content: center;
-  gap: 22px;
+  grid-template-columns: 372px minmax(0, 1fr);
+  gap: var(--sp-6);
+  max-width: 1180px;
   height: 100%;
   min-height: 0;
-  padding: var(--gutter) 18px;
+  margin: 0 auto;
+  padding: var(--gutter) var(--sp-4);
 }
 
 .phone {
@@ -24,7 +26,7 @@
 .phone__status {
   display: flex;
   justify-content: space-between;
-  padding: 6px 18px 2px;
+  padding: 5px 18px 1px;
   background: var(--wa-header);
   color: #fff;
   font-size: var(--fs-xs);
@@ -35,7 +37,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 14px 10px;
+  padding: 4px 14px 8px;
   background: var(--wa-header);
   color: #fff;
 }
@@ -62,6 +64,7 @@
 }
 
 .phone__thread {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -74,12 +77,33 @@
   background-size: 14px 14px;
 }
 
+/* The day stays in view while the thread scrolls, as in WhatsApp, in a strip that never covers a bubble. */
+.phone__day {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  justify-content: center;
+  padding: 6px 0 2px;
+  background: var(--chat-bg);
+}
+
+.phone__day::after {
+  position: absolute;
+  right: 0;
+  bottom: -8px;
+  left: 0;
+  height: 8px;
+  background: linear-gradient(var(--chat-bg), rgb(236 229 221 / 0%));
+  content: '';
+  pointer-events: none;
+}
+
 .day-chip {
-  align-self: center;
-  margin: 2px 0 4px;
   padding: 3px 10px;
   border-radius: 7px;
-  background: rgb(255 255 255 / 85%);
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 26 51 / 12%);
   color: var(--muted);
   font-size: var(--fs-2xs);
 }
@@ -184,16 +208,42 @@
   margin-bottom: 4px;
 }
 
-.voice__wave {
+.wave {
+  position: relative;
+  display: inline-flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.wave__bars {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  height: 20px;
 }
 
-.voice__wave span {
-  width: 2.5px;
+.wave__bars span {
+  width: 3px;
   border-radius: 2px;
-  background: #5f7086;
+  background: #9aa7b8;
+}
+
+/* While playing, a blue copy of the bars fills from the left over the note's duration. */
+.wave__bars--played {
+  position: absolute;
+  inset: 0 auto 0 0;
+  clip-path: inset(0 100% 0 0);
+  animation: wave-fill var(--voice-duration, 4s) linear forwards;
+}
+
+.wave__bars--played span {
+  background: var(--blue);
+}
+
+@keyframes wave-fill {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
 }
 
 .voice__time {
@@ -204,16 +254,12 @@
 
 .voice__tag {
   display: inline-block;
-  margin-top: 4px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: rgb(0 0 0 / 6%);
-  color: #5b6474;
-  font-size: var(--fs-2xs);
+  margin-top: 3px;
+  color: #7d8794;
+  font-size: 10.5px;
 }
 
 .voice__tag--live {
-  background: var(--green-soft);
   color: var(--green);
 }
 
@@ -354,12 +400,19 @@
   background: #f0f2f5;
 }
 
+/* One scrolling row of chips; the right edge fades so the row reads as scrollable. */
 .chips {
   display: flex;
   gap: 6px;
-  padding-bottom: 6px;
+  padding: 0 24px 6px 0;
   overflow-x: auto;
-  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
 }
 
 .chip {
@@ -374,12 +427,30 @@
   background: #fff;
   color: var(--ink);
   font-size: var(--fs-xs);
+  scroll-snap-align: start;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.chip:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .chip--hot {
   border-color: var(--blue);
   background: var(--blue-soft);
   color: var(--blue);
+}
+
+/* The chip a launcher asked the presenter to tap: a ring that pulses three times. */
+.chip--hint {
+  box-shadow: 0 0 0 0 rgb(11 99 201 / 45%);
+  animation: chip-hint 1.4s ease-out 3;
+}
+
+@keyframes chip-hint {
+  to {
+    box-shadow: 0 0 0 7px rgb(11 99 201 / 0%);
+  }
 }
 
 .slips {
@@ -479,98 +550,37 @@
   background: var(--red);
 }
 
-.merchant-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.merchant-card {
-  padding: 14px 16px;
-}
-
-.merchant-card h2 {
-  margin: 2px 0;
-  font-size: var(--fs-xl);
-}
-
-.kv-list {
-  margin: 10px 0 0;
-}
-
-.kv {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-}
-
-.kv dt {
-  color: var(--muted);
-}
-
-.kv dd {
-  margin: 0;
-  text-align: right;
-}
-
-.money-list {
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.money-list li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-}
-
-.money-list strong {
-  min-width: 70px;
-  font-size: var(--fs-lg);
-  font-weight: 500;
-}
-
-.formula {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--paper);
-}
-
-.formula__en {
-  font-size: var(--fs-md);
-  font-weight: 500;
-}
-
-.formula__hi {
-  margin: 2px 0 4px;
-  font-size: var(--fs-base);
-}
-
-.presenter ol {
-  margin: 6px 0 0;
-  padding-left: 18px;
-}
-
-.presenter li {
-  margin: 5px 0;
-  font-size: var(--fs-sm);
-}
-
 @keyframes glow {
   50% {
     box-shadow: 0 0 0 4px rgb(21 128 61 / 25%);
   }
 }
 
+/* The Soundbox line inside the phone shows only when the Soundbox card is out of view. */
+.phone__soundbox {
+  display: none;
+  padding-top: 6px;
+  background: #f0f2f5;
+}
+
+/* Chhatri's spoken lines: a small grey waveform beside the play button. */
+.wave--compact {
+  flex: none;
+}
+
+.wave--compact .wave__bars {
+  height: 14px;
+}
+
+.wave--compact .wave__bars span {
+  width: 2px;
+}
+
 @media (max-width: 900px) {
+  .phone__soundbox {
+    display: block;
+  }
+
   .merchant-page {
     grid-template-columns: minmax(0, 1fr);
     height: auto;
@@ -579,5 +589,19 @@
 
   .phone {
     height: 78vh;
+    max-height: 700px;
+  }
+}
+
+/* Small phones: the page is the phone, so the drawn bezel goes. */
+@media (max-width: 480px) {
+  .merchant-page {
+    padding: 8px 8px 12px;
+  }
+
+  .merchant-page > .phone {
+    border: 0;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
   }
 }

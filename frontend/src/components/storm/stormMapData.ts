@@ -116,8 +116,8 @@ function zoneLabels(input: StormInput, project: Projection): StormLabel[] {
   return input.snapshot.zones.flatMap((zone) => {
     const centre = centroids.get(zone.zone_id)
     if (!centre || !LABELLED.has(zone.status)) return []
-    const pct = zone.live_index_pct ?? zone.index_pct
-    const text = zone.status === 'slow_day' ? `${zone.zone_id} · ${pct ?? '—'}% of expected` : zone.label
+    /** B3: labels read the trailing 3-hour index, like the Z9 explanation. */
+    const text = zone.status === 'slow_day' ? `${zone.zone_id} · ${zone.index_pct ?? '—'}% of expected` : zone.label
     return [{ id: zone.zone_id, at: project(centre[1], centre[0]), text, status: zone.status }]
   })
 }

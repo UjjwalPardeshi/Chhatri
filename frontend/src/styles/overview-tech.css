@@ -104,13 +104,6 @@
   font-size: var(--fs-sm);
 }
 
-.live-now {
-  margin-top: var(--sp-8);
-}
-
-.live-now__toggle {
-  display: none;
-}
 
 .integration-grid {
   display: grid;
@@ -284,8 +277,9 @@
 
 .roadmap__when {
   color: var(--accent);
-  font-family: var(--font-mono);
   font-size: var(--fs-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .roadmap__card h3 {
@@ -431,28 +425,10 @@
     gap: 2px;
   }
 
-  /* Phones: the integration list folds away behind one line. */
-  .live-now__toggle {
-    display: inline-flex;
-    height: 34px;
-    align-items: center;
-    padding: 0 14px;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-pill);
-    background: var(--card);
-    font-size: var(--fs-sm);
-    font-weight: 500;
-  }
-
+  /* Phones: two columns of integrations, names and modes only. */
   .integration-grid {
-    display: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 var(--sp-3);
-    margin-top: var(--sp-3);
-  }
-
-  .live-now[data-open='true'] .integration-grid {
-    display: grid;
   }
 
   .integration-grid .integration__detail {

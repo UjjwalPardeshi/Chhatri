@@ -15,11 +15,16 @@ Every scenario load is deterministic: same ids, same amounts, and the first case
 
 ## T−30 min: machine check
 
-1. Start the stack with one of these:
-   - `make dev`: console at http://localhost:5173, API at http://localhost:8000.
+1. Start the stack with one of these (decide before the talk, see "Workflows: in-process or n8n" below):
+   - `make dev`: console at http://localhost:5173, API at http://localhost:8000, in-process workflows.
    - `make up`: console at http://localhost:8080, API at http://localhost:8000, n8n at http://localhost:5678.
-     `make up` returns only when every container is healthy.
-2. Run `make demo-check`. It must pass every scenario.
+     `make up` returns only when every container is healthy. It runs the workflows on n8n unless `.env`
+     has `CHHATRI_STACK_N8N_URL=` (empty value), which selects the in-process runner.
+2. Rehearse every scenario against the running backend:
+   `backend/.venv/bin/python backend/scripts/demo_check.py --url http://localhost:8000`. It must print
+   `PASS: 70 passed, 0 failed, 0 skipped` (about 10 s in-process, about 50 s with n8n). It reloads
+   scenarios, so run it before you open the console, never during the talk. `make demo-check` runs the
+   same checks in a separate in-process app on the committed artefacts.
 3. Run `curl -s localhost:8000/api/preflight`. Every item must have `"ok": true`.
 4. Open the console at 1280×720 with browser zoom at 100 %, in a full-screen window.
 5. Click **Enable sound** in the header once. This is the one user gesture the browser needs;
@@ -28,6 +33,14 @@ Every scenario load is deterministic: same ids, same amounts, and the first case
    WhatsApp, Paytm staging or n8n. Nothing simulated may be called live.
 7. Pick the **monsoon** scenario. The clock must read `Mumbai · monsoon replay · 08:00 · simulated`
    and the replay must be paused.
+
+**Workflows: in-process or n8n.** Both give the same simulated timeline (decisions 17:00, credits
+17:04, pauses 17:05; checked by `demo_check.py --url` in both modes). With n8n LIVE the 17:00 minute
+starts 312 payout runs on n8n one after another, so the simulated clock **holds at 17:00 for about
+30–60 s of real time** before it moves on (the feed fills with decisions meanwhile). The deck (slide 13)
+does not claim n8n as live, so the recommended stage set-up is the in-process runner (`make dev`, or
+`make up` with `CHHATRI_STACK_N8N_URL=`); the n8n badge then honestly reads SIMULATED. If you present
+with n8n LIVE, talk over the hold at step 4 of the storm, or pause at 16:59 and step once.
 
 Backup controls, if a UI control misbehaves. `API` is `http://localhost:8000` with `make dev`, or
 `http://localhost:8080` (through nginx) with `make up`:
@@ -67,7 +80,8 @@ paused at 08:00.
 3. **14:00–17:00 (about 30 s at speed 6)**: Z3, Z7 and Z12 turn amber, then red. Zone status goes from `watch` to
    `triggered`. Z9 (Chembur, by the harbour) also dips, but it has no alert.
 4. **17:00: the trigger fires** for Z3, Z7 and Z12. Pause if you want to talk over it.
-   - Zone labels: `Z7 · 37% · 46 shops`, `Z3 · 38% · 141 shops`, `Z12 · 47% · 125 shops`.
+   - Zone labels: `Z7 · 37% · 46 shops`, `Z3 · 38% · 141 shops`, `Z12 · 47% · 125 shops`; Z9 reads
+     `Z9 · 61% · 64 shops` with status slow day.
    > "The drop held for three hours across all 46 shops in Zone 7, below 50 % and below the bottom of
    > the model's range, during the alert. The policy engine checks every shop's cover. No one filed
    > anything."
@@ -131,14 +145,17 @@ zone was normal.
    2025-08-20, "Viral fever", KEM Hospital, Parel).
    > "The vision model reads the name and dates. The policy engine checks them against KYC
    > (ANIL RAMESH JADHAV) and against the silent day."
-   Decision **APPROVED ₹1,500**:
-   - The decision's formula has the SPEC §9.6 personal form, `½ × <usual Wednesday> = … a day, capped
-     at ₹1,500 × 1 day = ₹1,500` (the claim is for Wednesday 20 Aug, so read that day's number off the
-     screen; only the ₹1,500 is a golden number).
-   - Message: `अनिल जी, आपका दावा मंज़ूर है। ₹1,500 आज के सेटलमेंट के साथ जमा।` / *Anil ji, your claim
-     is approved. ₹1,500 credited with today's settlement.* This arrives at credit time, 4 simulated
-     minutes after the decision, so press **Play** briefly.
-   - The instalment for Thursday (the day after the silent day) is paused.
+   Decision **APPROVED ₹1,500**, decided at the minute you send the slip (11:20 if you paused there):
+   - Formula: `½ × ₹4,300 = ₹2,150 a day, capped at ₹1,500 × 1 day = ₹1,500` (Hindi
+     `₹4,300 का आधा = ₹2,150 प्रतिदिन; सीमा ₹1,500 × 1 दिन = ₹1,500`). ₹4,300 is Anil's usual
+     Wednesday, the silent day; the console's "expected today" for Thursday reads ₹4,560.
+   - Credit time is 4 simulated minutes after the decision, so **press Play** (or
+     `post /api/replay/step '{"minutes":5}'`): at +4 min the message
+     `अनिल जी, आपका दावा मंज़ूर है। ₹1,500 आज के सेटलमेंट के साथ जमा।` / *Anil ji, your claim is approved.
+     ₹1,500 credited with today's settlement.*, the ₹1,500 payout card and the Soundbox line
+     **"Paytm par ₹1,500 prapt hue — Chhatri se"**.
+   - At +5 min: `आज की ₹600 की किस्त रोक दी गई है।` / *Today's ₹600 instalment is paused.* (Thursday
+     21 Aug, the day after the silent day).
 
 ## 4:45–5:45 · Live tests 2 and 3 (deck slide 8)
 
@@ -152,7 +169,8 @@ Pawar").
 - Open `/claims` → **C-2291**. The evidence shows the slip image, the extracted name, the KYC name, the
   match score, the silent days and the checks. Tap **Approve**. The officer decision re-runs every HARD
   check and pays **₹1,500**. Anil gets `अनिल जी, हमारी टीम ने आपका दावा मंज़ूर किया। ₹1,500 जमा।` /
-  *Anil ji, our team approved your claim. ₹1,500 credited.*
+  *Anil ji, our team approved your claim. ₹1,500 credited.* That message comes at credit time, 4
+  simulated minutes after the approval: press Play (or step 5 minutes) before switching to the phone.
   > "Doubtful claims always go to a person. The AI never pays on a doubt."
 
 **BLOCKED: "Red alert tomorrow. Cover me today."** Pick scenario **buy_cover**: Mon 18 Aug 2025,
@@ -160,8 +178,11 @@ Pawar").
 Pav, Z3, not covered) and tap the voice chip **cover**.
 - Reply: `नया कवर वेटिंग पीरियड के बाद शुरू होता है — 25 अगस्त से। कल के अलर्ट पर यह लागू नहीं होगा।` /
   *New cover starts after the waiting period — from 25 August. It won't apply to tomorrow's alert.*
-- Then `COVER_LINK` with a Paytm link for 30 days of Z3's premium. The link comes from Paytm staging
-  when `PAYTM_MCP_URL` or `PAYTM_MID` + `PAYTM_KEY_SECRET` is set; otherwise it is
+- Then the link message for 30 days of Z3's premium: *To buy cover for later, pay ₹424.80
+  (₹14.16/day) here: …* (Hindi `आगे के लिए कवर लेना हो तो ₹424.80 (₹14.16/दिन) यहाँ भरें: …`). The price
+  comes from the backtest (`backend/artifacts/premiums.json`); the deck's "a few rupees a day" is a
+  pricing decision still open, so do not quote a price beyond what the screen shows. The link comes
+  from Paytm staging when `PAYTM_MCP_URL` or `PAYTM_MID` + `PAYTM_KEY_SECRET` is set; otherwise it is
   `https://paytm.me/sim-…`, labelled SIMULATED.
   > "Nobody can buy cover once a storm is forecast. The waiting period is seven days."
 
@@ -193,6 +214,9 @@ Pav, Z3, not covered) and tap the voice chip **cover**.
 | "reconnecting" pill | Wait. SSE resumes with `Last-Event-ID`. Reload the page if it lasts more than 10 s; state is server-side. |
 | No sound | Click **Enable sound** again. Every voice bubble also has a play button. |
 | n8n container down | Nothing. A workflow n8n cannot start runs in-process instead, with the same steps and timeline; the backend logs it at ERROR. |
+| Clock holds at 17:00 (n8n LIVE) | Expected: 312 payout runs are going through n8n (about 30–60 s). Keep talking; the clock resumes and credits land at 17:04. To avoid it, restart with `CHHATRI_STACK_N8N_URL=` in `.env` and `make up`. |
+| Phone shows nothing after the slip or the officer's approval | The clock is paused; money arrives 4 simulated minutes later. Press Play, or `post /api/replay/step '{"minutes":5}'`. |
+| Console does not load with `make up` | `docker compose ps` (all healthy?), `docker compose logs backend`. Fall back to `make dev` on the same machine: console http://localhost:5173. |
 | Paytm staging slow or down | Say so; nothing else depends on it. For an offline demo, start without the Paytm variables: the link is then `https://paytm.me/sim-…`, labelled SIMULATED. |
 | Replay stuck | `post /api/replay/pause '{}'`, then `post /api/replay/step '{"minutes":5}'`, or seek to the moment you need. |
 
@@ -207,6 +231,8 @@ Pav, Z3, not covered) and tap the voice chip **cover**.
 | KPIs | 3 zones triggered · 312 shops paid · 4 min trigger to money |
 | Z7 | 46 shops, 46 of 46 prepaid, total ₹58,900 |
 | Anil (S-0142) | usual Tuesday ₹4,380 · area payout ₹1,380 · instalment ₹600 paused |
-| Personal claim | ₹1,500 (daily cap), 1 day, Thursday instalment paused |
+| Personal claim | usual Wednesday ₹4,300 · ½ = ₹2,150 capped at ₹1,500, 1 day · credit +4 min · Thursday's ₹600 instalment paused +5 min |
+| Z9 | `Z9 · 61% · 64 shops`, slow day, no payout |
+| Cover link (Ramesh, S-0907, Z3) | ₹424.80 for 30 days (₹14.16/day, from the backtest; pricing decision pending) |
 | First case after a fresh load | C-2291 |
 | Cover bought Mon 18 Aug | BLOCKED, starts 25 August (7-day waiting period) |

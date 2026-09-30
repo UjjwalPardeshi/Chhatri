@@ -18,7 +18,7 @@ export const JOURNEY_LAUNCH: Readonly<Record<Journey['key'], { target: LaunchKey
 
 export function Journeys({ launcher }: { launcher: LaunchState }) {
   return (
-    <RevealSection label="What the merchant sees" className="ov-journeys">
+    <RevealSection label="What the merchant sees" id="ov-whatsapp" className="ov-journeys">
       <h2 className="ov-h2">The merchant gets it on WhatsApp, in Hindi and English.</h2>
       <div className="journeys">
         {JOURNEYS.map((journey, i) => {

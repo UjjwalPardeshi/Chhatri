@@ -7,7 +7,8 @@ import { STORM } from '../../content/deck'
 import type { LaunchState } from '../../state/useLaunch'
 import { Explanations } from '../panel/Explanations'
 import { KpiTiles } from '../panel/KpiTiles'
-import { ZoneCard, type ZoneCardData, type ZoneTrend } from '../panel/ZoneCard'
+import { ZoneCard, type ZoneCardData } from '../panel/ZoneCard'
+import { nextHour, type ZoneTrend } from '../panel/zoneTrend'
 import { STORM_MAP, StormMap } from '../storm/StormMap'
 import { LaunchButton } from './LaunchButton'
 import { LaunchError } from './LaunchError'
@@ -26,6 +27,7 @@ const Z7_INDEX_PCT = 37
 export const STORM_TREND: ZoneTrend = {
   pct: Z7_INDEX_PCT,
   hours: (STORM_MAP.hourly[STORM.zone.id] ?? []).map((pct, i) => ({ label: WINDOW_HOURS[i] ?? '', pct })),
+  window: `${WINDOW_HOURS[0]} to ${nextHour(WINDOW_HOURS[WINDOW_HOURS.length - 1])}`,
 }
 
 const MAP_CHIP = 'Mumbai · monsoon replay · 17:05 · simulated'
@@ -33,7 +35,7 @@ const STORM_KEYS = ['storm-live', 'storm-jump'] as const
 
 export function Storm({ launcher }: { launcher: LaunchState }) {
   return (
-    <RevealSection label="The storm replay" className="ov-storm" tone="navy">
+    <RevealSection label="The storm replay" id="ov-storm" className="ov-storm" tone="navy">
       <h2 className="ov-h2">The claims team sees the loss as it happens.</h2>
       <div className="ov-storm__grid">
         <div className="ov-storm__map">

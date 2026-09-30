@@ -178,7 +178,7 @@
   display: grid;
   flex: 1;
   grid-template-columns: 104px minmax(0, 1fr);
-  align-items: center;
+  align-items: first baseline;
   gap: var(--sp-3);
   padding: 13px var(--sp-6);
   border-bottom: 1px solid var(--line-soft);
@@ -186,10 +186,12 @@
   line-height: 1.45;
 }
 
+/* Times and "Day 1" in the text face at medium weight, figures aligned. */
 .day-card__at {
   color: var(--muted);
-  font-family: var(--font-mono);
   font-size: var(--fs-base);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .day-card--chhatri .day-card__at {
@@ -298,11 +300,20 @@
   color: var(--on-navy-2);
 }
 
+/* Arrows between steps: a small blue disc centred in the gap, so the flow reads at a glance. */
 .engine__arrow {
   position: absolute;
+  z-index: 1;
   top: 50%;
-  right: -20px;
-  color: var(--blue);
+  right: calc(-1 * var(--engine-gap) / 2 - 11px);
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 3px var(--paper);
+  color: #fff;
   transform: translateY(-50%);
 }
 
@@ -400,6 +411,13 @@
   .ov-badday__grid {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-8);
+  }
+
+  .day-card__steps li {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: var(--sp-2);
+    padding: 12px var(--sp-4);
+    font-size: var(--fs-base);
   }
 
   .engine-wrap {

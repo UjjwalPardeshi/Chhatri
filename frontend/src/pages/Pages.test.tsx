@@ -18,9 +18,9 @@ describe('Audit page', () => {
     backend.seek('17:05')
     renderApp('/audit', backend)
     expect(await screen.findByRole('heading', { name: 'Audit log' })).toBeTruthy()
-    await waitFor(() => expect(document.querySelectorAll('.audit-table tbody tr').length).toBeGreaterThan(10))
+    await waitFor(() => expect(document.querySelectorAll('.audit-table tbody tr.audit-row').length).toBeGreaterThan(10))
     fireEvent.change(screen.getByRole('textbox', { name: 'Filter audit entries' }), { target: { value: 'payout' } })
-    const rows = [...document.querySelectorAll('.audit-table tbody tr')]
+    const rows = [...document.querySelectorAll('.audit-table tbody tr.audit-row')]
     expect(rows.every((r) => /payout/i.test(r.textContent ?? ''))).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Verify chain' }))
     expect(await screen.findByText(/Chain valid ·/)).toBeTruthy()

@@ -20,6 +20,9 @@ class FakeScheduler:
     def schedule(self, at: datetime, name: str, fn: Callable[[], Awaitable[None]]) -> None:
         self.jobs.append((at, name, fn))
 
+    def was_scheduled(self, name: str) -> bool:
+        return any(job_name == name for _, job_name, _ in self.jobs)
+
     async def run_all(self) -> None:
         for _, _, fn in sorted(self.jobs, key=lambda job: job[0]):
             await fn()

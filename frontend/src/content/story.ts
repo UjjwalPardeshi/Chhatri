@@ -76,7 +76,8 @@ export const HERO_THREAD: readonly Message[] = [
   message({ id: 'h1', day: MONSOON_DAY, at: '17:04', kind: 'TEXT', text: MSG.areaPayoutIntro(STORY.nameHi, STORY.nameEn, STORY.drop) }),
   message({ id: 'h2', day: MONSOON_DAY, at: '17:04', kind: 'PAYOUT_CARD', card: areaCard() }),
   message({ id: 'h3', day: MONSOON_DAY, at: '17:05', kind: 'VOICE', inbound: true, text: WHY, seconds: 4 }),
-  message({ id: 'h4', day: MONSOON_DAY, at: '17:05', kind: 'TEXT', text: MSG.explainArea('मंगलवार', 'Tuesday', STORY.usualDay, STORY.drop) }),
+  /** Deck slide 1 shows Chhatri's answer in English only, which keeps it clear of the Soundbox line. */
+  message({ id: 'h4', day: MONSOON_DAY, at: '17:05', kind: 'TEXT', text: { hi: null, en: MSG.explainArea('मंगलवार', 'Tuesday', STORY.usualDay, STORY.drop).en } }),
 ]
 
 export const RAIN_SOUNDBOX: Message = message({ id: 'r4', day: MONSOON_DAY, at: '17:04', kind: 'SOUNDBOX', text: MSG.soundbox(STORY.areaAmount) })

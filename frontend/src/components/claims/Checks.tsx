@@ -1,7 +1,12 @@
-/** Policy checks for a decision (SPEC §9.2): pass / fail / unsure (soft) / waived, with the numbers. */
+/**
+ * Policy checks for a decision (SPEC §9.2): what blocked the money first (fail, unsure, waived,
+ * then pass), failed rows tinted, the check code in quiet mono under its label. On a phone each
+ * row becomes a small card (CSS).
+ */
 import type { Check } from '../../api/types'
 import { Icon } from '../common/Icon'
 import { CHECK_STATUS } from './labels'
+import { sortChecks } from './whyHuman'
 
 export function Checks({ checks }: { checks: readonly Check[] }) {
   return (
@@ -15,7 +20,7 @@ export function Checks({ checks }: { checks: readonly Check[] }) {
         </tr>
       </thead>
       <tbody>
-        {checks.map((check) => {
+        {sortChecks(checks).map((check) => {
           const status = CHECK_STATUS[check.status]
           return (
             <tr key={check.code} data-status={check.status}>
@@ -32,8 +37,10 @@ export function Checks({ checks }: { checks: readonly Check[] }) {
                   {check.severity === 'SOFT' && check.status !== 'PASS' ? ' (soft)' : ''}
                 </span>
               </td>
-              <td>{check.observed ?? '—'}</td>
-              <td className="muted">{check.required ?? '—'}</td>
+              <td data-label="Observed">{check.observed ?? '—'}</td>
+              <td className="muted" data-label="Required">
+                {check.required ?? '—'}
+              </td>
             </tr>
           )
         })}

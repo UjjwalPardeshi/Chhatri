@@ -52,9 +52,109 @@
   overflow: auto;
 }
 
+/* Audit: the page scrolls, so the header and each minute's label stay in view (sticky). */
+.audit-wrap {
+  overflow: clip;
+}
+
 .audit-table td {
   font-size: var(--fs-xs);
   white-space: nowrap;
+}
+
+.audit-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.audit-group th {
+  position: sticky;
+  top: 36px;
+  z-index: 1;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+/* Money rows: a blue rule on the left edge and the action in bold. */
+.audit-row[data-money='true'] td:first-child {
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.audit-row[data-money='true'] .audit-row__action {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* Hovering a row lights its hash and the next entry's "previous" hash: the chain link. */
+.audit-hash {
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.audit-hash[data-match='true'] {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.audit-row__seq {
+  position: relative;
+}
+
+/* After "Verify chain": a green check lands on each row in turn. */
+.audit-row__check {
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  transform: translateY(-50%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .audit-row__check {
+    animation: check-in 260ms var(--ease-out) both;
+    animation-delay: calc(var(--i) * 30ms);
+  }
+}
+
+@keyframes check-in {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+}
+
+.audit-early {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: 14px;
+  padding: var(--sp-5) var(--sp-6);
+  border-left: 3px solid var(--blue);
+}
+
+.audit-early h2 {
+  font-size: var(--fs-lg);
+}
+
+.audit-early p {
+  max-width: 60ch;
+  margin-top: 2px;
 }
 
 .actor {
@@ -73,12 +173,40 @@
   font-size: var(--fs-lg);
 }
 
+.backtest-hero {
+  padding: var(--sp-6) var(--sp-6) var(--sp-5);
+}
+
+.backtest-hero h2 {
+  margin-bottom: var(--sp-5);
+}
+
+.backtest-hero .proof__facts {
+  margin-top: var(--sp-6);
+}
+
+.backtest-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
 .compare td {
-  font-size: var(--fs-base);
+  font-size: var(--fs-sm);
+}
+
+.compare td.compare__col,
+.compare th.compare__col {
+  text-align: center;
 }
 
 .compare__us {
   color: var(--blue) !important;
+}
+
+.compare__us-cell {
+  background: rgb(231 240 251 / 55%);
 }
 
 .compare__best {
@@ -86,18 +214,59 @@
   font-weight: 500;
 }
 
+.zones-table td,
+.zones-table th {
+  padding-inline: 8px;
+  font-size: var(--fs-sm);
+}
+
 .ratio {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 200px;
+}
+
+.ratio__plot {
+  position: relative;
+  width: 84px;
+  height: 10px;
 }
 
 .ratio__bar {
-  height: 8px;
-  max-width: 150px;
-  border-radius: 4px;
+  display: block;
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+  background: #9aa7bb;
+}
+
+.ratio--over .ratio__bar {
   background: var(--amber);
+}
+
+.ratio__target,
+.ratio-legend__line {
+  width: 2px;
+  background: var(--ink);
+}
+
+.ratio__target {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+}
+
+.ratio-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-xs);
+}
+
+.ratio-legend__line {
+  display: inline-block;
+  flex: none;
+  height: 14px;
 }
 
 .notes {
@@ -106,10 +275,23 @@
   font-size: var(--fs-xs);
 }
 
+/* Two independent stacks: authority + checks on the left, live tests + rules on the right. */
 .policy-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: start;
   gap: 14px;
+}
+
+.policy-grid__col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.authority + p {
+  margin: var(--sp-3) 0 0;
 }
 
 .authority td {
@@ -128,8 +310,7 @@
 
 .rules {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 var(--sp-8);
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
 }
 
@@ -153,12 +334,19 @@
   text-align: right;
 }
 
+@media (max-width: 1100px) {
+  .backtest-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
   .page {
     padding: 14px 16px 24px;
   }
 
   .policy-grid,
+  .backtest-grid,
   .rules {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -170,5 +358,118 @@
 
   .page__tools .input {
     width: 100%;
+  }
+}
+
+/* Phones: one card per check, code and severity on top, then what it applies to and needs. */
+@media (max-width: 640px) {
+  .policy-checks thead {
+    display: none;
+  }
+
+  .policy-checks,
+  .policy-checks tbody,
+  .policy-checks td {
+    display: block;
+  }
+
+  .policy-checks tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px var(--sp-3);
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .policy-checks td {
+    padding: 0;
+    border: 0;
+  }
+
+  .policy-checks__code {
+    font-weight: 500;
+  }
+
+  .policy-checks__severity {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .policy-checks td[data-label] {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
+  }
+
+  .policy-checks td[data-label]::before {
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    content: attr(data-label);
+  }
+}
+
+/* Phones: each audit entry becomes a small card; the minute labels stay as separators. */
+@media (max-width: 640px) {
+  .audit-table thead {
+    display: none;
+  }
+
+  .audit-table,
+  .audit-table tbody {
+    display: block;
+  }
+
+  .audit-group,
+  .audit-group th {
+    display: block;
+    top: 0;
+  }
+
+  .audit-table .audit-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px var(--sp-3);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .audit-table .audit-row[data-money='true'] {
+    box-shadow: inset 3px 0 0 var(--blue);
+  }
+
+  .audit-table .audit-row[data-money='true'] td:first-child {
+    box-shadow: none;
+  }
+
+  .audit-table .audit-row td {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    text-align: left;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .audit-table .audit-row td::before {
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: var(--fs-2xs);
+    font-weight: 500;
+    content: attr(data-label);
+  }
+
+  .audit-row__seq {
+    padding-left: 22px;
+  }
+
+  .audit-row__check {
+    top: 12px;
+    left: 0;
   }
 }

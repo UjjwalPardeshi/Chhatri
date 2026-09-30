@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MockBackend } from '../mock/backend'
 import { testBackend } from '../mock/testkit'
 import { offlineTiles, renderApp } from '../test/renderApp'
+import { rebuildLabel } from './Live'
 
 let backend: MockBackend
 afterEach(() => backend.dispose())
@@ -24,5 +25,13 @@ describe('Live map page', () => {
     const kpis = document.querySelector('[data-kpi="zones"]')
     expect(kpis?.textContent).toContain('3')
     expect(within(document.body).getByText(/Why Zone 9 got nothing/)).toBeTruthy()
+  })
+
+  it('names the rebuild a slow replay action is doing', () => {
+    expect(rebuildLabel('load')).toBe('Loading the replay…')
+    expect(rebuildLabel('seek')).toBe('Moving the replay clock…')
+    expect(rebuildLabel('reset')).toBe('Moving the replay clock…')
+    expect(rebuildLabel('play')).toBeNull()
+    expect(rebuildLabel(null)).toBeNull()
   })
 })

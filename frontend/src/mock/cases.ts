@@ -85,8 +85,9 @@ export function openReviewCase(rt: MockRuntime, merchant: MockMerchant, decision
   return openCase(rt, merchant, 'PERSONAL_CLAIM_REVIEW', summary, decision, evidence)
 }
 
+/** SPEC §9.4: an officer approval records every SOFT check as WAIVED_BY_OFFICER (as the backend does). */
 function waived(checks: readonly Check[]): Check[] {
-  return checks.map((c) => (c.severity === 'SOFT' && c.status !== 'PASS' ? { ...c, status: 'WAIVED_BY_OFFICER' } : c))
+  return checks.map((c) => (c.severity === 'SOFT' ? { ...c, status: 'WAIVED_BY_OFFICER', detail_en: `Waived by officer ${MOCK_OFFICER_ID} (was ${c.status}): ${c.detail_en}` } : c))
 }
 
 function officerDecision(rt: MockRuntime, previous: Decision, approve: boolean): Decision {
@@ -108,12 +109,18 @@ function officerDecision(rt: MockRuntime, previous: Decision, approve: boolean):
   return decision
 }
 
+/** The backend's wording for a resolved dispute (replay/officer.py); disputes close, they never pay again. */
+const DISPUTE_CONFIRMED = 'Payout confirmed by a claims officer'
+const DISPUTE_REJECTED = 'Dispute declined by a claims officer'
+
 const DECLINE_REASON = {
   hi: 'पर्ची पर नाम आपके KYC से मेल नहीं खाता, इसलिए यह दावा मंज़ूर नहीं हो सका।',
   en: "The name on the slip doesn't match your KYC, so this claim can't be approved.",
 }
 
-export function officerDecide(rt: MockRuntime, merchant: MockMerchant, caseId: string, approve: boolean, note: string): Case {
+export type OfficerOutcome = { decision: Decision | null; case: Case }
+
+export function officerDecide(rt: MockRuntime, merchant: MockMerchant, caseId: string, approve: boolean, note: string): OfficerOutcome {
   const current = rt.cases.find((c) => c.id === caseId)
   if (!current) throw new CaseError('NOT_FOUND', `Case ${caseId} not found`, 404)
   if (current.status !== 'OPEN') throw new CaseError('CONFLICT', `Case ${caseId} is already ${current.status}`, 409)
@@ -124,10 +131,12 @@ export function officerDecide(rt: MockRuntime, merchant: MockMerchant, caseId: s
     if (approve) payPersonal(rt, merchant, decision, MSG.officerApproved(merchant.owner_name_hi, merchant.owner_first_en, decision.amount_label), OFFICER_BADGE)
     else rt.send(merchant.id, { kind: 'TEXT', text: MSG.officerDeclined(merchant.owner_name_hi, merchant.owner_first_en, DECLINE_REASON.hi, DECLINE_REASON.en) })
   }
-  const defaultNote = approve ? 'Approved by the claims officer' : 'Declined by the claims officer'
-  const updated: Case = { ...current, status: approve ? 'APPROVED' : 'DECLINED', decision, resolution: note.trim() || defaultNote, resolved_by: officer, resolved_at: rt.nowIso }
+  const dispute = current.kind === 'DISPUTE'
+  const status = dispute ? 'CLOSED' : approve ? 'APPROVED' : 'DECLINED'
+  const defaultNote = dispute ? (approve ? DISPUTE_CONFIRMED : DISPUTE_REJECTED) : `${approve ? 'Approved' : 'Declined'} by ${officer}`
+  const updated: Case = { ...current, status, decision, resolution: note.trim() || defaultNote, resolved_by: officer, resolved_at: rt.nowIso }
   rt.replaceCase(updated)
   rt.record(officer, approve ? 'case.approved' : 'case.declined', 'case', caseId, { note: updated.resolution })
   rt.addFeed('case', `Case ${caseId} ${approve ? 'approved' : 'declined'} by a claims officer`, { merchant_id: merchant.id })
-  return updated
+  return { decision, case: updated }
 }

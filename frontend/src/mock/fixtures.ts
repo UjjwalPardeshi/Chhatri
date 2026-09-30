@@ -4,6 +4,7 @@
  * backtest report in the §19.2 shape (labelled as simulated).
  */
 import type { BacktestReport, IntegrationStatus, MerchantSummary, PolicyView } from '../api/types'
+import backtestReport from './data/backtest.json'
 
 export type MockMerchant = MerchantSummary & {
   owner_name_hi: string
@@ -65,7 +66,7 @@ export const LENDER_NAME = 'Simulated lender (NBFC partner)'
 export const PAYOUT_RAIL = 'Paytm settlement (simulated)'
 export const RULES_VERSION = 'pilot-0.1'
 export const MOCK_OFFICER_TOKEN = 'mock-officer-token'
-export const MOCK_OFFICER_ID = 'demo'
+export const MOCK_OFFICER_ID = 'officer'
 
 const MOCK_DETAIL = 'mock console backend'
 
@@ -124,46 +125,9 @@ export const POLICY: PolicyView = Object.freeze({
   ],
 }) as PolicyView
 
-export const BACKTEST: BacktestReport = Object.freeze({
-  label: 'simulated sales · real Open-Meteo rainfall',
-  seasons: ['Jun–Sep 2024', 'Jun–Sep 2025'],
-  generated_at: '2025-09-30T09:00:00+05:30',
-  triggers: [
-    {
-      name: 'chhatri',
-      real_drops: 64,
-      real_drops_paid: 58,
-      recall: 0.906,
-      payouts: 61,
-      payouts_no_real_drop: 3,
-      false_positive_rate: 0.049,
-      paid_paise: 1_842_760_00,
-      trigger_to_money: 'same day · 4 min',
-      documents_per_area_claim: 0,
-    },
-    {
-      name: 'weather_only',
-      real_drops: 64,
-      real_drops_paid: 35,
-      recall: 0.547,
-      payouts: 79,
-      payouts_no_real_drop: 44,
-      false_positive_rate: 0.557,
-      paid_paise: 2_310_450_00,
-      trigger_to_money: 'same day · 4 min',
-      documents_per_area_claim: 0,
-    },
-  ],
-  zones: [
-    { zone_id: 'Z3', premium_per_day_label: '₹3', premiums_paise: 30_883_00, payouts_paise: 19_142_00, loss_ratio: 0.62, chhatri_fp: 1, chhatri_fn: 1 },
-    { zone_id: 'Z7', premium_per_day_label: '₹3', premiums_paise: 10_074_00, payouts_paise: 6_890_00, loss_ratio: 0.68, chhatri_fp: 0, chhatri_fn: 1 },
-    { zone_id: 'Z9', premium_per_day_label: '₹2', premiums_paise: 9_344_00, payouts_paise: 3_118_00, loss_ratio: 0.33, chhatri_fp: 0, chhatri_fn: 0 },
-    { zone_id: 'Z12', premium_per_day_label: '₹3', premiums_paise: 27_375_00, payouts_paise: 17_240_00, loss_ratio: 0.63, chhatri_fp: 1, chhatri_fn: 2 },
-  ],
-  personal: { claims: 42, auto_paid: 31, referred: 11, referred_share: 0.262 },
-  notes: [
-    'Mock console data: numbers illustrate the report layout; the live backend serves backend/artifacts/backtest/report.json.',
-    'Real drop = zone-day whose true shock-caused loss is at least 40% of expected day sales.',
-    'Weather-only trigger: reference grid point daily rain ≥ 64.5 mm (IMD "heavy").',
-  ],
-}) as BacktestReport
+/**
+ * The backtest the mock serves: a copy of GET /api/backtest from the committed artefact
+ * (backend/artifacts/backtest/report.json, B6), so mock mode shows the same numbers as the real
+ * backend. Refresh it after `make data` with: curl -s $API/api/backtest | jq .data > src/mock/data/backtest.json
+ */
+export const BACKTEST: BacktestReport = Object.freeze(backtestReport as BacktestReport)

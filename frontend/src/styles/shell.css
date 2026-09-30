@@ -43,10 +43,10 @@
   grid-area: footer;
 }
 
-/* Header */
+/* Header: on the popover rung, so its badge popover paints above sticky table headers and the map. */
 .app-header {
   position: relative;
-  z-index: 2;
+  z-index: var(--z-popover);
   display: flex;
   align-items: center;
   gap: var(--sp-5);
@@ -198,7 +198,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 11px;
 }
 
 .integrations-summary__seg strong {
@@ -207,12 +207,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Live products as named green chips (none in mock mode: then only the simulated count shows). */
 .integrations-summary__seg--live {
+  gap: 10px;
   border-right: 1px solid rgb(255 255 255 / 14%);
+  color: var(--on-navy);
+  letter-spacing: 0.02em;
 }
 
-.integrations-summary__seg--live[data-count='0'] {
-  color: var(--on-navy-3);
+.integrations-summary__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .integrations-summary__glyph {
@@ -223,13 +229,23 @@
   box-shadow: 0 0 0 3px rgb(34 197 94 / 22%);
 }
 
-.integrations-summary__seg--live[data-count='0'] .integrations-summary__glyph {
-  background: var(--on-navy-3);
-  box-shadow: none;
+.integrations-summary__more {
+  color: var(--on-navy-2);
 }
 
 .integrations-summary__seg--sim {
-  background: rgb(255 255 255 / 5%);
+  color: var(--on-navy-3);
+  letter-spacing: 0.02em;
+}
+
+.integrations-summary__seg--sim strong {
+  color: var(--on-navy-2);
+  font-weight: 500;
+}
+
+.integrations-summary[data-live='0'] {
+  border-color: rgb(255 255 255 / 12%);
+  background: transparent;
 }
 
 .integrations-summary--error,
@@ -250,7 +266,9 @@
   right: 0;
   z-index: var(--z-popover);
   width: 470px;
+  max-height: calc(100dvh - var(--header-h) - var(--sp-4));
   padding: var(--sp-3) var(--sp-4);
+  overflow-y: auto;
   color: var(--ink);
   box-shadow: var(--shadow-lg);
   transform-origin: top right;
@@ -370,25 +388,32 @@
   animation: pulse 1s ease-in-out infinite;
 }
 
-/* Replay controls */
+/* Replay controls: one row of controls, the scrubber with the story's chapters under it. */
+/* overflow-x: clip keeps the scrubber's translated knob rail from widening the page on phones. */
 .control-bar {
   position: relative;
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 7px var(--sp-4);
+  overflow-x: clip;
   border-bottom: 1px solid var(--line);
   background: var(--card);
 }
 
+.control-bar__row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 6px var(--sp-4) 2px;
+}
+
 .control-bar--empty {
+  padding: 10px var(--sp-4);
   color: var(--muted);
 }
 
+/* Wide enough for "Slip name mismatch · Thu 21 Aug"; it gives way before the clock does. */
 .scenario-select {
-  flex: none;
-  width: 262px;
+  flex: 0 1 258px;
+  min-width: 196px;
   font-weight: 500;
 }
 
@@ -399,7 +424,7 @@
   gap: var(--sp-2);
   min-width: 0;
   overflow: hidden;
-  height: 32px;
+  height: 34px;
   padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
@@ -414,8 +439,27 @@
   text-overflow: ellipsis;
 }
 
+/* The simulated HH:MM: the demo's most important changing number, readable from the back. */
 .clock-label__time {
+  display: inline-block;
+  color: var(--navy);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  vertical-align: -2px;
   font-variant-numeric: tabular-nums;
+}
+
+.clock-label__time[data-pulse='true'] {
+  animation: clock-pulse 900ms var(--ease-out);
+}
+
+@keyframes clock-pulse {
+  0%,
+  30% {
+    color: var(--blue);
+  }
 }
 
 .clock-label__tail {
@@ -455,7 +499,7 @@
 }
 
 .speed .input {
-  width: 96px;
+  width: 92px;
 }
 
 .seek {
@@ -464,8 +508,9 @@
 }
 
 .seek__input {
-  width: 64px;
+  width: 76px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .seek__input::placeholder {
@@ -477,25 +522,217 @@
   border-color: var(--red);
 }
 
+/* "Slow near payout": a small switch (the checkbox stays the accessible control). */
+.slow-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px 0 2px;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.slow-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.slow-toggle__switch {
+  position: relative;
+  width: 26px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+  transition: background-color 160ms ease;
+}
+
+.slow-toggle__switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 25%);
+  content: '';
+  transition: transform var(--dur-ui) var(--ease-out);
+}
+
+.slow-toggle input:checked + .slow-toggle__switch {
+  background: var(--blue);
+}
+
+.slow-toggle input:checked + .slow-toggle__switch::after {
+  transform: translateX(10px);
+}
+
+.slow-toggle input:focus-visible + .slow-toggle__switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .control-bar__error {
   position: absolute;
   top: 100%;
-  right: var(--sp-4);
-  z-index: var(--z-popover);
-  margin-top: 6px;
+  left: 50%;
+  z-index: var(--z-toast);
+  margin-top: 8px;
   box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
 }
 
-/* Replay progress: a hairline scaled from the left (transform only). */
-.control-bar__progress {
+/* Scrubber: 6 px track, blue elapsed part, knob at now, chapter ticks with labels beneath. */
+.scrubber {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px auto;
+  align-items: start;
+  gap: var(--sp-2);
+  padding: 4px var(--sp-4) 6px;
+}
+
+.scrubber__edge {
+  margin-top: -3px;
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+}
+
+.scrubber__edge + .scrubber__area + .scrubber__edge {
+  text-align: right;
+}
+
+.scrubber .slow-toggle {
+  margin: -6px 0 0 var(--sp-2);
+}
+
+.slow-toggle--menu {
+  display: none;
+}
+
+.scrubber__area {
+  position: relative;
+  min-width: 0;
+}
+
+.scrubber__track {
+  position: relative;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--grey-soft);
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 4%);
+}
+
+.scrubber__fill {
   position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  background: var(--blue);
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(11 99 201 / 70%), var(--blue));
   transform-origin: left center;
   transition: transform 300ms linear;
+}
+
+.scrubber__tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ink-3);
+}
+
+.scrubber__tick[data-passed='true'] {
+  background: var(--navy);
+}
+
+.scrubber__knob-rail {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: transform 300ms linear;
+}
+
+.scrubber__knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--blue);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(11 99 201 / 35%);
+  transform: translate(-50%, -50%);
+}
+
+.scrubber__leaders {
+  display: block;
+  overflow: visible;
+}
+
+.scrubber__leaders path {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.scrubber__leaders path[data-passed='true'] {
+  stroke: rgb(11 99 201 / 45%);
+}
+
+.scrubber__labels {
+  position: relative;
+  height: 18px;
+}
+
+.scrubber__chapter {
+  position: absolute;
+  top: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.scrubber__chapter:hover:not(:disabled) {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.scrubber__chapter:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.scrubber__chapter[data-passed='true'] {
+  color: var(--blue);
+}
+
+.scrubber__at {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.scrubber__chapter[data-passed='true'] .scrubber__at {
+  color: var(--blue);
 }
 
 /* Footer: attributions and what is simulated (SPEC §0.1, §5.1, §20). */
@@ -568,7 +805,7 @@
     padding: 0 var(--sp-4) var(--sp-2);
     scroll-snap-type: x proximity;
     scroll-padding: 0 var(--sp-6);
-    mask-image: linear-gradient(90deg, transparent 0, #000 var(--sp-4), #000 calc(100% - 36px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 var(--sp-4), #000 calc(100% - 64px), rgb(0 0 0 / 35%) calc(100% - 24px), transparent 100%);
   }
 
   .app-nav__link {
@@ -586,6 +823,7 @@
     right: var(--sp-4);
     left: var(--sp-4);
     width: auto;
+    max-height: calc(100dvh - 96px - var(--sp-4));
   }
 
   .integration {
@@ -609,7 +847,7 @@
 }
 
 @media (max-width: 900px) and (min-width: 641px) {
-  .control-bar {
+  .control-bar__row {
     flex-wrap: wrap;
   }
 
@@ -640,14 +878,39 @@
     display: none;
   }
 
-  .control-bar {
+  .control-bar__row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       'scenario transport'
       'clock clock';
     gap: var(--sp-2);
-    padding: var(--sp-2) var(--sp-4);
+    padding: var(--sp-2) var(--sp-4) 2px;
+  }
+
+  /* Phones: the chapters keep their words, the times move into the tooltip. */
+  .scrubber {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 6px;
+  }
+
+  .slow-toggle--bar {
+    display: none;
+  }
+
+  .slow-toggle--menu {
+    display: inline-flex;
+    flex-basis: 100%;
+    padding-top: var(--sp-1);
+  }
+
+  .scrubber__edge,
+  .scrubber__at {
+    display: none;
+  }
+
+  .clock-label__time {
+    font-size: var(--fs-lg);
   }
 
   .scenario-select {
@@ -708,4 +971,5 @@
   .transport__more .seek__input {
     flex: 1;
   }
+
 }

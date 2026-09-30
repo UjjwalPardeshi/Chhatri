@@ -1,9 +1,10 @@
 /** Phone frame (deck slides 1 and 7): status bar, "Paytm · Chhatri" header, chat, Soundbox, composer. */
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 
 import type { Message } from '../../api/types'
 import { hhmm, weekdayDayLabel } from '../../lib/time'
 import { MessageBubble } from './Bubbles'
+import { useThreadScroll } from './useThreadScroll'
 
 type Props = {
   now: string
@@ -11,17 +12,13 @@ type Props = {
   footer: ReactNode
   status: ReactNode
   testId?: string
-  /** Follow new messages (live chat); story phones stay anchored at the top. */
+  /** Follow new messages (live chat, see useThreadScroll); story phones stay anchored at the top. */
   autoScroll?: boolean
 }
 
 export function Phone({ now, messages, footer, status, testId = 'phone', autoScroll = true }: Props) {
   const threadRef = useRef<HTMLDivElement>(null)
-  const last = messages.at(-1)?.id
-  useEffect(() => {
-    const node = threadRef.current
-    if (node && autoScroll) node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' })
-  }, [last, autoScroll])
+  useThreadScroll(threadRef, messages.at(-1)?.id, autoScroll)
   return (
     <div className="phone" data-testid={testId}>
       <div className="phone__status num">
@@ -35,8 +32,11 @@ export function Phone({ now, messages, footer, status, testId = 'phone', autoScr
           <p className="phone__sub">Merchant protection · Hindi, English</p>
         </div>
       </header>
+      {/* The day sits in its own strip above the thread, so it never covers a bubble (WhatsApp keeps it in view too). */}
+      <div className="phone__day">
+        <span className="day-chip">{weekdayDayLabel(now)}</span>
+      </div>
       <div className="phone__thread" ref={threadRef} aria-live="polite">
-        <div className="day-chip">{weekdayDayLabel(now)}</div>
         {status}
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />

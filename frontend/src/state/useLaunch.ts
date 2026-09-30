@@ -29,7 +29,7 @@ function runAction(api: Api, action: LaunchAction): Promise<unknown> {
 }
 
 export function useLaunch(): LaunchState {
-  const { api, refresh, replay } = useLive()
+  const { api, refresh, replay, pauseAt } = useLive()
   const navigate = useNavigate()
   const [busy, setBusy] = useState<string | null>(null)
   const [failure, setFailure] = useState<{ key: string; error: ApiError } | null>(null)
@@ -46,6 +46,7 @@ export function useLaunch(): LaunchState {
         navigate(target.to, { state })
         /** Playing goes through the shared replay control, so a failure shows in the control bar. */
         if (target.play !== undefined) await replay('play', target.play)
+        if (target.play !== undefined && target.pauseAt) pauseAt({ scenario: target.scenario, at: target.pauseAt })
       } catch (reason) {
         const error = toApiError(reason)
         console.warn('[launch] scenario jump failed', error.code)
@@ -54,7 +55,7 @@ export function useLaunch(): LaunchState {
         setBusy(null)
       }
     },
-    [api, navigate, refresh, replay],
+    [api, navigate, pauseAt, refresh, replay],
   )
   const errorFor = useCallback((keys: readonly string[]) => (failure && keys.includes(failure.key) ? failure.error : null), [failure])
   return { busy, failure, errorFor, launch }

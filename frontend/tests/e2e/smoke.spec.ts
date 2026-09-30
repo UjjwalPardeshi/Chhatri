@@ -4,7 +4,7 @@
  */
 import { expect, test } from '@playwright/test'
 
-import { FONT_HOSTS, goTo, IS_MOCK, loadScenario, MOCK_HOOK, openConsole, seek } from './helpers'
+import { FONT_HOSTS, goTo, IS_MOCK, loadScenario, MOCK_HOOK, openConsole, seek, settled } from './helpers'
 
 test('monsoon golden numbers, local fonts and the tile fallback', async ({ page }) => {
   const fontRequests: string[] = []
@@ -102,6 +102,7 @@ test('buy cover during a red alert is blocked with a Paytm link', async ({ page 
 
 test('audit chain verifies and integrations show their mode', async ({ page }) => {
   await openConsole(page)
+  await loadScenario(page, 'monsoon', 'monsoon replay')
   await seek(page, '09:00')
   await goTo(page, 'Audit')
   await page.getByRole('button', { name: 'Verify chain' }).click()
@@ -131,9 +132,23 @@ test.describe('phone-sized screen', () => {
     const widths: Record<string, number> = {}
     for (const link of ['Overview', 'Live map', 'Claims', 'Merchant phone', 'Audit', 'Backtest', 'Policy']) {
       await goTo(page, link)
-      await page.waitForLoadState('networkidle')
+      await settled(page)
       widths[link] = await page.evaluate(() => document.documentElement.scrollWidth)
     }
     expect(Object.values(widths).every((w) => w <= 390), JSON.stringify(widths)).toBe(true)
   })
+})
+
+test('switching scenario on another page, then Merchant phone at once, opens the new merchant', async ({ page }) => {
+  await openConsole(page)
+  await loadScenario(page, 'illness_mismatch', 'illness mismatch replay')
+  await goTo(page, 'Claims')
+  await expect(page).toHaveURL(/\/claims/)
+  await page.getByRole('combobox', { name: 'Scenario' }).selectOption('buy_cover')
+  await goTo(page, 'Merchant phone')
+  await expect(page).toHaveURL(/\/merchant\/S-0907$/)
+  await expect(page.locator('.clock-label')).toContainText('buy cover replay')
+  const phone = page.getByTestId('phone')
+  await phone.getByRole('button', { name: 'Red alert tomorrow. Cover me today.' }).click()
+  await expect(phone.getByText(/^New cover starts after the waiting period/)).toBeVisible()
 })

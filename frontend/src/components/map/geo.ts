@@ -9,6 +9,10 @@ export type Bounds = [LatLng, LatLng]
 
 /** Zones the deck's map frames: Z3 west on the coast, Z7 centre, Z12 south-east, Z9 by the harbour. */
 export const FOCUS_ZONES: readonly string[] = ['Z3', 'Z7', 'Z9', 'Z12']
+/** The storm cluster the live map is framed on (SPEC §17.2 monsoon: the three alert zones). */
+export const STORM_ZONES: readonly string[] = ['Z3', 'Z7', 'Z12']
+/** Zones kept in view by their label anchor only (Z9's slow-day callout, deck slide 6 top right). */
+export const CONTEXT_ZONES: readonly string[] = ['Z9']
 
 function ringArea(ring: readonly Position[]): number {
   let area = 0
@@ -84,4 +88,45 @@ export function boundsOf(zones: FeatureCollection, ids: readonly string[]): Boun
 export function northWestOf(collection: FeatureCollection): LatLng | null {
   const bounds = boundsOf(collection, [])
   return bounds ? [bounds[1][0], bounds[0][1]] : null
+}
+
+/** Grows `bounds` to include `points` (label anchors that must stay on screen). */
+export function extendBounds(bounds: Bounds, points: readonly LatLng[]): Bounds {
+  return points.reduce<Bounds>(
+    ([[south, west], [north, east]], [lat, lng]) => [
+      [Math.min(south, lat), Math.min(west, lng)],
+      [Math.max(north, lat), Math.max(east, lng)],
+    ],
+    bounds,
+  )
+}
+
+/**
+ * The live map's frame (deck slide 6): the storm zones fill the map, and on wide screens the
+ * context zones' label anchors are added so the Z9 callout stays on the map. On a phone only the
+ * storm cluster is framed; the Z9 label then clamps to the map edge as an edge callout.
+ */
+export function stormFrame(zones: FeatureCollection, compact: boolean): Bounds | null {
+  const storm = boundsOf(zones, STORM_ZONES)
+  if (!storm || compact) return storm
+  const centroids = centroidsById(zones)
+  const anchors = CONTEXT_ZONES.flatMap((id) => {
+    const at = centroids.get(id)
+    return at ? [at] : []
+  })
+  return extendBounds(storm, anchors)
+}
+
+/** The northernmost outer-ring vertex of a collection (where the rain band's label sits). */
+export function northernmostOf(collection: FeatureCollection): LatLng | null {
+  let top: LatLng | null = null
+  for (const feature of collection.features) {
+    if (!isPolygonal(feature)) continue
+    for (const ring of outerRings(feature.geometry)) {
+      for (const [lng, lat] of ring) {
+        if (!top || lat > top[0]) top = [lat, lng]
+      }
+    }
+  }
+  return top
 }

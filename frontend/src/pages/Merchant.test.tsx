@@ -1,5 +1,5 @@
 /** Merchant phone against the mock (SPEC §13, §20 "Merchant phone", deck slides 1 and 7). */
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MockBackend } from '../mock/backend'
@@ -61,6 +61,9 @@ describe('Merchant phone', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Red alert tomorrow. Cover me today.' }))
     const links = await screen.findAllByRole('link', { name: /paytm\.me\/sim-/ })
     expect(links[0].getAttribute('href')).toMatch(/^https:\/\/paytm\.me\/sim-[0-9A-F]{6}$/)
-    expect(screen.getByText(/^New cover starts after the waiting period/)).toBeTruthy()
+    expect(screen.getAllByText(/^New cover starts after the waiting period/)).toHaveLength(2)
+    const blocked = within(screen.getByTestId('cover-blocked'))
+    expect(blocked.getByText('Blocked')).toBeTruthy()
+    expect(blocked.getByText(/^Paytm link sent for ₹[\d,.]+ \(₹[\d,.]+ a day\)$/)).toBeTruthy()
   })
 })

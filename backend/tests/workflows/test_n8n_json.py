@@ -9,7 +9,7 @@ import pytest
 
 from chhatri.workflows.definitions import WORKFLOWS
 
-from .n8n_graph import WAIT_TYPE, callback_nodes, callback_steps, webhook_node
+from .n8n_graph import RESPOND_TYPE, WAIT_TYPE, callback_nodes, callback_steps, true_path, webhook_node
 
 N8N_DIR = Path(__file__).resolve().parents[3] / "n8n" / "workflows"
 
@@ -40,3 +40,17 @@ def test_callbacks_carry_the_secret_and_pass_the_run_through(workflow: str) -> N
         params = json.dumps(node["parameters"])
         assert "X-Chhatri-Secret" in params, node["name"]
         assert "run_id" in params and "payload" in params, node["name"]
+
+
+@pytest.mark.parametrize("workflow", sorted(WORKFLOWS))
+def test_webhook_answers_only_after_the_last_callback(workflow: str) -> None:
+    """The start call returns once every step was reported (B1 timeline, chhatri.integrations.n8n)."""
+    doc = load(workflow)
+    assert webhook_node(doc)["parameters"]["responseMode"] == "responseNode"
+    path = true_path(doc)
+    responders = [i for i, node in enumerate(path) if node["type"] == RESPOND_TYPE]
+    last_callback = max(i for i, node in enumerate(path) if node in callback_nodes(doc))
+    assert responders == [len(path) - 1] and responders[0] > last_callback
+    done = path[-1]["parameters"]
+    assert done["options"]["responseCode"] == 200
+    assert "status: 'completed'" in done["responseBody"] and "run_id" in done["responseBody"]

@@ -27,11 +27,12 @@ describe('Overview page', () => {
     expect(document.querySelector('.control-bar')).toBeNull()
     const hero = within(section('Chhatri'))
     expect(hero.getByText('अनिल जी, आज भारी बारिश से आपके इलाके की बिक्री 63% गिरी।')).toBeTruthy()
-    expect(hero.getByText('₹1,380')).toBeTruthy()
+    expect(hero.getAllByText('₹1,380')).toHaveLength(2)
+    expect(hero.getByText('credited at 17:04')).toBeTruthy()
     expect(hero.getByText('No claim needed')).toBeTruthy()
 
     const problem = within(section('The problem'))
-    expect(problem.getByText('30-60 days')).toBeTruthy()
+    expect(problem.getByText('30-60')).toBeTruthy()
     expect(problem.getByText('Same day')).toBeTruthy()
 
     const storm = within(section('The storm replay'))
@@ -57,7 +58,7 @@ describe('Overview page', () => {
   it('reads the backtest and the integration modes from the API', async () => {
     renderApp('/', backend)
     const proof = within(section('Backtest'))
-    expect(await proof.findByText(/^91%/)).toBeTruthy()
+    expect(await proof.findByText(/^60%/)).toBeTruthy()
     expect(proof.getByText('simulated sales · real Open-Meteo rainfall')).toBeTruthy()
     const tech = section('Technology')
     await waitFor(() => expect(tech.querySelectorAll('[data-mode="SIMULATED"]').length).toBe(15))
@@ -71,31 +72,31 @@ describe('Overview page', () => {
     expect(await screen.findByRole('button', { name: 'Red alert tomorrow. Cover me today.' })).toBeTruthy()
     expect(backend.clock.scenario).toBe('buy_cover')
     expect(backend.clock.label).toBe('Mumbai · buy cover replay · 18:10 · simulated')
-  })
+  }, SLOW_RENDER_MS)
 
   it('replays the storm to 17:05 and opens the live map', async () => {
     renderApp('/', backend)
-    fireEvent.click(within(section('The storm replay')).getByRole('button', { name: /Replay the storm to 17:05/ }))
+    fireEvent.click(within(section('The storm replay')).getByRole('button', { name: /Jump to 17:05/ }))
     expect(await screen.findByTestId('live-map')).toBeTruthy()
     expect(backend.clock.label).toBe('Mumbai · monsoon replay · 17:05 · simulated')
     expect(backend.runtime.kpis.shops_paid).toBe(312)
-  })
+  }, SLOW_RENDER_MS)
 
   it('shows the failure next to the journey that could not load', async () => {
     renderApp('/', backend)
     const journeys = within(section('What the merchant sees'))
     await screen.findByText('Merchant insurance where the claim starts itself')
     backend.outage(60_000)
-    fireEvent.click(journeys.getByRole('button', { name: /Play it live · illness 11:20/ }))
-    expect(await journeys.findByText(/Cannot reach the Chhatri server/)).toBeTruthy()
-    expect(within(section('Humans in control')).queryByText(/Cannot reach the Chhatri server/)).toBeNull()
+    fireEvent.click(journeys.getByRole('button', { name: /Play the illness claim/ }))
+    expect(await journeys.findByText(/Can’t reach the Chhatri server/)).toBeTruthy()
+    expect(within(section('Humans in control')).queryByText(/Can’t reach the Chhatri server/)).toBeNull()
   })
 
   it('shows a visible error when the backtest cannot load', async () => {
     backend.outage(60_000)
     renderApp('/', backend)
     const proof = within(section('Backtest'))
-    expect(await proof.findByText(/Cannot reach the Chhatri server/)).toBeTruthy()
+    expect(await proof.findByText(/Can’t reach the Chhatri server/)).toBeTruthy()
     expect(await within(section('Technology')).findByText('Integration status unavailable')).toBeTruthy()
   })
 })

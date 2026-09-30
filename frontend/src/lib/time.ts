@@ -17,6 +17,15 @@ export function hhmm(iso: string | null | undefined): string {
   return match ? `${match[1]}:${match[2]}` : '—'
 }
 
+const IST_HHMM = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+/** The IST wall time `minutes` after `iso` ("2025-08-21T11:25:00+05:30", 4 → "11:29"); "—" when malformed. */
+export function hhmmAfter(iso: string | null | undefined, minutes: number): string {
+  const at = iso ? Date.parse(iso) : Number.NaN
+  if (Number.isNaN(at) || !Number.isFinite(minutes)) return '—'
+  return IST_HHMM.format(new Date(at + minutes * MINUTE_MS))
+}
+
 /** "2025-08-19…" → "19 Aug 2025". */
 export function dayLabel(iso: string | null | undefined): string {
   const match = iso ? ISO_DATE.exec(iso) : null

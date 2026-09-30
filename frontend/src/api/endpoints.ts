@@ -17,6 +17,7 @@ import type {
   MerchantDetail,
   MerchantSummary,
   Message,
+  OfficerResult,
   PolicyView,
   ScenarioName,
   Session,
@@ -130,9 +131,10 @@ export function createApi(client: ApiClient) {
     cases: (status: CaseStatus | 'ALL', signal?: AbortSignal) =>
       client.get<Case[]>(status === 'ALL' ? '/api/cases' : `/api/cases?status=${status}`, signal),
     caseDetail: (id: string, signal?: AbortSignal) => client.get<Case>(`/api/cases/${assertCaseId(id)}`, signal),
-    approve: (id: string, note: string) => client.post<Case>(`/api/cases/${assertCaseId(id)}/approve`, { note }, true),
-    decline: (id: string, note: string) => client.post<Case>(`/api/cases/${assertCaseId(id)}/decline`, { note }, true),
-    decision: (id: string) => client.get<Decision>(`/api/decisions/${encodeURIComponent(id)}`),
+    /** SPEC §19: the officer routes answer with the new decision and the resolved case. */
+    approve: (id: string, note: string) => client.post<OfficerResult>(`/api/cases/${assertCaseId(id)}/approve`, { note }, true),
+    decline: (id: string, note: string) => client.post<OfficerResult>(`/api/cases/${assertCaseId(id)}/decline`, { note }, true),
+    decision: (id: string, signal?: AbortSignal) => client.get<Decision>(`/api/decisions/${encodeURIComponent(id)}`, signal),
     audit: (after: number, limit: number, signal?: AbortSignal) =>
       client.list<AuditEntry[]>(`/api/audit?after=${after}&limit=${limit}`, signal),
     verifyAudit: () => client.get<AuditVerify>('/api/audit/verify'),

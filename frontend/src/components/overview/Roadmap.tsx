@@ -1,46 +1,12 @@
 /**
- * Roadmap and team (deck slide 13) with three honest tiers of what is real, what can be live and
- * what is always simulated (SPEC §0.1); the live count is read from GET /api/integrations.
+ * Roadmap and team (deck slide 13). What is live in the prototype sits with the technology
+ * (Honesty.tsx), so this band is only the plan and the people.
  */
-import { HONESTY_TIERS, ROADMAP, TEAM } from '../../content/deck'
-import { useLive } from '../../state/live'
-import { integrationCounts } from '../layout/IntegrationBadges'
-
-function LiveCount() {
-  const { integrations, integrationsError } = useLive()
-  if (integrationsError) return <span className="tier__now">Live status unavailable right now.</span>
-  if (!integrations) return <span className="tier__now">Checking what is live…</span>
-  const { live, simulated } = integrationCounts(integrations)
-  return (
-    <span className="tier__now num">
-      Right now: {live} live, {simulated} simulated.
-    </span>
-  )
-}
-
-function Tiers() {
-  const tiers = [
-    { key: 'real', ...HONESTY_TIERS.real, extra: null },
-    { key: 'keyed', ...HONESTY_TIERS.keyed, extra: <LiveCount /> },
-    { key: 'simulated', ...HONESTY_TIERS.simulated, extra: null },
-  ]
-  return (
-    <div className="tiers" aria-label="What is live in our prototype">
-      {tiers.map((tier) => (
-        <div key={tier.key} className={`tier tier--${tier.key}`}>
-          <p className="tier__title">{tier.title}</p>
-          <p className="tier__text">
-            {tier.text} {tier.extra}
-          </p>
-        </div>
-      ))}
-    </div>
-  )
-}
+import { ROADMAP, TEAM } from '../../content/deck'
 
 export function Roadmap() {
   return (
-    <section className="ov-roadmap" aria-label="Roadmap and team">
+    <section className="ov-roadmap" id="ov-roadmap" aria-label="Roadmap and team">
       <div className="ov-roadmap__inner">
         <h2 className="ov-h2 ov-h2--light">A working prototype by 3 October, then a monsoon pilot.</h2>
         <div className="roadmap">
@@ -56,7 +22,6 @@ export function Roadmap() {
             </article>
           ))}
         </div>
-        <Tiers />
         <div className="team">
           <div>
             <p className="team__label">Team</p>

@@ -33,7 +33,7 @@ function WaitChart() {
 
 export function Problem() {
   return (
-    <RevealSection label="The problem" className="ov-problem">
+    <RevealSection label="The problem" id="ov-problem" className="ov-problem">
       <h2 className="ov-h2">A bad day costs a shop its income. Getting paid for it takes weeks, if it happens at all.</h2>
       <div className="ov-problem__grid">
         <WaitChart />

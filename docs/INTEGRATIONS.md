@@ -6,7 +6,8 @@ calls were checked against the installed packages: sarvamai 0.1.34, mcp 1.30.0, 
 
 All live clients use a 10 s timeout (60 s for Sarvam doc-ai). They retry only on 429 or 5xx, with
 backoff and at most 3 attempts. They never log secrets, and they raise `IntegrationError` with a safe
-message.
+message. The one exception is the n8n start call: it waits up to 30 s for the whole run and is not
+retried, because n8n already retries each callback (see "n8n workflows").
 
 `/api/integrations` reports these components: `sarvam_stt`, `sarvam_tts`, `sarvam_chat`,
 `sarvam_vision`, `whatsapp`, `paytm`, `n8n`, `memory`, `weather`, `soundbox`, `sales_data`, `alerts`,
@@ -130,13 +131,22 @@ built by `chhatri.integrations.whatsapp_payloads.template_payload`.
 
 - **Start**: `POST {N8N_BASE_URL}/webhook/chhatri-{workflow}` with header `X-Chhatri-Secret` and body
   `{"run_id", "workflow", "payload"}`. `run_id` is `{workflow}:{decision_id|case_id}`, which makes the
-  run idempotent. n8n answers `202 {"ok": true, "data": {"run_id", "status": "accepted"}}`, or `403`
-  for a wrong or missing secret.
+  run idempotent. n8n answers only after the last step's callback:
+  `200 {"ok": true, "data": {"run_id", "status": "completed", "steps": [...]}}`, or `403` for a wrong
+  or missing secret, or `500` when a callback failed. The backend waits for this answer (timeout 30 s),
+  so every step is scheduled before the simulated clock moves on; an answer without the completion body
+  counts as a failed start.
 - **Callbacks**: n8n calls `POST {CHHATRI_PUBLIC_URL}/internal/workflows/{step}` for each step, in
   `WORKFLOWS` order. Each call has the same header and the body `{"run_id", "workflow", "step",
   "payload"}`, with the payload passed through unchanged. The backend answers
   `200 {"ok": true, "data": {"step", "status": "done"|"skipped"}}`. Any non-2xx answer, after 3 tries,
-  stops the n8n run.
+  stops the n8n run, and the webhook answers 500.
+- **Fallback**: connect failure, a non-2xx webhook answer or a missing completion body hands the run
+  to the in-process runner, which schedules only the steps n8n had not reported yet. A timeout is not
+  handed over (n8n may still be running it); it is audited as `workflow.start_failed`.
+- **Throughput**: about 5–10 runs per second on the dev machine (n8n 2.41.3, SQLite, every execution
+  saved). The monsoon burst of 312 payout runs holds the simulated clock at 17:00 for roughly 30–60 s;
+  see docs/DEMO.md for the stage set-up.
 - **Steps**:
 
   | Workflow | Steps |
@@ -161,7 +171,8 @@ built by `chhatri.integrations.whatsapp_payloads.template_payload`.
   - the step order for all three workflows;
   - the secret header on every callback and payload pass-through (nested Unicode);
   - 403 and no callbacks for a wrong or missing secret;
-  - a 500 on `credit_payout` stops the payout run before `notify_merchant`.
+  - the webhook answers 200 with the completion body only after the last callback;
+  - a 500 on `credit_payout` stops the payout run before `notify_merchant`, and the webhook answers 500.
 
 ## Memory (SPEC §14.6, §16)
 

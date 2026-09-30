@@ -127,10 +127,13 @@ export class MockBackend {
     return this.tick()
   }
 
+  /** Like the backend engine (replay/engine.py), a step or a seek pauses the replay first. */
   step(minutes: number): ClockState {
     if (!Number.isInteger(minutes) || minutes < 1) {
       throw new MockHttpError('VALIDATION_ERROR', 'Invalid input', 422, { minutes: 'must be a whole number ≥ 1' })
     }
+    this.rt.running = false
+    this.stopTimer()
     this.advanceTo(Math.min(this.rt.minute + minutes, this.rt.scenario.endMin))
     return this.tick()
   }
@@ -142,15 +145,13 @@ export class MockBackend {
     if (!(target >= s.startMin && target <= s.endMin)) {
       throw new MockHttpError('VALIDATION_ERROR', 'Invalid input', 422, { to: `must be between ${hhmmOf(s.startMin)} and ${hhmmOf(s.endMin)}` })
     }
+    this.rt.running = false
+    this.stopTimer()
     if (target < this.rt.minute) {
-      const { running, speed } = this.rt
-      this.stopTimer()
-      this.rt = this.createRuntime(s.name, speed)
+      this.rt = this.createRuntime(s.name, this.rt.speed)
       this.start()
-      this.rt.running = running
     }
     this.advanceTo(target)
-    if (this.rt.running) this.startTimer()
     return this.tick()
   }
 

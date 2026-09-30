@@ -61,7 +61,7 @@ describe('mock routes', () => {
     client.setOfficerToken('wrong')
     await expect(api.approve('C-2291', '')).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 401 })
     client.setOfficerToken(MOCK_OFFICER_TOKEN)
-    expect((await api.approve('C-2291', 'fine')).status).toBe('APPROVED')
+    expect((await api.approve('C-2291', 'fine')).case.status).toBe('CLOSED')
     await expect(api.decline('C-2291', '')).rejects.toMatchObject({ code: 'CONFLICT', status: 409 })
     expect((await api.caseDetail('C-2291')).resolution).toBe('fine')
     expect(await api.cases('ALL')).toHaveLength(1)

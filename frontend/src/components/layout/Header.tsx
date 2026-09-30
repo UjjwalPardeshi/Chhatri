@@ -2,9 +2,12 @@
 import { useEffect, useRef } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
 
+import type { ScenarioName, StateSnapshot } from '../../api/types'
+import { DEMO_MERCHANT } from '../../content/deck'
 import { useLive } from '../../state/live'
 import { Brand } from './Brand'
 import { ConnectionPill } from './ConnectionPill'
+import { SCENARIO_OPTIONS } from './ControlBar'
 import { IntegrationBadges } from './IntegrationBadges'
 import { SoundToggle } from './SoundToggle'
 
@@ -25,11 +28,23 @@ function useActiveLinkInView(pathname: string) {
   return navRef
 }
 
+/**
+ * The "Merchant phone" link's merchant (binding decision B5). A scenario being loaded decides
+ * first, so a click during the switch already opens the new merchant; then the clock's scenario
+ * (updated as soon as the load returns, before `demo_merchant_id` arrives with the next
+ * snapshot); the snapshot's id is the fallback when no scenario is loaded.
+ */
+export function phoneMerchant(snapshot: Pick<StateSnapshot, 'clock' | 'demo_merchant_id'> | null, loading: ScenarioName | null = null): string {
+  const scenario = loading ?? snapshot?.clock.scenario
+  if (scenario) return SCENARIO_OPTIONS[scenario].merchant
+  return snapshot?.demo_merchant_id ?? DEMO_MERCHANT
+}
+
 export function Header({ openCases }: { openCases: number }) {
-  const { snapshot } = useLive()
+  const { snapshot, loadingScenario } = useLive()
   const { pathname } = useLocation()
   const navRef = useActiveLinkInView(pathname)
-  const phoneId = snapshot?.demo_merchant_id ?? 'S-0142'
+  const phoneId = phoneMerchant(snapshot, loadingScenario)
   const links = [
     { to: '/', label: 'Overview', end: true },
     { to: '/live', label: 'Live map' },

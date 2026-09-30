@@ -1,8 +1,11 @@
 /**
  * Live city heat map (SPEC §20 "Live map", deck slide 6; binding decision B3): CARTO Positron
- * tiles with a no-tile fallback, ward outlines, H3 hexes coloured on the deck scale, zone labels
- * ("Z7 · 37% · 46 shops"), the rain band during alerts and the demo merchant's pin
- * ("₹1,380 paid · 17:04" once credited).
+ * tiles when a tile URL works, otherwise a basemap drawn from the ward polygons (land without
+ * shops stippled); H3 hexes coloured on the deck scale; white ward borders, the selected zone in
+ * navy; zone labels ("Z7 · 37% · 46 shops") on leader lines; the rain band hatched above the hexes
+ * with its pill on a leader above the band; and the demo merchant's pin ("₹1,380 paid · 17:04"
+ * once credited, with one ring pulse). The map is framed on the storm cluster (Z3, Z7, Z12) with
+ * Z9's callout kept in view.
  */
 import 'leaflet/dist/leaflet.css'
 
@@ -12,18 +15,30 @@ import { AttributionControl, MapContainer, useMap } from 'react-leaflet'
 
 import type { MerchantDetail, StateSnapshot, ZoneSnapshot } from '../../api/types'
 import { hhmm } from '../../lib/time'
+import { basemap } from '../../state/tileStatus'
 import { useLatest } from '../../state/useLatest'
-import { boundsOf, centroidsById, FOCUS_ZONES, type LatLng } from './geo'
-import { escapeHtml, HexLayer, LabelLayer, LandLayer, MapPanes, RainBandLayer, Tiles, WardLayer, type LabelSpec, type TileFailure } from './layers'
-import { Legend, MapChip, NorthArrow, OfflineNote, RainPatternDefs } from './overlays'
+import { useMediaQuery } from '../../state/useMediaQuery'
+import { centroidsById, northernmostOf, stormFrame, type Bounds, type LatLng } from './geo'
+import { escapeHtml, HexLayer, LabelLayer, LandLayer, MapPanes, RainBandLayer, SelectedZoneLayer, Tiles, WardLayer, type LabelSpec, type TileFailure } from './layers'
+import { alertStatus, basemapTitle, Legend, MapPatternDefs, NorthArrow, OfflineNote, StatusChip } from './overlays'
 
 export const PIN_ID_PREFIX = 'merchant:'
 export const WATER_ID_PREFIX = 'water:'
+export const RAIN_LABEL_ID = 'rain-band'
+/** SVG pattern ids of the live map (MapPatternDefs): `live-hatch`, `live-stipple`. */
+export const LIVE_PATTERNS = 'live'
+/** The rain pill sits above the band (screen angle, radians). */
+const UP = -Math.PI / 2
 /** Water names shown on the deck map (fixed, non-interactive). */
 export const WATER_LABELS: readonly { name: string; at: LatLng }[] = [
   { name: 'Arabian Sea', at: [18.975, 72.772] },
   { name: 'Harbour', at: [18.99, 72.945] },
 ]
+/** Phones frame only the storm cluster (deck slide 6 at 390 px); wider screens keep Z9 in view. */
+export const COMPACT_QUERY = '(max-width: 600px)'
+/** Room around the frame (px): the status chip sits top left, the legend bottom right. */
+const FRAME_PADDING: Readonly<{ topLeft: [number, number]; bottomRight: [number, number] }> = Object.freeze({ topLeft: [56, 60], bottomRight: [56, 64] })
+const COMPACT_PADDING: Readonly<{ topLeft: [number, number]; bottomRight: [number, number] }> = Object.freeze({ topLeft: [24, 36], bottomRight: [24, 56] })
 
 export function waterSpecs(): LabelSpec[] {
   return WATER_LABELS.map((w) => ({
@@ -35,23 +50,27 @@ export function waterSpecs(): LabelSpec[] {
   }))
 }
 const LABELLED_STATUSES: ReadonlySet<ZoneSnapshot['status']> = new Set(['triggered', 'watch', 'slow_day'])
-const FIT_PADDING: [number, number] = [28, 28]
-const LEAFLET_PREFIX = '<a href="https://leafletjs.com">Leaflet</a>'
+/** Placement priority: the loss first, then the watch, then context (lower = placed earlier). */
+const STATUS_PRIORITY: Readonly<Record<ZoneSnapshot['status'], number>> = Object.freeze({ triggered: 0, watch: 1, slow_day: 2, normal: 3, no_data: 4 })
 
 export type MapGeo = { zones: FeatureCollection; hexes: FeatureCollection }
 
-export function zoneLabelSpecs(zones: readonly ZoneSnapshot[], centroids: ReadonlyMap<string, LatLng>, always: readonly (string | null)[]): LabelSpec[] {
-  return zones.flatMap((zone) => {
-    const at = centroids.get(zone.zone_id)
-    if (!at || !(LABELLED_STATUSES.has(zone.status) || always.includes(zone.zone_id))) return []
-    const slow = zone.status === 'slow_day'
-    const pct = zone.live_index_pct ?? zone.index_pct
-    const body = slow
-      ? `<div class="zone-label zone-label--slow" data-box><strong>${escapeHtml(zone.zone_id)} · ${pct ?? '—'}% of expected</strong><span>Slow day, no alert: no payout</span></div>`
-      : `<div class="zone-label zone-label--${zone.status}" data-box>${escapeHtml(zone.label)}</div>`
-    const html = `<div class="zone-anchor"><span class="zone-anchor__line"></span><span class="zone-anchor__dot"></span>${body}</div>`
-    return [{ id: zone.zone_id, at, html, className: `zone-label-icon zone-label-icon--${zone.status}`, movable: true }]
-  })
+function zoneLabelHtml(zone: ZoneSnapshot, selected: boolean): string {
+  const ring = selected ? ' zone-label--selected' : ''
+  if (zone.status !== 'slow_day') return `<div class="zone-label zone-label--${zone.status}${ring}" data-box>${escapeHtml(zone.label)}</div>`
+  /** B3: labels read the trailing 3-hour index (the explanation's 61%), never the sliding live one. */
+  const pct = zone.index_pct
+  return `<div class="zone-label zone-label--slow${ring}" data-box><strong>${escapeHtml(zone.zone_id)} · ${pct ?? '—'}% of expected</strong><span>Slow day, no alert: no payout</span></div>`
+}
+
+export function zoneLabelSpecs(zones: readonly ZoneSnapshot[], centroids: ReadonlyMap<string, LatLng>, always: readonly (string | null)[], selected: string | null = null): LabelSpec[] {
+  const wanted = zones.filter((zone) => centroids.has(zone.zone_id) && (LABELLED_STATUSES.has(zone.status) || always.includes(zone.zone_id)))
+  return wanted
+    .toSorted((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
+    .map((zone) => {
+      const html = `<div class="zone-anchor"><span class="zone-anchor__line"></span><span class="zone-anchor__dot"></span>${zoneLabelHtml(zone, zone.zone_id === selected)}</div>`
+      return { id: zone.zone_id, at: centroids.get(zone.zone_id) as LatLng, html, className: `zone-label-icon zone-label-icon--${zone.status}`, movable: true }
+    })
 }
 
 /** "₹1,380 paid · 17:04" for the latest payout credited on the scenario day. */
@@ -77,14 +96,40 @@ export function rainCaption(zones: readonly ZoneSnapshot[], band: FeatureCollect
   return since ? `Heavy rain band · since ${since}` : 'Heavy rain band'
 }
 
-function ResizeWatcher() {
+/**
+ * The rain band's label (deck slide 6): a pill on a short leader from the band's northern edge,
+ * placed like a zone label (preferring to sit above the band) so it is never cut by the map edge.
+ */
+export function rainSpec(zones: readonly ZoneSnapshot[], band: FeatureCollection): LabelSpec | null {
+  const top = northernmostOf(band)
+  if (!top) return null
+  const icon = '<svg class="rain-pill__icon" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M12 2.5c-.3 0-.6.2-.8.5C9.5 5.6 5.5 11 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 11 14.5 5.6 12.8 3c-.2-.3-.5-.5-.8-.5Z"/></svg>'
+  const pill = `<span class="rain-pill rain-label" data-box>${icon}<span class="rain-label__text">${escapeHtml(rainCaption(zones, band))}</span></span>`
+  const html = `<div class="zone-anchor zone-anchor--rain"><span class="zone-anchor__line"></span><span class="zone-anchor__dot"></span>${pill}</div>`
+  return { id: RAIN_LABEL_ID, at: top, html, className: 'rain-label-icon', movable: true, prefer: UP }
+}
+
+function Framer({ bounds, compact }: { bounds: Bounds; compact: boolean }) {
   const map = useMap()
+  const key = JSON.stringify(bounds)
   useEffect(() => {
-    const container = map.getContainer()
-    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [map])
+    const padding = compact ? COMPACT_PADDING : FRAME_PADDING
+    const fit = () => map.fitBounds(bounds, { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight, animate: false })
+    fit()
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false })
+        fit()
+      })
+    })
+    observer.observe(map.getContainer())
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [map, key, compact]) // eslint-disable-line react-hooks/exhaustive-deps -- `key` stands for `bounds`
   return null
 }
 
@@ -97,44 +142,53 @@ type Props = {
   onOpenMerchant: (merchantId: string) => void
 }
 
-export function LiveMap({ geo, snapshot, merchant, selected, onSelectZone, onOpenMerchant }: Props) {
-  const [offline, setOffline] = useState<TileFailure | null>(null)
-  const bounds = useMemo(() => boundsOf(geo.zones, FOCUS_ZONES), [geo.zones])
+function useLabels(geo: MapGeo, snapshot: StateSnapshot, merchant: MerchantDetail | null, selected: string | null): LabelSpec[] {
   const centroids = useMemo(() => centroidsById(geo.zones), [geo.zones])
   const day = snapshot.clock.now.slice(0, 10)
-  const labels = useMemo(() => {
-    const zoneLabels = zoneLabelSpecs(snapshot.zones, centroids, [merchant?.zone_id ?? null, selected])
-    const fixed = merchant ? [...waterSpecs(), pinSpec(merchant, day)] : waterSpecs()
-    return [...fixed, ...zoneLabels]
-  }, [snapshot.zones, centroids, merchant, selected, day])
+  return useMemo(() => {
+    const rain = snapshot.rain_band ? rainSpec(snapshot.zones, snapshot.rain_band) : null
+    const fixed = [...waterSpecs(), ...(merchant ? [pinSpec(merchant, day)] : [])]
+    const always = [selected, merchant?.zone_id ?? null]
+    return [...fixed, ...zoneLabelSpecs(snapshot.zones, centroids, always, selected), ...(rain ? [rain] : [])]
+  }, [snapshot.zones, snapshot.rain_band, centroids, merchant, selected, day])
+}
+
+export function LiveMap({ geo, snapshot, merchant, selected, onSelectZone, onOpenMerchant }: Props) {
+  const [offline, setOffline] = useState<TileFailure | null>(null)
+  const [tilesShown, setTilesShown] = useState(false)
+  const compact = useMediaQuery(COMPACT_QUERY)
+  const bounds = useMemo(() => stormFrame(geo.zones, compact), [geo.zones, compact])
+  const labels = useLabels(geo, snapshot, merchant, selected)
   const handlers = useLatest({ onSelectZone, onOpenMerchant })
   const onLabel = useMemo(
     () => (id: string) => {
-      if (id.startsWith(WATER_ID_PREFIX)) return
+      if (id.startsWith(WATER_ID_PREFIX) || id === RAIN_LABEL_ID) return
       if (id.startsWith(PIN_ID_PREFIX)) handlers.current.onOpenMerchant(id.slice(PIN_ID_PREFIX.length))
       else handlers.current.onSelectZone(id)
     },
     [handlers],
   )
-  const alertActive = snapshot.zones.some((z) => z.status === 'triggered' || z.status === 'watch') || snapshot.rain_band !== null
+  useEffect(() => basemap.set(offline ?? (tilesShown ? 'tiles' : 'unknown')), [offline, tilesShown])
+  useEffect(() => () => basemap.set('unknown'), [])
   if (!bounds) return <div className="map-frame map-frame--empty">No ward geometry available</div>
 
   return (
-    <div className={`map-frame ${offline ? 'map-frame--offline' : ''}`} data-testid="live-map" data-tiles={offline ? 'fallback' : 'carto'}>
-      <RainPatternDefs />
-      <MapContainer bounds={bounds} boundsOptions={{ padding: FIT_PADDING }} zoomControl={false} attributionControl={false} className="map" zoomSnap={0.25}>
-        <AttributionControl position="bottomleft" prefix={LEAFLET_PREFIX} />
+    <div className={`map-frame ${offline ? 'map-frame--drawn' : ''}`} data-testid="live-map" data-tiles={offline ? 'fallback' : 'carto'} data-reason={offline ?? undefined} title={basemapTitle(offline)}>
+      <MapPatternDefs prefix={LIVE_PATTERNS} />
+      <MapContainer bounds={bounds} zoomControl={false} attributionControl={false} className="map" zoomSnap={0.25}>
+        {tilesShown && !offline ? <AttributionControl position="bottomleft" prefix={false} /> : null}
         <MapPanes />
-        <ResizeWatcher />
-        {offline ? <LandLayer zones={geo.zones} /> : <Tiles onFallback={setOffline} />}
+        <Framer bounds={bounds} compact={compact} />
+        {offline ? <LandLayer zones={geo.zones} patterns={LIVE_PATTERNS} /> : <Tiles onFallback={setOffline} onLoaded={() => setTilesShown(true)} />}
         <HexLayer hexes={geo.hexes} values={snapshot.hexes} />
-        <WardLayer zones={geo.zones} snapshots={snapshot.zones} selected={selected} offline={offline !== null} onSelect={onSelectZone} />
-        {snapshot.rain_band ? <RainBandLayer band={snapshot.rain_band} caption={rainCaption(snapshot.zones, snapshot.rain_band)} /> : null}
+        <WardLayer zones={geo.zones} snapshots={snapshot.zones} selected={selected} onSelect={onSelectZone} />
+        {snapshot.rain_band ? <RainBandLayer band={snapshot.rain_band} patterns={LIVE_PATTERNS} /> : null}
+        <SelectedZoneLayer zones={geo.zones} selected={selected} />
         <LabelLayer labels={labels} onSelect={onLabel} />
       </MapContainer>
-      <MapChip clock={snapshot.clock} alertActive={alertActive} />
+      <StatusChip status={alertStatus(snapshot.zones, snapshot.clock)} />
       <NorthArrow />
-      <Legend />
+      <Legend patterns={LIVE_PATTERNS} />
       {offline ? <OfflineNote reason={offline} /> : null}
     </div>
   )

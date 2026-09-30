@@ -1,6 +1,8 @@
 /**
- * KPI tiles (SPEC §17.2, deck slide 6): zones triggered, shops paid, trigger to money. When a
- * number changes live (17:00 trigger, 17:04 credit) it counts up over 500 ms and the tile flashes.
+ * KPI tiles (SPEC §17.2, deck slide 6): zones triggered, shops paid, trigger to money, as one
+ * 64 px strip of three cells (value and label on one baseline) so the live panel keeps room for
+ * the event feed. When a number changes live (17:00 trigger, 17:04 credit) it counts up over
+ * 500 ms and its cell flashes.
  */
 import type { Kpis } from '../../api/types'
 import { useChangedKeys, useCountUp } from '../../state/motion'
@@ -36,9 +38,9 @@ export function KpiTiles({ kpis }: { kpis: KpiFigures }) {
   ]
   const changed = useChangedKeys(Object.fromEntries(tiles.map((t) => [t.key, t.raw])))
   return (
-    <section className="kpis" aria-label="Key numbers">
+    <section className="card kpis" aria-label="Key numbers">
       {tiles.map((tile) => (
-        <div key={tile.key} className={`card kpi ${changed.has(tile.key) ? 'is-changed' : ''}`} data-kpi={tile.key} title={tile.title ?? undefined}>
+        <div key={tile.key} className={`kpi ${changed.has(tile.key) ? 'is-changed' : ''}`} data-kpi={tile.key} title={tile.title ?? undefined}>
           <span className="kpi__value num">{tile.value}</span>
           <span className="kpi__caption">{tile.caption}</span>
         </div>

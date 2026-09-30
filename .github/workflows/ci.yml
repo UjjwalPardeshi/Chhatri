@@ -38,6 +38,8 @@ jobs:
           ruff check .
           ruff format --check .
       - name: Fast tests with coverage
+        env:
+          COVERAGE_CORE: sysmon  # Python 3.12 low-overhead tracer, as in `make test-backend`
         run: python -m pytest -m "not slow" --cov=chhatri --cov-report=term-missing --cov-fail-under=80
 
   frontend:

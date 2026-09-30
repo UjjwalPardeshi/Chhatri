@@ -1,8 +1,10 @@
 /**
  * Why Paytm wins (deck slide 12): financial services revenue (₹ crore, Q1 FY26 → Q1 FY27), the
- * four value drivers and the go-to-market, with the deck's sources.
+ * four value drivers and the go-to-market, then who benefits (deck slide 11), with the deck's
+ * sources.
  */
 import { BUSINESS } from '../../content/deck'
+import { BENEFITS } from '../../content/deckValue'
 import { RevealSection } from './Reveal'
 
 const MAX_CRORE = Math.max(...BUSINESS.revenue.map((r) => r.crore))
@@ -29,7 +31,7 @@ function RevenueBars() {
 
 export function Business() {
   return (
-    <RevealSection label="Why Paytm" className="ov-business">
+    <RevealSection label="Why Paytm" id="ov-business" className="ov-business">
       <h2 className="ov-h2">{BUSINESS.title}</h2>
       <div className="ov-business__grid">
         <RevenueBars />
@@ -49,6 +51,17 @@ export function Business() {
           </p>
         </div>
       </div>
+      <section className="benefits" aria-label="Who benefits">
+        <p className="ov-label">Who benefits</p>
+        <div className="benefits__grid">
+          {BENEFITS.map((b) => (
+            <article key={b.who} className="benefit">
+              <h3 className="benefit__who">{b.who}</h3>
+              <p className="benefit__what">{b.what}</p>
+            </article>
+          ))}
+        </div>
+      </section>
       <p className="ov-source">{BUSINESS.sources}</p>
     </RevealSection>
   )

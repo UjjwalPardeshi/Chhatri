@@ -67,6 +67,24 @@ async def test_step_failures_propagate_to_the_scheduler() -> None:
         await scheduler.run_all()
 
 
+async def test_takeover_schedules_only_steps_not_yet_reported() -> None:
+    """Fallback after a partial n8n run (B1): steps n8n already reported are not scheduled twice."""
+    scheduler = FakeScheduler(DECIDED)
+
+    async def reported() -> None:
+        return None
+
+    scheduler.schedule(DECIDED, "payout:D-000001:execute_payout", reported)
+    run = await InProcessWorkflowEngine(scheduler, RecordingHandlers()).start("payout", PAYOUT)
+    assert run.accepted and run.detail == "3 steps scheduled from 17:00"
+    assert [name for _, name, _ in scheduler.jobs] == [
+        "payout:D-000001:execute_payout",
+        "payout:D-000001:credit_payout",
+        "payout:D-000001:notify_merchant",
+        "payout:D-000001:pause_instalment",
+    ]
+
+
 def test_n8n_engine_is_reexported() -> None:
     from chhatri.integrations.n8n import N8nWorkflowEngine as Impl
 

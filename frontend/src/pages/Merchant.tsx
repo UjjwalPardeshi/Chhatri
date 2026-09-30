@@ -1,22 +1,29 @@
 /**
  * Merchant phone page (SPEC §13, §20 "Merchant phone"): the WhatsApp-like conversation for one
- * merchant, updated live from `message` events, with the merchant's money beside it.
+ * merchant, updated live from `message` events, with the shop's Soundbox, money and the "What
+ * happened" steps beside it.
+ * A launcher from the Overview can pass a `hint` (useLaunch) to highlight the chip to tap next.
  */
 import { useCallback, useMemo, useState } from 'react'
-import { useParams } from 'react-router'
+import { useLocation, useParams } from 'react-router'
 
 import { assertMerchantId } from '../api/endpoints'
 import type { Message, VoiceDemoKey } from '../api/types'
 import { ErrorState, InlineError, Loading } from '../components/common/Status'
 import { Composer, type ComposerActions } from '../components/phone/Composer'
 import { MerchantPanel } from '../components/phone/MerchantPanel'
-import { chatMessages, latestSoundbox, upsertMessage } from '../components/phone/messages'
+import { coverOffer } from '../components/phone/coverOffer'
+import { chatMessages, latestSoundbox, upsertMessage, voiceAudioUrl } from '../components/phone/messages'
 import { Phone } from '../components/phone/Phone'
+import { SoundboxDevice } from '../components/phone/SoundboxDevice'
 import { SoundboxStrip } from '../components/phone/SoundboxStrip'
+import { happenedSteps } from '../components/phone/whatHappened'
 import { ApiError } from '../api/client'
 import { useLive, useLiveEvent } from '../state/live'
 import { toApiError, useAsync } from '../state/useAsync'
+import type { LaunchNavState } from '../state/useLaunch'
 import { useMerchant } from '../state/useMerchant'
+import { useSettle } from '../state/useSettle'
 
 const PULSE_MS = 2_400
 
@@ -49,20 +56,26 @@ function useConversation(merchantId: string) {
     if (event.type !== 'message' || event.data.message.merchant_id !== merchantId) return
     const message = event.data.message
     setLive((current) => ({ base, items: [...(current.base === base ? current.items : []), message] }))
-    if (message.direction === 'OUTBOUND' && message.channel !== 'SOUNDBOX' && message.text_hi) void sound.autoPlay(message.text_hi, message.audio_url)
+    if (message.direction === 'OUTBOUND' && message.channel !== 'SOUNDBOX' && message.text_hi) void sound.autoPlay(message.text_hi, voiceAudioUrl(message))
   })
   const reload = useCallback(() => setVersion((v) => v + 1), [])
   return { messages, loaded, pulse, reload }
 }
 
+/**
+ * Phone actions. A slip photo can approve a personal claim; on a paused replay the clock then
+ * steps to the end of the payout workflow so the ₹1,500 card arrives on screen (useSettle, B2).
+ */
 function useActions(merchantId: string, reload: () => void) {
   const { api } = useLive()
+  const settle = useSettle()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
-  const run = async (action: () => Promise<unknown>): Promise<boolean> => {
+  const run = async (action: () => Promise<unknown>, settles = false): Promise<boolean> => {
     setBusy(true)
     try {
       await action()
+      if (settles) await settle(merchantId)
       setError(null)
       return true
     } catch (reason) {
@@ -77,14 +90,21 @@ function useActions(merchantId: string, reload: () => void) {
     sendText: (text) => run(() => api.sendText(merchantId, text)),
     sendVoiceDemo: (key: VoiceDemoKey) => run(() => api.sendVoiceDemo(merchantId, key)),
     sendVoice: (blob, filename) => run(() => api.sendVoice(merchantId, blob, filename)),
-    sendPhoto: (file) => run(() => api.sendPhoto(merchantId, file)),
-    sendSample: (file) => run(() => api.sendSampleSlip(merchantId, file)),
+    sendPhoto: (file) => run(() => api.sendPhoto(merchantId, file), true),
+    sendSample: (file) => run(() => api.sendSampleSlip(merchantId, file), true),
   }
   return { actions, busy, error, clearError: () => setError(null) }
 }
 
+/** The chip a launcher asked to highlight (LaunchNavState), if any. */
+function useHint(): string | null {
+  const state = useLocation().state as Partial<LaunchNavState> | null
+  return typeof state?.hint === 'string' ? state.hint : null
+}
+
 function MerchantView({ merchantId }: { merchantId: string }) {
   const { snapshot } = useLive()
+  const hint = useHint()
   const merchant = useMerchant(merchantId)
   const conversation = useConversation(merchantId)
   const { actions, busy, error, clearError } = useActions(merchantId, conversation.reload)
@@ -93,18 +113,31 @@ function MerchantView({ merchantId }: { merchantId: string }) {
   ) : conversation.loaded.loading && conversation.messages.length === 0 ? (
     <Loading label="Loading chat…" />
   ) : null
+  const announcement = latestSoundbox(conversation.messages)
   const footer = (
     <>
-      <SoundboxStrip message={latestSoundbox(conversation.messages)} pulse={conversation.pulse} />
+      {/* On narrow screens the Soundbox card sits far below the phone, so its line shows here too. */}
+      {announcement ? (
+        <div className="phone__soundbox">
+          <SoundboxStrip message={announcement} pulse={conversation.pulse} />
+        </div>
+      ) : null}
       {error ? <InlineError error={error} onDismiss={clearError} /> : null}
-      <Composer scenario={snapshot?.clock.scenario ?? null} busy={busy} actions={actions} />
+      <Composer scenario={snapshot?.clock.scenario ?? null} busy={busy} actions={actions} hint={hint} />
     </>
   )
+  const soundbox = <SoundboxDevice message={announcement} announcing={conversation.pulse} />
   return (
     <div className="merchant-page">
       <Phone now={snapshot?.clock.now ?? ''} messages={chatMessages(conversation.messages)} status={status} footer={footer} />
       {merchant.data ? (
-        <MerchantPanel merchant={merchant.data} scenario={snapshot?.clock.scenario ?? null} />
+        <MerchantPanel
+          merchant={merchant.data}
+          scenario={snapshot?.clock.scenario ?? null}
+          soundbox={soundbox}
+          offer={coverOffer(conversation.messages)}
+          steps={happenedSteps(merchant.data, conversation.messages)}
+        />
       ) : merchant.error ? (
         <ErrorState error={merchant.error} title="Could not load the merchant" onRetry={merchant.reload} />
       ) : (
