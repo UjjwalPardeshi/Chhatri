@@ -1,173 +1,97 @@
-"""Replay state management (SPEC §24.6, §17).
+"""Process state and per-scenario runtime (SPEC §3, §24.6).
 
-StaticContext: built once per process at startup; immutable.
-Runtime: per-scenario state; fresh instance on each load.
-AppState: FastAPI app state; manages lifecycle and scenario loading.
+- `StaticContext` / `load_static` (re-exported from `chhatri.replay.static`): built once per process.
+- `Runtime`: everything of one loaded scenario. SPEC §3: ids, store, audit log, clock, scheduler,
+  zone board and feed are new on every load, so a scenario always replays to the same ids,
+  amounts and audit hashes. The `EventBus` is the process-wide one: its history is cleared and a
+  ``scenario`` event published on every load, so a reconnecting console only sees the new run.
+- `AppState.load(name)`: ValueError for an unknown scenario (API 422); RuntimeError when the model
+  artefacts are missing or the scenario cannot be built (API 503) — including an integration that
+  cannot be configured; the previously loaded runtime then stays loaded (paused). The world
+  (history and predictions) is built in a worker thread so the event loop keeps serving; the
+  previous runtime's clock is paused first. The previous runtime is not closed: a request still
+  holding it finishes on it, and it is released with its last reference.
+- Channel name: WHATSAPP when the WhatsApp integration is LIVE, else SIMULATOR (the phone view).
+- `AppState.preflight()`: see `chhatri.replay.preflight`.
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
+import time
+from collections import Counter
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from types import MappingProxyType
+from typing import Any, Final, Protocol
 
 import numpy as np
 
-from chhatri.audit.log import AuditLog
-from chhatri.clock import ManualClock, at, ist
+from chhatri.cases.service import CaseService
+from chhatri.clock import ManualClock
 from chhatri.config import Settings
-from chhatri.domain.models import Alert
+from chhatri.conversation.service import ConversationService
+from chhatri.domain.enums import Channel, IntegrationMode
 from chhatri.events import EventBus
-from chhatri.forecast.model import ExpectedSalesModel
+from chhatri.forecast.errors import ForecastError
 from chhatri.ids import IdFactory
-from chhatri.integrations.registry import build_integrations
-from chhatri.policy.rules import PolicyRules, default_rules
-from chhatri.sim.calibration import load_calibration
-from chhatri.sim.calibration import Calibration
-from chhatri.sim.city import build_city
-from chhatri.sim.geo import build_geography
-from chhatri.sim.sales import SalesSimulator
-from chhatri.sim.scenarios import get_scenario
-from chhatri.sim.weather import build_shocks
+from chhatri.integrations.registry import Integrations, build_integrations
+from chhatri.ledger.instalments import InstalmentService
+from chhatri.ledger.payouts import PayoutService
+from chhatri.ledger.premiums import PremiumService
+from chhatri.policy.rules import PolicyRules
+from chhatri.replay.audit_bus import PublishingAuditLog
+from chhatri.replay.board import ZoneBoard
+from chhatri.replay.engine import ReplayEngine
+from chhatri.replay.feed import FeedLog
+from chhatri.replay.live import HexIndex
+from chhatri.replay.orchestrator import Orchestrator
+from chhatri.replay.preflight import preflight_rows
+from chhatri.replay.publish import Publisher, RuntimeLink
+from chhatri.replay.scheduler import FailureRecorder, SimScheduler
+from chhatri.replay.static import StaticContext, load_static
+from chhatri.replay.world import ScenarioData, build_world
+from chhatri.sim.scenarios import SCENARIOS
+from chhatri.sim.types import SalesPanel, Scenario
+from chhatri.sim.weather import ShockCalendar
 from chhatri.store.repositories import Store
 
-if TYPE_CHECKING:
-    from chhatri.cases.service import CaseService
-    from chhatri.conversation.service import ConversationService
-    from chhatri.ledger.instalments import InstalmentService
-    from chhatri.ledger.payouts import PayoutService
-    from chhatri.ledger.premiums import PremiumService
-    from chhatri.replay.engine import ReplayEngine
-    from chhatri.replay.orchestrator import Orchestrator
-    from chhatri.replay.scheduler import SimScheduler
-    from chhatri.sim.city import City
-    from chhatri.sim.geo import Geography
-    from chhatri.sim.sales import SalesPanel
-    from chhatri.sim.scenarios import Scenario
-    from chhatri.sim.weather import ShockCalendar
+__all__ = ["AppState", "Runtime", "StaticContext", "load_static"]
 
 logger = logging.getLogger(__name__)
 
+WHATSAPP_STATUS: Final = "whatsapp"
+LOAD_ERRORS: Final = (ValueError, KeyError, IndexError, OSError, ForecastError)
+
+
+class IntegrationsFactory(Protocol):
+    """`chhatri.integrations.registry.build_integrations` (SPEC §24.5); injectable for tests."""
+
+    def __call__(
+        self,
+        settings: Settings,
+        *,
+        scheduler: SimScheduler,
+        step_handlers: Orchestrator,
+        data_dir: Path,
+        rules: PolicyRules,
+    ) -> Integrations: ...
+
 
 @dataclass(frozen=True, slots=True)
-class StaticContext:
-    """Build-once-per-process immutable context. SPEC §24.6."""
-
-    settings: Settings
-    rules: PolicyRules
-    data_dir: Path
-    artifacts_dir: Path
-    calibration: "Calibration"
-    city: City
-    model: ExpectedSalesModel | None  # None if artefacts missing
-    model_error: str | None
-    zones_geojson: dict
-    hexes_geojson: dict
-    backtest_report: dict | None
-    premiums: dict[str, int]  # zone_id → paise per day
-
-
-def load_static(settings: Settings) -> StaticContext:
-    """Load static context at startup (SPEC §24.6). SPEC §0.2: missing model artefacts
-    do NOT crash; model=None + model_error is reported via preflight."""
-
-    data_dir = settings.chhatri_data_dir
-    artifacts_dir = data_dir.parent / "artifacts"
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load rules
-    rules = default_rules()
-
-    # Load calibration
-    calibration = load_calibration(data_dir)
-
-    # Load city
-    city = build_city(settings.chhatri_seed, data_dir, calibration, scale="full")
-
-    # Load geography
-    wards_geojson_path = data_dir / "geo" / "bmc_wards.geojson"
-    if not wards_geojson_path.exists():
-        raise FileNotFoundError(f"BMC wards GeoJSON not found: {wards_geojson_path}")
-    with open(wards_geojson_path) as f:
-        wards_geojson = json.load(f)
-
-    shops_per_zone = {zone.id: len(list(city.zone_rows(zone.id))) for zone in city.zones}
-    geography = build_geography(wards_geojson_path, shops_per_zone)
-    zones_geojson = geography.zones_geojson
-    hexes_geojson = geography.hexes_geojson
-
-    # Load model
-    model = None
-    model_error = None
-    model_dir = artifacts_dir / "model"
-    if model_dir.exists():
-        try:
-            model = ExpectedSalesModel.load(model_dir)
-            logger.info("Loaded expected-sales model from %s", model_dir)
-        except Exception as e:
-            model_error = f"Failed to load model: {e}"
-            logger.warning("Model load failed (will report in preflight): %s", model_error)
-    else:
-        model_error = f"Model artifacts not found at {model_dir}"
-        logger.info(model_error)
-
-    # Load backtest report
-    backtest_report = None
-    backtest_file = artifacts_dir / "backtest" / "report.json"
-    if backtest_file.exists():
-        try:
-            with open(backtest_file) as f:
-                backtest_report = json.load(f)
-        except Exception as e:
-            logger.warning("Failed to load backtest report: %s", e)
-
-    # Load premiums
-    premiums: dict[str, int] = {}
-    premiums_file = artifacts_dir / "premiums.json"
-    if premiums_file.exists():
-        try:
-            with open(premiums_file) as f:
-                premiums = {k: int(v) for k, v in json.load(f).items()}
-        except Exception as e:
-            logger.warning("Failed to load premiums: %s", e)
-    logger.info("Loaded premiums for %d zones", len(premiums))
-
-    return StaticContext(
-        settings=settings,
-        rules=rules,
-        data_dir=data_dir,
-        artifacts_dir=artifacts_dir,
-        calibration=calibration,
-        city=city,
-        model=model,
-        model_error=model_error,
-        zones_geojson=zones_geojson,
-        hexes_geojson=hexes_geojson,
-        backtest_report=backtest_report,
-        premiums=premiums,
-    )
-
-
-@dataclass
 class Runtime:
-    """Per-scenario runtime state. Fresh instance on each load. SPEC §24.6.
-
-    Attributes are populated during load(); most are initialized after init.
-    """
+    """One loaded scenario (SPEC §24.6)."""
 
     static: StaticContext
-    bus: EventBus
-    scenario: Scenario
+    world: ScenarioData
     clock: ManualClock
     ids: IdFactory
     store: Store
-    audit: AuditLog
-    shocks: ShockCalendar
-    history: SalesPanel
-    expected: np.ndarray
-    integrations: "Integrations"
+    audit: PublishingAuditLog
+    bus: EventBus
+    integrations: Integrations
     conversation: ConversationService
     orchestrator: Orchestrator
     engine: ReplayEngine
@@ -176,135 +100,173 @@ class Runtime:
     instalments: InstalmentService
     premiums: PremiumService
     cases: CaseService
+    board: ZoneBoard
+    feed: FeedLog
+    hex_index: HexIndex
+    zone_shops: Mapping[str, int]
+
+    @property
+    def scenario(self) -> Scenario:
+        return self.world.scenario
+
+    @property
+    def shocks(self) -> ShockCalendar:
+        return self.world.shocks
+
+    @property
+    def history(self) -> SalesPanel:
+        """history_start .. the last scenario day, full days (SPEC §24.6)."""
+        return self.world.history
+
+    @property
+    def expected(self) -> np.ndarray:
+        """(M, 24 × scenario days, 3) predictions from the scenario day's midnight (SPEC §24.6)."""
+        return self.world.expected
+
+
+@dataclass(frozen=True, slots=True)
+class _Core:
+    """The per-load pieces built before the integrations."""
+
+    link: RuntimeLink
+    publisher: Publisher
+    clock: ManualClock
+    ids: IdFactory
+    store: Store
+    audit: PublishingAuditLog
+    feed: FeedLog
+    failures: FailureRecorder
+    scheduler: SimScheduler
+    orchestrator: Orchestrator
+
+
+def _zone_shops(static: StaticContext, store: Store) -> Mapping[str, int]:
+    """Covered shops per zone at load (ZoneSnapshot ``shops``, SPEC §5.4)."""
+    counts = Counter(static.city.merchant(mid).zone_id for mid in store.covers())
+    return MappingProxyType({zone.id: counts.get(zone.id, 0) for zone in static.city.zones})
+
+
+def _channel(integrations: Integrations) -> Channel:
+    live = any(s.name == WHATSAPP_STATUS and s.mode is IntegrationMode.LIVE for s in integrations.statuses)
+    return Channel.WHATSAPP if live else Channel.SIMULATOR
 
 
 class AppState:
-    """FastAPI app state (SPEC §24.6). Manages static load once and scenario loads.
+    """Stored at FastAPI ``app.state.chhatri`` (SPEC §24.6)."""
 
-    SPEC §3: ids, store, audit, and IdFactory are reset on each scenario load.
-    SPEC design note: EventBus is shared across loads; its history is cleared and a
-    "scenario" event is published on load.
-    """
-
-    def __init__(self, static: StaticContext) -> None:
+    def __init__(
+        self,
+        static: StaticContext,
+        *,
+        bus: EventBus | None = None,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
+        integrations_factory: IntegrationsFactory = build_integrations,
+    ) -> None:
         self.static = static
-        self.bus = EventBus()
+        self.bus = bus if bus is not None else EventBus()
+        self._sleep = sleep
+        self._monotonic = monotonic
+        self._build_integrations = integrations_factory
+        self._hex_index = HexIndex.build(static.city)
         self._runtime: Runtime | None = None
 
     @property
     def runtime(self) -> Runtime:
-        """The currently loaded scenario's runtime. Raises RuntimeError if nothing loaded."""
+        """The loaded scenario; RuntimeError when nothing is loaded."""
         if self._runtime is None:
-            raise RuntimeError("No scenario loaded")
+            raise RuntimeError("no scenario is loaded")
         return self._runtime
 
-    async def load(self, scenario_name: str) -> Runtime:
-        """Load a scenario (SPEC §24.6; §3: resets ids/store/audit).
-
-        Raises:
-            ValueError: unknown scenario name.
-            RuntimeError: model missing (required for decisions).
-        """
-        valid_scenarios = ("monsoon", "illness", "illness_mismatch", "buy_cover")
-        if scenario_name not in valid_scenarios:
-            raise ValueError(f"Unknown scenario: {scenario_name}")
-
+    async def load(self, scenario: str) -> Runtime:
+        """Load `scenario` paused at its start with fresh ids, store and audit (SPEC §3, §17)."""
+        if scenario not in SCENARIOS:
+            raise ValueError(f"unknown scenario {scenario!r}; expected one of {', '.join(SCENARIOS)}")
         if self.static.model is None:
-            raise RuntimeError(
-                f"Cannot load scenario without model: {self.static.model_error}"
-            )
-
-        logger.info("Loading scenario %s", scenario_name)
-
-        # Fresh per-load instances
-        scenario = get_scenario(scenario_name, self.static.city, self.static.calibration)
-        clock = ManualClock(scenario.start)
-        ids = IdFactory()
-        store = Store(self.static.city)
-
-        # Audit DB: per load, under var_dir/runs/ or in-memory
-        audit_path = self.static.settings.var_dir / "runs"
-        audit_path.mkdir(parents=True, exist_ok=True)
-        # Use per-run audit DBs to avoid collision: named by scenario + timestamp-ish
-        run_id = scenario.name
-        audit_db = audit_path / f"{run_id}.db"
-        audit = AuditLog(audit_db)
-
-        # Shocks and sales history
-        shocks = build_shocks(
-            self.static.city,
-            self.static.data_dir,
-            self.static.settings.chhatri_seed,
-            overrides=scenario.overrides,
-        )
-        simulator = SalesSimulator(self.static.city, shocks, self.static.settings.chhatri_seed)
-
-        # History panel: [history_start, scenario.day + 1) — full days
-        history = simulator.generate(scenario.history_start, scenario.day)
-
-        # Expected sales for the scenario day(s)
-        # (M, 24 * num_days, 3) for p10/p50/p90
-        scenario_days = (scenario.end.date() - scenario.start.date()).days + 1
-        expected = self.static.model.predict(
-            self.static.city,
-            history,
-            scenario.start,
-            24 * scenario_days,
-        )
-
-        # Clear bus history and publish scenario event
+            raise RuntimeError(f"cannot load {scenario}: {self.static.model_error}")
+        if self._runtime is not None:
+            await self._runtime.engine.pause()
+        try:
+            world = await asyncio.to_thread(build_world, self.static, scenario)
+            core = self._core(world)
+            runtime = self._assemble(world, core)
+        except LOAD_ERRORS as exc:
+            logger.exception("scenario %s could not be built", scenario)
+            raise RuntimeError(f"scenario {scenario} could not be built: {exc}") from exc
+        core.link.bind(runtime)
+        self._runtime = runtime
         self.bus.clear()
-        self.bus.publish(
-            "scenario",
-            clock.now(),
-            {"clock": {"now": clock.now().isoformat()}},
+        core.publisher.scenario()
+        await runtime.orchestrator.start()
+        logger.info("scenario %s loaded, paused at %s", scenario, world.scenario.start.isoformat())
+        return runtime
+
+    def _core(self, world: ScenarioData) -> _Core:
+        link = RuntimeLink()
+        publisher = Publisher(self.bus, link)
+        audit = PublishingAuditLog(self.bus)
+        feed = FeedLog()
+        failures = FailureRecorder(audit, feed)
+        clock = ManualClock(world.scenario.start)
+        return _Core(
+            link=link,
+            publisher=publisher,
+            clock=clock,
+            ids=IdFactory(),
+            store=Store(self.static.city),
+            audit=audit,
+            feed=feed,
+            failures=failures,
+            scheduler=SimScheduler(clock, failures),
+            orchestrator=Orchestrator(link, publisher),
         )
 
-        # Build integrations (scheduler = SimScheduler, step_handlers = orchestrator later)
-        # For now, pass a dummy scheduler; orchestrator will inject itself
-        from chhatri.replay.scheduler import SimScheduler
-        from chhatri.replay.orchestrator import Orchestrator
-
-        scheduler = SimScheduler()
-        orchestrator = Orchestrator(
-            static=self.static,
-            runtime_getter=lambda: self._runtime,  # type: ignore
-            ids=ids,
-            store=store,
-            audit=audit,
-            clock=clock,
+    def _assemble(self, world: ScenarioData, core: _Core) -> Runtime:
+        static = self.static
+        integrations = self._build_integrations(
+            static.settings,
+            scheduler=core.scheduler,
+            step_handlers=core.orchestrator,
+            data_dir=static.data_dir,
+            rules=static.rules,
+        )
+        return Runtime(
+            static=static,
+            world=world,
+            clock=core.clock,
+            ids=core.ids,
+            store=core.store,
+            audit=core.audit,
             bus=self.bus,
+            integrations=integrations,
+            conversation=self._conversation(core, integrations),
+            orchestrator=core.orchestrator,
+            engine=self._engine(world, core),
+            scheduler=core.scheduler,
+            payouts=PayoutService(core.store, core.audit, core.ids, static.rules),
+            instalments=InstalmentService(core.store, core.audit, core.ids),
+            premiums=PremiumService(
+                core.store,
+                core.audit,
+                core.ids,
+                static.rules,
+                integrations.payments,
+                premiums=static.premiums,
+            ),
+            cases=CaseService(core.store, core.audit, core.ids, static.rules),
+            board=ZoneBoard(),
+            feed=core.feed,
+            hex_index=self._hex_index,
+            zone_shops=_zone_shops(static, core.store),
         )
 
-        integrations = build_integrations(
-            self.static.settings,
-            scheduler=scheduler,
-            step_handlers=orchestrator,
-            data_dir=self.static.data_dir,
-        )
-
-        # Ledger services
-        from chhatri.cases.service import CaseService
-        from chhatri.conversation.service import ConversationService
-        from chhatri.ledger.instalments import InstalmentService
-        from chhatri.ledger.payouts import PayoutService
-        from chhatri.ledger.premiums import PremiumService
-        from chhatri.replay.engine import ReplayEngine
-
-        payouts = PayoutService(store, audit, ids, self.static.rules)
-        instalments = InstalmentService(store, audit, ids)
-        premiums = PremiumService(
-            store, audit, ids, self.static.rules, integrations.payments
-        )
-        cases = CaseService(store, audit, ids, self.static.rules)
-
-        # Conversation service
-        conversation = ConversationService(
+    def _conversation(self, core: _Core, integrations: Integrations) -> ConversationService:
+        return ConversationService(
             city=self.static.city,
-            store=store,
-            audit=audit,
-            ids=ids,
-            clock=clock,
+            store=core.store,
+            audit=core.audit,
+            ids=core.ids,
+            clock=core.clock,
             bus=self.bus,
             channel=integrations.channel,
             stt=integrations.stt,
@@ -312,100 +274,38 @@ class AppState:
             chat=integrations.chat,
             slips=integrations.slips,
             soundbox=integrations.soundbox,
-            claims=orchestrator,
-            channel_name="SIMULATOR",
+            claims=core.orchestrator,
+            channel_name=_channel(integrations),
         )
 
-        # Replay engine
-        engine = ReplayEngine(
-            static=self.static,
-            runtime_getter=lambda: self._runtime,  # type: ignore
-            clock=clock,
-            scheduler=scheduler,
-            bus=self.bus,
+    def _engine(self, world: ScenarioData, core: _Core) -> ReplayEngine:
+        name = world.scenario.name
+
+        async def reload() -> ReplayEngine:
+            return (await self.load(name)).engine
+
+        return ReplayEngine(
+            clock=core.clock,
+            scheduler=core.scheduler,
+            hooks=core.orchestrator,
+            events=core.publisher,
+            failures=core.failures,
+            start=world.scenario.start,
+            end=world.scenario.end,
+            reload=reload,
+            sleep=self._sleep,
+            monotonic=self._monotonic,
         )
-
-        # Wire orchestrator and engine
-        orchestrator.conversation = conversation
-        orchestrator.engine = engine
-        scheduler.runtime_getter = lambda: self._runtime  # type: ignore
-        engine.orchestrator = orchestrator
-
-        # Create runtime
-        runtime = Runtime(
-            static=self.static,
-            bus=self.bus,
-            scenario=scenario,
-            clock=clock,
-            ids=ids,
-            store=store,
-            audit=audit,
-            shocks=shocks,
-            history=history,
-            expected=expected,
-            integrations=integrations,
-            conversation=conversation,
-            orchestrator=orchestrator,
-            engine=engine,
-            scheduler=scheduler,
-            payouts=payouts,
-            instalments=instalments,
-            premiums=premiums,
-            cases=cases,
-        )
-        self._runtime = runtime
-
-        logger.info("Scenario %s loaded; ready at %s", scenario_name, clock.now())
-        return runtime
 
     async def shutdown(self) -> None:
-        """Clean up resources."""
-        if self._runtime is not None:
-            try:
-                self._runtime.audit.verify()
-            except Exception as e:
-                logger.warning("Audit verification failed at shutdown: %s", e)
-        logger.info("AppState shutdown")
+        """Pause the clock and close the audit log of the loaded scenario."""
+        runtime, self._runtime = self._runtime, None
+        if runtime is None:
+            return
+        await runtime.engine.pause()
+        runtime.audit.close()
+        logger.info("replay state shut down (%s)", runtime.scenario.name)
 
-    def preflight(self) -> list[dict]:
-        """Preflight checks (SPEC §19; /api/preflight).
-
-        Returns:
-            [{name, ok, detail}] for each readiness check.
-        """
-        checks = []
-
-        # Static context
-        checks.append({"name": "rules", "ok": True, "detail": "loaded"})
-        checks.append({"name": "calibration", "ok": True, "detail": "loaded"})
-        checks.append(
-            {
-                "name": "model",
-                "ok": self.static.model is not None,
-                "detail": self.static.model_error or "loaded",
-            }
-        )
-        checks.append({"name": "city", "ok": True, "detail": f"{len(self.static.city.merchants)} merchants"})
-
-        # Scenario loadable
-        try:
-            _ = get_scenario("monsoon", self.static.city, self.static.calibration)
-            checks.append({"name": "scenario", "ok": True, "detail": "monsoon loadable"})
-        except Exception as e:
-            checks.append({"name": "scenario", "ok": False, "detail": str(e)})
-
-        # Integrations
-        if self._runtime is not None:
-            for status in self._runtime.integrations.statuses:
-                checks.append(
-                    {
-                        "name": status.name,
-                        "ok": status.mode == "LIVE",
-                        "detail": status.mode,
-                    }
-                )
-
-        # Clock
-        checks.append({"name": "clock", "ok": True, "detail": "manual clock ready"})
-
-        return checks
+    def preflight(self) -> list[dict[str, Any]]:
+        """``[{name, ok, detail}]`` readiness rows (SPEC §19 /api/preflight)."""
+        return preflight_rows(self.static, self._runtime)

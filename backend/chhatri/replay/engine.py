@@ -1,239 +1,234 @@
-"""Replay engine for simulated time advancement (SPEC §24.6, §17.1).
+"""The replay clock: play, pause, step and seek on simulated time (SPEC §17.1, §24.6).
 
-ReplayEngine: manages time, speed, and background task. Supports play/pause/step/seek.
+- Time advances in 1-minute simulated steps. For every minute ``t``: the clock is set to ``t``, the
+  workflow steps due by ``t`` run (in ``(at, seq)`` order), the minute hooks run
+  (`Orchestrator.on_minute`), at hour boundaries the hour hooks run (detection → claims,
+  `Orchestrator.on_hour`), and every 15 simulated minutes the hex values are published — so hexes
+  go out at most once per 15 simulated minutes whatever the speed.
+- ``play``: a background task wakes every 250 ms of real time and advances ``speed × 0.25``
+  simulated minutes (``speed`` = simulated minutes per real second, 1..120, default 6; fractions
+  carry over). ``tick`` events follow the wake-ups, at most 4 per real second. The engine pauses
+  itself at the scenario's end. An unexpected error in the background clock is logged, reported
+  to the `ReplayFailureSink` (audit ``replay.stopped`` and a feed item) and pauses the clock; the
+  minute that failed may be partly applied (workflow-step failures never get here: the scheduler
+  isolates them).
+- ``pause`` waits for the minute being processed to finish, so no half-processed minute remains.
+- ``step(minutes)``: pauses, then advances synchronously awaiting every effect; ValueError for a
+  non-positive or non-integer count or past the scenario's end.
+- ``seek("HH:MM")`` on the scenario day: forward = step; backward = reload the scenario (fresh ids,
+  store, audit; SPEC §3) and seek on the new engine; ValueError for a bad time or one outside the
+  scenario window. `sleep` and `monotonic` are injectable so tests control pacing.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import math
+import re
 import time
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
+from typing import Final, Protocol
 
-from chhatri.clock import floor_hour
+from chhatri.clock import IST, ManualClock, at
+from chhatri.replay.scheduler import SimScheduler
 
-if TYPE_CHECKING:
-    from chhatri.replay.orchestrator import Orchestrator
-    from chhatri.replay.scheduler import SimScheduler
-    from chhatri.replay.state import Runtime, StaticContext
+__all__ = [
+    "DEFAULT_SPEED",
+    "MAX_SPEED",
+    "MIN_SPEED",
+    "TICK_SECONDS",
+    "EngineEvents",
+    "ReplayEngine",
+    "ReplayFailureSink",
+    "ReplayHooks",
+    "validate_speed",
+]
 
 logger = logging.getLogger(__name__)
 
+MIN_SPEED: Final = 1.0
+MAX_SPEED: Final = 120.0
+DEFAULT_SPEED: Final = 6.0
+TICK_SECONDS: Final = 0.25
+MINUTE: Final = timedelta(minutes=1)
+HEX_EVERY_MINUTES: Final = 15
+SEEK_PATTERN: Final = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+
+class ReplayHooks(Protocol):
+    async def on_minute(self, at: datetime) -> None: ...
+
+    async def on_hour(self, at: datetime) -> None: ...
+
+
+class EngineEvents(Protocol):
+    def tick(self) -> None: ...
+
+    def quarter_hour(self, at: datetime) -> None: ...
+
+
+class ReplayFailureSink(Protocol):
+    def replay_stopped(self, at: datetime, error: Exception) -> None: ...
+
+
+def validate_speed(speed: object) -> float:
+    """A finite number in [1, 120] (booleans are not numbers here); ValueError otherwise."""
+    if isinstance(speed, bool) or not isinstance(speed, int | float) or not math.isfinite(speed):
+        raise ValueError("speed must be a number of simulated minutes per real second")
+    if not MIN_SPEED <= speed <= MAX_SPEED:
+        raise ValueError(f"speed must be between {MIN_SPEED:g} and {MAX_SPEED:g}")
+    return float(speed)
+
 
 class ReplayEngine:
-    """Replay engine managing simulated time (SPEC §17.1; design notes).
-
-    Speed: sim minutes per real second, 1..120, default 6.
-    The background task advances time every 250ms real time by speed*0.25 sim minutes,
-    processing minute by minute. At hour boundaries, on_hour() is called.
-    Hexes published at most once per simulated 15 min; tick throttled to <= 4 per real sec.
-    Seeking backward = AppState reload + step.
-    """
+    """SPEC §24.6 replay engine of one loaded scenario."""
 
     def __init__(
         self,
-        static: StaticContext,
-        runtime_getter: Callable[[], Runtime],
-        clock: "ManualClock",  # noqa: F821
+        *,
+        clock: ManualClock,
         scheduler: SimScheduler,
-        bus: "EventBus",  # noqa: F821
+        hooks: ReplayHooks,
+        events: EngineEvents,
+        failures: ReplayFailureSink,
+        start: datetime,
+        end: datetime,
+        reload: Callable[[], Awaitable[ReplayEngine]],
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
+        speed: float = DEFAULT_SPEED,
     ) -> None:
-        self.static = static
-        self.runtime_getter = runtime_getter
-        self.clock = clock
-        self.scheduler = scheduler
-        self.bus = bus
-        self.orchestrator: Orchestrator | None = None
-
-        self._speed = 6.0  # sim min per real sec
+        if end <= start:
+            raise ValueError("a scenario ends after it starts")
+        self._clock = clock
+        self._scheduler = scheduler
+        self._hooks = hooks
+        self._events = events
+        self._failures = failures
+        self._start = start
+        self._end = end
+        self._reload = reload
+        self._sleep = sleep
+        self._monotonic = monotonic
+        self._speed = validate_speed(speed)
         self._running = False
-        self._background_task: asyncio.Task[None] | None = None
-        self._last_hexes_publish_at: float | None = None
-        self._last_tick_time = 0.0
-
-    async def play(self, speed: float | None = None) -> None:
-        """Start playback at the given speed (1..120, default 6).
-
-        Raises:
-            ValueError: speed out of range.
-            RuntimeError: already playing or orchestrator not set.
-        """
-        if speed is not None:
-            if not (1 <= speed <= 120):
-                raise ValueError(f"Speed must be 1..120, got {speed}")
-            self._speed = speed
-
-        if self._running:
-            logger.debug("Engine already playing at speed %.1f", self._speed)
-            return
-
-        if self.orchestrator is None:
-            raise RuntimeError("Orchestrator not set")
-
-        self._running = True
-        self._background_task = asyncio.create_task(self._background_loop())
-        logger.info("Engine playing at speed %.1f sim min/real sec", self._speed)
-
-    async def pause(self) -> None:
-        """Pause playback."""
-        self._running = False
-        if self._background_task is not None:
-            await self._background_task
-            self._background_task = None
-        logger.info("Engine paused at %s", self.clock.now())
-
-    async def step(self, minutes: int) -> None:
-        """Advance time synchronously by `minutes` (awaits all effects).
-
-        Used for deterministic testing and single-step debugging.
-        """
-        if self._running:
-            raise RuntimeError("Cannot step while playing; pause first")
-
-        if self.orchestrator is None:
-            raise RuntimeError("Orchestrator not set")
-
-        rt = self.runtime_getter()
-        start = self.clock.now()
-        end = start + __import__("datetime").timedelta(minutes=minutes)
-
-        logger.debug("Stepping %d minutes from %s to %s", minutes, start, end)
-
-        current = start
-        while current < end:
-            # Advance clock by 1 minute
-            current = self.clock.advance(__import__("datetime").timedelta(minutes=1))
-
-            # Run due jobs
-            await self.scheduler.run_due(current)
-
-            # On-minute hook
-            await self.orchestrator.on_minute(current)
-
-            # On-hour hook at hour boundaries
-            if current.minute == 0:
-                await self.orchestrator.on_hour(current)
-
-    async def seek(self, hhmm: str) -> None:
-        """Seek to time HH:MM within the scenario (SPEC §17.1).
-
-        Forward: step deterministically.
-        Backward: AppState reload + step (inject reload callback).
-        """
-        if self._running:
-            raise RuntimeError("Cannot seek while playing; pause first")
-
-        rt = self.runtime_getter()
-        scenario = rt.scenario
-
-        # Parse HH:MM
-        try:
-            hh, mm = map(int, hhmm.split(":"))
-        except ValueError:
-            raise ValueError(f"Invalid time format {hhmm!r}, expected HH:MM")
-
-        import datetime
-        from zoneinfo import ZoneInfo
-
-        IST = ZoneInfo("Asia/Kolkata")
-        target = datetime.datetime.combine(
-            scenario.start.date(),
-            datetime.time(hh, mm),
-            tzinfo=IST,
-        )
-
-        if target < scenario.start:
-            raise ValueError(
-                f"Cannot seek before scenario start {scenario.start.time()}; "
-                f"seeking backward is not yet implemented"
-            )
-
-        if target > scenario.end:
-            raise ValueError(f"Cannot seek past scenario end {scenario.end.time()}")
-
-        current = self.clock.now()
-        if target == current:
-            logger.debug("Already at %s", hhmm)
-            return
-
-        if target > current:
-            # Forward seek: just step
-            delta = (target - current).total_seconds() / 60
-            await self.step(int(delta))
-        else:
-            # Backward seek not implemented (would need full reload)
-            raise NotImplementedError("Backward seek not yet implemented")
+        self._task: asyncio.Task[None] | None = None
+        self._lock = asyncio.Lock()
+        self._carry = 0.0
+        self._last_tick: float | None = None
 
     @property
     def running(self) -> bool:
-        """True if playback is active."""
         return self._running
 
     @property
     def speed(self) -> float:
-        """Current playback speed (sim min per real sec)."""
         return self._speed
 
-    async def _background_loop(self) -> None:
-        """Background task: advances time every 250ms and processes events."""
-        import datetime
+    async def play(self, speed: float | None = None) -> None:
+        """Run the clock at `speed` (or the current speed); a no-op at the scenario's end."""
+        if speed is not None:
+            self._speed = validate_speed(speed)
+        if self._clock.now() >= self._end:
+            logger.info("replay is at its end; play ignored")
+        elif not self._running:
+            self._running = True
+            self._carry = 0.0
+            self._task = asyncio.create_task(self._loop(), name="chhatri-replay")
+        self._events.tick()
 
-        rt = self.runtime_getter()
-        real_start = time.time()
-        last_hour_check = self.clock.now()
+    async def pause(self) -> None:
+        """Stop the clock after the minute being processed."""
+        self._running = False
+        async with self._lock:
+            task, self._task = self._task, None
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        self._events.tick()
 
+    async def step(self, minutes: int) -> None:
+        """Advance `minutes` simulated minutes now, awaiting every effect."""
+        if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes < 1:
+            raise ValueError("minutes must be a positive whole number")
+        if self._clock.now() + minutes * MINUTE > self._end:
+            raise ValueError("cannot step beyond the end of the scenario")
+        await self.pause()
+        async with self._lock:
+            for _ in range(minutes):
+                await self._minute(self._clock.now() + MINUTE)
+        self._events.tick()
+
+    async def seek(self, hhmm: str) -> None:
+        """Jump to HH:MM of the scenario day (forward: step; backward: reload then step)."""
+        target = self._parse(hhmm)
+        now = self._clock.now()
+        if target > now:
+            await self.step(int((target - now) / MINUTE))
+        elif target < now:
+            await self.pause()
+            fresh = await self._reload()
+            await fresh.seek(hhmm)
+        else:
+            await self.pause()
+
+    def _parse(self, hhmm: str) -> datetime:
+        match = SEEK_PATTERN.fullmatch(hhmm) if isinstance(hhmm, str) else None
+        if match is None:
+            raise ValueError("seek takes a time as HH:MM")
+        target = at(self._start.astimezone(IST).date(), int(match[1]), int(match[2]))
+        if not self._start <= target <= self._end:
+            raise ValueError(f"{hhmm} is outside the scenario window")
+        return target
+
+    async def _minute(self, t: datetime) -> None:
+        self._clock.set(t)
+        await self._scheduler.run_due(t)
+        await self._hooks.on_minute(t)
+        if t.minute == 0:
+            await self._hooks.on_hour(t)
+        if t.minute % HEX_EVERY_MINUTES == 0:
+            self._events.quarter_hour(t)
+
+    async def _loop(self) -> None:
+        """Background clock: wake every TICK_SECONDS, advance speed × TICK_SECONDS minutes."""
+        while self._running:
+            await self._sleep(TICK_SECONDS)
+            self._carry += self._speed * TICK_SECONDS
+            whole = int(self._carry)
+            self._carry -= whole
+            if not await self._advance_guarded(whole):
+                return
+            self._maybe_tick()
+            if self._clock.now() >= self._end and self._running:
+                logger.info("replay reached its end at %s; paused", self._end.isoformat())
+                self._running = False
+                self._events.tick()
+
+    async def _advance_guarded(self, minutes: int) -> bool:
+        """Process up to `minutes` minutes; False (clock paused, failure reported) on an error."""
         try:
-            while self._running:
-                # Sleep 250ms real time
-                await asyncio.sleep(0.25)
-
-                if not self._running:
-                    break
-
-                # Advance sim time by speed * 0.25 minutes
-                sim_advance_minutes = self._speed * 0.25
-                sim_advance_seconds = int(sim_advance_minutes * 60)
-                new_time = self.clock.advance(datetime.timedelta(seconds=sim_advance_seconds))
-
-                # Process minute by minute from last update to now
-                current = last_hour_check
-                while current < new_time:
-                    current += datetime.timedelta(minutes=1)
-                    self.clock.set(current)
-
-                    # Run due scheduler jobs
-                    await self.scheduler.run_due(current)
-
-                    # On-minute hook
-                    await self.orchestrator.on_minute(current)
-
-                    # On-hour hook at hour boundaries
-                    if current.minute == 0 and current > last_hour_check:
-                        await self.orchestrator.on_hour(current)
-                        last_hour_check = current
-
-                # Publish tick (throttled to <= 4 per real second)
-                now_real = time.time()
-                if now_real - self._last_tick_time >= 0.25:
-                    self.bus.publish(
-                        "tick",
-                        self.clock.now(),
-                        {"clock": {}},  # Filled by views
-                    )
-                    self._last_tick_time = now_real
-
-                # Check for scenario end
-                if self.clock.now() >= rt.scenario.end:
-                    logger.info("Scenario reached end; pausing")
-                    self._running = False
-                    break
-
-        except asyncio.CancelledError:
-            logger.debug("Background loop cancelled")
-            raise
-        except Exception as e:
-            logger.exception("Background loop error: %s", e)
+            async with self._lock:
+                for _ in range(minutes):
+                    if not self._running or self._clock.now() >= self._end:
+                        break
+                    await self._minute(self._clock.now() + MINUTE)
+        except Exception as exc:  # the background clock must surface, not die silently (SPEC §24.6)
+            now = self._clock.now()
+            logger.exception("replay stopped at %s after an error", now.isoformat())
             self._running = False
-            raise
-        finally:
-            logger.debug("Background loop exiting")
+            self._failures.replay_stopped(now, exc)
+            self._events.tick()
+            return False
+        return True
+
+    def _maybe_tick(self) -> None:
+        """At most one tick per TICK_SECONDS of real time (≤ 4 per second)."""
+        now = self._monotonic()
+        if self._last_tick is None or now - self._last_tick >= TICK_SECONDS:
+            self._last_tick = now
+            self._events.tick()
