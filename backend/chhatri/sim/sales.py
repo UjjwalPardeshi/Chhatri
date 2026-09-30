@@ -1,365 +1,207 @@
-"""Sales simulator (SPEC §6, §24.1).
+"""Vectorised hourly sales simulator (SPEC §6.1-§6.3, §24.1).
 
-Deterministic hourly sales generation with shocks. Slice-consistent: same seed + date range
-yields identical results as a subset of a longer generation.
+Hourly sales (SPEC §6.2) for merchant m, day d, hour h::
+
+    mean   = base_day x dow_mult[dow] x hour_weight[h] x festival_mult x trend(d) x day_noise x hour_noise
+    amount = round(mean x shock), txns ~ Poisson(amount / avg_ticket), amount := 0 where txns == 0
+
+- day_noise ~ lognormal(sigma 0.10) per shop-day, hour_noise ~ lognormal(sigma 0.25) per hour; both
+  mean-one, so the expected value equals the deterministic part.
+- shock = (1 - rain_impact) x (1 - slow_depth) x (1 - bandh_drop), 0 on personal closure days. The
+  independent shocks combine multiplicatively (each removes its share of what is left), which is
+  the natural reading of §6.2's "x (1 - impact)" and keeps the product in [0, 1].
+- rain_impact = sensitivity x g(r3), r3 = zone rain in hours h-2, h-1, h (crossing midnight),
+  g(r) = 1 - exp(-r / 25), or r / 18 inside the exponent for waterlogging-prone zones (§6.3).
+- Sales are 0 outside [open_hour, close_hour) and on the weekly-off day (not shocks).
+- trend(d) = 1.05 ** (years since 2025-08-19): 5 % yearly growth, 1.0 on the replay date.
+
+Randomness: per simulated day, noise draws come from generator(seed, SALES_NOISE, day) and one
+uniform per cell from generator(seed, SALES_TXNS, day), each an (M, 24) array for all merchants at
+once; txns are the exact Poisson quantiles of those uniforms (`poisson_from_uniform`), so a cell's
+count never depends on other cells' lambdas. Any date range is therefore a slice of any longer range (slice-consistent), and
+`counterfactual` reuses exactly the same noise with every shock removed.
 """
 
 from __future__ import annotations
 
-import hashlib
+import logging
+from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import date, timedelta
-from enum import IntEnum
 
 import numpy as np
 
 from chhatri.clock import at
+from chhatri.domain.enums import ShopType
+from chhatri.sim.disruptions import BANDH_DROP, FESTIVAL_UPLIFT, is_festival_day
+from chhatri.sim.profiles import FESTIVAL_SHOP_TYPES
+from chhatri.sim.rainfall import HOURS
+from chhatri.sim.rng import Stream, generator, poisson_from_uniform
+from chhatri.sim.truth import build_ground_truth
 from chhatri.sim.types import HOUR, City, GroundTruth, SalesPanel
+from chhatri.sim.weather import ShockCalendar
+
+__all__ = ["SalesPanel", "GroundTruth", "SalesSimulator", "rain_impact_curve"]
+
+logger = logging.getLogger(__name__)
+
+DAY_SIGMA = 0.10
+HOUR_SIGMA = 0.25
+RAIN_SCALE_MM = 25.0
+WATERLOGGED_RAIN_SCALE_MM = 18.0
+TRAILING_HOURS = 3
+TREND_ANCHOR = date(2025, 8, 19)
+TREND_ANNUAL_GROWTH = 0.05
+DAYS_PER_YEAR = 365.0
+NO_WEEKLY_OFF = -1
 
 
-# RNG stream IDs for reproducibility
-class RNGStream(IntEnum):
-    """Deterministic stream IDs for seeding."""
-    BASE_DAY_NOISE = 1
-    DOW_MULT_NOISE = 2
-    HOUR_PROFILE_NOISE = 3
-    RAIN_IMPACT = 4
-    FESTIVAL_MULT = 5
-    TREND_FACTOR = 6
-    FINAL_NOISE = 7
-    CLOSURE_HAZARD = 8
-    TXN_COUNT = 9
+def rain_impact_curve(r3_mm: np.ndarray | float, waterlogging_prone: bool | np.ndarray) -> np.ndarray:
+    """g(r3) of SPEC §6.3: 1 - exp(-r3/25), or 1 - exp(-r3/18) in waterlogging-prone zones."""
+    scale = np.where(waterlogging_prone, WATERLOGGED_RAIN_SCALE_MM, RAIN_SCALE_MM)
+    return 1.0 - np.exp(-np.asarray(r3_mm, dtype=np.float64) / scale)
+
+
+def _n_days(start_day: date, end_day: date) -> int:
+    if end_day < start_day:
+        raise ValueError(f"end_day {end_day} is before start_day {start_day}")
+    return (end_day - start_day).days + 1
+
+
+def trend(day: date) -> float:
+    return float((1.0 + TREND_ANNUAL_GROWTH) ** ((day - TREND_ANCHOR).days / DAYS_PER_YEAR))
+
+
+@dataclass(frozen=True, slots=True)
+class _Rows:
+    """Per-merchant constants as arrays in `City.merchants` order."""
+
+    base_dow: np.ndarray  # (M, 7) base_day x dow_mult
+    hour_weights: np.ndarray  # (M, 24)
+    sensitivity: np.ndarray  # (M,)
+    avg_ticket: np.ndarray  # (M,)
+    weekly_off: np.ndarray  # (M,) int, NO_WEEKLY_OFF when none
+    zone_row: np.ndarray  # (M,) index into ShockCalendar.zone_ids
+    festival: np.ndarray  # (M,) bool
+    waterlogged: np.ndarray  # (Z,) bool in zone order
+
+    @classmethod
+    def from_city(cls, city: City, zone_ids: tuple[str, ...]) -> _Rows:
+        profiles = [city.profiles[m.id] for m in city.merchants]
+        zone_index = {z: i for i, z in enumerate(zone_ids)}
+        zones = {z.id: z for z in city.zones}
+        return cls(
+            base_dow=np.array(
+                [[p.base_day_paise * f for f in p.dow_mult] for p in profiles], dtype=np.float64
+            ),
+            hour_weights=np.array([p.hour_weights for p in profiles], dtype=np.float64),
+            sensitivity=np.array([p.rain_sensitivity for p in profiles], dtype=np.float64),
+            avg_ticket=np.array([p.avg_ticket_paise for p in profiles], dtype=np.float64),
+            weekly_off=np.array(
+                [NO_WEEKLY_OFF if m.weekly_off is None else m.weekly_off for m in city.merchants]
+            ),
+            zone_row=np.array([zone_index[m.zone_id] for m in city.merchants], dtype=np.intp),
+            festival=np.array([ShopType(m.shop_type) in FESTIVAL_SHOP_TYPES for m in city.merchants]),
+            waterlogged=np.array([zones[z].waterlogging_prone for z in zone_ids], dtype=bool),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _Shocks:
+    """Shock arrays for a day range (zone order for zone arrays)."""
+
+    rain_g: np.ndarray  # (Z, 24 * D) g(r3)
+    slow: np.ndarray  # (Z, D)
+    closed: np.ndarray  # (M, D) bool
+    bandh: np.ndarray  # (D,) bool
 
 
 class SalesSimulator:
-    """Generates hourly sales panels with shocks."""
+    """Deterministic sales for a city under a shock calendar (SPEC §6, §24.1)."""
 
-    def __init__(self, city: City, shocks, seed: int):
-        """Initialize sales simulator.
+    def __init__(self, city: City, shocks: ShockCalendar, seed: int) -> None:
+        if tuple(z.id for z in city.zones) != shocks.zone_ids:
+            raise ValueError("shock calendar was built for a different city")
+        self._city = city
+        self._shocks = shocks
+        self._seed = seed
+        self._rows = _Rows.from_city(city, shocks.zone_ids)
 
-        Args:
-            city: City with merchants and profiles
-            shocks: ShockCalendar with weather and closure data
-            seed: Base random seed
-        """
-        self.city = city
-        self.shocks = shocks
-        self.seed = seed
-        self._ground_truth_cache = {}
+    @property
+    def city(self) -> City:
+        return self._city
 
-    def _rng_for(self, merchant_id: str, day: date, stream: int) -> np.random.Generator:
-        """Create deterministic RNG for a merchant-day-stream combination.
+    def _shock_arrays(self, start_day: date, days: int) -> _Shocks:
+        first_hour = at(start_day, 0)
+        rain = self._shocks.zone_rain(
+            first_hour - (TRAILING_HOURS - 1) * HOUR, HOURS * days + TRAILING_HOURS - 1
+        )
+        window = np.lib.stride_tricks.sliding_window_view(rain, TRAILING_HOURS, axis=1)
+        r3 = window.sum(axis=2)
+        last = start_day + timedelta(days=days - 1)
+        return _Shocks(
+            rain_g=rain_impact_curve(r3, self._rows.waterlogged[:, None]),
+            slow=self._shocks.slow_depths(start_day, days),
+            closed=self._shocks.closed(start_day, last),
+            bandh=np.array([self._shocks.is_bandh(start_day + timedelta(days=d)) for d in range(days)]),
+        )
 
-        This ensures that the same (merchant, day, stream) always yields the same sequence,
-        regardless of what dates have been requested before (slice consistency).
-        Seeds from (base_seed, day ordinal, stream) per SPEC §6.2.
-        """
-        # Use deterministic hash (not Python's hash() which varies across sessions)
-        key = f"{merchant_id}:{day.toordinal()}:{stream}:{self.seed}"
-        # MD5 returns bytes; convert to uint32 for numpy
-        hash_bytes = hashlib.md5(key.encode(), usedforsecurity=False).digest()
-        stream_seed = int.from_bytes(hash_bytes[:4], byteorder='big', signed=False) % (2**31)
-        return np.random.default_rng(stream_seed)
+    def _day(self, day: date, index: int, shocks: _Shocks | None) -> tuple[np.ndarray, np.ndarray]:
+        """(amount int64 (M, 24), txns int32 (M, 24)) for one day; shocks=None is the counterfactual."""
+        rows = self._rows
+        n = rows.base_dow.shape[0]
+        noise = generator(self._seed, Stream.SALES_NOISE, day.toordinal())
+        day_noise = np.exp(DAY_SIGMA * noise.standard_normal(n) - DAY_SIGMA**2 / 2)
+        hour_noise = np.exp(HOUR_SIGMA * noise.standard_normal((n, HOURS)) - HOUR_SIGMA**2 / 2)
+        festival = np.where(rows.festival & is_festival_day(day), 1.0 + FESTIVAL_UPLIFT, 1.0)
+        day_level = rows.base_dow[:, day.weekday()] * festival * trend(day) * day_noise
+        day_level = np.where(rows.weekly_off == day.weekday(), 0.0, day_level)
+        mean = day_level[:, None] * rows.hour_weights * hour_noise
+        if shocks is not None:
+            g = shocks.rain_g[:, HOURS * index : HOURS * (index + 1)][rows.zone_row]
+            day_factor = (1.0 - shocks.slow[rows.zone_row, index]) * (1.0 - BANDH_DROP * shocks.bandh[index])
+            day_factor = np.where(shocks.closed[:, index], 0.0, day_factor)
+            mean = mean * (1.0 - rows.sensitivity[:, None] * g) * day_factor[:, None]
+        amount = np.floor(mean + 0.5).astype(np.int64)
+        uniforms = generator(self._seed, Stream.SALES_TXNS, day.toordinal()).random(amount.shape)
+        txns = poisson_from_uniform(uniforms, amount / rows.avg_ticket[:, None])
+        return np.where(txns == 0, 0, amount), txns.astype(np.int32)
+
+    def _days(
+        self, start_day: date, end_day: date, shocked: bool
+    ) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
+        days = _n_days(start_day, end_day)
+        shocks = self._shock_arrays(start_day, days) if shocked else None
+        for i in range(days):
+            amount, txns = self._day(start_day + timedelta(days=i), i, shocks)
+            yield i, amount, txns
+
+    def _panel(self, start_day: date, end_day: date, shocked: bool) -> SalesPanel:
+        days = _n_days(start_day, end_day)
+        n = len(self._city.merchants)
+        amount = np.empty((n, HOURS * days), dtype=np.int64)
+        txns = np.empty((n, HOURS * days), dtype=np.int32)
+        for i, day_amount, day_txns in self._days(start_day, end_day, shocked):
+            amount[:, HOURS * i : HOURS * (i + 1)] = day_amount
+            txns[:, HOURS * i : HOURS * (i + 1)] = day_txns
+        ids = tuple(m.id for m in self._city.merchants)
+        return SalesPanel(ids, at(start_day, 0), HOURS * days, amount, txns)
 
     def generate(self, start_day: date, end_day: date) -> SalesPanel:
-        """Generate sales for a date range.
-
-        Args:
-            start_day: Start date (inclusive)
-            end_day: End date (inclusive)
-
-        Returns:
-            SalesPanel with hourly amounts and transaction counts.
-        """
-        start_dt = at(start_day, 0)
-        end_dt = at(end_day + timedelta(days=1), 0)
-        hours = int((end_dt - start_dt) / HOUR)
-
-        merchant_ids = self.city.merchants
-        m_count = len(merchant_ids)
-
-        # Initialize arrays
-        amount_paise = np.zeros((m_count, hours), dtype=np.int64)
-        txns = np.zeros((m_count, hours), dtype=np.int32)
-
-        # Generate hour by hour
-        current_dt = start_dt
-        hour_idx = 0
-
-        while hour_idx < hours:
-            current_day = current_dt.date()
-            current_hour = current_dt.hour
-
-            for merchant_idx, merchant in enumerate(merchant_ids):
-                profile = self.city.profiles[merchant.id]
-
-                # Check if this is a business hour
-                if not profile.is_business_hour(current_hour):
-                    amount_paise[merchant_idx, hour_idx] = 0
-                    txns[merchant_idx, hour_idx] = 0
-                    continue
-
-                # Check if it's a weekly-off day
-                if merchant.weekly_off is not None and current_day.weekday() == merchant.weekly_off:
-                    amount_paise[merchant_idx, hour_idx] = 0
-                    txns[merchant_idx, hour_idx] = 0
-                    continue
-
-                # Check if merchant is closed
-                closure_ranges = self.shocks.closures(merchant.id)
-                is_closed = any(start <= current_day <= end for start, end in closure_ranges)
-                if is_closed:
-                    amount_paise[merchant_idx, hour_idx] = 0
-                    txns[merchant_idx, hour_idx] = 0
-                    continue
-
-                # Generate sales for this hour
-                # Base formula: base_day × dow_mult × hour_profile × festival_mult × trend × (1-impact) × noise
-
-                base_day = profile.base_day_paise
-
-                # Day-of-week multiplier
-                dow_mult = profile.dow_mult[current_day.weekday()]
-
-                # Hour profile
-                hour_weight = profile.hour_weights[current_hour]
-
-                # Festival multiplier
-                festival_mult = self._festival_multiplier(merchant.shop_type, current_day)
-
-                # Rain impact
-                rain_mm_val = self.shocks.rain_mm(merchant.zone_id, current_dt)
-                rain_impact = self._rain_impact(rain_mm_val, profile, merchant.zone_id)
-
-                # Slow day
-                slow_depth = self.shocks.slow_day_depth(merchant.zone_id, current_day)
-
-                # Bandh impact
-                bandh_impact = 0.75 if self.shocks.is_bandh(current_day) else 0.0
-
-                # Combine shocks (worst case)
-                total_impact = max(rain_impact, slow_depth, bandh_impact)
-
-                # Trend (constant 1.0 for simplicity in demo)
-                trend = 1.0
-
-                # Generate noise: day-level and hour-level
-                day_rng = self._rng_for(merchant.id, current_day, RNGStream.BASE_DAY_NOISE)
-                day_noise_factor = np.exp(day_rng.normal(0, 0.10))  # σ ≈ 0.10
-
-                hour_rng = self._rng_for(merchant.id, current_day, RNGStream.HOUR_PROFILE_NOISE + current_hour)
-                hour_noise_factor = np.exp(hour_rng.normal(0, 0.25))  # σ ≈ 0.25
-
-                # Compute expected amount (before noise)
-                hourly_base = base_day * dow_mult * hour_weight * festival_mult * trend * (1.0 - total_impact)
-
-                # Apply noise
-                final_amount = hourly_base * day_noise_factor * hour_noise_factor
-                amount_paise[merchant_idx, hour_idx] = max(0, int(final_amount))
-
-                # Generate transaction count
-                if amount_paise[merchant_idx, hour_idx] > 0:
-                    avg_ticket = profile.avg_ticket_paise
-                    expected_txns = amount_paise[merchant_idx, hour_idx] / avg_ticket
-
-                    txn_rng = self._rng_for(merchant.id, current_day, RNGStream.TXN_COUNT + current_hour)
-                    txn_count = txn_rng.poisson(expected_txns)
-                    txns[merchant_idx, hour_idx] = int(txn_count)
-                else:
-                    txns[merchant_idx, hour_idx] = 0
-
-            current_dt += HOUR
-            hour_idx += 1
-
-        return SalesPanel(
-            merchant_ids=tuple(m.id for m in merchant_ids),
-            start=start_dt,
-            hours=hours,
-            amount_paise=amount_paise,
-            txns=txns
-        )
+        """Actual sales for the inclusive day range, 24 hours per day (SPEC §6.1)."""
+        return self._panel(start_day, end_day, shocked=True)
 
     def counterfactual(self, start_day: date, end_day: date) -> SalesPanel:
-        """Generate sales with identical noise but no shocks (rain, bandh, slow days).
-
-        Used for computing actual vs expected losses (SPEC §6.3).
-        Returns the same sales as generate() but with all shock impacts (rain, bandh, slow days, closures) set to zero.
-        This requires the same noise factors but impact = 0.
-        """
-        start_dt = at(start_day, 0)
-        end_dt = at(end_day + timedelta(days=1), 0)
-        hours = int((end_dt - start_dt) / HOUR)
-
-        merchant_ids = self.city.merchants
-        m_count = len(merchant_ids)
-
-        # Initialize arrays
-        amount_paise = np.zeros((m_count, hours), dtype=np.int64)
-        txns = np.zeros((m_count, hours), dtype=np.int32)
-
-        # Generate hour by hour, but with impact = 0 (no shocks)
-        current_dt = start_dt
-        hour_idx = 0
-
-        while hour_idx < hours:
-            current_day = current_dt.date()
-            current_hour = current_dt.hour
-
-            for merchant_idx, merchant in enumerate(merchant_ids):
-                profile = self.city.profiles[merchant.id]
-
-                # Check if this is a business hour
-                if not profile.is_business_hour(current_hour):
-                    amount_paise[merchant_idx, hour_idx] = 0
-                    txns[merchant_idx, hour_idx] = 0
-                    continue
-
-                # Check if it's a weekly-off day
-                if merchant.weekly_off is not None and current_day.weekday() == merchant.weekly_off:
-                    amount_paise[merchant_idx, hour_idx] = 0
-                    txns[merchant_idx, hour_idx] = 0
-                    continue
-
-                # For counterfactual, ignore closures - no impact
-                # (closures are shocks, not noise)
-
-                # Generate sales for this hour with NO shock impact
-                base_day = profile.base_day_paise
-                dow_mult = profile.dow_mult[current_day.weekday()]
-                hour_weight = profile.hour_weights[current_hour]
-                festival_mult = self._festival_multiplier(merchant.shop_type, current_day)
-                trend = 1.0
-
-                # NO IMPACT (counterfactual has no shocks)
-                total_impact = 0.0
-
-                # Generate identical noise as in generate()
-                day_rng = self._rng_for(merchant.id, current_day, RNGStream.BASE_DAY_NOISE)
-                day_noise_factor = np.exp(day_rng.normal(0, 0.10))
-
-                hour_rng = self._rng_for(merchant.id, current_day, RNGStream.HOUR_PROFILE_NOISE + current_hour)
-                hour_noise_factor = np.exp(hour_rng.normal(0, 0.25))
-
-                # Compute expected amount (with impact = 0)
-                hourly_base = base_day * dow_mult * hour_weight * festival_mult * trend * (1.0 - total_impact)
-
-                # Apply noise
-                final_amount = hourly_base * day_noise_factor * hour_noise_factor
-                amount_paise[merchant_idx, hour_idx] = max(0, int(final_amount))
-
-                # Generate transaction count with same RNG as generate()
-                if amount_paise[merchant_idx, hour_idx] > 0:
-                    avg_ticket = profile.avg_ticket_paise
-                    expected_txns = amount_paise[merchant_idx, hour_idx] / avg_ticket
-
-                    txn_rng = self._rng_for(merchant.id, current_day, RNGStream.TXN_COUNT + current_hour)
-                    txn_count = txn_rng.poisson(expected_txns)
-                    txns[merchant_idx, hour_idx] = int(txn_count)
-                else:
-                    txns[merchant_idx, hour_idx] = 0
-
-            current_dt += HOUR
-            hour_idx += 1
-
-        return SalesPanel(
-            merchant_ids=tuple(m.id for m in merchant_ids),
-            start=start_dt,
-            hours=hours,
-            amount_paise=amount_paise,
-            txns=txns
-        )
+        """Same noise with every shock removed: rain, slow days, bandh, personal closures (§24.1)."""
+        return self._panel(start_day, end_day, shocked=False)
 
     def ground_truth(self, start_day: date, end_day: date) -> GroundTruth:
-        """Compute ground truth loss labels per zone-day.
+        """True shock-caused loss per zone-day over covered shops, labels and closures (§24.1)."""
+        return build_ground_truth(self, self._shocks, start_day, end_day)
 
-        Returns:
-            GroundTruth with loss percentages and shock labels
-        """
-        actual = self.generate(start_day, end_day)
-        counterfactual = self.counterfactual(start_day, end_day)
-
-        zone_day_loss: dict[tuple[str, date], float] = {}
-        zone_day_label: dict[tuple[str, date], str] = {}
-
-        current_day = start_day
-        while current_day <= end_day:
-            for zone in self.city.zones:
-                zone_rows = self.city.zone_rows(zone.id)
-
-                if not zone_rows:
-                    continue
-
-                # Get actual and counterfactual for this zone-day
-                day_panel_actual = actual.day(current_day)
-                day_panel_cf = counterfactual.day(current_day)
-
-                zone_actual_amount = day_panel_actual.amount_paise[list(zone_rows), :].sum()
-                zone_cf_amount = day_panel_cf.amount_paise[list(zone_rows), :].sum()
-
-                loss_pct = 1.0 - (zone_actual_amount / zone_cf_amount) if zone_cf_amount > 0 else 0.0
-
-                zone_day_loss[(zone.id, current_day)] = loss_pct
-
-                # Determine label
-                if self.shocks.is_bandh(current_day):
-                    label = "bandh"
-                elif self.shocks.slow_day_depth(zone.id, current_day) > 0:
-                    label = "slow_day"
-                elif self.shocks.rain_mm(zone.id, at(current_day, 12)) > 0:
-                    label = "rain"
-                else:
-                    label = "normal"
-
-                zone_day_label[(zone.id, current_day)] = label
-
-            current_day += timedelta(days=1)
-
-        # Collect closures
-        closures: dict[str, tuple[tuple[date, date], ...]] = {}
-        for merchant in self.city.merchants:
-            closure_ranges = self.shocks.closures(merchant.id)
-            if closure_ranges:
-                closures[merchant.id] = closure_ranges
-
-        return GroundTruth(
-            zone_day_loss_pct=zone_day_loss,
-            zone_day_label=zone_day_label,
-            closures=closures
-        )
-
-    def _rain_impact(self, rain_mm: float, profile, zone_id: str) -> float:
-        """Compute sales impact from rainfall.
-
-        Formula: impact = sensitivity × g(r3) where g(r) = 1 - exp(-r / divisor)
-        r3 = rainfall in last 3 hours (current + 2 previous)
-        Divisor = 18 for waterlogging-prone zones, else 25.
-        """
-        if rain_mm <= 0:
-            return 0.0
-
-        zone = self.city.geography.zone(zone_id)
-        divisor = 18 if zone.waterlogging_prone else 25
-
-        # For simplicity, assume r3 ≈ rain_mm (would need 3h history for exact)
-        g_r = 1.0 - np.exp(-rain_mm / divisor)
-        impact = profile.rain_sensitivity * g_r
-
-        return min(1.0, impact)  # Cap at 100%
-
-    def _festival_multiplier(self, shop_type, day: date) -> float:
-        """Compute sales multiplier for festivals."""
-        # Ganesh Chaturthi: 10-day window (SPEC §6.3)
-        ganesh_2024 = (date(2024, 9, 7), date(2024, 9, 16))
-        ganesh_2025 = (date(2025, 8, 27), date(2025, 9, 5))
-
-        in_ganesh = (
-            (ganesh_2024[0] <= day <= ganesh_2024[1]) or
-            (ganesh_2025[0] <= day <= ganesh_2025[1])
-        )
-
-        if in_ganesh:
-            # +20% for food/sweets/kirana
-            from chhatri.domain.enums import ShopType
-            if shop_type in [ShopType.STREET_FOOD, ShopType.FRUIT_VEG, ShopType.KIRANA]:
-                return 1.20
-
-        return 1.0
+    def daily_totals(self, start_day: date, end_day: date, shocked: bool) -> np.ndarray:
+        """(M, days) Σ amount per merchant-day without materialising the hourly panel."""
+        totals = np.zeros((len(self._city.merchants), _n_days(start_day, end_day)), dtype=np.int64)
+        for i, amount, _txns in self._days(start_day, end_day, shocked):
+            totals[:, i] = amount.sum(axis=1)
+        return totals
