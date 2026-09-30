@@ -1,62 +1,61 @@
 #!/usr/bin/env python3
-"""Generate sample admission slips (SPEC §17.2, scripts section).
+"""Regenerate the sample admission slips in backend/data/slips (SPEC §17.2).
 
-Creates:
-- backend/data/slips/anil_admission_slip.png
-- backend/data/slips/mismatch_admission_slip.png
-- backend/data/slips/blurry_slip.png
+- anil_admission_slip.png: "Anil R. Jadhav", admitted 2025-08-20, "Viral fever", KEM Hospital, Parel
+- mismatch_admission_slip.png: "Sunil Pawar", same dates (the HUMAN live test, §13.6)
+- blurry_slip.png: the Anil slip photographed out of focus; unreadable, low confidence
+
+Deterministic: re-running produces byte-identical files.
 """
 
+from __future__ import annotations
+
+import argparse
+import logging
 from datetime import date
 from pathlib import Path
 
-from chhatri.sim.slips import render_slip
+from chhatri.config import DATA_DIR
+from chhatri.sim.scenarios import SLIP_ANIL, SLIP_BLURRY, SLIP_MISMATCH
+from chhatri.sim.slips import render_slip, render_unreadable_slip
+
+logger = logging.getLogger("make_slips")
+
+ADMITTED = date(2025, 8, 20)
+HOSPITAL = "KEM Hospital, Parel"
+DIAGNOSIS = "Viral fever"
+ANIL_PATIENT = "Anil R. Jadhav"
+MISMATCH_PATIENT = "Sunil Pawar"
 
 
-def main():
-    backend_dir = Path(__file__).resolve().parent.parent
-    slips_dir = backend_dir / "data" / "slips"
-    slips_dir.mkdir(parents=True, exist_ok=True)
+def build_slips() -> dict[str, bytes]:
+    """File name -> PNG bytes for the three sample slips."""
+    return {
+        SLIP_ANIL: render_slip(ANIL_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS),
+        SLIP_MISMATCH: render_slip(MISMATCH_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS),
+        SLIP_BLURRY: render_unreadable_slip(ANIL_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS),
+    }
 
-    # Anil's admission slip
-    anil_slip = render_slip(
-        patient_name="Anil R. Jadhav",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        sample_label=True
-    )
-    anil_path = slips_dir / "anil_admission_slip.png"
-    anil_path.write_bytes(anil_slip)
-    print(f"Wrote {anil_path}")
 
-    # Mismatch slip (Sunil Pawar, but sent by Anil)
-    mismatch_slip = render_slip(
-        patient_name="Sunil Pawar",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        sample_label=True
-    )
-    mismatch_path = slips_dir / "mismatch_admission_slip.png"
-    mismatch_path.write_bytes(mismatch_slip)
-    print(f"Wrote {mismatch_path}")
+def write_slips(out_dir: Path) -> list[Path]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name, png in build_slips().items():
+        path = out_dir / name
+        path.write_bytes(png)
+        logger.info("wrote %s (%d bytes)", path, len(png))
+        written.append(path)
+    return written
 
-    # Blurry slip (low confidence - harder to read)
-    blurry_slip = render_slip(
-        patient_name="Anil R. Jadhav",
-        admitted=date(2025, 8, 20),
-        hospital="KEM Hospital, Parel",
-        diagnosis="Viral fever",
-        sample_label=True,
-        confidence=0.55
-    )
-    blurry_path = slips_dir / "blurry_slip.png"
-    blurry_path.write_bytes(blurry_slip)
-    print(f"Wrote {blurry_path}")
 
-    print("Admission slips generated successfully!")
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--out", type=Path, default=DATA_DIR / "slips", help="output directory")
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    write_slips(args.out)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

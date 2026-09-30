@@ -2,32 +2,32 @@
   {
     "id": "Z1",
     "ward": "A",
-    "name": "A",
+    "name": "Colaba · Fort",
     "centroid": {
-      "lat": 18.92314404626714,
-      "lng": 72.82499932841273
+      "lat": 18.923144,
+      "lng": 72.824999
     },
-    "shops": 106,
+    "shops": 109,
     "waterlogging_prone": false
   },
   {
     "id": "Z2",
     "ward": "B",
-    "name": "B",
+    "name": "Dongri · Sandhurst Road",
     "centroid": {
-      "lat": 18.956361729484538,
-      "lng": 72.84014108780282
+      "lat": 18.956362,
+      "lng": 72.840141
     },
-    "shops": 104,
+    "shops": 117,
     "waterlogging_prone": false
   },
   {
     "id": "Z3",
     "ward": "G/S",
-    "name": "Worli \u00b7 Lower Parel",
+    "name": "Worli · Lower Parel",
     "centroid": {
-      "lat": 18.998276107278993,
-      "lng": 72.8217542390375
+      "lat": 18.998276,
+      "lng": 72.821754
     },
     "shops": 141,
     "waterlogging_prone": false
@@ -35,43 +35,43 @@
   {
     "id": "Z4",
     "ward": "C",
-    "name": "C",
+    "name": "Kalbadevi · Marine Lines",
     "centroid": {
-      "lat": 18.95110780264386,
-      "lng": 72.82736913855528
+      "lat": 18.951108,
+      "lng": 72.827369
     },
-    "shops": 72,
+    "shops": 90,
     "waterlogging_prone": false
   },
   {
     "id": "Z5",
     "ward": "D",
-    "name": "D",
+    "name": "Malabar Hill · Grant Road",
     "centroid": {
-      "lat": 18.962338852986374,
-      "lng": 72.81004663611657
+      "lat": 18.962339,
+      "lng": 72.810047
     },
-    "shops": 115,
+    "shops": 79,
     "waterlogging_prone": false
   },
   {
     "id": "Z6",
     "ward": "F/N",
-    "name": "F/N",
+    "name": "Matunga · Sion",
     "centroid": {
-      "lat": 19.02768894267177,
-      "lng": 72.86618044325584
+      "lat": 19.027689,
+      "lng": 72.86618
     },
-    "shops": 93,
+    "shops": 113,
     "waterlogging_prone": true
   },
   {
     "id": "Z7",
     "ward": "F/S",
-    "name": "Parel \u00b7 Lalbaug",
+    "name": "Parel · Lalbaug",
     "centroid": {
-      "lat": 18.99838046910981,
-      "lng": 72.84931404017581
+      "lat": 18.99838,
+      "lng": 72.849314
     },
     "shops": 46,
     "waterlogging_prone": true
@@ -79,12 +79,12 @@
   {
     "id": "Z8",
     "ward": "G/N",
-    "name": "G/N",
+    "name": "Dadar · Mahim",
     "centroid": {
-      "lat": 19.034039861893387,
-      "lng": 72.84516774212186
+      "lat": 19.03404,
+      "lng": 72.845168
     },
-    "shops": 77,
+    "shops": 99,
     "waterlogging_prone": true
   },
   {
@@ -92,8 +92,8 @@
     "ward": "M/W",
     "name": "Chembur",
     "centroid": {
-      "lat": 19.03539889575448,
-      "lng": 72.89360196410422
+      "lat": 19.035399,
+      "lng": 72.893602
     },
     "shops": 64,
     "waterlogging_prone": false
@@ -101,23 +101,23 @@
   {
     "id": "Z10",
     "ward": "H/E",
-    "name": "H/E",
+    "name": "Bandra East · Santacruz East",
     "centroid": {
-      "lat": 19.07040966220768,
-      "lng": 72.85566164737236
+      "lat": 19.07041,
+      "lng": 72.855662
     },
-    "shops": 74,
+    "shops": 35,
     "waterlogging_prone": true
   },
   {
     "id": "Z11",
     "ward": "H/W",
-    "name": "H/W",
+    "name": "Bandra West · Khar West",
     "centroid": {
-      "lat": 19.064958189215577,
-      "lng": 72.83139979083693
+      "lat": 19.064958,
+      "lng": 72.8314
     },
-    "shops": 68,
+    "shops": 65,
     "waterlogging_prone": false
   },
   {
@@ -125,8 +125,8 @@
     "ward": "E",
     "name": "Byculla",
     "centroid": {
-      "lat": 18.973980182368816,
-      "lng": 72.83649747804094
+      "lat": 18.97398,
+      "lng": 72.836497
     },
     "shops": 125,
     "waterlogging_prone": false
@@ -134,65 +134,65 @@
   {
     "id": "Z13",
     "ward": "K/E",
-    "name": "K/E",
+    "name": "Andheri East",
     "centroid": {
-      "lat": 19.11382307954697,
-      "lng": 72.86549456421136
+      "lat": 19.113823,
+      "lng": 72.865495
     },
-    "shops": 113,
+    "shops": 120,
     "waterlogging_prone": false
   },
   {
     "id": "Z14",
     "ward": "K/W",
-    "name": "K/W",
+    "name": "Andheri West · Juhu",
     "centroid": {
-      "lat": 19.12619835159544,
-      "lng": 72.82767712114595
+      "lat": 19.126244,
+      "lng": 72.827402
     },
-    "shops": 103,
+    "shops": 117,
     "waterlogging_prone": true
   },
   {
     "id": "Z15",
     "ward": "L",
-    "name": "L",
+    "name": "Kurla",
     "centroid": {
-      "lat": 19.087555543915656,
-      "lng": 72.8866696673923
+      "lat": 19.087556,
+      "lng": 72.88667
     },
-    "shops": 44,
+    "shops": 42,
     "waterlogging_prone": true
   },
   {
     "id": "Z16",
     "ward": "M/E",
-    "name": "M/E",
+    "name": "Govandi · Mankhurd",
     "centroid": {
-      "lat": 19.03858062647597,
-      "lng": 72.92471273111205
+      "lat": 19.038581,
+      "lng": 72.924713
     },
-    "shops": 104,
+    "shops": 33,
     "waterlogging_prone": false
   },
   {
     "id": "Z17",
     "ward": "N",
-    "name": "N",
+    "name": "Ghatkopar",
     "centroid": {
-      "lat": 19.087086785452403,
-      "lng": 72.92531223515512
+      "lat": 19.087087,
+      "lng": 72.925312
     },
-    "shops": 96,
+    "shops": 41,
     "waterlogging_prone": false
   },
   {
     "id": "Z18",
     "ward": "P/S",
-    "name": "P/S",
+    "name": "Goregaon",
     "centroid": {
-      "lat": 19.158451317767106,
-      "lng": 72.85737433721664
+      "lat": 19.158451,
+      "lng": 72.857374
     },
     "shops": 35,
     "waterlogging_prone": false
@@ -200,67 +200,67 @@
   {
     "id": "Z19",
     "ward": "P/N",
-    "name": "P/N",
+    "name": "Malad",
     "centroid": {
-      "lat": 19.184367197153723,
-      "lng": 72.82681628093233
+      "lat": 19.184367,
+      "lng": 72.826816
     },
-    "shops": 92,
+    "shops": 64,
     "waterlogging_prone": false
   },
   {
     "id": "Z20",
     "ward": "R/S",
-    "name": "R/S",
+    "name": "Kandivali",
     "centroid": {
-      "lat": 19.204477547234916,
-      "lng": 72.8599977234639
+      "lat": 19.204478,
+      "lng": 72.859998
     },
-    "shops": 114,
+    "shops": 33,
     "waterlogging_prone": false
   },
   {
     "id": "Z21",
     "ward": "R/C",
-    "name": "R/C",
+    "name": "Borivali",
     "centroid": {
-      "lat": 19.231246602334892,
-      "lng": 72.84298835911447
+      "lat": 19.231247,
+      "lng": 72.842988
     },
-    "shops": 79,
+    "shops": 104,
     "waterlogging_prone": false
   },
   {
     "id": "Z22",
     "ward": "R/N",
-    "name": "R/N",
+    "name": "Dahisar",
     "centroid": {
-      "lat": 19.252333824373565,
-      "lng": 72.85981214529988
+      "lat": 19.252334,
+      "lng": 72.859812
     },
-    "shops": 113,
+    "shops": 68,
     "waterlogging_prone": false
   },
   {
     "id": "Z23",
     "ward": "S",
-    "name": "S",
+    "name": "Bhandup · Powai",
     "centroid": {
-      "lat": 19.132883076753057,
-      "lng": 72.92943599087025
+      "lat": 19.132883,
+      "lng": 72.929436
     },
-    "shops": 63,
+    "shops": 37,
     "waterlogging_prone": false
   },
   {
     "id": "Z24",
     "ward": "T",
-    "name": "T",
+    "name": "Mulund",
     "centroid": {
-      "lat": 19.172457264897716,
-      "lng": 72.93000461868418
+      "lat": 19.172457,
+      "lng": 72.930005
     },
-    "shops": 32,
+    "shops": 43,
     "waterlogging_prone": false
   }
 ]
