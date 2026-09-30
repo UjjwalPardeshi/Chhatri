@@ -1,197 +1,140 @@
-"""Memory integration (SPEC §14.6, §16).
+"""In-process memory graph and precedent ranking (SPEC §14.6, §16).
 
-Simulated memory uses networkx. Live memory optionally uses Cognee.
+`SimulatedMemoryGraph` is a networkx `MultiDiGraph`:
+- nodes: `shop:{merchant}`, `zone:{zone}`, and one node per remembered fact typed by its kind —
+  `event` (area trigger), `payout`, `dispute`, `case`, `decision`;
+- edges: `shop -IN_ZONE-> zone`, `event -IN_ZONE-> zone`, `payout -PAID_FOR-> shop`,
+  `payout -PAID_FOR-> event` (attrs `trigger_id`), `shop -DISPUTED-> dispute`,
+  `dispute -DISPUTED-> decision` (attrs `decision_id`), `decision|case -DECIDED_BY-> shop`,
+  `case -DECIDED_BY-> decision` (attrs `decision_id`), and `SIMILAR_TO` from a fact to the earlier
+  facts of the same kind for the same shop.
+
+`precedents()` ranks facts of the requested kind (or any) — same merchant 1.0, same zone 0.7, other
+0.4; ties by most recent, then subject id (deterministic); the subject itself is excluded
+(`exclude_subject_id`, e.g. the case the officer is looking at).
 """
 
 from __future__ import annotations
 
-import logging
-from datetime import datetime
+import threading
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 
 import networkx as nx
 
-from chhatri.integrations.base import IntegrationError, MemoryFact, Precedent
+from chhatri.clock import require_aware
+from chhatri.integrations.base import MemoryFact, Precedent
 
-logger = logging.getLogger(__name__)
+SAME_MERCHANT_SCORE = 1.0  # SPEC §16
+SAME_ZONE_SCORE = 0.7
+OTHER_SCORE = 0.4
+DEFAULT_LIMIT = 5
+IN_ZONE, PAID_FOR, DISPUTED, DECIDED_BY, SIMILAR_TO = (
+    "IN_ZONE",
+    "PAID_FOR",
+    "DISPUTED",
+    "DECIDED_BY",
+    "SIMILAR_TO",
+)
+NODE_TYPE_BY_KIND: Mapping[str, str] = MappingProxyType(
+    {"trigger": "event", "payout": "payout", "dispute": "dispute", "case": "case", "decision": "decision"}
+)
+
+
+@dataclass(frozen=True, slots=True)
+class StoredFact:
+    node: str
+    fact: MemoryFact
+
+
+def fact_node(fact: MemoryFact) -> str:
+    return f"{NODE_TYPE_BY_KIND.get(fact.kind, fact.kind)}:{fact.subject_id}"
+
+
+def score_fact(fact: MemoryFact, merchant_id: str | None, zone_id: str | None) -> float:
+    """SPEC §16 precedent score."""
+    if merchant_id is not None and fact.merchant_id == merchant_id:
+        return SAME_MERCHANT_SCORE
+    if zone_id is not None and fact.zone_id == zone_id:
+        return SAME_ZONE_SCORE
+    return OTHER_SCORE
+
+
+def rank_precedents(
+    facts: list[MemoryFact],
+    *,
+    merchant_id: str | None,
+    zone_id: str | None,
+    kind: str | None,
+    limit: int,
+    exclude_subject_id: str | None,
+) -> list[Precedent]:
+    """Score, filter and order facts; shared by the in-process graph and the Cognee adapter."""
+    if limit < 0:
+        raise ValueError("limit must be non-negative")
+    scored = [
+        (score_fact(fact, merchant_id, zone_id), fact)
+        for fact in facts
+        if (kind is None or fact.kind == kind) and fact.subject_id != exclude_subject_id
+    ]
+    scored.sort(key=lambda item: (-item[0], -item[1].at.timestamp(), item[1].subject_id))
+    return [
+        Precedent(subject_id=fact.subject_id, kind=fact.kind, at=fact.at, text=fact.text, score=score)
+        for score, fact in scored[:limit]
+    ]
 
 
 class SimulatedMemoryGraph:
-    """In-memory fact store using networkx MultiDiGraph.
-
-    Node types: shop, zone, event, payout, dispute, case, decision.
-    Edge types: IN_ZONE, PAID_FOR, DISPUTED, DECIDED_BY, SIMILAR_TO.
-    """
+    """MemoryGraph backed by a networkx MultiDiGraph (thread-safe)."""
 
     def __init__(self) -> None:
-        """Initialize with an empty networkx MultiDiGraph."""
-        self.graph = nx.MultiDiGraph()
+        self.graph: nx.MultiDiGraph = nx.MultiDiGraph()
+        self._facts: dict[str, StoredFact] = {}
+        self._by_shop_kind: dict[tuple[str, str], list[str]] = {}
+        self._lock = threading.Lock()
+
+    def facts(self) -> list[MemoryFact]:
+        with self._lock:
+            return [stored.fact for stored in self._facts.values()]
 
     async def remember(self, fact: MemoryFact) -> None:
-        """Store a memory fact in the graph.
-
-        Args:
-            fact: The memory fact to store.
-        """
-        # Add the subject node if not present
-        subject_node = fact.subject_id
-        self.graph.add_node(subject_node, kind=fact.kind, at=fact.at, text=fact.text)
-
-        # Add merchant and zone nodes if provided, with edges
-        if fact.merchant_id:
-            merchant_node = f"merchant:{fact.merchant_id}"
-            self.graph.add_node(merchant_node, type="merchant")
-            self.graph.add_edge(subject_node, merchant_node, relation="for_merchant")
-
-        if fact.zone_id:
-            zone_node = f"zone:{fact.zone_id}"
-            self.graph.add_node(zone_node, type="zone")
-            self.graph.add_edge(subject_node, zone_node, relation="in_zone")
-
-    async def precedents(
-        self,
-        *,
-        merchant_id: str | None = None,
-        zone_id: str | None = None,
-        kind: str | None = None,
-        limit: int = 5,
-    ) -> list[Precedent]:
-        """Find similar past facts.
-
-        Ranking:
-        - Same merchant: 1.0
-        - Same zone: 0.7
-        - Other: 0.4
-        - Ties broken by most recent (latest first)
-        - Subject itself is excluded
-
-        Args:
-            merchant_id: Filter by merchant (optional).
-            zone_id: Filter by zone (optional).
-            kind: Filter by fact kind (optional).
-            limit: Maximum number of results to return.
-
-        Returns:
-            List of Precedents sorted by score (descending) and recency.
-        """
-        precedents_list: list[tuple[str, datetime, str, float]] = []
-
-        # Collect all nodes that might match the criteria
-        for node in self.graph.nodes():
-            if not isinstance(node, str):
-                continue
-
-            node_data = self.graph.nodes[node]
-            node_kind = node_data.get("kind")
-            node_at = node_data.get("at")
-            node_text = node_data.get("text", "")
-
-            # Skip if kind doesn't match filter
-            if kind and node_kind != kind:
-                continue
-
-            # Calculate relevance score
-            score = 0.4  # default: other
-            node_merchant = self._get_connected_merchant(node)
-            node_zone = self._get_connected_zone(node)
-
-            if merchant_id and node_merchant == merchant_id:
-                score = 1.0
-            elif zone_id and node_zone == zone_id:
-                score = 0.7
-            elif merchant_id or zone_id:
-                # If filtering by merchant/zone but this node doesn't match, skip
-                continue
-
-            if node_at:
-                precedents_list.append((node, node_at, node_text, score))
-
-        # Sort by score (descending) then by recency (latest first)
-        precedents_list.sort(key=lambda x: (-x[3], -x[1].timestamp()))
-
-        # Convert to Precedent objects
-        result = [
-            Precedent(
-                subject_id=subject_id,
-                kind=self.graph.nodes[subject_id].get("kind", "unknown"),
-                at=at,
-                text=text,
-                score=score,
+        require_aware(fact.at)
+        if not fact.subject_id or not fact.kind:
+            raise ValueError("a memory fact needs a kind and a subject id")
+        node = fact_node(fact)
+        with self._lock:
+            siblings = (
+                self._by_shop_kind.setdefault((fact.merchant_id, fact.kind), []) if fact.merchant_id else []
             )
-            for subject_id, at, text, score in precedents_list[:limit]
-        ]
+            earlier = [other for other in siblings if other != node]
+            if node not in siblings and fact.merchant_id:
+                siblings.append(node)
+            self._facts[node] = StoredFact(node, fact)
+            self.graph.add_node(
+                node, type=NODE_TYPE_BY_KIND.get(fact.kind, fact.kind), at=fact.at, text=fact.text
+            )
+            self._link(node, fact)
+            for other in earlier:
+                self.graph.add_edge(node, other, key=SIMILAR_TO, relation=SIMILAR_TO)
 
-        return result
+    def _link(self, node: str, fact: MemoryFact) -> None:
+        shop = f"shop:{fact.merchant_id}" if fact.merchant_id else None
+        zone = f"zone:{fact.zone_id}" if fact.zone_id else None
+        edges: list[tuple[str, str, str]] = []
+        if shop and zone:
+            edges.append((shop, zone, IN_ZONE))
+        if fact.kind == "trigger" and zone:
+            edges.append((node, zone, IN_ZONE))
+        edges.extend(_kind_edges(node, fact, shop))
+        for source, target, relation in edges:
+            self._add_typed(source)
+            self._add_typed(target)
+            self.graph.add_edge(source, target, key=relation, relation=relation)
 
-    def _get_connected_merchant(self, node: str) -> str | None:
-        """Get the merchant connected to a node."""
-        for _, neighbor, _data in self.graph.out_edges(node, data=True):
-            if neighbor.startswith("merchant:"):
-                return neighbor.replace("merchant:", "")
-        return None
-
-    def _get_connected_zone(self, node: str) -> str | None:
-        """Get the zone connected to a node."""
-        for _, neighbor, _data in self.graph.out_edges(node, data=True):
-            if neighbor.startswith("zone:"):
-                return neighbor.replace("zone:", "")
-        return None
-
-
-class CogneeMemoryGraph:
-    """Live memory using Cognee (if installed and configured).
-
-    SPEC §0.1: Cognee memory is never live if COGNEE_ENABLED != true or cognee is not installed.
-    """
-
-    def __init__(self) -> None:
-        """Initialize with lazy import of cognee.
-
-        Raises:
-            IntegrationError: If cognee is not installed or not properly configured.
-        """
-        try:
-            import cognee  # type: ignore
-        except ImportError:
-            raise IntegrationError(
-                "cognee",
-                "cognee not installed",
-            ) from None
-
-        self.cognee = cognee
-
-    async def remember(self, fact: MemoryFact) -> None:
-        """Store a memory fact via Cognee.
-
-        Args:
-            fact: The memory fact to store.
-
-        Raises:
-            IntegrationError: If the Cognee operation fails.
-        """
-        try:
-            # Convert fact to a structured format for Cognee
-            fact_text = f"{fact.kind}: {fact.text}"
-            metadata: dict[str, str] = {}
-
-            if fact.merchant_id:
-                fact_text += f" (merchant: {fact.merchant_id})"
-                metadata["merchant_id"] = fact.merchant_id
-
-            if fact.zone_id:
-                fact_text += f" (zone: {fact.zone_id})"
-                metadata["zone_id"] = fact.zone_id
-
-            metadata["kind"] = fact.kind
-            metadata["at"] = fact.at.isoformat()
-
-            # Call cognee.add with the fact
-            await self.cognee.add(fact_text, metadata=metadata)
-        except Exception as e:
-            raise IntegrationError(
-                "cognee",
-                f"Failed to store fact in Cognee: {type(e).__name__}",
-                retryable=True,
-            ) from e
+    def _add_typed(self, node: str) -> None:
+        if node not in self.graph:
+            self.graph.add_node(node, type=node.split(":", 1)[0])
 
     async def precedents(
         self,
@@ -199,57 +142,45 @@ class CogneeMemoryGraph:
         merchant_id: str | None = None,
         zone_id: str | None = None,
         kind: str | None = None,
-        limit: int = 5,
+        limit: int = DEFAULT_LIMIT,
+        exclude_subject_id: str | None = None,
     ) -> list[Precedent]:
-        """Search for similar facts via Cognee.
+        return rank_precedents(
+            self.facts(),
+            merchant_id=merchant_id,
+            zone_id=zone_id,
+            kind=kind,
+            limit=limit,
+            exclude_subject_id=exclude_subject_id,
+        )
 
-        Args:
-            merchant_id: Filter by merchant (optional).
-            zone_id: Filter by zone (optional).
-            kind: Filter by fact kind (optional).
-            limit: Maximum number of results to return.
 
-        Returns:
-            List of Precedents from Cognee search.
+def _attr(fact: MemoryFact, name: str) -> str | None:
+    value = fact.attrs.get(name)
+    return value if isinstance(value, str) and value else None
 
-        Raises:
-            IntegrationError: If the search fails.
-        """
-        try:
-            # Build a search query from the filters
-            search_query = []
-            if kind:
-                search_query.append(kind)
-            if merchant_id:
-                search_query.append(f"merchant:{merchant_id}")
-            if zone_id:
-                search_query.append(f"zone:{zone_id}")
 
-            query_str = " ".join(search_query) if search_query else "precedent"
+def _kind_edges(node: str, fact: MemoryFact, shop: str | None) -> list[tuple[str, str, str]]:
+    trigger_id, decision_id = _attr(fact, "trigger_id"), _attr(fact, "decision_id")
+    edges: list[tuple[str, str, str]] = []
+    if fact.kind == "payout":
+        edges += [(node, shop, PAID_FOR)] if shop else []
+        edges += [(node, f"event:{trigger_id}", PAID_FOR)] if trigger_id else []
+    elif fact.kind == "dispute":
+        edges += [(shop, node, DISPUTED)] if shop else []
+        edges += [(node, f"decision:{decision_id}", DISPUTED)] if decision_id else []
+    elif fact.kind in ("decision", "case"):
+        edges += [(node, shop, DECIDED_BY)] if shop else []
+        edges += (
+            [(node, f"decision:{decision_id}", DECIDED_BY)] if decision_id and fact.kind == "case" else []
+        )
+    return edges
 
-            # Call cognee.search
-            results = await self.cognee.search(query_str, limit=limit)
 
-            # Convert results to Precedent objects
-            precedents_list: list[Precedent] = []
-            for result in results:
-                # Extract timestamp from result if available
-                at_str = result.get("metadata", {}).get("at")
-                at = datetime.fromisoformat(at_str) if at_str else datetime.now()
+def __getattr__(name: str) -> object:
+    """Keep `chhatri.integrations.memory.CogneeMemoryGraph` importable (it lives in memory_cognee)."""
+    if name == "CogneeMemoryGraph":
+        from chhatri.integrations.memory_cognee import CogneeMemoryGraph
 
-                precedent = Precedent(
-                    subject_id=result.get("id", "unknown"),
-                    kind=result.get("metadata", {}).get("kind", "unknown"),
-                    at=at,
-                    text=result.get("text", ""),
-                    score=result.get("score", 0.5),
-                )
-                precedents_list.append(precedent)
-
-            return precedents_list
-        except Exception as e:
-            raise IntegrationError(
-                "cognee",
-                f"Failed to search Cognee: {type(e).__name__}",
-                retryable=True,
-            ) from e
+        return CogneeMemoryGraph
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
