@@ -1,125 +1,123 @@
-# Chhatri — Docker Compose orchestration (SPEC §23)
-# Services: backend (FastAPI), frontend (nginx), n8n (workflows), paytm-mcp (optional)
-# Usage:
-#   make up           # start all services (backend, frontend, in-process n8n by default)
-#   make down         # stop all services
-#   docker compose --profile n8n up  # enable live n8n
-#   docker compose config  # validate
+# Chhatri stack (SPEC §23 `make up`; §0.1, §14.5, §21; binding decisions B1, B6, B8).
+#
+#   make up                     # = docker compose up -d --build --wait (creates .env first if missing)
+#   docker compose config       # validate
+#   docker compose down         # stop (named volume n8n-data keeps n8n's database)
+#
+# Services: backend (FastAPI :8000), frontend (console, nginx :8080 -> /api proxied to backend),
+# n8n (2.x, the three Chhatri workflows auto-imported and published at start).
+# Host ports bind to CHHATRI_BIND_ADDR (default 127.0.0.1) and are configurable:
+# CHHATRI_BACKEND_PORT (8000), CHHATRI_CONSOLE_PORT (8080), CHHATRI_N8N_PORT (5678).
+# The backend hands workflows to n8n at http://n8n:5678; set CHHATRI_STACK_N8N_URL to an empty value
+# to run the in-process workflow runner instead (same steps, same simulated timeline, B1).
+# Optional settings are passed through only when set in the shell or .env (never as empty strings).
+name: chhatri
 
 services:
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
+    image: chhatri-backend:local
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${CHHATRI_BIND_ADDR:-127.0.0.1}:${CHHATRI_BACKEND_PORT:-8000}:8000"
+    extra_hosts:
+      # e.g. PAYTM_MCP_URL=http://host.docker.internal:8080/sse for a Paytm MCP server on the host
+      - "host.docker.internal:host-gateway"
     environment:
-      # From .env / docker-compose overrides
       CHHATRI_SEED: ${CHHATRI_SEED:-20251019}
-      CHHATRI_CONSOLE_ORIGIN: ${CHHATRI_CONSOLE_ORIGIN:-http://localhost:5173}
-      CHHATRI_PUBLIC_URL: ${CHHATRI_PUBLIC_URL:-http://backend:8000}
-      CHHATRI_OFFICER_TOKEN: ${CHHATRI_OFFICER_TOKEN:-}
-      CHHATRI_INTERNAL_SECRET: ${CHHATRI_INTERNAL_SECRET:-}
+      CHHATRI_DATA_DIR: /app/data
+      CHHATRI_VAR_DIR: /app/var
+      CHHATRI_CONSOLE_ORIGIN: ${CHHATRI_CONSOLE_ORIGIN:-http://localhost:${CHHATRI_CONSOLE_PORT:-8080}}
+      CHHATRI_PUBLIC_URL: http://backend:8000
+      CHHATRI_INTERNAL_SECRET: ${CHHATRI_INTERNAL_SECRET:?set CHHATRI_INTERNAL_SECRET in .env (make env)}
+      CHHATRI_OFFICER_TOKEN:
       CHHATRI_DEMO_MODE: ${CHHATRI_DEMO_MODE:-true}
       CHHATRI_LOG_LEVEL: ${CHHATRI_LOG_LEVEL:-INFO}
-      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
-      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
-      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
-      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
-      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
-      WHATSAPP_DEMO_RECIPIENT: ${WHATSAPP_DEMO_RECIPIENT:-}
-      PAYTM_MCP_URL: ${PAYTM_MCP_URL:-}
-      PAYTM_MID: ${PAYTM_MID:-}
-      PAYTM_KEY_SECRET: ${PAYTM_KEY_SECRET:-}
-      N8N_BASE_URL: ${N8N_BASE_URL:-}
+      SARVAM_API_KEY:
+      SARVAM_CHAT_MODEL:
+      SARVAM_STT_MODEL:
+      SARVAM_TTS_MODEL:
+      SARVAM_TTS_SPEAKER:
+      WHATSAPP_ACCESS_TOKEN:
+      WHATSAPP_PHONE_NUMBER_ID:
+      WHATSAPP_APP_SECRET:
+      WHATSAPP_VERIFY_TOKEN:
+      WHATSAPP_GRAPH_VERSION:
+      WHATSAPP_TEMPLATE_LANGUAGE:
+      WHATSAPP_DEMO_RECIPIENT:
+      PAYTM_MCP_URL:
+      PAYTM_MID:
+      PAYTM_KEY_SECRET:
+      PAYTM_BASE_URL:
+      N8N_BASE_URL: ${CHHATRI_STACK_N8N_URL-http://n8n:5678}
       COGNEE_ENABLED: ${COGNEE_ENABLED:-false}
       OPENMETEO_LIVE: ${OPENMETEO_LIVE:-false}
-      PYTHONUNBUFFERED: "1"
     volumes:
-      - ./backend/data:/app/data:ro
-      - ./backend/artifacts:/app/artifacts
       - backend-var:/app/var
-    networks:
-      - chhatri
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/health', timeout=2)"]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 120s
 
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: chhatri-frontend:local
+    restart: unless-stopped
     ports:
-      - "80:80"
-    networks:
-      - chhatri
+      - "${CHHATRI_BIND_ADDR:-127.0.0.1}:${CHHATRI_CONSOLE_PORT:-8080}:8080"
+    environment:
+      CHHATRI_BACKEND_UPSTREAM: backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "--quiet", "--output-document=/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 3
       start_period: 5s
 
-  # Optional: n8n for live workflows (SPEC §14.5, §15)
-  # Requires: N8N_BASE_URL environment variable to be set
-  # Workflows auto-imported + activated on startup via entrypoint script
   n8n:
-    image: docker.n8n.io/n8nio/n8n:2.2.0
+    # Pinned 2.x tag (verified on docker.n8n.io). scripts/n8n_selftest.py runs exactly this image.
+    image: docker.n8n.io/n8nio/n8n:2.41.3
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/chhatri/entrypoint.sh"]
     ports:
-      - "5678:5678"
-    entrypoint: /workflows/entrypoint.sh
+      - "${CHHATRI_BIND_ADDR:-127.0.0.1}:${CHHATRI_N8N_PORT:-5678}:5678"
     environment:
-      DB_TYPE: sqlite
-      DB_SQLITE_PATH: /home/node/.n8n/database.sqlite
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-${CHHATRI_INTERNAL_SECRET}}
-      N8N_WEBHOOK_URL: ${CHHATRI_PUBLIC_URL:-http://backend:8000}
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"  # allow env access in expressions for CHHATRI_INTERNAL_SECRET
-      WEBHOOK_URL: ${CHHATRI_PUBLIC_URL:-http://backend:8000}
-      CHHATRI_PUBLIC_URL: ${CHHATRI_PUBLIC_URL:-http://backend:8000}
-      CHHATRI_INTERNAL_SECRET: ${CHHATRI_INTERNAL_SECRET:-}
+      CHHATRI_INTERNAL_SECRET: ${CHHATRI_INTERNAL_SECRET:?set CHHATRI_INTERNAL_SECRET in .env (make env)}
+      CHHATRI_PUBLIC_URL: http://backend:8000
+      N8N_ENCRYPTION_KEY:
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      GENERIC_TIMEZONE: Asia/Kolkata
+      TZ: Asia/Kolkata
     volumes:
       - n8n-data:/home/node/.n8n
-      - ./n8n/workflows:/workflows:ro
-    networks:
-      - chhatri
+      - ./n8n/workflows:/chhatri/workflows:ro
+      - ./n8n/entrypoint.sh:/chhatri/entrypoint.sh:ro
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      test: ["CMD", "wget", "--quiet", "--output-document=/dev/null", "http://127.0.0.1:5678/healthz/readiness"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 15s
-    profiles:
-      - n8n  # disabled by default; enable with: docker compose --profile n8n up
-
-  # Optional: Paytm payment MCP server (SPEC §14.3)
-  # Requires: github.com/shivam3-garg/payment-mcp cloned locally
-  # Usage: docker compose --profile paytm-mcp up
-  # Then set PAYTM_MCP_URL=http://paytm-mcp:8080/sse in backend
-  paytm-mcp:
-    build:
-      context: ./paytm-mcp  # assumes clone of payment-mcp repo
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    networks:
-      - chhatri
-    profiles:
-      - paytm-mcp  # disabled by default; enable with: docker compose --profile paytm-mcp up
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+      retries: 6
+      start_period: 90s
 
 volumes:
   backend-var:
   n8n-data:
-
-networks:
-  chhatri:
-    driver: bridge

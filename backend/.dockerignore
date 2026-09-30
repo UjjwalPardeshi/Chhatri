@@ -1,12 +1,23 @@
+# Build context of backend/Dockerfile (SPEC §23). The image needs only: pyproject.toml, README.md,
+# chhatri/, scripts/, data/ and artifacts/. Everything else stays out (venv, caches, tests, run state,
+# secrets).
 .venv
+venv
+var
+tests
 .pytest_cache
 .ruff_cache
+.mypy_cache
+htmlcov
 .coverage
+.coverage.*
+coverage.xml
 *.egg-info
-__pycache__
+**/__pycache__
+**/*.py[cod]
+.env
+.env.*
+Dockerfile
+.dockerignore
 .git
-.gitignore
-*.pyc
-*.pyo
 .DS_Store
-node_modules
