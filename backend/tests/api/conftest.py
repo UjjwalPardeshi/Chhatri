@@ -13,10 +13,18 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from chhatri.api.app import create_app
+from chhatri.events import EventBus
+from chhatri.replay.state import AppState
+from chhatri.replay.static import StaticContext
 from tests.api import fake_views
 from tests.api.fakes import OFFICER_TOKEN, WA_APP_SECRET, FakeAppState, make_settings
+from tests.replay import small_world
+from tests.replay.helpers import OFFICER_TOKEN as REPLAY_OFFICER_TOKEN
+from tests.replay.helpers import make_static
+from tests.replay.helpers import offline_settings as replay_settings
 
 BASE_URL = "http://testserver"
+REAL_HISTORY = 50_000  # keep every event of a small-city replay day
 
 
 @pytest.fixture
@@ -59,3 +67,40 @@ def signed(payload: dict[str, Any], secret: str = WA_APP_SECRET) -> tuple[bytes,
     raw = json.dumps(payload).encode()
     signature = "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
     return raw, {"X-Hub-Signature-256": signature, "Content-Type": "application/json"}
+
+
+# ------------------------------------------------------------------ real AppState (integration tests)
+
+
+@pytest.fixture(scope="session")
+def real_static(tmp_path_factory: pytest.TempPathFactory) -> StaticContext:
+    """The small city with a quickly trained model (no `make data` needed; SPEC §24.1 ``small``)."""
+    var_dir = tmp_path_factory.mktemp("api-real")
+    return make_static(
+        replay_settings(var_dir), small_world.small_city(), small_world.small_model(), var_dir / "artifacts"
+    )
+
+
+@pytest.fixture
+def real_state(real_static: StaticContext) -> AppState:
+    """A fresh real AppState whose bus keeps every event, so tests can check all of them."""
+    return AppState(real_static, bus=EventBus(history_size=REAL_HISTORY))
+
+
+@pytest.fixture
+async def real_app(real_state: AppState) -> AsyncIterator[FastAPI]:
+    app = create_app(real_state.static.settings, state=real_state)
+    async with app.router.lifespan_context(app):
+        yield app
+
+
+@pytest.fixture
+async def real_client(real_app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """Client of the real app; nothing is loaded until a test loads a scenario."""
+    async with AsyncClient(transport=ASGITransport(app=real_app), base_url=BASE_URL, timeout=30.0) as http:
+        yield http
+
+
+@pytest.fixture
+def real_officer() -> dict[str, str]:
+    return {"Authorization": f"Bearer {REPLAY_OFFICER_TOKEN}"}

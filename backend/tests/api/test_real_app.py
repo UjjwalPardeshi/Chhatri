@@ -110,9 +110,17 @@ async def test_illness_is_paid_the_same_day(http: AsyncClient) -> None:
     await load(http, "illness", "11:21")
     assert "Please send one photo of the hospital slip." in english(await say(http, "S-0142", "ill"))
     photo, _ = list_of(await http.post("/api/merchants/S-0142/photo", json={}), Message)
-    assert "your claim is approved. ₹1,500 credited" in english(photo)
+    assert [m.kind for m in photo] == ["IMAGE"]  # B2: the approval is told when the money arrives
     anil = data_of(await http.get("/api/merchants/S-0142"), MerchantDetail)
-    assert [d.outcome for d in anil.decisions][-1] == "APPROVED"
+    assert (anil.decisions[-1].outcome, anil.decisions[-1].amount_label) == ("APPROVED", "₹1,500")
+    clock = data_of(await http.post("/api/replay/step", json={"minutes": 4}), ClockState)
+    assert clock.now == "2025-08-21T11:25:00+05:30"  # decision 11:21 + payout_rail_delay_minutes
+    messages, _ = list_of(await http.get("/api/merchants/S-0142/messages"), Message)
+    assert "Anil ji, your claim is approved. ₹1,500 credited with today's settlement." in english(messages)
+    anil = data_of(await http.get("/api/merchants/S-0142"), MerchantDetail)
+    assert [(p.amount_label, p.status, p.credited_at) for p in anil.payouts] == [
+        ("₹1,500", "CREDITED", "2025-08-21T11:25:00+05:30")
+    ]
 
 
 async def test_mismatched_slip_goes_to_a_human_who_approves(http: AsyncClient) -> None:
