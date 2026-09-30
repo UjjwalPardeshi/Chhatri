@@ -45,7 +45,7 @@ class Event:
         return {"id": self.id, "type": self.type, "at": self.at.isoformat(), "data": self.data}
 
 
-@dataclass
+@dataclass(eq=False)  # identity hash: subscribers live in a set
 class _Subscriber:
     queue: asyncio.Queue[Event]
     dropped: int = 0
