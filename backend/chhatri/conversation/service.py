@@ -1,97 +1,88 @@
-"""Conversation service (SPEC §13, §24.4). Talk to merchants in Hindi + English.
+"""ConversationService — talks to merchants in Hindi + English (SPEC §13, §24.4).
 
-ConversationService implements the flows of §13.5:
-- Area payout (intro + payout card + soundbox)
-- WHY_AMOUNT (explain area)
-- DISPUTE_AMOUNT (open case + dispute ack)
-- Silent check-in (CHECKIN_SILENT)
-- REPORT_ILLNESS (ask for slip → slip reader → personal claim → policy)
-- BUY_COVER (evaluate → COVER_BLOCKED or COVER_LINK)
-- Officer results (OFFICER_APPROVED / OFFICER_DECLINED)
+One service serves WhatsApp (live) and the console phone simulator (``channel_name``). Inbound text,
+voice (→ STT) and slip photos are recorded, classified (``nlu.detect_intent``, audited as
+``intent.detected``) and answered by the §13.5 flows (``replies``, ``slip_flow``); the orchestrator
+calls the ``notify_*`` / ``checkin_silent`` methods from its workflow steps (``notifications``).
+Every message goes through ``outbox.Outbox``: stored in the MessageLog, published as a §19.1
+``message`` event, voiced, sent via the channel and audited.
+
+Voice notes: the transcript comes from the SpeechToText (``transcript_hint`` is passed as its
+``language_hint``, which the simulator uses as the words). When the STT hears nothing or fails
+(logged) and the caller supplied ``transcript_hint`` — the console's canned deck voice notes, which
+are silent WAV clips — the hint is used, labelled ``voice_source: "browser-simulated"``; without a
+hint the merchant is asked to repeat or type (VOICE_UNCLEAR). The audio is kept as media so the
+console can play it; ``meta.duration_s`` is read from WAV headers.
 """
 
 from __future__ import annotations
 
+import io
 import logging
-from datetime import date, datetime
-from typing import Any, Protocol
+import wave
+from datetime import date
+from typing import Final
 
 from chhatri.clock import Clock
-from chhatri.conversation.flows import (
-    handle_acknowledge,
-    handle_buy_cover,
-    handle_cover_status,
-    handle_dispute,
-    handle_report_illness,
-    handle_why_amount,
-    send_fallback_help,
+from chhatri.conversation.nlu import detect_intent
+from chhatri.conversation.notifications import Notifications
+from chhatri.conversation.outbox import (
+    AI_ACTOR,
+    MEDIA_URL,
+    VOICE_BROWSER,
+    VOICE_SARVAM,
+    Outbox,
+    Outgoing,
 )
-from chhatri.conversation.intents import Intent
-from chhatri.conversation.messages import bilingual, render
-from chhatri.conversation.nlu import classify_with_llm
-from chhatri.domain.enums import (
-    Channel,
-    DecisionOutcome,
-    Direction,
-    Language,
-    MessageKind,
-)
-from chhatri.domain.models import (
-    AreaTrigger,
-    Case,
-    CoverQuote,
-    Decision,
-    InstalmentPause,
-    Merchant,
-    Message,
-    Payout,
-    SlipExtraction,
-)
+from chhatri.conversation.ports import ClaimsPort, ConversationStore, MerchantDirectory
+from chhatri.conversation.replies import Replies
+from chhatri.conversation.slip_flow import SlipFlow
+from chhatri.domain.enums import Channel, MessageKind
+from chhatri.domain.models import AreaTrigger, Case, Decision, InstalmentPause, Merchant, Message, Payout
 from chhatri.events import EventBus
 from chhatri.ids import IdFactory
 from chhatri.integrations.base import (
     ChatModel,
+    IntegrationError,
     MessagingChannel,
-    OutboundMessage,
     SlipReader,
     Soundbox,
     SpeechToText,
     TextToSpeech,
 )
-from chhatri.money import format_inr
-from chhatri.sim.city import City
-from chhatri.store.protocols import AuditSink, MessageLog
+from chhatri.store.protocols import AuditSink
+
+__all__ = ["ClaimsPort", "ConversationService"]
 
 logger = logging.getLogger(__name__)
 
+MAX_TEXT_CHARS: Final = 2000
+SARVAM_SOURCE_PREFIX: Final = "sarvam"
 
-class ClaimsPort(Protocol):
-    """Implemented by the orchestrator; conversation never touches policy directly."""
 
-    async def submit_personal_claim(
-        self, merchant_id: str, slip: SlipExtraction, media_id: str
-    ) -> Decision: ...
+def wav_duration_s(audio: bytes) -> float | None:
+    """Duration of a RIFF/WAVE clip in seconds; None for any other container."""
+    try:
+        with wave.open(io.BytesIO(audio), "rb") as clip:
+            rate = clip.getframerate()
+            return round(clip.getnframes() / rate, 2) if rate else None
+    except (wave.Error, EOFError):
+        return None
 
-    async def open_dispute(self, merchant_id: str, text: str) -> Case: ...
 
-    async def quote_cover(self, merchant_id: str) -> tuple[CoverQuote, Any | None]: ...
-
-    def latest_paid_decision(self, merchant_id: str) -> Decision | None: ...
-
-    def open_silence(self, merchant_id: str) -> date | None: ...
+def _require_bytes(data: bytes, what: str) -> None:
+    if not data:
+        raise ValueError(f"{what} is empty")
 
 
 class ConversationService:
-    """Conversation service (SPEC §24.4).
-
-    Stores every message in MessageLog, audits each action, publishes events, sends via channel.
-    """
+    """SPEC §24.4 surface; see the module docstring."""
 
     def __init__(
         self,
         *,
-        city: City,
-        store: MessageLog,
+        city: MerchantDirectory,
+        store: ConversationStore,
         audit: AuditSink,
         ids: IdFactory,
         clock: Clock,
@@ -105,637 +96,122 @@ class ConversationService:
         claims: ClaimsPort,
         channel_name: Channel,
     ) -> None:
-        self.city = city
-        self.store = store
-        self.audit = audit
-        self.ids = ids
-        self.clock = clock
-        self.bus = bus
-        self.channel = channel
-        self.stt = stt
-        self.tts = tts
-        self.chat = chat
-        self.slips = slips
-        self.soundbox = soundbox
-        self.claims = claims
-        self.channel_name = channel_name
-
-    async def handle_text(
-        self, merchant_id: str, text: str
-    ) -> tuple[Message, ...]:
-        """Process inbound text message. Returns (inbound, *replies)."""
-        merchant = self.city.merchant(merchant_id)
-        now = self.clock.now()
-
-        # Store inbound
-        inbound = Message(
-            id=self.ids.next("message"),
-            merchant_id=merchant_id,
-            direction=Direction.INBOUND,
-            channel=self.channel_name,
-            kind=MessageKind.TEXT,
-            text_hi=text if self._is_hindi(text) else None,
-            text_en=text if not self._is_hindi(text) else None,
-            created_at=now,
+        self._city = city
+        self._audit = audit
+        self._stt = stt
+        self._chat = chat
+        self._outbox = Outbox(
+            store=store,
+            audit=audit,
+            ids=ids,
+            clock=clock,
+            bus=bus,
+            channel=channel,
+            tts=tts,
+            soundbox=soundbox,
+            channel_name=channel_name,
         )
-        self.store.add_message(inbound)
-        self.audit.append(
-            at=now,
-            actor=f"merchant:{merchant_id}",
-            action="message_inbound",
-            subject_type="message",
-            subject_id=inbound.id,
-            data={"kind": "text"},
-        )
+        self._store = store
+        self._replies = Replies(outbox=self._outbox, claims=claims, store=store)
+        self._slips = SlipFlow(outbox=self._outbox, claims=claims, store=store, reader=slips, audit=audit)
+        self._notices = Notifications(outbox=self._outbox, directory=city)
 
-        # Classify intent
-        intent = await classify_with_llm(text, self.chat)
+    # ------------------------------------------------------------------ inbound
 
-        # Process by intent
-        replies = []
-        if intent == Intent.WHY_AMOUNT:
-            replies = await handle_why_amount(self, merchant, now)
-        elif intent == Intent.DISPUTE_AMOUNT:
-            replies = await handle_dispute(self, merchant, text, now)
-        elif intent == Intent.REPORT_ILLNESS:
-            replies = await handle_report_illness(self, merchant, now)
-        elif intent == Intent.BUY_COVER:
-            replies = await handle_buy_cover(self, merchant, now)
-        elif intent == Intent.COVER_STATUS:
-            replies = await handle_cover_status(self, merchant, now)
-        elif intent in (Intent.GREETING, Intent.AFFIRM, Intent.DENY):
-            replies = await handle_acknowledge(self, merchant, intent, now)
-        else:
-            replies = await send_fallback_help(self, merchant, now)
-
-        return (inbound,) + tuple(replies)
+    async def handle_text(self, merchant_id: str, text: str) -> tuple[Message, ...]:
+        """Inbound text → (inbound, *replies)."""
+        merchant = self._city.merchant(merchant_id)
+        clean = text.strip()
+        if not clean or len(clean) > MAX_TEXT_CHARS:
+            raise ValueError(f"text must be 1..{MAX_TEXT_CHARS} characters")
+        inbound = self._outbox.receive(merchant, kind=MessageKind.TEXT, text=clean)
+        return (inbound, *await self._answer(merchant, inbound, clean))
 
     async def handle_voice(
-        self,
-        merchant_id: str,
-        audio: bytes,
-        mime: str,
-        *,
-        transcript_hint: str | None = None,
+        self, merchant_id: str, audio: bytes, mime: str, *, transcript_hint: str | None = None
     ) -> tuple[Message, ...]:
-        """Process inbound voice (STT → treat as text). Returns (voice_inbound, *replies)."""
-        merchant = self.city.merchant(merchant_id)
-        now = self.clock.now()
-
-        # Transcribe
-        try:
-            transcript_obj = await self.stt.transcribe(
-                audio, mime, language_hint=transcript_hint
-            )
-            transcript = transcript_obj.text
-        except Exception:
-            logger.exception("STT error")
-            transcript = ""
-
-        # Store voice inbound
-        voice_msg = Message(
-            id=self.ids.next("message"),
-            merchant_id=merchant_id,
-            direction=Direction.INBOUND,
-            channel=self.channel_name,
+        """Inbound voice note → STT → (inbound, *replies)."""
+        merchant = self._city.merchant(merchant_id)
+        _require_bytes(audio, "voice note")
+        transcript, source = await self._transcribe(audio, mime, transcript_hint)
+        media_id = self._outbox.store_media(audio, mime)
+        meta: dict[str, object] = {
+            "voice_source": VOICE_SARVAM if source.startswith(SARVAM_SOURCE_PREFIX) else VOICE_BROWSER
+        }
+        duration = wav_duration_s(audio)
+        if duration is not None:
+            meta["duration_s"] = duration
+        if transcript:
+            meta["transcript"] = transcript
+        inbound = self._outbox.receive(
+            merchant,
             kind=MessageKind.VOICE,
-            text_hi=transcript if transcript and self._is_hindi(transcript) else None,
-            text_en=transcript if transcript and not self._is_hindi(transcript) else None,
-            created_at=now,
-            meta={"transcript": transcript, "voice_source": "sarvam"}
-            if transcript
-            else {"voice_source": "sarvam"},
+            text=transcript or None,
+            audio_url=MEDIA_URL.format(media_id=media_id),
+            meta=meta,
         )
-        self.store.add_message(voice_msg)
-        self.audit.append(
-            at=now,
-            actor=f"merchant:{merchant_id}",
-            action="message_inbound",
-            subject_type="message",
-            subject_id=voice_msg.id,
-            data={"kind": "voice", "transcript": transcript},
-        )
-
-        # If no transcript, send polite "couldn't hear" reply
         if not transcript:
-            reply = await self._send_message(
-                merchant,
-                "माफ कीजिए, आप की बात समझ नहीं आई। कृपया लिखकर भेजें।",
-                "I didn't catch that. Could you please type your message?",
-                now
-            )
-            return (voice_msg, reply)
-
-        # Treat transcript as text
-        return await self.handle_text(merchant_id, transcript)
+            return inbound, await self._outbox.send(merchant, Outgoing.text("VOICE_UNCLEAR"))
+        return (inbound, *await self._answer(merchant, inbound, transcript))
 
     async def handle_image(
         self, merchant_id: str, image: bytes, mime: str, media_id: str
     ) -> tuple[Message, ...]:
-        """Process inbound image (slip → SlipReader → submit_personal_claim)."""
-        merchant = self.city.merchant(merchant_id)
-        now = self.clock.now()
-
-        # Store inbound image message
-        image_msg = Message(
-            id=self.ids.next("message"),
-            merchant_id=merchant_id,
-            direction=Direction.INBOUND,
-            channel=self.channel_name,
-            kind=MessageKind.IMAGE,
-            media_url=f"/api/media/{media_id}",
-            created_at=now,
+        """Inbound slip photo → personal claim → (inbound, *replies)."""
+        merchant = self._city.merchant(merchant_id)
+        _require_bytes(image, "image")
+        if not media_id.strip():
+            raise ValueError("media_id is required")
+        self._store.put_media(image, mime, media_id)
+        inbound = self._outbox.receive(
+            merchant, kind=MessageKind.IMAGE, media_url=MEDIA_URL.format(media_id=media_id)
         )
-        self.store.add_message(image_msg)
-        self.store.put_media(image, mime, media_id)
-        self.audit.append(
-            at=now,
-            actor=f"merchant:{merchant_id}",
-            action="message_inbound",
-            subject_type="message",
-            subject_id=image_msg.id,
-            data={"kind": "image", "media_id": media_id},
-        )
+        return (inbound, *await self._slips.reply(merchant, image, mime, media_id))
 
-        # Read slip
+    async def _transcribe(self, audio: bytes, mime: str, hint: str | None) -> tuple[str, str]:
         try:
-            slip = await self.slips.read_slip(image, mime)
-        except Exception:
-            logger.exception("Slip reading error")
-            reply = await self._send_message(
-                merchant,
-                "मैं पर्ची को स्पष्ट नहीं पढ़ सका। कृपया फिर से कोशिश करें।",
-                "I couldn't read the slip clearly. Please try again.",
-                now,
-            )
-            return (image_msg, reply)
+            heard = await self._stt.transcribe(audio, mime, language_hint=hint)
+            text, source = heard.text.strip(), heard.source
+        except IntegrationError as exc:
+            logger.warning("conversation: STT failed (%s)", exc.safe_message)
+            text, source = "", "failed"
+        if not text and hint and hint.strip():
+            logger.info("conversation: using the console's transcript hint for a canned voice note")
+            return hint.strip(), "hint"
+        return text, source
 
-        # Submit personal claim
-        decision = await self.claims.submit_personal_claim(
-            merchant_id, slip, media_id
+    async def _answer(self, merchant: Merchant, inbound: Message, text: str) -> tuple[Message, ...]:
+        detected = await detect_intent(text, self._chat)
+        self._audit.append(
+            at=inbound.created_at,
+            actor=AI_ACTOR,
+            action="intent.detected",
+            subject_type="message",
+            subject_id=inbound.id,
+            data={"merchant_id": merchant.id, "intent": detected.intent.value, "source": detected.source},
         )
+        return await self._replies.respond(merchant, detected.intent, text)
 
-        # Respond based on decision
-        replies = []
-        if decision.outcome == DecisionOutcome.APPROVED:
-            # PERSONAL_PAID + payout card
-            replies = await self._send_personal_paid(
-                merchant, decision, now
-            )
-        elif decision.outcome == DecisionOutcome.REFERRED:
-            # SLIP_TO_HUMAN variant
-            replies = await self._send_slip_to_human(
-                merchant, decision, now
-            )
-        else:
-            # DECLINED
-            declined_msg = await self._send_message(
-                merchant,
-                "आपके दावे को स्वीकृत नहीं किया जा सका। कृपया सहायता के लिए संपर्क करें।",
-                "Your claim could not be approved. Please contact support.",
-                now,
-            )
-            replies = [declined_msg]
-
-        return (image_msg,) + tuple(replies)
+    # ------------------------------------------------------------------ business-initiated
 
     async def notify_area_payout(
-        self,
-        decision: Decision,
-        payout: Payout,
-        trigger: AreaTrigger,
+        self, decision: Decision, payout: Payout, trigger: AreaTrigger
     ) -> tuple[Message, ...]:
-        """Notify area payout (SPEC §13.5 area payout flow)."""
-        merchant = self.city.merchant(decision.merchant_id)
-        now = self.clock.now()
+        """AREA_PAYOUT_INTRO → PAYOUT_CARD → SOUNDBOX, at credit time (SPEC §13.5)."""
+        return await self._notices.area_payout(decision, payout, trigger)
 
-        messages = []
+    async def notify_instalment_paused(self, pause: InstalmentPause) -> Message:
+        """INSTALMENT_PAUSED at pause time (SPEC §13.5)."""
+        return await self._notices.instalment_paused(pause)
 
-        # AREA_PAYOUT_INTRO (bilingual)
-        hi_text, en_text = bilingual(
-            "AREA_PAYOUT_INTRO",
-            name_hi=merchant.owner_name_hi,
-            name_en=merchant.owner_name,
-            drop=trigger.drop_pct,
-        )
-        intro_msg = await self._send_message(
-            merchant,
-            hi_text,
-            en_text,
-            now,
-        )
-        messages.append(intro_msg)
+    async def notify_personal_paid(self, decision: Decision, payout: Payout) -> tuple[Message, ...]:
+        """PERSONAL_PAID / OFFICER_APPROVED → PAYOUT_CARD → SOUNDBOX, at credit time."""
+        return await self._notices.personal_paid(decision, payout)
 
-        # PAYOUT_CARD
-        payout_msg = Message(
-            id=self.ids.next("message"),
-            merchant_id=merchant.id,
-            direction=Direction.OUTBOUND,
-            channel=self.channel_name,
-            kind=MessageKind.PAYOUT_CARD,
-            created_at=now,
-            card={
-                "amount_label": format_inr(payout.amount_paise),
-                "subtitle_hi": "आज के सेटलमेंट के साथ जमा",
-                "subtitle_en": "Credited with today's settlement",
-                "badge": "No claim needed",
-            },
-        )
-        self.store.add_message(payout_msg)
-        self.audit.append(
-            at=now,
-            actor="ai-agent",
-            action="message_outbound",
-            subject_type="message",
-            subject_id=payout_msg.id,
-            data={"kind": "payout_card", "amount": payout.amount_paise},
-        )
-        messages.append(payout_msg)
+    async def checkin_silent(self, merchant_id: str, first_silent_day: date) -> Message:
+        """CHECKIN_SILENT, business-initiated (template outside the 24 h window, SPEC §13.7)."""
+        return await self._notices.checkin_silent(merchant_id, first_silent_day)
 
-        # Soundbox event
-        await self._soundbox_announce(
-            merchant,
-            render("SOUNDBOX", "en", amount=format_inr(payout.amount_paise)),
-            payout.amount_paise,
-            now,
-        )
-
-        return tuple(messages)
-
-    async def notify_instalment_paused(
-        self, pause: InstalmentPause
-    ) -> Message:
-        """Notify instalment paused (SPEC §13.5)."""
-        merchant = self.city.merchant(pause.merchant_id)
-        now = self.clock.now()
-
-        hi_text, en_text = bilingual(
-            "INSTALMENT_PAUSED",
-            instalment=format_inr(pause.amount_paise),
-        )
-        msg = await self._send_message(
-            merchant,
-            hi_text,
-            en_text,
-            now,
-        )
-        return msg
-
-    async def notify_personal_paid(
-        self, decision: Decision, payout: Payout
-    ) -> tuple[Message, ...]:
-        """Notify personal claim approved + paid."""
-        merchant = self.city.merchant(decision.merchant_id)
-        now = self.clock.now()
-
-        messages = []
-
-        # PERSONAL_PAID (bilingual)
-        hi_text, en_text = bilingual(
-            "PERSONAL_PAID",
-            name_hi=merchant.owner_name_hi,
-            name_en=merchant.owner_name,
-            amount=format_inr(payout.amount_paise),
-        )
-        msg = await self._send_message(
-            merchant,
-            hi_text,
-            en_text,
-            now,
-        )
-        messages.append(msg)
-
-        # Soundbox
-        await self._soundbox_announce(
-            merchant,
-            render("SOUNDBOX", "en", amount=format_inr(payout.amount_paise)),
-            payout.amount_paise,
-            now,
-        )
-
-        return tuple(messages)
-
-    async def checkin_silent(
-        self, merchant_id: str, first_silent_day: date
-    ) -> Message:
-        """Check in on silent merchant (SPEC §13.5, §13.7).
-
-        On live WhatsApp outside 24-hour window, use template; otherwise free-form.
-        """
-        merchant = self.city.merchant(merchant_id)
-        now = self.clock.now()
-
-        # Check if outside 24-hour window (SPEC §13.7)
-        # Note: Template selection is handled by the MessagingChannel implementation
-        _ = self._get_last_inbound_time(merchant_id)
-
-        # Render bilingual check-in message
-        hi_text, en_text = bilingual(
-            "CHECKIN_SILENT",
-            name_hi=merchant.owner_name_hi,
-            name_en=merchant.owner_name,
-        )
-
-        # On live WhatsApp outside 24h, send via template; otherwise free-form
-        # (Template sending is handled by channel implementation; we send the message normally)
-        msg = await self._send_message(
-            merchant,
-            hi_text,
-            en_text,
-            now,
-        )
-        return msg
-
-    async def notify_officer_result(
-        self, decision: Decision, case: Case
-    ) -> tuple[Message, ...]:
-        """Notify officer decision result (SPEC §13.5)."""
-        merchant = self.city.merchant(decision.merchant_id)
-        now = self.clock.now()
-
-        messages = []
-
-        if decision.outcome == DecisionOutcome.APPROVED:
-            # OFFICER_APPROVED
-            hi_text, en_text = bilingual(
-                "OFFICER_APPROVED",
-                name_hi=merchant.owner_name_hi,
-                name_en=merchant.owner_name,
-                amount=format_inr(decision.amount_paise),
-            )
-            msg = await self._send_message(
-                merchant,
-                hi_text,
-                en_text,
-                now,
-            )
-            messages.append(msg)
-        else:
-            # OFFICER_DECLINED with reason
-            reason_hi = decision.referral_reason or "आपके दावे को स्वीकृत नहीं किया जा सका।"
-            reason_en = decision.referral_reason or "Your claim could not be approved."
-            hi_text, en_text = bilingual(
-                "OFFICER_DECLINED",
-                name_hi=merchant.owner_name_hi,
-                name_en=merchant.owner_name,
-                reason_hi=reason_hi,
-                reason_en=reason_en,
-            )
-            msg = await self._send_message(
-                merchant,
-                hi_text,
-                en_text,
-                now,
-            )
-            messages.append(msg)
-
-        # CASE_CHIP (English only per spec)
-        case_chip = Message(
-            id=self.ids.next("message"),
-            merchant_id=merchant.id,
-            direction=Direction.OUTBOUND,
-            channel=self.channel_name,
-            kind=MessageKind.CASE_CHIP,
-            text_en=render("CASE_CHIP", "en", case_id=case.id),
-            created_at=now,
-        )
-        self.store.add_message(case_chip)
-        self.audit.append(
-            at=now,
-            actor="ai-agent",
-            action="message_outbound",
-            subject_type="message",
-            subject_id=case_chip.id,
-            data={"kind": "case_chip", "case_id": case.id},
-        )
-        messages.append(case_chip)
-
-        return tuple(messages)
-
-    # ---- Helpers ----
-
-    async def _send_personal_paid(
-        self,
-        merchant: Merchant,
-        decision: Decision,
-        now: datetime,
-    ) -> list[Message]:
-        """Send PERSONAL_PAID message."""
-        messages = []
-
-        hi_text, en_text = bilingual(
-            "PERSONAL_PAID",
-            name_hi=merchant.owner_name_hi,
-            name_en=merchant.owner_name,
-            amount=format_inr(decision.amount_paise),
-        )
-        msg = await self._send_message(
-            merchant,
-            hi_text,
-            en_text,
-            now,
-        )
-        messages.append(msg)
-
-        # Soundbox (if amount > 0)
-        if decision.amount_paise > 0:
-            await self._soundbox_announce(
-                merchant,
-                render(
-                    "SOUNDBOX", "en", amount=format_inr(decision.amount_paise)
-                ),
-                decision.amount_paise,
-                now,
-            )
-
-        return messages
-
-    async def _send_slip_to_human(
-        self,
-        merchant: Merchant,
-        decision: Decision,
-        now: datetime,
-    ) -> list[Message]:
-        """Send SLIP_TO_HUMAN variant based on failing check (SPEC §13.5)."""
-        messages = []
-
-        # Select message variant based on the failing SOFT check
-        message_key = "SLIP_TO_HUMAN"  # default
-        for check in decision.checks:
-            if check.status == "FAIL" and check.severity == "SOFT":
-                if check.code == "DATES_MATCH":
-                    message_key = "SLIP_TO_HUMAN_DATES"
-                    break
-                elif check.code == "SLIP_READABLE":
-                    message_key = "SLIP_TO_HUMAN_UNREADABLE"
-                    break
-                elif check.code == "NAME_MATCHES_KYC":
-                    message_key = "SLIP_TO_HUMAN"
-                    break
-
-        hi_text, en_text = bilingual(message_key)
-        msg = await self._send_message(
-            merchant,
-            hi_text,
-            en_text,
-            now,
-        )
-        messages.append(msg)
-
-        return messages
-
-    async def _send_fallback_help(
-        self, merchant: Merchant, now: datetime
-    ) -> list[Message]:
-        """Send FALLBACK_HELP."""
-        hi_text, en_text = bilingual("FALLBACK_HELP")
-        msg = await self._send_message(
-            merchant, hi_text, en_text, now
-        )
-        return [msg]
-
-    async def _send_message(
-        self, merchant: Merchant, hi_text: str, en_text: str, now: datetime
-    ) -> Message:
-        """Send a bilingual text message via channel, store, audit, publish."""
-        msg = Message(
-            id=self.ids.next("message"),
-            merchant_id=merchant.id,
-            direction=Direction.OUTBOUND,
-            channel=self.channel_name,
-            kind=MessageKind.TEXT,
-            text_hi=hi_text,
-            text_en=en_text,
-            created_at=now,
-        )
-
-        # Generate TTS for Hindi text
-        try:
-            audio_obj = await self.tts.synthesize(
-                hi_text, Language.HI
-            )
-            if audio_obj.audio:
-                media_id = self.ids.next("media")
-                msg = msg.model_copy(
-                    update={
-                        "audio_url": f"/api/media/{media_id}",
-                        "meta": {
-                            "voice_source": audio_obj.source or "browser-simulated"
-                        },
-                    }
-                )
-                self.store.put_media(audio_obj.audio, audio_obj.mime_type or "audio/mpeg", media_id)
-            else:
-                msg = msg.model_copy(
-                    update={"meta": {"voice_source": "browser-simulated"}}
-                )
-        except Exception:
-            logger.exception("TTS error")
-            msg = msg.model_copy(update={"meta": {"voice_source": "browser-simulated"}})
-
-        # Store
-        self.store.add_message(msg)
-        self.audit.append(
-            at=now,
-            actor="ai-agent",
-            action="message_outbound",
-            subject_type="message",
-            subject_id=msg.id,
-            data={"kind": "text"},
-        )
-
-        # Send via channel (bilingual: Hindi + English)
-        try:
-            await self.channel.send(
-                OutboundMessage(
-                    merchant_id=merchant.id,
-                    to_phone=merchant.phone,
-                    text=f"{hi_text}\n{en_text}",
-                )
-            )
-        except Exception:
-            logger.exception("Channel send error")
-
-        # Publish event
-        self.bus.publish(
-            "message",
-            now,
-            {"message": msg.model_dump(mode="json")},
-        )
-
-        return msg
-
-    async def _soundbox_announce(
-        self, merchant: Merchant, text: str, amount_paise: int, now: datetime
-    ) -> None:
-        """Send soundbox announcement."""
-        try:
-            await self.soundbox.announce(merchant.id, text, amount_paise)
-            self.bus.publish(
-                "soundbox",
-                now,
-                {
-                    "merchant_id": merchant.id,
-                    "text": text,
-                    "amount_label": format_inr(amount_paise),
-                    "audio_url": None,
-                },
-            )
-        except Exception:
-            logger.exception("Soundbox error")
-
-    def _get_last_inbound_time(self, merchant_id: str) -> datetime | None:
-        """Get the most recent inbound message time for a merchant (SPEC §13.7).
-
-        Returns None if no inbound messages exist.
-        """
-        messages = self.store.messages(merchant_id)
-        for msg in reversed(messages):
-            if msg.direction == Direction.INBOUND:
-                return msg.created_at
-        return None
-
-    @staticmethod
-    def _is_hindi(text: str) -> bool:
-        """Check if text contains Devanagari characters."""
-        import re
-
-        return bool(re.search(r"[ऀ-ॿ]", text))
-
-    @staticmethod
-    def _format_date_hi(d: date) -> str:
-        """Format date for Hindi: '27 अगस्त'."""
-        months_hi = [
-            "जनवरी",
-            "फरवरी",
-            "मार्च",
-            "अप्रैल",
-            "मई",
-            "जून",
-            "जुलाई",
-            "अगस्त",
-            "सितंबर",
-            "अक्तूबर",
-            "नवंबर",
-            "दिसंबर",
-        ]
-        return f"{d.day} {months_hi[d.month - 1]}"
-
-    @staticmethod
-    def _format_date_en(d: date) -> str:
-        """Format date for English: '25 Aug'."""
-        months_en = [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec",
-        ]
-        return f"{d.day} {months_en[d.month - 1]}"
+    async def notify_officer_result(self, decision: Decision, case: Case) -> tuple[Message, ...]:
+        """OFFICER_DECLINED now; an approval is told at credit time by ``notify_personal_paid``."""
+        return await self._notices.officer_result(decision, case)

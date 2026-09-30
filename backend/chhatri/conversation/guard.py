@@ -1,72 +1,54 @@
-"""Guard function (SPEC §13.3). Reject LLM replies that make false claims or disallowed numbers."""
+"""Guard for free-text replies (SPEC §13.3, §0.2, §24.4).
+
+Chhatri's merchant messages are templates filled with decision facts (§13.4). Any free-text reply a
+language model might write is accepted only when ``grounded`` holds:
+
+- every number in it is one of the decision facts — numbers are compared as digit runs after
+  folding Devanagari digits to ASCII and dropping digit-grouping commas, so "₹1,380", "1380" and
+  "₹१,३८०" are the same number, while "₹1,380.50" brings in an extra "50";
+- it does not promise money or approval (English, Hindi and Hinglish phrasings: "approved",
+  "will pay", "मंज़ूर", "पक्का", "पैसे मिल जाएंगे", "pass ho jayega" …), because only the policy
+  engine decides (§0.2).
+
+Otherwise the caller must use the template instead.
+"""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from typing import Final
+
+from chhatri.conversation.intents import normalise
+from chhatri.conversation.lexicon import Concept
+
+_DEVANAGARI_DIGITS: Final = str.maketrans("०१२३४५६७८९", "0123456789")
+_GROUPING_COMMA: Final = re.compile(r"(?<=\d),(?=\d)")
+_DIGIT_RUN: Final = re.compile(r"\d+")
+
+PROMISE: Final = Concept(
+    stems=(
+        "approv", "guarantee", "promis", "assur", "sanction", "refund", "will be paid", "will pay",
+        "will get", "youll get", "will receive", "will be credited", "will credit", "definitely get",
+        "surely get", "मंजूर", "गारंटी", "पक्का", "वादा", "मिल जाएंग", "मिल जायेंग", "मिलेंगे",
+        "पैसे मिल", "रुपये मिल", "भुगतान मिल", "भुगतान कर देंगे", "भुगतान हो जाएग", "जमा हो जाएग",
+        "जमा कर देंगे", "manjoor", "manzoor", "manjur", "pakka", "pass ho jayega", "mil jayenge",
+        "mil jayega", "paisa milega", "paise milenge", "payment ho jayega",
+    )
+)  # fmt: skip
+
+
+def numbers_in(text: str) -> frozenset[str]:
+    """Digit runs in ``text`` after folding Devanagari digits and digit-grouping commas."""
+    ascii_digits = text.translate(_DEVANAGARI_DIGITS)
+    return frozenset(_DIGIT_RUN.findall(_GROUPING_COMMA.sub("", ascii_digits)))
 
 
 def grounded(reply: str, allowed_numbers: Iterable[str]) -> bool:
-    """Check if a reply is grounded in facts.
-
-    Rejects:
-    - Digit sequences not in allowed_numbers (except those in formats like ₹1,380)
-    - Promises of money/approval not in the facts
-    - Guarantees or assurances beyond facts
-
-    Args:
-        reply: The text to check
-        allowed_numbers: List of allowed digit sequences (e.g. ["1380", "63"])
-
-    Returns:
-        True if reply is grounded; False if it contains disallowed claims
-    """
-    if not reply or not reply.strip():
-        return True
-
-    allowed_set = set(allowed_numbers)
-
-    # Check for direct approval/payment claims
-    # If the reply claims something is approved, paid, or guaranteed, it must be grounded in facts
-    if re.search(
-        r"\b(approved|approve|paid|pay|guarantee|promised)\b",
-        reply,
-        re.IGNORECASE,
-    ):
-        # This is a claim that needs to be grounded
-        # For now, we reject it unless it's clearly from a template we generated
-        # (templates would have come from facts, so any number should be allowed)
-        # If there are NO allowed numbers and we're making approval claims, reject it
-        if not allowed_set:
-            # No allowed facts to ground the approval claim
-            return False
-
-    # Check for strong promises of money/approval
-    promise_keywords = re.compile(
-        r"\b(will|guarantee|promise|definitely|must|assure|ensure)\b.*"
-        r"\b(money|rupee|paise|paisa|payment|paid|approved|approve)\b",
-        re.IGNORECASE,
-    )
-    if promise_keywords.search(reply):
+    """True when ``reply`` uses only fact numbers and promises no money or approval (SPEC §13.3)."""
+    allowed: set[str] = set()
+    for value in allowed_numbers:
+        allowed |= numbers_in(str(value))
+    if not numbers_in(reply) <= allowed:
         return False
-
-    # Extract all digit sequences from the reply
-    # Match patterns like: 123, 1,234, ₹1,380, etc.
-    digit_pattern = re.compile(r"[\d,]+")
-    found_digits = []
-
-    for match in digit_pattern.finditer(reply):
-        digit_str = match.group(0)
-        # Normalize: remove commas
-        normalized = digit_str.replace(",", "")
-        if normalized and normalized.isdigit():
-            found_digits.append(normalized)
-
-    # Check if all found digits are in the allowed list
-    for digit in found_digits:
-        if digit not in allowed_set:
-            # Check if it's a single digit or very small number (likely not a currency amount)
-            if len(digit) > 1 or digit not in "0123456789":
-                return False
-
-    return True
+    return not PROMISE.found_in(normalise(reply))
