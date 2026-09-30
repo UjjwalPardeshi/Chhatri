@@ -45,7 +45,7 @@ async def paytm_callback(request: Request, settings: SettingsDep, state: StateDe
         return ok({"status": "ignored", "link_id": callback.link_id})
     runtime = get_runtime(state)
     seen: PaidTransactions = request.app.state.paid_transactions
-    if callback.txn_id is not None and not seen.first_time(callback.txn_id):
+    if callback.txn_id is not None and not seen.first_time(callback.txn_id, runtime.store):
         return ok({"status": "duplicate", "link_id": callback.link_id})
     try:
         await runtime.orchestrator.paytm_paid(callback.link_id, callback.txn_id)

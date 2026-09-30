@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import weakref
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Final
@@ -112,14 +113,24 @@ def checksum_valid(params: dict[str, str], merchant_key: str) -> bool:
 
 
 class PaidTransactions:
-    """Bounded memory of Paytm transaction ids already applied (globally unique per payment)."""
+    """Bounded memory of the Paytm transaction ids applied to the loaded scenario.
+
+    The memory is scoped to one scenario load (SPEC §3: store, ids and audit start afresh, and a
+    simulated link id repeats on every load of the same scenario), so ``first_time`` takes the
+    runtime's store as its scope: when a new load brings a new store, the old ids are forgotten.
+    The scope is held weakly so a replaced runtime is never kept alive by this memory.
+    """
 
     def __init__(self, capacity: int = MAX_SEEN_TXNS) -> None:
         self._seen: OrderedDict[str, None] = OrderedDict()
         self._capacity = capacity
+        self._scope: weakref.ref[object] | None = None
 
-    def first_time(self, txn_id: str) -> bool:
-        """Reserve ``txn_id``; False when it was already applied (or is being applied)."""
+    def first_time(self, txn_id: str, scope: object) -> bool:
+        """Reserve ``txn_id`` in ``scope``; False when it was already applied (or is being applied)."""
+        if self._scope is None or self._scope() is not scope:
+            self._seen.clear()
+            self._scope = weakref.ref(scope)
         if txn_id in self._seen:
             return False
         self._seen[txn_id] = None

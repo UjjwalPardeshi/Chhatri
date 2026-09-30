@@ -123,9 +123,21 @@ def test_checksum_valid_never_raises(checksum: str) -> None:
     assert checksum_valid({"linkId": "x", "CHECKSUMHASH": checksum}, PAYTM_KEY) is False
 
 
+class Scope:
+    """Stands for one loaded scenario's store (weak-referenceable, identity-compared)."""
+
+
 def test_paid_transactions_memory_is_bounded() -> None:
-    seen = PaidTransactions(capacity=2)
-    assert [seen.first_time(t) for t in ("a", "b", "a", "c", "a")] == [True, True, False, True, True]
+    seen, scope = PaidTransactions(capacity=2), Scope()
+    assert [seen.first_time(t, scope) for t in ("a", "b", "a", "c", "a")] == [True, True, False, True, True]
+
+
+def test_paid_transactions_are_forgotten_when_a_new_scenario_is_loaded() -> None:
+    seen, first, second = PaidTransactions(), Scope(), Scope()
+    assert (seen.first_time("a", first), seen.first_time("a", first)) == (True, False)
+    assert (seen.first_time("a", second), seen.first_time("a", second)) == (True, False)
+    del first, second  # a replaced runtime is not kept alive: the scope is held weakly
+    assert seen.first_time("a", Scope()) is True
 
 
 def callback(step: str = "execute_payout", **overrides: object) -> dict[str, object]:
