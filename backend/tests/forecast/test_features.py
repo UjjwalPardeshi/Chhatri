@@ -1,136 +1,110 @@
-"""Tests for forecast/features.py (SPEC §7.1)."""
+"""Feature schema, city arrays and feature frames (SPEC §7.1)."""
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 
 import numpy as np
 import pandas as pd
 import pytest
-from zoneinfo import ZoneInfo
 
-from chhatri.clock import at
-from chhatri.forecast.features import construct_features
-from chhatri.sim.types import City, SalesPanel
+from chhatri.domain.enums import ShopType
+from chhatri.forecast.features import (
+    FEATURES,
+    NO_WEEKLY_OFF,
+    CityArrays,
+    FeatureSchema,
+    concat_blocks,
+    day_block,
+    is_festival,
+    to_frame,
+)
+from chhatri.forecast.history import TrailingStats
+from chhatri.sim.types import City
+from tests.forecast.synthetic import make_city
 
-IST = ZoneInfo("Asia/Kolkata")
+
+@pytest.mark.parametrize(
+    ("day", "expected"),
+    [
+        (date(2024, 9, 6), False),
+        (date(2024, 9, 7), True),
+        (date(2024, 9, 16), True),
+        (date(2024, 9, 17), False),
+        (date(2025, 8, 26), False),
+        (date(2025, 8, 27), True),
+        (date(2025, 9, 5), True),
+        (date(2025, 9, 6), False),
+        (date(2025, 8, 19), False),
+    ],
+)
+def test_festival_windows(day: date, expected: bool) -> None:
+    assert is_festival(day) is expected
 
 
-class TestConstructFeatures:
-    """Feature construction must be vectorised and deterministic."""
+class TestSchema:
+    def test_fixed_lists_cover_every_zone_and_shop_type(self) -> None:
+        city = make_city((("Z2", 3),), extra_zones=("Z1", "Z10"))
+        schema = FeatureSchema.for_city(city)
+        assert schema.zone_ids == ("Z1", "Z2", "Z10")
+        assert schema.shop_types == tuple(t.value for t in ShopType)
+        assert schema.zone_codes(city.merchants).tolist() == [1, 1, 1]
 
-    def test_construct_features_returns_dataframe(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """construct_features returns a DataFrame with proper structure."""
-        start = at(date(2025, 8, 18), 6)
-        end = at(date(2025, 8, 21), 6)
+    def test_unknown_zone_is_rejected(self, city: City) -> None:
+        schema = FeatureSchema(zone_ids=("Z1", "Z2"), shop_types=tuple(t.value for t in ShopType))
+        with pytest.raises(ValueError, match="Z3"):
+            schema.zone_codes(city.merchants)
 
-        df = construct_features(small_city, sales_panel, start_day=start.date(), end_day=end.date())
+    def test_unknown_shop_type_is_rejected(self, city: City) -> None:
+        schema = FeatureSchema(zone_ids=("Z1", "Z2", "Z3"), shop_types=("TEA_STALL",))
+        with pytest.raises(ValueError, match="shop types"):
+            schema.shop_type_codes(city.merchants)
 
-        assert isinstance(df, pd.DataFrame)
-        assert len(df) > 0
 
-    def test_construct_features_has_required_columns(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """DataFrame has all required feature columns."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
+class TestCityArrays:
+    def test_schedule_cover_and_weekly_off(self, city: City) -> None:
+        arrays = CityArrays.build(city, FeatureSchema.for_city(city))
+        row = city.row("S-0005")  # weekly_off_every=5 → S-0005 has weekly off 5 % 7 = 5 (Saturday)
+        profile = city.profiles["S-0005"]
+        assert arrays.weekly_off[row] == 5
+        assert arrays.weekly_off[city.row("S-0001")] == NO_WEEKLY_OFF
+        assert arrays.business[row].tolist() == [
+            profile.open_hour <= h < profile.close_hour for h in range(24)
+        ]
+        assert not arrays.covered[city.row("S-0003")] and arrays.covered[city.row("S-0001")]
+        assert not arrays.open_mask(date(2025, 1, 4))[row].any()  # a Saturday
+        assert arrays.open_mask(date(2025, 1, 3))[row].sum() == profile.close_hour - profile.open_hour
 
-        required_cols = ["merchant_id", "zone_id", "shop_type", "hour", "dow", "is_festival", "month", "shop_level", "shop_hour_share", "amount", "target"]
-        for col in required_cols:
-            assert col in df.columns, f"Missing column: {col}"
+    def test_subset_rows_follow_given_order(self, city: City) -> None:
+        schema = FeatureSchema.for_city(city)
+        full = CityArrays.build(city, schema)
+        part = CityArrays.build(city, schema, [30, 2])
+        assert part.zone_code.tolist() == [full.zone_code[30], full.zone_code[2]]
+        assert not part.business.flags.writeable
 
-    def test_features_categorical_shop_type_is_fixed(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """shop_type is a categorical with a FIXED category list (same train/predict)."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
 
-        assert df["shop_type"].dtype.name == "category"
-        categories = df["shop_type"].cat.categories.tolist()
-        # All standard shop types
-        assert "TEA_STALL" in categories
-        assert "PHARMACY" in categories
-        assert "KIRANA" in categories
+class TestFrames:
+    def test_day_block_and_frame_encoding(self, city: City) -> None:
+        schema = FeatureSchema.for_city(city)
+        arrays = CityArrays.build(city, schema)
+        m = len(city.merchants)
+        stats = TrailingStats(np.full(m, 1000.0), np.full((m, 24), 1 / 24))
+        day = date(2025, 8, 28)  # a festival Thursday
+        mask = np.zeros((m, 24), dtype=bool)
+        mask[0, 9] = mask[40, 17] = True
+        block = day_block(arrays, stats, day, mask)
+        assert block.rows.tolist() == [0, 40] and block.hours.tolist() == [9, 17]
+        frame = to_frame(schema, concat_blocks([block]))
+        assert list(frame.columns) == list(FEATURES)
+        assert isinstance(frame["zone_id"].dtype, pd.CategoricalDtype)
+        assert list(frame["zone_id"].cat.categories) == ["Z1", "Z2", "Z3"]
+        assert list(frame["shop_type"].cat.categories) == [t.value for t in ShopType]
+        assert frame["zone_id"].tolist() == [city.merchants[0].zone_id, city.merchants[40].zone_id]
+        assert frame["dow"].tolist() == [3.0, 3.0] and frame["is_festival"].tolist() == [1.0, 1.0]
+        assert frame["month"].tolist() == [8.0, 8.0] and frame["hour"].tolist() == [9.0, 17.0]
+        np.testing.assert_allclose(frame["shop_level"], np.log(1000.0))
+        assert all(frame[c].dtype == np.float64 for c in FEATURES[2:])
 
-    def test_features_hour_in_0_23(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """hour column is in [0, 23]."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-
-        assert df["hour"].min() >= 0
-        assert df["hour"].max() <= 23
-
-    def test_features_dow_in_0_6(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """dow column is in [0, 6] (Mon=0, Sun=6)."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-
-        assert df["dow"].min() >= 0
-        assert df["dow"].max() <= 6
-
-    def test_features_is_festival_binary(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """is_festival is 0 or 1."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-
-        assert set(df["is_festival"].unique()).issubset({0, 1})
-
-    def test_features_festival_ganesh_chaturthi_2025(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """is_festival marks Ganesh Chaturthi 2025-08-27 +10 days."""
-        # Extend the panel to cover this period
-        start = at(date(2025, 8, 25), 6)
-        hours = 5 * 24
-        merchant_ids = sales_panel.merchant_ids
-        amount_paise = np.zeros((len(merchant_ids), hours), dtype=np.int64)
-        txns = np.zeros((len(merchant_ids), hours), dtype=np.int32)
-        extended = SalesPanel(merchant_ids, start, hours, amount_paise, txns)
-
-        df = construct_features(small_city, extended, start_day=date(2025, 8, 25), end_day=date(2025, 8, 31))
-
-        # 2025-08-27 is in the Ganesh Chaturthi window (27-36 inclusive)
-        # Check that is_festival is marked for dates in the window
-        if len(df) > 0:
-            festival_rows = df[df["is_festival"] == 1]
-            # The festival window includes dates from 2025-08-27 to 2025-09-05
-            # Since we're extracting 2025-08-25 to 2025-08-31, 27-31 should be marked
-            if len(festival_rows) > 0:
-                assert festival_rows["is_festival"].sum() > 0
-
-    def test_features_shop_level_numeric(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """shop_level is numeric (log of median full-day sales)."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-
-        # shop_level should have numeric values for merchants with sales
-        merchant_with_sales = df[df["amount"] > 0]["shop_level"].iloc[0] if len(df[df["amount"] > 0]) > 0 else None
-        if merchant_with_sales is not None:
-            assert isinstance(merchant_with_sales, (int, float, np.number))
-
-    def test_features_shop_hour_share_numeric(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """shop_hour_share is numeric (shop's share of its day in that hour)."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-
-        # shop_hour_share should be between 0 and 1 (or at least non-negative)
-        shop_shares = df["shop_hour_share"]
-        assert (shop_shares >= 0).all()
-
-    def test_features_target_normalized(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """target = amount / exp(shop_level)."""
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-
-        # Check target calculation for non-zero amounts
-        mask = df["amount"] > 0
-        if mask.sum() > 0:
-            row = df[mask].iloc[0]
-            expected_target = row["amount"] / np.exp(row["shop_level"])
-            assert np.isclose(row["target"], expected_target, rtol=0.01)
-
-    def test_features_vectorized_performance(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """Feature construction for ~2,000 merchants x 180 days takes < 1 minute."""
-        import time
-
-        start_time = time.time()
-        df = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-        elapsed = time.time() - start_time
-
-        # Even with small data, should be fast and vectorised
-        assert elapsed < 60  # Well under a minute
-
-    def test_features_deterministic(self, small_city: City, sales_panel: SalesPanel) -> None:
-        """Same input produces identical output."""
-        df1 = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-        df2 = construct_features(small_city, sales_panel, start_day=date(2025, 8, 18), end_day=date(2025, 8, 21))
-
-        pd.testing.assert_frame_equal(df1, df2)
+    def test_empty_blocks_give_empty_frame(self, city: City) -> None:
+        frame = to_frame(FeatureSchema.for_city(city), concat_blocks([]))
+        assert len(frame) == 0 and list(frame.columns) == list(FEATURES)
