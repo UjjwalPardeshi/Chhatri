@@ -143,6 +143,7 @@ docker-compose.yml  Makefile  .env.example  .github/workflows/ci.yml
 
 ## Documentation
 
+- [docs/user-manual.pdf](docs/user-manual.pdf): the user manual for a first-time reader (what Chhatri is, how to run it, a guided tour of every screen); source in [docs/user-manual/](docs/user-manual/user-manual.html).
 - [docs/README.md](docs/README.md): the index of the full documentation set (strategy, product, design,
   engineering, business and delivery), with reading paths for judges, the team and engineers.
 - [docs/DEMO.md](docs/DEMO.md): the minute-by-minute presenter script with every golden number and string.

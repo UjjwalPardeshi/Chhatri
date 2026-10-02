@@ -16,6 +16,8 @@
 - **Build order:** everything not yet built is P0. It is built in six waves behind feature flags, and a feature that is not finished is hidden, never shown half-working ([build plan](06-delivery/build-plan.md)).
 - **Conventions:** no personal emails or phone numbers; Indian number format (₹1,380; 1.57 crore); Hindi in Devanagari with English beside; professional tone, short sentences, no hype.
 
+**User manual:** [user-manual.pdf](user-manual.pdf), a plain-English guide for a first-time reader with a screenshot of every screen (source: [user-manual/user-manual.html](user-manual/user-manual.html)).
+
 ## Reading paths by audience
 
 **Judge (10 min):** [Executive summary](00-executive-summary.md) → [Problem statement analysis](01-strategy/problem-statement-analysis.md) → [User journeys](02-product/user-journeys.md) → [Demo runbook](06-delivery/demo-runbook.md) → [Pitch and Q&A](06-delivery/pitch-and-judge-qa.md).
