@@ -1,9 +1,13 @@
 /** Unit/component test config (SPEC §22: vitest for formatters, colour scale and UI). */
 import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   test: {
     environment: 'happy-dom',
     // Lazy pages and the geo JSON need ~2 s per test on an idle machine and 10-15 s when the CPU is shared

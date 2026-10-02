@@ -1,0 +1,131 @@
+/*
+ * Tailwind CSS v4 + shadcn/ui for the merchant mini-app only (ADR 0005; implementation guide, Wave 0).
+ *
+ *  1. No preflight: only the theme and utilities layers are imported, so nothing resets the console.
+ *  2. Class detection is limited to this folder (source(none) + @source "./"), test files excluded: a
+ *     word in a test would otherwise ship as a utility (miniappBuild.test.ts checks the compiled CSS).
+ *  3. Utilities are marked important so they beat the console's un-layered element rules
+ *     (button, a, :focus-visible) inside the mini-app.
+ *  4. Every shadcn token and base style lives under .miniapp, never :root, html, body or *.
+ *  5. What Tailwind emits globally stays inert for the console. Its theme variables sit in the theme
+ *     layer, so the console's un-layered tokens win a name clash (--ease-in-out). Its keyframes are
+ *     un-layered, so a name the console also defines (pulse) is renamed: mini-pulse.
+ *  6. Reduced motion: a layered !important beats the console's un-layered !important rule (base.css), so
+ *     the important utilities would keep animating. For !important an earlier layer wins, so the base
+ *     layer restates that rule for .miniapp (miniappCss.test.ts keeps the two identical).
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none) important;
+@source "./";
+@source not "./**/*.test.{ts,tsx}";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Light only: dark: variants apply under a .dark ancestor, which the mini-app never renders. */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font);
+  --font-heading: var(--font);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --animate-pulse: mini-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes mini-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+.miniapp {
+  --background: var(--paper);
+  --foreground: var(--ink);
+  /* --card is the console's own white (tokens.css); it is not redefined here. */
+  --card-foreground: var(--ink);
+  --popover: var(--card);
+  --popover-foreground: var(--ink);
+  --primary: var(--blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--blue-soft);
+  --secondary-foreground: var(--blue);
+  --muted: var(--paper-2);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--blue-soft);
+  --accent-foreground: var(--blue);
+  --destructive: var(--red);
+  --border: var(--line);
+  --input: var(--line-strong);
+  /* Focus rings need 3:1 on white; the console's --accent (#38a3e8) is about 2.8:1, --blue is above 5:1. */
+  --ring: var(--blue);
+  --radius: 10px;
+}
+
+/* A scoped subset of Tailwind's preflight, for shadcn components. */
+@layer base {
+  .miniapp,
+  .miniapp *,
+  .miniapp *::before,
+  .miniapp *::after {
+    border: 0 solid;
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+  .miniapp {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font);
+  }
+  .miniapp :where(button, input, select, textarea) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+  }
+  .miniapp :where(ul, ol, menu) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .miniapp :where(img, svg) {
+    display: block;
+    vertical-align: middle;
+  }
+  /* Note 6: the console's reduced-motion rule, restated where it outranks the important utilities. */
+  @media (prefers-reduced-motion: reduce) {
+    .miniapp,
+    .miniapp *,
+    .miniapp *::before,
+    .miniapp *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      animation-delay: 0ms !important;
+      transition-duration: 1ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
