@@ -13,7 +13,7 @@ import { t } from '../miniapp/lib/copy'
 import { formatInr } from '../lib/money'
 import type { AskClause, AskFact, AskIntent, NextActionKind } from '../miniapp/api/ask'
 import { MockHttpError } from './backend'
-import { openDisputeCase } from './cases'
+import { openOrFindDispute } from './cases'
 import { MSG } from './catalogue'
 import { findMentions } from './askMentions'
 import { coverStatusText, deriveCover, storedCover } from './endpoints/cover'
@@ -79,8 +79,9 @@ function handoff(): Draft {
 function dispute(rt: MockRuntime, merchantId: string, question: string): Draft {
   const decision = latestPaid(rt, merchantId)
   if (!decision) return help('DISPUTE_AMOUNT')
-  const opened = openDisputeCase(rt, merchantById(merchantId), question, decision)
-  return { intent: 'DISPUTE_AMOUNT', lines: { hi: `${MSG.disputeAck.hi}\n${MSG.caseChip(opened.id).hi}`, en: `${MSG.disputeAck.en}\n${MSG.caseChip(opened.id).en}` }, clauses: [{ id: 'C9', title: 'Disputes' }], facts: [], next: 'TRACK_CASE', caseId: opened.id }
+  const { opened, already } = openOrFindDispute(rt, merchantById(merchantId), question, decision)
+  const ack = already ? MSG.disputeAlreadyOpen(opened.id) : MSG.disputeAck
+  return { intent: 'DISPUTE_AMOUNT', lines: { hi: `${ack.hi}\n${MSG.caseChip(opened.id).hi ?? MSG.caseChip(opened.id).en}`, en: `${ack.en}\n${MSG.caseChip(opened.id).en}` }, clauses: [{ id: 'C9', title: 'Disputes' }], facts: [], next: 'TRACK_CASE', caseId: opened.id }
 }
 
 function coverStatus(rt: MockRuntime, merchantId: string): Draft {

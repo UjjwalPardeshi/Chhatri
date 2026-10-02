@@ -114,6 +114,10 @@ export function ResourceScreen<T>({ name, resource, empty, skeleton, children }:
   if (state === 'error' && error) return <ScreenRoot name={name} state="error"><ErrorState error={error} onRetry={reload} /></ScreenRoot>
   if (state === 'loading') return <ScreenRoot name={name} state="loading">{blocks}</ScreenRoot>
   if (state === 'empty') return <ScreenRoot name={name} state="empty">{empty}</ScreenRoot>
+  if (state === 'offline' && data === null && error) {
+    // Nothing was ever loaded: a banner "showing data from -" over a skeleton is a dead end, so say it and offer Try again.
+    return <ScreenRoot name={name} state="offline"><ErrorState error={error} onRetry={reload} /></ScreenRoot>
+  }
   if (state === 'offline') {
     return (
       <ScreenRoot name={name} state="offline">

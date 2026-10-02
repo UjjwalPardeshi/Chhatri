@@ -5,7 +5,7 @@
  */
 import type { MessageMeta, VoiceDemoKey } from '../api/types'
 import { dateEn, MSG, type Bilingual } from './catalogue'
-import { openDisputeCase } from './cases'
+import { openOrFindDispute } from './cases'
 import { requestCover } from './endpoints/premium'
 import { MERCHANTS, type MockMerchant } from './fixtures'
 import { submitSlip } from './personal'
@@ -114,8 +114,8 @@ function explainAmount(rt: MockRuntime, merchant: MockMerchant): void {
 }
 
 function dispute(rt: MockRuntime, merchant: MockMerchant, text: string): void {
-  const opened = openDisputeCase(rt, merchant, text, latestPaidDecision(rt, merchant.id))
-  reply(rt, merchant, MSG.disputeAck)
+  const { opened, already } = openOrFindDispute(rt, merchant, text, latestPaidDecision(rt, merchant.id))
+  reply(rt, merchant, already ? MSG.disputeAlreadyOpen(opened.id) : MSG.disputeAck)
   rt.send(merchant.id, { kind: 'CASE_CHIP', text: MSG.caseChip(opened.id), meta: { case_id: opened.id } })
 }
 

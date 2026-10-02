@@ -64,6 +64,10 @@ export const MSG = {
     hi: 'ठीक है, मैं इसे हमारी टीम को भेज रहा हूँ। 24 घंटे में जवाब मिलेगा।',
     en: "Okay, I'm sending this to our team. You'll hear back within 24 hours.",
   } as Bilingual,
+  disputeAlreadyOpen: (caseId: string): Bilingual => ({
+    hi: `आपका सवाल पहले से हमारी टीम के पास है। केस ${caseId} देखिए।`,
+    en: `Your question is already with our team. See case ${caseId}.`,
+  }),
   caseChip: (caseId: string): Bilingual => ({ hi: null, en: `Sent to a claims officer · case ${caseId}` }),
   coverBlocked: (startsOn: string): Bilingual => ({
     hi: `नया कवर वेटिंग पीरियड के बाद शुरू होता है — ${dateHi(startsOn)} से। कल के अलर्ट पर यह लागू नहीं होगा।`,

@@ -32,13 +32,15 @@
     display: none;
   }
   .miniapp [data-testid='screen-receipt'] {
-    gap: 8px;
+    gap: 4px;
     padding: 0;
   }
   .miniapp [data-testid='receipt-document'] {
     box-shadow: none;
-    padding: 12px;
-    gap: 8px;
+    padding: 8px;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.3;
   }
   .miniapp [data-testid='receipt-document'] > dl {
     display: grid;
@@ -46,8 +48,8 @@
     column-gap: 24px;
   }
   .miniapp [data-testid='receipt-document'] > dl > div {
-    padding-block: 4px;
-    gap: 2px;
+    padding-block: 2px;
+    gap: 1px;
     break-inside: avoid;
   }
   .miniapp [data-testid='receipt-sources'],
@@ -62,6 +64,6 @@
   .miniapp [data-testid='receipt-grievance-path'] {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px 24px;
+    gap: 4px 24px;
   }
 }

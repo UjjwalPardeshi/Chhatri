@@ -71,6 +71,22 @@ describe('POST /api/merchants/{id}/ask', () => {
     expect(answer.next_action.kind).toBe('TRACK_CASE')
   })
 
+  it('never writes the word null in a Hindi dispute answer (the case chip is English in every language)', async () => {
+    const api = await setup()
+    const answer = await api.ask('S-0142', { question: 'मेरा नुकसान ज़्यादा हुआ', lang: 'hi' })
+    expect(answer.answer).not.toContain('null')
+    expect(answer.answer).toMatch(/Sent to a claims officer · case C-\d+/)
+  })
+
+  it('returns the open case for a second "bigger" question instead of opening another', async () => {
+    const api = await setup()
+    const first = await api.ask('S-0142', { question: 'My loss was bigger', lang: 'en' })
+    const second = await api.ask('S-0142', { question: 'My loss was bigger', lang: 'en' })
+    expect(second.case_id).toBe(first.case_id)
+    expect(second.answer_en).toContain('already with our team')
+    expect((await api.cases('ALL')).filter((c) => c.kind === 'DISPUTE')).toHaveLength(1)
+  })
+
   it('numbers answers AQ-000001, AQ-000002 and starts again after a scenario load', async () => {
     const api = await setup()
     expect((await api.ask('S-0142', { question: 'hello', lang: 'en' })).ask_id).toBe('AQ-000001')

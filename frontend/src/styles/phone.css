@@ -656,3 +656,13 @@
     max-height: 700px;
   }
 }
+
+/* N3 on the console phone: the two answers under "Is this right?" */
+.precheck-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2, 8px);
+  margin-top: var(--s-2, 8px);
+  padding: 0;
+  border: 0;
+}

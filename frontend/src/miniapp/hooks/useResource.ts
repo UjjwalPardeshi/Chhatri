@@ -76,6 +76,12 @@ export function useResource<T>(merchantId: string | null, load: (api: Api, signa
   useLiveEvent(REFRESH_EVENTS, (event) => {
     if (event.type === 'scenario' || (merchantId !== null && eventMerchantId(event) === merchantId)) setVersion((v) => v + 1)
   })
+  /** The device coming back online reloads what a lost connection left unloaded or stale. */
+  const wasOnline = useRef(online)
+  useEffect(() => {
+    if (online && !wasOnline.current) setVersion((v) => v + 1)
+    wasOnline.current = online
+  }, [online])
   /** A scenario load answered by the replay controls changes the clock before its event arrives; the first snapshot does not count. */
   const scenarioKey = snapshot ? `${snapshot.clock.scenario}|${snapshot.clock.start}` : null
   const seen = useRef<string | null>(null)

@@ -2,7 +2,7 @@
  * Mock GET /api/decisions/{decision_id}/receipt (data-model 5.8, fs-09 section 10): the decision, the formula and the
  * money facts, every check with its clause and sources, the counterfactuals the engine re-ran, the payout, the case,
  * the audit position and the grievance ladder. It is built from the mock decision, payout and case records. The
- * lender block (`edi`) stays null while the X4 flags are off, as the backend sends it; card 4.x connects it. Like the
+ * lender block (`edi`) is the lender's request for the decision and stays null while none was made (X4 off, or no loan), as the backend sends it. Like the
  * backend, the receipt carries no phone number.
  */
 import type { Case, Decision, Receipt } from '../../api/types'
@@ -23,6 +23,21 @@ function caseOf(rt: MockRuntime, decision: Decision): Case | null {
     rt.cases.find((c) => c.kind !== 'DISPUTE' && c.decision?.claim_id === decision.claim_id) ??
     null
   )
+}
+
+/** The lender's request for this decision (X4): None while no request was made (no loan, or the flag is off). */
+function ediOf(rt: MockRuntime, decision: Decision): Receipt['edi'] {
+  const request = rt.holidayRequests.filter((r) => r.decision_id === decision.id).at(-1)
+  if (!request) return null
+  return {
+    request_id: request.id,
+    status: request.status,
+    reason_code: request.reason_code,
+    instalment_date: request.instalment_date,
+    instalment_label: request.instalment_label,
+    decided_at: request.decided_at,
+    lender: request.lender,
+  }
 }
 
 function auditOf(rt: MockRuntime, decision: Decision): Receipt['audit'] {
@@ -68,7 +83,7 @@ export function receiptView(rt: MockRuntime, decisionId: string): Receipt {
     })),
     counterfactuals: counterfactualsFor(provenance),
     payout: payout ? { id: payout.id, status: payout.status, amount_label: payout.amount_label, credited_at: payout.credited_at } : null,
-    edi: null,
+    edi: ediOf(rt, decision),
     case: kase ? { id: kase.id, kind: kase.kind, status: kase.status, due_by: kase.due_by } : null,
     audit: auditOf(rt, decision),
     grievance: {

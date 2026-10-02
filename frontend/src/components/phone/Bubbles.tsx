@@ -15,6 +15,7 @@ import { coverLink } from './coverOffer'
 import { linkify } from './linkify'
 import { spokenText, voiceAudioUrl, voiceSeconds, voiceSourceLabel, type VoiceSourceLabel } from './messages'
 import { PaytmLinkCard } from './PaytmLinkCard'
+import { openPrecheck, PrecheckActions } from './PrecheckActions'
 import { Waveform } from './Waveform'
 
 function Stamp({ message }: { message: Message }) {
@@ -106,6 +107,11 @@ function VoiceBubble({ message }: { message: Message }) {
   )
 }
 
+function OpenPrecheck({ message }: { message: Message }) {
+  const card = openPrecheck(message)
+  return card ? <PrecheckActions message={message} card={card} /> : null
+}
+
 function PayoutCard({ message }: { message: Message }) {
   const card = message.card
   if (!card) return null
@@ -156,7 +162,7 @@ export function CaseChip({ message }: { message: Message }) {
   )
 }
 
-export function MessageBubble({ message }: { message: Message }) {
+export function MessageBubble({ message, latest = false }: { message: Message; latest?: boolean }) {
   if (message.kind === 'CASE_CHIP') return <CaseChip message={message} />
   const mine = message.direction === 'INBOUND'
   const side = mine ? 'bubble--mine' : 'bubble--theirs'
@@ -183,6 +189,7 @@ export function MessageBubble({ message }: { message: Message }) {
         {message.kind === 'IMAGE' ? <ImageBubble message={message} /> : null}
         {message.kind !== 'VOICE' && message.kind !== 'IMAGE' ? <Lines message={message} /> : null}
         {!mine && message.meta.mode ? <ModeChip label={message.meta} /> : null}
+        {latest && message.direction === 'OUTBOUND' ? <OpenPrecheck message={message} /> : null}
         <div className="bubble__foot">
           {speakable ? <SpokenFoot message={message} /> : null}
           <Stamp message={message} />

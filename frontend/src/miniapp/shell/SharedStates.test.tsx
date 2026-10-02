@@ -93,6 +93,17 @@ describe('ResourceScreen', () => {
     expect(screen.getByTestId('app-offline-banner').textContent).toMatch(/^Offline\. Showing data from .*17:05|5:05/)
   })
 
+  it('offers Try again when the first load could not connect, instead of a banner over an empty screen', () => {
+    const reload = vi.fn<() => void>()
+    const network = new ApiError('NETWORK_ERROR', 'offline', 0)
+    inApp(<ResourceScreen name="home" resource={resource('offline', { error: network, reload })}>{Body}</ResourceScreen>)
+    expect(screen.getByTestId('screen-home').getAttribute('data-state')).toBe('offline')
+    expect(screen.queryByTestId('app-offline-banner')).toBeNull()
+    expect(screen.getByTestId('app-error').textContent).toContain('cannot connect')
+    fireEvent.click(screen.getByTestId('app-error-retry'))
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
   it('is ready with the data', () => {
     inApp(<ResourceScreen name="home" resource={resource('ready', { data: 'cover' })}>{Body}</ResourceScreen>)
     expect(screen.getByTestId('screen-home').getAttribute('data-state')).toBe('ready')

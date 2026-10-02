@@ -10,7 +10,7 @@ import type { Case, Decision } from '../../api/types'
 import { isFeatureEnabled } from '../../features'
 import { MAX_COMPLAINT_CHARS, GRIEVANCE_TOPICS, STEP_IDS, TOPIC_RESPONDENT, type Grievance, type GrievanceTopic, type LadderClock, type LadderStep, type Respondent, type StepId } from '../../miniapp/api/rights'
 import { MockHttpError } from '../backend'
-import { openDisputeCase } from '../cases'
+import { openOrFindDispute } from '../cases'
 import { MSG } from '../catalogue'
 import { POLICY_RULES } from '../fixtures'
 import { bodyField, invalid, merchantParam, notFound, ok, type Route, type RouteContext } from '../http'
@@ -141,8 +141,9 @@ function openGrievance(ctx: RouteContext): { grievance: Grievance; created: bool
   const respondent = ROUTER[kind]
   let caseId: string | null = review?.id ?? null
   if (needsDecision) {
-    caseId = openDisputeCase(rt, merchant, text.trim(), decision).id
-    rt.send(merchant.id, { kind: 'TEXT', text: MSG.disputeAck })
+    const { opened, already } = openOrFindDispute(rt, merchant, text.trim(), decision)
+    caseId = opened.id
+    rt.send(merchant.id, { kind: 'TEXT', text: already ? MSG.disputeAlreadyOpen(caseId) : MSG.disputeAck })
     rt.send(merchant.id, { kind: 'CASE_CHIP', text: MSG.caseChip(caseId), meta: { case_id: caseId } })
   }
   const first = LADDERS[respondent][0]

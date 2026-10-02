@@ -39,7 +39,7 @@ export function Phone({ now, messages, footer, status, testId = 'phone', autoScr
       <div className="phone__thread" ref={threadRef} aria-live="polite">
         {status}
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble key={message.id} message={message} latest={message.id === messages.at(-1)?.id} />
         ))}
       </div>
       {footer}

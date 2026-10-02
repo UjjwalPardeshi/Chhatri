@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { MockBackend } from './backend'
+import { createMockFetch } from './fetch'
 import { inboundPhoto, inboundVoiceDemo } from './conversation'
 import type { MockRuntime } from './runtime'
 import { testBackend } from './testkit'
@@ -36,6 +37,19 @@ describe('the mock lender grants by default', () => {
     expect(rt.pauses).toHaveLength(1)
     expect(rt.holidayRequests[0].instalment_date).toBe(rt.pauses[0].instalment_date)
     expect(lastLine(rt, 'S-0142')).toBe(GRANTED_LINE)
+  })
+
+  it('shows the lender block on the receipt only when a request was made', async () => {
+    const rt = storm('17:05')
+    const decision = rt.decisions.find((d) => d.merchant_id === 'S-0142')
+    const response = await createMockFetch(backend)(`/api/decisions/${decision?.id}/receipt`)
+    const body = (await response.json()) as { data: { edi: { status: string; instalment_label: string; lender: string } | null } }
+    expect(body.data.edi).toMatchObject({ status: 'GRANTED', instalment_label: '₹600' })
+    backend.dispose()
+    const off = storm('17:05', '')
+    const offDecision = off.decisions.find((d) => d.merchant_id === 'S-0142')
+    const offBody = (await (await createMockFetch(backend)(`/api/decisions/${offDecision?.id}/receipt`)).json()) as { data: { edi: unknown } }
+    expect(offBody.data.edi).toBeNull()
   })
 
   it('sends only what the lender needs: no claim kind, no reason, no payout amount', () => {

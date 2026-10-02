@@ -58,6 +58,18 @@ function openCase(rt: MockRuntime, merchant: MockMerchant, kind: Case['kind'], s
   return opened
 }
 
+/** The dispute case still open for this decision, if any (fs-06 section 10: a second question opens no second case). */
+export function openDisputeFor(rt: MockRuntime, merchantId: string, decision: Decision | null): Case | null {
+  if (decision === null) return null
+  return rt.cases.find((c) => c.kind === 'DISPUTE' && c.status === 'OPEN' && c.merchant_id === merchantId && c.decision?.id === decision.id) ?? null
+}
+
+/** Opens a dispute case, or returns the one still open for the same decision with `already` set. */
+export function openOrFindDispute(rt: MockRuntime, merchant: MockMerchant, text: string, decision: Decision | null): { opened: Case; already: boolean } {
+  const existing = openDisputeFor(rt, merchant.id, decision)
+  return existing ? { opened: existing, already: true } : { opened: openDisputeCase(rt, merchant, text, decision), already: false }
+}
+
 export function openDisputeCase(rt: MockRuntime, merchant: MockMerchant, text: string, decision: Decision | null): Case {
   const amount = decision ? `the ${decision.amount_label} area payout` : 'the area payout'
   const evidence: CaseEvidence = {

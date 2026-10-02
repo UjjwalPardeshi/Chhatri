@@ -62,6 +62,23 @@ describe('useResource', () => {
     await waitFor(() => expect(load.mock.calls.length).toBeGreaterThanOrEqual(3))
   })
 
+  it('reloads once when the device comes back online, so an offline first load recovers', async () => {
+    const { wrapper } = setup()
+    const load = vi.fn<(api: Api, signal: AbortSignal) => Promise<string>>()
+    load.mockRejectedValueOnce(new ApiError('NETWORK_ERROR', 'down', 0)).mockResolvedValue('back')
+    setOnLine(false)
+    const { result } = renderHook(() => useResource('S-0142', load), { wrapper })
+    await waitFor(() => expect(result.current.error?.code).toBe('NETWORK_ERROR'))
+    expect(result.current.state).toBe('offline')
+    act(() => {
+      setOnLine(true)
+      window.dispatchEvent(new Event('online'))
+    })
+    await waitFor(() => expect(result.current.data).toBe('back'))
+    expect(result.current.state).toBe('ready')
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the last good data when a reload fails, and says error', async () => {
     const { wrapper } = setup()
     const load = vi.fn<(api: Api, signal: AbortSignal) => Promise<string>>()
