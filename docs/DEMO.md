@@ -22,10 +22,14 @@ Every scenario load is deterministic: same ids, same amounts, and the first case
      `make up` returns only when every container is healthy. It runs the workflows on n8n unless `.env`
      has `CHHATRI_STACK_N8N_URL=` (empty value), which selects the in-process runner.
 2. Rehearse every scenario against the running backend:
-   `backend/.venv/bin/python backend/scripts/demo_check.py --url http://localhost:8000`. It must print
+   `backend/.venv/bin/python backend/scripts/demo_check.py --url http://localhost:8000`. The backend must run
+   with the demo flag set, `CHHATRI_FEATURES=x4_lender_request` in `.env` (the lender decides the instalment
+   holiday); `curl -s localhost:8000/api/health` must list `"features": ["x4_lender_request"]`. With the flag
+   off the 17:05 line is the old unconditional pause and the check fails on purpose. It must print
    `PASS: 70 passed, 0 failed, 0 skipped` (about 10 s in-process, about 50 s with n8n). It reloads
    scenarios, so run it before you open the console, never during the talk. `make demo-check` runs the
-   same checks in a separate in-process app on the committed artefacts.
+   same checks in a separate in-process app on the committed artefacts, with the demo flag set switched on
+   by itself.
 3. Run `curl -s localhost:8000/api/preflight`. Every item must have `"ok": true`.
 4. Open the console at 1280×720 with browser zoom at 100 %, in a full-screen window.
 5. Click **Enable sound** in the header once. This is the one user gesture the browser needs;
@@ -36,7 +40,7 @@ Every scenario load is deterministic: same ids, same amounts, and the first case
    and the replay must be paused.
 
 **Workflows: in-process or n8n.** Both give the same simulated timeline (decisions 17:00, credits
-17:04, pauses 17:05; checked by `demo_check.py --url` in both modes). With n8n LIVE the 17:00 minute
+17:04, the lender asked and the instalments paused 17:05; checked by `demo_check.py --url` in both modes). With n8n LIVE the 17:00 minute
 starts 312 payout runs on n8n one after another, so the simulated clock **holds at 17:00 for about
 30–60 s of real time** before it moves on (the feed fills with decisions meanwhile). The deck (slide 13)
 does not claim n8n as live, so the recommended stage set-up is the in-process runner (`make dev`, or
@@ -101,7 +105,10 @@ paused at 08:00.
 6. **Why Zone 9 got nothing** (right panel), verbatim: *"Why Zone 9 got nothing: its sales fell to 61%
    on a day with no weather alert. That's a slow day, not a loss event, so Chhatri doesn't pay."*
    > "A slow day is not a loss event. The trigger needs an alert and a drop the model can't explain."
-7. **17:05**: tomorrow's instalments are paused. **Pause the replay** at about 17:06.
+7. **17:05**: Chhatri asks each merchant's lender to pause tomorrow's instalment, and the simulated lender
+   grants it. **Pause the replay** at about 17:06.
+   > "Chhatri does not pause a loan. It asks the lender, under a rule they agreed in advance, and the lender
+   > decides. Here the answer is yes."
 
 ## 2:30–3:30 · What Anil sees, and "why this amount?" (deck slides 1, 7 and 8, test 1: EXPLAINED)
 
@@ -114,7 +121,9 @@ At **17:04**:
   **No claim needed**.
 - Soundbox: **"Paytm par ₹1,380 prapt hue — Chhatri se"** / *₹1,380 received on Paytm, from Chhatri*.
 
-At **17:05**: `कल की ₹600 की किस्त रोक दी गई है।` / *Tomorrow's ₹600 instalment is paused.*
+At **17:05**: `आपके लेंडर ने कल की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।` /
+*Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty.* The
+line names the lender as the one who decided.
 
 **Live test 1: EXPLAINED.**
 1. Tap the voice chip **why**. Anil says `मुझे इतने ही पैसे क्यों मिले?` (*Why did I get only this
@@ -158,8 +167,9 @@ zone was normal.
      `अनिल जी, आपका दावा मंज़ूर है। ₹1,500 आज के सेटलमेंट के साथ जमा।` / *Anil ji, your claim is approved.
      ₹1,500 credited with today's settlement.*, the ₹1,500 payout card and the Soundbox line
      **"Paytm par ₹1,500 prapt hue — Chhatri se"**.
-   - At +5 min: `आज की ₹600 की किस्त रोक दी गई है।` / *Today's ₹600 instalment is paused.* (Thursday
-     21 Aug, the day after the silent day).
+   - At +5 min: `आपके लेंडर ने आज की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।` /
+     *Your lender has paused today's ₹600 instalment. It moves to the end of your loan with no penalty.*
+     (Thursday 21 Aug, the day after the silent day).
 
 ## 4:45–5:45 · Live tests 2 and 3 (deck slide 8)
 
@@ -192,7 +202,7 @@ Pav, Z3, not covered) and tap the voice chip **cover**.
 
 ## 5:45–6:30 · Trust: audit, policy, backtest (deck slides 5, 8 and 11)
 
-- `/audit` → **Verify chain** → valid. Every step, from trigger to decision, payout, pause and message,
+- `/audit` → **Verify chain** → valid. Every step, from trigger to decision, payout, holiday request, lender answer, pause and message,
   is hash-chained.
 - `/policy`: the payout-authority table, exactly as on slide 8 (area drop: Chhatri pays, a human only
   on dispute; personal claim: pays up to the daily cap; slip unclear: never alone; cover after an
@@ -237,11 +247,11 @@ badges show as LIVE.
 | Replay day | Tue 19 Aug 2025, 08:00–20:00 IST (simulated) |
 | Alert | `A-20250818-01`, RED rain, Z3 · Z7 · Z12, issued Mon 18 Aug 17:30, valid 14:00–20:00 |
 | Indices at 17:00 | Z7 37 % (drop 63 %) · Z3 38 % · Z12 47 % · Z9 61 % (slow day, no alert) |
-| Timeline | decisions 17:00 · credits + WhatsApp + Soundbox 17:04 · instalment pauses 17:05 |
+| Timeline | decisions 17:00 · credits + WhatsApp + Soundbox 17:04 · lender asked, instalment pauses 17:05 |
 | KPIs | 3 zones triggered · 312 shops paid · 4 min trigger to money |
 | Z7 | 46 shops, 46 of 46 prepaid, total ₹58,900 |
-| Anil (S-0142) | usual Tuesday ₹4,380 · area payout ₹1,380 · instalment ₹600 paused |
-| Personal claim | usual Wednesday ₹4,300 · ½ = ₹2,150 capped at ₹1,500, 1 day · credit +4 min · Thursday's ₹600 instalment paused +5 min |
+| Anil (S-0142) | usual Tuesday ₹4,380 · area payout ₹1,380 · instalment ₹600 paused by his lender (asked 17:05) |
+| Personal claim | usual Wednesday ₹4,300 · ½ = ₹2,150 capped at ₹1,500, 1 day · credit +4 min · Thursday's ₹600 instalment paused by the lender +5 min |
 | Z9 | `Z9 · 61% · 64 shops`, slow day, no payout |
 | Cover link (Ramesh, S-0907, Z3) | ₹424.80 for 30 days (₹14.16/day, from the backtest; pricing decision pending) |
 | First case after a fresh load | C-2291 |

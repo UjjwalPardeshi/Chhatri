@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | PLANNED · build-ready spec v1.4 · the mini-app itself is not built yet (Section 2 lists what exists today) |
+| Status | BUILT · spec v1.5 · the mini-app core (N1, nine screens) plus Ask Chhatri (N2), slip pre-check (N3), voice (N4), grievances (N5), consents (N6), and Marathi (N8) (Section 2 lists what exists today) |
 | Owner | Omkar Kadam (screens, copy, UI stack) · Ujjwal Pardeshi (endpoints and engine fields in Section 6) |
 | Date | 2026-10-02 |
 | Related | [ADR 0005](../../04-engineering/adr/0005-mini-app-inside-the-console.md) · [PRD](../prd.md) · [Design system](../../03-design/design-system.md) · [Screens and flows](../../03-design/screens-and-flows.md) · [Copy deck](../../03-design/copy-deck.md) · [Data model and API](../../04-engineering/data-model-and-api.md) · [Implementation guide](../../04-engineering/implementation-guide.md) · [Policy wording](../policy-wording-and-cis.md) · [User journeys](../user-journeys.md) · [fs-03 EDI holiday](fs-03-edi-holiday.md) · [fs-05 Ask Chhatri](fs-05-ask-chhatri.md) · [fs-06 explanations, disputes and grievance](fs-06-explanations-disputes-and-grievance.md) · [fs-07 cover purchase and consent](fs-07-cover-purchase-and-consent.md) · [Traceability matrix](../../01-strategy/requirements-traceability-matrix.md) · [Facts and sources](../../01-strategy/facts-and-sources.md) |
@@ -53,7 +53,7 @@ Ideas adopted from public rival projects (project names, not people; repo links 
 | Rules for display: `GET /api/policy` | `backend/chhatri/api/routers/records.py` |
 | Frontend tests: 262 of 264 pass (X1 fixes the two failures) | `frontend/src/**/*.test.tsx` |
 
-**PLANNED:** everything else in this spec. Nothing of the mini-app, Tailwind, shadcn, the feature flags or the three new endpoints is written yet.
+**BUILT since (Waves 0 to 5, 2 Oct 2026, uncommitted working tree until the freeze):** everything in this spec, behind its flag. The feature flags (`frontend/src/features.ts`), Tailwind v4 and shadcn scoped to `.miniapp` (`frontend/src/miniapp/miniapp.css`, `src/miniapp/ui/`), the frame and the standalone route, S1 to S9 (`src/miniapp/screens/`), the three endpoints and their mock parity (`src/mock/endpoints/cover.ts`, `tracker.ts`, `receipt.ts`), the next-best-action rules (`src/miniapp/hooks/nextBestAction.ts`, including `ask`, `send_slip` and `tick_consent`), the consent block on S3 (`src/miniapp/screens/BuyConsent.tsx`), Marathi (`src/miniapp/copy/mr.ts`, a draft until a native speaker reviews it) and the static build (`frontend/vite.spa-fallback.ts`). What still needs a person: the native review of the proposed Hindi and the Marathi draft, the deploy of the static build (repo owner) and the two rehearsals.
 
 | Wave | What ships for the mini-app |
 |---|---|
@@ -64,7 +64,7 @@ Ideas adopted from public rival projects (project names, not people; repo links 
 | 4 judge wow | Marathi (`n8_marathi`) after native review |
 | 5 ship | N7 static build with the standalone route; deep-link fallback; rehearsals |
 
-**Known gaps in code that this spec depends on** (verified on 2 Oct 2026):
+**Gaps found while writing this spec** (verified on 2 Oct 2026; 1 to 4 are fixed in Wave 1, 5 and 6 stay as the open questions say):
 
 1. `GET /api/merchants/{id}/cover`, `GET /api/merchants/{id}/claims` and `GET /api/decisions/{decision_id}/receipt` do not exist yet (Wave 1, Ujjwal).
 2. The mock backend has no route for `POST /api/premium/link` or `POST /api/webhooks/paytm`, and it prices the demo merchants at ₹3 a day (`frontend/src/mock/fixtures.ts`). A mock quote for Ramesh would read ₹90 for 30 days, not the ₹424.80 that [DEMO.md](../../DEMO.md) shows (Z3, ₹14.16 a day). Fix in Wave 1 (Omkar): copy the zone premiums from `backend/artifacts/premiums.json` into the mock data and add both routes.
@@ -98,7 +98,7 @@ At 1200 px and wider (the console is designed for 1280×720) the merchant page h
 ```
 +--------------------+--------------------+------------------------------+
 | WhatsApp phone     | Mini-app frame     | Merchant panel               |
-| 372 px (BUILT)     | 372 px (PLANNED)   | one column of cards (BUILT   |
+| 372 px (BUILT)     | 372 px (BUILT)     | one column of cards (BUILT   |
 |                    |  app bar + clock   | cards, stacked)              |
 |                    |  screen (scrolls)  | Soundbox, money,             |
 |                    |  next-best bar     | What happened,               |
@@ -242,22 +242,22 @@ All calls use the existing client and envelope (`{ok, data}` or `{ok: false, err
 | Endpoint | Status | Used by | Notes |
 |---|---|---|---|
 | `GET /api/merchants/{id}` | BUILT | S1, S9 | Names (English and Hindi), `language`, `expected_today_label`, masked KYC name, loan summary |
-| `GET /api/merchants/{id}/cover` | PLANNED, Wave 1 | S1, S2, S3 | Section 6.2 |
-| `GET /api/merchants/{id}/claims` | PLANNED, Wave 1 | S1, S4, S5 | Section 6.2 |
+| `GET /api/merchants/{id}/cover` | BUILT, Wave 1 | S1, S2, S3 | Section 6.2 |
+| `GET /api/merchants/{id}/claims` | BUILT, Wave 1 | S1, S4, S5 | Section 6.2 |
 | `GET /api/decisions/{decision_id}` | BUILT | S6 | Checks, explanation (formula, expected day, drop, share, cap), `rules_version`, `decided_by`, `referral_reason`, `supersedes` |
-| `GET /api/decisions/{decision_id}/receipt` | PLANNED, Wave 1 (add to section 5) | S6, S7 | Section 6.2 |
-| `POST /api/premium/link` | BUILT (officer-authenticated) | S3 | Returns `{quote, premium}`. `quote.outcome` is OK or BLOCKED |
+| `GET /api/decisions/{decision_id}/receipt` | BUILT, Wave 1 | S6, S7 | Section 6.2 |
+| `POST /api/premium/link` | BUILT (officer-authenticated) | S3 | Returns `{quote, premium}`. `quote.outcome` is OK or BLOCKED. With `n6_consents` on it also takes `consents` and `notice_version` (fs-07 9.5) and answers 422 when the block is incomplete |
 | `POST /api/webhooks/paytm` | BUILT | S3 | SIMULATED paid callback: JSON `link_id`, `status` `TXN_SUCCESS` |
 | `POST /api/merchants/{id}/messages` | BUILT | S5, S8 | Wave 1 dispute: sends the dispute phrase, returns the produced messages (DISPUTE_ACK and the case chip) |
 | `GET /api/policy` | BUILT | S2, S5 | Rule numbers; nothing numeric is typed into copy |
-| `GET /api/integrations` | BUILT | all | LIVE or SIMULATED per component; FALLBACK after X6 |
+| `GET /api/integrations` | BUILT | all | LIVE, SIMULATED or FALLBACK per component (X6) |
 | `GET /api/state`, `GET /api/stream` | BUILT | all | Replay clock and refresh events (the console's `LiveProvider` already consumes both) |
 | `GET /api/audit/verify` | BUILT | S7 | "Check the log" |
-| `POST /api/merchants/{id}/grievances`, `GET /api/merchants/{id}/grievances` | PLANNED, Wave 3 | S5, S8 | [fs-06](fs-06-explanations-disputes-and-grievance.md); replaces the chat path for disputes |
-| `POST /api/merchants/{id}/ask`, `POST /api/voice/stt`, `POST /api/voice/tts` | PLANNED, Wave 2 | S8 rows | [fs-05](fs-05-ask-chhatri.md) |
-| `POST /api/merchants/{id}/slip-precheck`, `POST /api/merchants/{id}/slip-precheck/{precheck_id}/confirm` | PLANNED, Wave 2 | S8 row, next-best action | [fs-02](fs-02-hospital-cash-claim.md) |
-| `GET /api/merchants/{id}/consents`, `POST /api/merchants/{id}/consents/{consent_id}/withdraw`, `GET /api/merchants/{id}/consents/activity`, `POST /api/merchants/{id}/slips/{slip_id}/forget` | PLANNED, Wave 3 | S3, S8 row | [fs-07](fs-07-cover-purchase-and-consent.md) |
-| `POST /api/integrations/{component}/fallback` | PLANNED, Wave 2 (X6) | presenter | Drives the FALLBACK state on S3 |
+| `POST /api/merchants/{id}/grievances`, `GET /api/merchants/{id}/grievances` | BUILT, Wave 3 (`n5_grievances`) | S5, S8 | [fs-06](fs-06-explanations-disputes-and-grievance.md); replaces the chat path for disputes |
+| `POST /api/merchants/{id}/ask`, `POST /api/voice/stt`, `POST /api/voice/tts` | BUILT, Wave 2 (`n2_ask_chhatri`, `n4_voice`) | S8 rows | [fs-05](fs-05-ask-chhatri.md) |
+| `POST /api/merchants/{id}/slip-precheck`, `POST /api/merchants/{id}/slip-precheck/{precheck_id}/confirm` | BUILT, Wave 2 (`n3_slip_precheck`) | S8 row, next-best action | [fs-02](fs-02-hospital-cash-claim.md) |
+| `GET /api/merchants/{id}/consents`, `POST /api/merchants/{id}/consents/{consent_id}/withdraw`, `GET /api/merchants/{id}/consents/activity`, `POST /api/merchants/{id}/slips/{slip_id}/forget` | BUILT, Wave 3 (`n6_consents`) | S3, S8 row | [fs-07](fs-07-cover-purchase-and-consent.md) |
+| `POST /api/integrations/{component}/fallback` | BUILT, Wave 2 (`x6_provider_panel`) | presenter | Drives the FALLBACK state on S3 |
 
 The mini-app does not read `GET /api/cases/{case_id}`: that route returns the officer's evidence bundle (slip image, merchant text), which a merchant surface should not carry. The case fields the tracker needs arrive with the claim item.
 
@@ -1085,6 +1085,7 @@ Frontend coverage thresholds (lines 90, statements 90, functions 85, branches 80
 
 ## Changelog
 
+- 2026-10-02 · v1.5 · status lines match the build: every endpoint and screen BUILT behind its flag; the S3 consent block, the `ask`, `send_slip` and `tick_consent` rules and the Home "Ask Chhatri" button are in
 - 2026-10-02 · v1.4 · rewritten as a build-ready N1 spec: placement and routes (ADR 0005), UI stack scoped to the mini-app, nine screens with data contract and all states, claim-tracker state machine (area, personal, dispute, lender answer), trust receipt with verified-by badges and engine counterfactual, jargon lens, next-best-action bar, language switching, acceptance criteria with test ids, tasks by wave, feature flags. Fixed wrong rule keys, the Soundbox "LIVE" and "usual Monday" claims, invented coverage and premium copy, the `pay-cover` endpoint, client telemetry and the service-worker offline claim; removed effort hours and the old priority labels.
 - 2026-10-02 · v1.3 · second fact-check pass: fixed endpoint parameter from {id} to {decision_id}
 - 2026-10-02 · v1.2 · final consistency pass against the code

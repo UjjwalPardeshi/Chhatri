@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-Only the policy engine (`backend/chhatri/policy/engine.py`) can produce an APPROVED decision. AI services (Sarvam today, Gemini PLANNED) help build the case: they read a slip and route a message. They never set an amount or an outcome. Code, reading `rules.yaml` (version pilot-0.1), decides the money. This gives reproducible, auditable payouts and one place for an insurer or regulator to look (SPEC §0.2, §9).
+Only the policy engine (`backend/chhatri/policy/engine.py`) can produce an APPROVED decision. AI services (Gemini and Sarvam, each LIVE only with its key and an open data gate) help build the case: they read a slip and route a message. They never set an amount or an outcome. Code, reading `rules.yaml` (version pilot-0.1), decides the money. This gives reproducible, auditable payouts and one place for an insurer or regulator to look (SPEC §0.2, §9).
 
 ## Context
 
@@ -37,10 +37,10 @@ Code path: `backend/chhatri/policy/engine.py`, `evaluate_area_claim()`, `evaluat
 
 The AI's role:
 
-- **Extract:** Sarvam Vision reads the hospital slip and extracts patient name, dates, hospital (live only with `SARVAM_API_KEY`, else the simulated reader). Gemini Vision is PLANNED (N3, Wave 2).
+- **Extract:** Sarvam Vision reads the hospital slip and extracts patient name, dates, hospital (live only with `SARVAM_API_KEY`, else the simulated reader). Gemini Vision comes first in the reader chain with the slip pre-check (N3, flag `n3_slip_precheck`, BUILT).
 - **Route:** An intent classifier (the word list first; the chat model only for UNKNOWN text) routes the merchant's message (K5).
-- **Suggest:** Ask Chhatri (PLANNED, N2) will cite policy clauses. It never suggests an amount or an approval.
-- **Guard:** A guard function (PLANNED, N2, H17) will reject any answer containing a money figure that is not in the decision facts.
+- **Suggest:** Ask Chhatri (N2, flag `n2_ask_chhatri`, BUILT) cites policy clauses. It never suggests an amount or an approval.
+- **Guard:** The two-layer guard (N2, H17, BUILT: `grounded()` and `guard_strict.py`) rejects any answer containing a money figure that is not in the decision facts.
 
 No money moves without the engine. The payout step (`backend/chhatri/ledger/payouts.py`) refuses any decision that is not a stored APPROVED decision, and only the engine creates APPROVED outcomes. The payout-authority table has tests in `backend/tests/policy/test_engine.py`.
 
@@ -93,6 +93,7 @@ No money moves without the engine. The payout step (`backend/chhatri/ledger/payo
 
 ## Changelog
 
+- 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v2.1 · fixed against the code: claim outcomes are APPROVED, REFERRED, DECLINED (BLOCKED is a cover quote outcome); name match is a SOFT check; officer path and WAIVED_BY_OFFICER added; Gemini, Ask Chhatri and the money-figure guard marked PLANNED; the AI no longer "suggests amounts"; signals made checkable.
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly establishes policy engine as sole APPROVED authority.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: verified ADR 0001 correctly establishes policy engine as sole APPROVED authority; no changes needed (compliant with canonical framing).

@@ -80,9 +80,9 @@ The mini-app calls the same API as the console, through the same client and enve
 | Status | Endpoints |
 |---|---|
 | BUILT | `GET /api/merchants/{id}`, `GET /api/decisions/{decision_id}`, `POST /api/premium/link` (officer token), `POST /api/webhooks/paytm`, `POST /api/merchants/{id}/messages`, `GET /api/policy`, `GET /api/integrations`, `GET /api/audit/verify`, and `GET /api/state` with `GET /api/stream` (the replay clock and refresh events that the console's `LiveProvider` already reads) |
-| PLANNED, wave 1 | `GET /api/merchants/{id}/cover`, `GET /api/merchants/{id}/claims`, `GET /api/decisions/{decision_id}/receipt` |
-| PLANNED, wave 2 | `POST /api/merchants/{id}/ask`, `POST /api/voice/stt`, `POST /api/voice/tts`, `POST /api/merchants/{id}/slip-precheck` and its `confirm`, `POST /api/integrations/{component}/fallback` |
-| PLANNED, wave 3 | `GET` and `POST /api/merchants/{id}/grievances`, `GET /api/merchants/{id}/consents`, `POST /api/merchants/{id}/consents/{consent_id}/withdraw`, `GET /api/merchants/{id}/consents/activity`, `POST /api/merchants/{id}/slips/{slip_id}/forget` |
+| BUILT, wave 1 | `GET /api/merchants/{id}/cover`, `GET /api/merchants/{id}/claims`, `GET /api/decisions/{decision_id}/receipt` |
+| BUILT, wave 2 | `POST /api/merchants/{id}/ask`, `POST /api/voice/stt`, `POST /api/voice/tts`, `POST /api/merchants/{id}/slip-precheck` and its `confirm`, `POST /api/integrations/{component}/fallback` |
+| BUILT, wave 3 | `GET` and `POST /api/merchants/{id}/grievances`, `GET /api/merchants/{id}/consents`, `POST /api/merchants/{id}/consents/{consent_id}/withdraw`, `GET /api/merchants/{id}/consents/activity`, `POST /api/merchants/{id}/slips/{slip_id}/forget` |
 
 Each planned endpoint is mocked in `frontend/src/mock` with the same view models before its screen turns on, so the static demo (N7) works without a backend. The demo has no merchant login: `POST /api/premium/link` needs the officer token, and the standalone route borrows the console's demo officer session. A pilot would use the merchant's own Paytm login.
 

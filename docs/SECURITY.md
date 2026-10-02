@@ -24,20 +24,24 @@ limits, and the checklist to run before a demo.
 
 | Surface | Protection |
 |---|---|
-| Officer actions (`POST /api/cases/{id}/approve`, `/decline`, `POST /api/premium/link`) | `Authorization: Bearer <CHHATRI_OFFICER_TOKEN>`, constant-time compare. When the token is unset, a random one is generated at start-up and logged once. In demo mode (`CHHATRI_DEMO_MODE=true`) `GET /api/session` hands it to the console. **Set `CHHATRI_DEMO_MODE=false` anywhere but the demo laptop.** |
+| Officer actions (`POST /api/cases/{id}/approve`, `/decline`, `POST /api/premium/link`; with their flags: `POST /api/merchants/{id}/consents/{consent_id}/withdraw`, `POST /api/merchants/{id}/slips/{slip_id}/forget`, and `POST /api/integrations/{component}/fallback`, which also needs demo mode) | `Authorization: Bearer <CHHATRI_OFFICER_TOKEN>`, constant-time compare. When the token is unset, a random one is generated at start-up and logged once. In demo mode (`CHHATRI_DEMO_MODE=true`) `GET /api/session` hands it to the console. **Set `CHHATRI_DEMO_MODE=false` anywhere but the demo laptop.** |
 | n8n callbacks (`POST /internal/workflows/{step}`) | `X-Chhatri-Secret` compared in constant time (`hmac.compare_digest`). An empty configured secret refuses everything. The body is validated against `WORKFLOWS`, and every `execute_payout` re-checks that the decision exists, is APPROVED and has not been executed. Idempotent per `(run_id, step)`. Not proxied by the console's nginx. |
 | n8n webhooks (`/webhook/chhatri-*`) | The workflow compares `X-Chhatri-Secret` with `$env.CHHATRI_INTERNAL_SECRET` and requires the secret to be non-empty; otherwise 403 and no callbacks (proved by `make n8n-selftest`). |
 | WhatsApp webhook (`/webhooks/whatsapp`) | GET needs `WHATSAPP_VERIFY_TOKEN`. POST verifies `X-Hub-Signature-256` (HMAC-SHA256 of the raw body with `WHATSAPP_APP_SECRET`) before parsing. Idempotent on message id. |
 | Paytm callback (`/api/webhooks/paytm`) | In REST mode, `CHECKSUMHASH` is verified with `PaytmChecksum.verifySignature`. Only `TXN_SUCCESS`/`SUCCESS`/`PAID` count. |
-| Uploads (`/api/merchants/{id}/photo`, `/voice`) | Type is checked by magic bytes, not headers (JPEG, PNG and WebP images; the §19 audio formats). Images and audio are limited to 5 MB and audio to 30 s. nginx caps request bodies at 6 MB. |
-| Rate limits | In-memory sliding window of 60 s per client: webhooks 60, uploads 20, phone messages 60. |
+| Uploads (`/api/merchants/{id}/photo`, `/voice`, `/slip-precheck`, `POST /api/voice/stt`) | Type is checked by magic bytes, not headers (JPEG, PNG and WebP images; the §19 audio formats). Images and audio are limited to 5 MB and audio to 30 s. nginx caps request bodies at 6 MB. |
+| Rate limits | In-memory sliding window of 60 s per client: webhooks 60, uploads 20, phone messages and Ask 60, what-if 300. |
+| Feature flags (`CHHATRI_FEATURES`) | Every flag is off by default. A route whose flag is off answers exactly like a path that does not exist (404 `not_found`, before the body is read), pinned by `backend/tests/api/test_feature_routes.py`. |
 | CORS | Only `CHHATRI_CONSOLE_ORIGIN`, with no credentials. The docker console is same-origin through nginx. |
 
 ### Money path (SPEC §0.2, §9)
 
-- `chhatri.policy.engine` is pure and is the only code that returns `APPROVED`. LLM output can choose
-  an intent from a fixed list and nothing else. Free-text replies pass the guard (§13.3): no digits that
-  are not in the decision facts, and no promises of money.
+- `chhatri.policy.engine` is pure and is the only code that returns `APPROVED`. With `n2_ask_chhatri`
+  off, LLM output can choose an intent from a fixed list and nothing else, and a model-chosen intent never
+  runs a handler that writes. With it on, only the word lists choose intents. Model answers pass a
+  two-layer guard (`grounded()` and `guard_strict.py`): no number that is not in the fact sheet, no
+  promise of money, no links or phone numbers, valid clause ids only. The question is wrapped as untrusted
+  data, and strong injection signals skip the model (H16).
 - An officer's approval creates a new decision after re-running every HARD check, so an officer cannot
   pay an uncovered merchant, a merchant with an unpaid premium, or the same claim twice. SOFT checks
   are recorded as `WAIVED_BY_OFFICER`.
@@ -60,6 +64,12 @@ tamper-evident, not durable: it lives in an in-memory database that is rebuilt o
 - Live WhatsApp messages go only to `WHATSAPP_DEMO_RECIPIENT`, and only for demo merchants. Simulated
   merchants have fake `+9199000…` numbers and are never contacted.
 - Error responses use the envelope and never echo secrets or stack traces.
+- Only synthetic data may reach a free-tier AI service (ADR 0009). `CHHATRI_DATA_IS_SYNTHETIC` must be
+  `true` for Gemini, Sarvam or Cognee to be called; unset, every such call is skipped.
+- A slip photo is re-encoded without EXIF, XMP or text chunks before a provider or the store sees it.
+  With `n6_consents` on, a slip is read only under a slip consent, and "forget my slip" erases the photo
+  and the slip text in decisions and cases. Audit entries for Ask and voice hold hashes, ids and counts,
+  never the question, the answer or a transcript.
 
 ### Containers and network
 
@@ -94,3 +104,6 @@ tamper-evident, not durable: it lives in an in-memory database that is rebuilt o
 - [ ] Ports are bound to `127.0.0.1`. If a tunnel is used, it forwards only `/webhooks/whatsapp`.
 - [ ] `GET /api/audit/verify` returns `valid: true` after a full rehearsal.
 - [ ] `make test`, `make test-infra` and `make n8n-selftest` pass on the demo machine.
+- [ ] `.env` has `CHHATRI_DATA_IS_SYNTHETIC=true` only because every slip, voice note and question on
+      stage is synthetic (`make env` warns when it is missing); `/api/preflight` shows the `free_tier_gate` row.
+- [ ] `CHHATRI_FEATURES` and `VITE_FEATURES` list the same flags, and `GET /api/health` prints them.

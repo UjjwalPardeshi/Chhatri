@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.6 · 2 Oct 2026 · the golden path is BUILT. The new beats (N1–N6 and the H-items) are PLANNED, each behind a flag, and each is used when it has passed rehearsal, and not before |
+| Status | v1.6 · 2 Oct 2026 · the golden path is BUILT. The new beats (N1–N6 and the H-items) are BUILT behind their flags (Waves 0 to 5, 2 Oct), and each is used when it has passed rehearsal, and not before |
 | Owner | Omkar Kadam (script) with Ujjwal Pardeshi (operator) |
 | Audience | The team, on-site demo logistics, backup operator |
 | Related | [docs/DEMO.md](../DEMO.md) (the golden script and numbers) · [Final deck and video script](final-deck-and-video-script.md) (the slide windows) · [On-site checklist](on-site-checklist.md) · [Build plan](build-plan.md) · [Risk register](risk-register.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) · [Feature specs](../02-product/feature-specs) |
@@ -12,7 +12,7 @@
 - **The demo runs live on the demo laptop:** console at http://localhost:5173 (`make dev`) or http://localhost:8080 (`make up`), API at http://localhost:8000. The deck is a second window. The operator switches windows on Omkar's cue words.
 - **Presenter:** Omkar Kadam narrates and makes no clicks. **Operator:** Ujjwal Pardeshi makes every click and speaks when the demo stalls, and at no other time.
 - **The slot time and length are not announced.** Two cuts are ready: 3 minutes and 7 minutes. Their windows are the slide windows of the [deck script](final-deck-and-video-script.md), so the slides and the clicks share one clock. Freeze the code 90 minutes before our slot.
-- **The golden path is [DEMO.md](../DEMO.md):** BUILT, with every number asserted by tests. The new beats (tracker, trust receipt, slip pre-check, Ask Chhatri with citations, voice, what-if, grievance, consent, provider panel) are PLANNED. A beat is used when its flag is on and it passed 3 of 3 rehearsal runs on the demo laptop inside its time budget. Otherwise the beat uses its fallback (section 4), which is the golden path.
+- **The golden path is [DEMO.md](../DEMO.md):** BUILT, with every number asserted by tests. The new beats (tracker, trust receipt, slip pre-check, Ask Chhatri with citations, voice, what-if, grievance, consent, provider panel) are BUILT behind flags and green in the mock end-to-end suite with every flag on; none has been rehearsed yet. A beat is used when its flag is on and it passed 3 of 3 rehearsal runs on the demo laptop inside its time budget. Otherwise the beat uses its fallback (section 4), which is the golden path.
 - **Badges:** the header shows LIVE or SIMULATED for each component, and FALLBACK once X6 lands. With our keys, at most the Sarvam components can be LIVE, and Gemini once Wave 2 lands. WhatsApp, the Paytm link, sales, alerts, KYC, payouts and the lender are SIMULATED. Never call anything live that the screen shows as SIMULATED or FALLBACK.
 - **If something breaks:** the backup controls in DEMO.md, then the fallback of that beat, then the static copy, then the backup video (section 6). The failure tree for five symptoms is in the [on-site checklist](on-site-checklist.md#4-the-failure-decision-tree).
 
@@ -146,7 +146,7 @@ Backup machine ready: yes / no     Backup video on laptop and phone: yes / no
 
 ## 4. The new beats: flags, pass rule and fallbacks
 
-Every beat here is PLANNED. A beat runs when its flag is on at the freeze and it passed its pass rule 3 of 3 times on the demo laptop inside its budget. Each person can veto a beat; showing needs both ([build plan](build-plan.md#7-hide-order-if-time-runs-out)). The decision is written in the rehearsal log (section 8). A beat that is off takes its fallback, and the fallback is the golden path.
+Every beat here is BUILT behind its flag and passes the mock end-to-end suite with all 14 flags on; none is rehearsed yet. A beat runs when its flag is on at the freeze and it passed its pass rule 3 of 3 times on the demo laptop inside its budget. Each person can veto a beat; showing needs both ([build plan](build-plan.md#7-hide-order-if-time-runs-out)). The decision is written in the rehearsal log (section 8). A beat that is off takes its fallback, and the fallback is the golden path.
 
 | Beat | Flag, wave, where, budget | Pass rule | Fallback on stage | If the flag is off |
 |---|---|---|---|---|
@@ -187,9 +187,9 @@ These are what a merchant would type or say. The wording of the answers comes fr
    - Sarvam speech-to-text, text-to-speech, chat and vision are LIVE when `SARVAM_API_KEY` is set. Otherwise labelled simulators run: canned transcripts, and a slip simulator that reads data embedded in the sample slips. A voice chip falls back to the canned transcript when speech-to-text fails.
    - WhatsApp needs four WhatsApp Cloud API variables, and the Paytm link needs `PAYTM_MCP_URL` or `PAYTM_MID` and `PAYTM_KEY_SECRET`. We have neither, so both are SIMULATED and the link is `https://paytm.me/sim-…`.
    - Sales, the alert feed, KYC, the payout rail, the lender and the Soundbox are always simulated.
-2. **After Wave 2 (PLANNED)** the Gemini free tier heads the chain for Ask Chhatri and slip reading, then Sarvam, then templates (Ask) or a person (slip). A component is LIVE when its key is set and the check call on the demo laptop succeeded.
-3. **After X6 (PLANNED)** a FALLBACK state, a provider panel, a "forced" chip and a switch per component appear. Forcing takes effect on the next call and needs no reload. It is process-wide, and **Clear all** or a restart removes it. A SIMULATED component has no live adapter to force off, so a component can be forced while it is LIVE, and not otherwise (the lender is the exception). Until X6 lands there is no FALLBACK badge.
-4. **Browser speech (PLANNED, N4)** needs no key. Chrome sends the audio to a remote service, so it needs the network. Test hi-IN on the demo laptop. Its label is SIMULATED with provider `browser`.
+2. **Wave 2 (BUILT, behind its flags)** the Gemini free tier heads the chain for Ask Chhatri and slip reading, then Sarvam, then templates (Ask) or a person (slip). A component is LIVE when its key is set and the check call on the demo laptop succeeded.
+3. **X6 (BUILT, `x6_provider_panel`)** a FALLBACK state, a provider panel, a "forced" chip and a switch per component appear. Forcing takes effect on the next call and needs no reload. It is process-wide, and **Clear all** or a restart removes it. A SIMULATED component has no live adapter to force off, so a component can be forced while it is LIVE, and not otherwise (the lender is the exception). Until X6 lands there is no FALLBACK badge.
+4. **Browser speech (BUILT, N4, `n4_voice`)** needs no key. Chrome sends the audio to a remote service, so it needs the network. Test hi-IN on the demo laptop. Its label is SIMULATED with provider `browser`.
 5. **Free-tier data.** Synthetic data, and nothing else, goes to a free-tier AI service. Nobody speaks personal details into the microphone or photographs a real document during the demo. The notice on the initial recording says the same.
 6. **The rule that matters:** never call a component live in the pitch or Q&A if the screen showed it as SIMULATED or FALLBACK.
 

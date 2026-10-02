@@ -10,7 +10,7 @@
 ## TL;DR
 
 - **What this is.** The layout, components and states of every screen to build: the seven console pages that exist, the merchant mini-app (N1 with its nine screens, plus N2 and N4 Ask and voice, N3 the slip sheet, N5 complaints, N6 consent, N7 the standalone route and N8 language), and six console parts with the case panel changes (X6 provider panel, H8 ops strip, H24 what-if drawer, presenter mode, the `/evals` page and the trigger-to-payout moment card).
-- **Everything is P0 and lands in a wave** (W0 setup, W1 demo spine, W2 live AI, W3 trust and rights, W4 judge wow, W5 ship). Each part says BUILT or PLANNED. Screenshots are of commit 86575ea.
+- **Everything is P0 and lands in a wave** (W0 setup, W1 demo spine, W2 live AI, W3 trust and rights, W4 judge wow, W5 ship). Each part says BUILT or PLANNED; since the Wave 0 to 5 build every part is BUILT behind its flag. Screenshots are of commit 86575ea.
 - **The mini-app is a 354 px screen in a 372 px frame** next to the WhatsApp phone on `/merchant/:id` (three columns from 1200 px), and a full-screen column on `/merchant/:id/app`. Three tabs: Home, Claims, Help. Every screen ends in one next step.
 - **Every screen has six states:** loading, empty, error, offline, SIMULATED and FALLBACK. Each screen below lists what shows in each, so none is built half-way.
 - **Slip problems are screens, not dead ends.** A blurry photo, a wrong document, a name that does not match the KYC name and a blocked camera each say what is wrong and offer the next step (section 6).
@@ -41,31 +41,31 @@
 | C1 | Overview | `/` | K8 | n/a | BUILT | 2.2 |
 | C2 | Live map | `/live` | K8 | n/a | BUILT | 2.3 |
 | C3 | Claims | `/claims` | K8 | n/a | BUILT | 2.4 |
-| C4 | Merchant phone | `/merchant/:id` | K8 | n/a | BUILT, third column PLANNED (W1) | 2.5, 3.2 |
+| C4 | Merchant phone | `/merchant/:id` | K8 | n/a | BUILT, third column BUILT (W1) | 2.5, 3.2 |
 | C5 | Audit | `/audit` | K8 | n/a | BUILT | 2.6 |
 | C6 | Backtest | `/backtest` | K8 | n/a | BUILT | 2.7 |
 | C7 | Policy | `/policy` | K8 | n/a | BUILT, nothing to edit | 2.8 |
-| S1 | Home | `screen=home` | N1 | 1 | PLANNED | 4.1 |
-| S2 | Coverage explainer | `screen=coverage` | N1, H20 | 1 | PLANNED | 4.2 |
-| S3 | Cover and buy | `screen=buy` | N1, N6 | 1, consent block 3 | PLANNED | 4.3 |
-| S4 | Claims | `screen=claims` | N1, H1 | 1 | PLANNED | 4.4 |
-| S5 | Claim detail | `screen=claim` | N1, H1 | 1 | PLANNED | 4.5 |
-| S6 | Why this amount | `screen=why` | N1, H2, H13, H14 | 1 | PLANNED | 4.6 |
-| S7 | Trust receipt | `screen=receipt` | N1, H3, H13, H14 | 1 | PLANNED | 4.7 |
-| S8 | Help | `screen=help` | N1 | 1, rows added in 2 and 3 | PLANNED | 4.8 |
-| S9 | Language | `screen=settings` | N8 | 1, Marathi 4 | PLANNED | 4.9 |
-| N2, N4 | Ask Chhatri, with voice | `screen=ask` | N2, N4, H16 to H19, H21 | 2 | PLANNED | 5 |
-| N3 | Slip sheet and slip problems | `screen=slip` | N3, H5, H15 | 2 | PLANNED | 6 |
-| N5 | Complaints | `screen=grievances` | N5, H22 | 3 | PLANNED | 7.1 |
-| S10, S11 | Consent centre, consent activity | `screen=consents`, `screen=consent-activity` | N6, H23 | 3 | PLANNED | 7.2, 7.3 |
-| N7 | Static demo and standalone route | `/merchant/:id/app` | N7 | 5 | PLANNED | 8 |
-| X6 | Provider panel | Header chip and popover | X6, H26 | 2 | PLANNED | 9.1 |
-| H8 | Ops strip | `/live`, `/claims` | H8 | 4 | PLANNED | 9.2 |
-| H24 | What-if drawer | `/live` | H24 | 4 | PLANNED | 9.3 |
-| P | Presenter mode | Header, all console pages | n/a | 4 | PLANNED | 9.4 |
-| H25 | Evaluation page | `/evals` | H25 | 3 | PLANNED | 9.5 |
-| M | Trigger-to-payout moment card | `/live` | n/a | 4 | PLANNED | 9.6 |
-| D | Case panel additions | `/claims` | H13, H14, X4 | 4 | PLANNED | 9.7 |
+| S1 | Home | `screen=home` | N1 | 1 | BUILT | 4.1 |
+| S2 | Coverage explainer | `screen=coverage` | N1, H20 | 1 | BUILT | 4.2 |
+| S3 | Cover and buy | `screen=buy` | N1, N6 | 1, consent block 3 | BUILT | 4.3 |
+| S4 | Claims | `screen=claims` | N1, H1 | 1 | BUILT | 4.4 |
+| S5 | Claim detail | `screen=claim` | N1, H1 | 1 | BUILT | 4.5 |
+| S6 | Why this amount | `screen=why` | N1, H2, H13, H14 | 1 | BUILT | 4.6 |
+| S7 | Trust receipt | `screen=receipt` | N1, H3, H13, H14 | 1 | BUILT | 4.7 |
+| S8 | Help | `screen=help` | N1 | 1, rows added in 2 and 3 | BUILT | 4.8 |
+| S9 | Language | `screen=settings` | N8 | 1, Marathi 4 | BUILT | 4.9 |
+| N2, N4 | Ask Chhatri, with voice | `screen=ask` | N2, N4, H16 to H19, H21 | 2 | BUILT | 5 |
+| N3 | Slip sheet and slip problems | `screen=slip` | N3, H5, H15 | 2 | BUILT | 6 |
+| N5 | Complaints | `screen=grievances` | N5, H22 | 3 | BUILT | 7.1 |
+| S10, S11 | Consent centre, consent activity | `screen=consents`, `screen=consent-activity` | N6, H23 | 3 | BUILT | 7.2, 7.3 |
+| N7 | Static demo and standalone route | `/merchant/:id/app` | N7 | 5 | BUILT | 8 |
+| X6 | Provider panel | Header chip and popover | X6, H26 | 2 | BUILT | 9.1 |
+| H8 | Ops strip | `/live`, `/claims` | H8 | 4 | BUILT | 9.2 |
+| H24 | What-if drawer | `/live` | H24 | 4 | BUILT | 9.3 |
+| P | Presenter mode | Header, all console pages | n/a | 4 | BUILT | 9.4 |
+| H25 | Evaluation page | `/evals` | H25 | 3 | BUILT | 9.5 |
+| M | Trigger-to-payout moment card | `/live` | n/a | 4 | BUILT | 9.6 |
+| D | Case panel additions | `/claims` | H13, H14, X4 | 4 | BUILT | 9.7 |
 
 ---
 
@@ -167,12 +167,12 @@ Chhatri छतरी   Overview  Live map  Claims  Merchant phone  Audit  Backte
 
 Seven pages, one header. The mini-app has no page of its own in the console: it is the third column of the Merchant phone page, and a standalone route for phones.
 
-### 3.2 The merchant page at 1280×720 (PLANNED, W1)
+### 3.2 The merchant page at 1280×720 (BUILT, W1)
 
 ```text
 +--------------------+--------------------+--------------------------+
 | WhatsApp phone     | Mini-app frame     | Merchant panel           |
-| 372 px (BUILT)     | 372 px (PLANNED)   | one column of cards      |
+| 372 px (BUILT)     | 372 px (BUILT)     | one column of cards      |
 |                    |  app bar           | (BUILT cards, stacked)   |
 | thread, chips,     |  screen (scrolls)  |  Soundbox                |
 | composer           |  next-step bar     |  Money                   |
@@ -190,7 +190,7 @@ Seven pages, one header. The mini-app has no page of its own in the console: it 
 
 The frame reuses the `.phone` bezel (9 px border, 34 px radius), so the screen inside is 354 px wide. Its height is the column height (840 px at most) and the app scrolls inside it. The frame has a link "Open full screen" to the standalone route, which keeps `mock=1` and `lang`.
 
-### 3.3 Inside the frame (PLANNED, W1)
+### 3.3 Inside the frame (BUILT, W1)
 
 ```text
 +--------------------------------------+
@@ -250,7 +250,7 @@ A tab owns its screens: Home owns S1 to S3, Claims owns S4 to S7, Help owns S8 a
 
 All navigation is URL state, so Back works and a deep link opens the right screen. A flag that is off shows Home for its screen.
 
-### 3.6 The six shared states (PLANNED, W1)
+### 3.6 The six shared states (BUILT, W1)
 
 Each screen root carries `data-state` with `loading`, `empty`, `error`, `offline` or `ready`. The visuals are the same everywhere.
 
@@ -697,7 +697,7 @@ Layouts are for the 354 px screen. The states of each screen are those of fs-04 
 
 - **Components.** AppBar, Card (a list of link rows, 44 px high at least), Badge (mode legend), Button, NextBestActionBar.
 - **Rows.** Coverage and Language are always there. "Ask Chhatri" appears with `n2_ask_chhatri`, "Complaints and escalation" with `n5_grievances`, "My data and consent" with `n6_consents`. A row whose flag is off is not drawn, so Help is never a list of disabled rows. Row labels are `explain.title`, `ask.title`, `grv.title`, `consent.title` and `lang.label`.
-- **About.** `help.about.title` and `help.about.text`. Under it a three-word legend with the hints `origin.LIVE.hint`, `origin.SIMULATED.hint` and `mode.FALLBACK.hint`, so a judge who sees a badge can read what it means without leaving the app. The legend is a PLANNED addition of this document and uses copy that exists.
+- **About.** `help.about.title` and `help.about.text`. Under it a three-word legend with the hints `origin.LIVE.hint`, `origin.SIMULATED.hint` and `mode.FALLBACK.hint`, so a judge who sees a badge can read what it means without leaving the app. The legend is BUILT (`miniapp/screens/Help.tsx`) and uses copy that exists.
 - **Next step.** The global list of fs-04 section 12. With `n2_ask_chhatri` on and nothing more urgent, it is `ask`.
 
 | State | What shows |
@@ -749,7 +749,7 @@ Layouts are for the 354 px screen. The states of each screen are those of fs-04 
 
 ## 5. Ask Chhatri and voice (N2, N4, W2)
 
-Ask Chhatri explains. The rules decide every payout, not the assistant. The screen is `screen=ask` in the Help tab, behind `n2_ask_chhatri`, and voice is behind `n4_voice`. Everything here is PLANNED. The built part is the recorder (`components/phone/useRecorder.ts`, 30 seconds) and the playback.
+Ask Chhatri explains. The rules decide every payout, not the assistant. The screen is `screen=ask` in the Help tab, behind `n2_ask_chhatri`, and voice is behind `n4_voice`. Everything here is BUILT behind those flags (`miniapp/screens/Ask*.tsx`, `miniapp/components/voice*.ts*`), on top of the recorder (`components/phone/useRecorder.ts`, 30 seconds) and the playback.
 
 ### 5.1 The screen
 
@@ -904,7 +904,7 @@ stateDiagram-v2
 
 ## 6. Slip pre-check sheet and slip problems (N3, W2)
 
-The photo is read, and the merchant confirms what was read before any check runs (H5). The pre-check never compares the name with the KYC name, never shows a confidence number, and never lets the merchant edit a field. If the read is wrong, the way out is another photo. Text printed on the slip is data, never an instruction. The sheet sits behind `n3_slip_precheck`. Everything here is PLANNED. The built part is the chat path: a photo sent after the check-in is read and filed as today.
+The photo is read, and the merchant confirms what was read before any check runs (H5). The pre-check never compares the name with the KYC name, never shows a confidence number, and never lets the merchant edit a field. If the read is wrong, the way out is another photo. Text printed on the slip is data, never an instruction. The sheet sits behind `n3_slip_precheck`. Everything here is BUILT behind that flag (`miniapp/screens/SlipPrecheck*.tsx`). With the flag off the chat path stays: a photo sent after the check-in is read and filed as today.
 
 ### 6.1 Where it opens
 
@@ -1113,7 +1113,7 @@ The WhatsApp phone shows the same content as a message card with up to three rep
 
 ## 7. Rights: complaints and consent (N5, N6, W3)
 
-Both are behind flags (`n5_grievances`, `n6_consents`). When a flag is off its Help row and its screens do not exist, and the dispute button of S5 uses the chat path. Everything here is PLANNED.
+Both are behind flags (`n5_grievances`, `n6_consents`). When a flag is off its Help row and its screens do not exist, and the dispute button of S5 uses the chat path. Everything here is BUILT behind those flags (`miniapp/screens/Grievance*.tsx`, `Consent*.tsx`).
 
 ### 7.1 Complaints and escalation (N5, `screen=grievances`, tab Help)
 
@@ -1367,7 +1367,7 @@ N7 is the mini-app on its own route, in a build that runs against the in-browser
 - **Banner.** `offline.static`. "Got it" (`explain.btn.got_it`) folds the banner into the app bar badge for the session. The badge never goes away.
 - **What is recorded.** Ask answers are recorded samples (provider `mock`, SIMULATED, reason `fb.reason.MOCK_BACKEND`) with a visible "recorded sample" line. The slip reader reads the sample slips and nothing else (section 6.6). The payment link is `https://paytm.me/sim-…` and opens nothing. Speech to text is simulated (`voice.sim.note`). The numbers match [DEMO.md](../DEMO.md).
 - **Deep links.** `screen`, `claim`, `decision`, `lang` and `mock=1` work as in section 3.5. The static host must send an unknown path to the app (the deep-link fallback of task N1-T60).
-- **The demo clock.** Without the console's control bar a visitor cannot move the replay, and at the start of the replay Anil has no claim. A **demo clock sheet** (PLANNED, W5, proposed) opens from the clock text in the app bar. It lists the four chapters the console already has (Alert 14:00, Trigger 17:00, Paid 17:04, Instalment 17:05), Play and Pause, and "Back to the start". It reuses the replay clock and the chapter list, and adds no endpoint. All its words are proposed. Without it the standalone route shows the replay start and nothing more (open question 5).
+- **The demo clock.** Without the console's control bar a visitor cannot move the replay, and at the start of the replay Anil has no claim. A **demo clock sheet** (BUILT, W5, `miniapp/shell/DemoClockSheet.tsx`; its words are proposed) opens from the clock text in the app bar of the standalone route. It lists the four chapters the console already has (Alert 14:00, Trigger 17:00, Paid 17:04, Instalment 17:05), Play and Pause, and "Back to the start". It reuses the replay clock and the chapter list, and adds no endpoint. All its words are proposed. Without it the standalone route shows the replay start and nothing more (open question 5).
 
 ```text
 +--------------------------------------+
@@ -1396,7 +1396,7 @@ N7 is the mini-app on its own route, in a build that runs against the in-browser
 
 ## 9. Console changes (W2 to W4)
 
-The console keeps its plain CSS tokens and its seven pages. This section adds six parts and the case panel changes. Each part has a wireframe, its components, its rules and the six states. Everything is PLANNED, and each sits behind a flag of the Wave 0 list in `frontend/src/features.ts`, which is not committed yet (`x6_provider_panel`, `h25_evals`, `h8_ops_strip`, `h24_whatif`, and `console_polish` for presenter mode, the moment card and the polish). fs-08 section 4.3 proposes separate names for presenter mode and the moment card. The list has one flag for both, and it wins until the owner splits it. When a flag is off the part does not exist.
+The console keeps its plain CSS tokens and its seven pages. This section adds six parts and the case panel changes. Each part has a wireframe, its components, its rules and the six states. Everything is BUILT, and each sits behind a flag of the Wave 0 list in `frontend/src/features.ts` (`x6_provider_panel`, `h25_evals`, `h8_ops_strip`, `h24_whatif`, and `console_polish` for presenter mode, the moment card and the polish). fs-08 section 4.3 proposes separate names for presenter mode and the moment card. The list has one flag for both, and it wins until the owner splits it. When a flag is off the part does not exist.
 
 ### 9.0 Where the parts go
 
@@ -1969,7 +1969,7 @@ Settled since v1.2: the placement of the mini-app (a third column and a standalo
 2. **Ops strip and moment card placement.** fs-08 puts the strip under the control bar across the page and the card at the top of the right panel. Measured at 1280×720, both cost the panel's Z9 note in presenter mode, so this document puts the strip over the map column and the card over the map. The card also stays while the replay is paused at 17:06, where the [demo runbook](../06-delivery/demo-runbook.md) (B10) drops it outside 16:58 to 17:06, because that is where the presenter talks over it. Decide at the W4 rehearsal, on the projector if it is available. Owner: Omkar Kadam.
 3. **No next-step bar on Ask and the slip sheet.** The composer and the answer's own button stand in. fs-04 AC-36 lists S1 to S9 for the bar. Owner: Omkar Kadam.
 4. **Native review.** The new Hindi lines should be read by a Hindi speaker outside the team, and the Marathi by a native speaker before `n8_marathi` goes on in W4. Owner: Omkar Kadam.
-5. **Moving the replay on a phone.** The demo clock sheet of section 8 is proposed. Without it the standalone route starts at the replay start, where Anil has no claim. Owner: Omkar Kadam.
+5. **Moving the replay on a phone.** Settled: the demo clock sheet of section 8 is built; its words are proposed and need the native review of question 4. Owner: Omkar Kadam.
 6. **Camera blocked.** The Permissions API is not in every browser, and a cancelled picker looks like a blocked camera. The design offers the gallery in both cases. Check it on the demo phone. Owner: Omkar Kadam.
 7. **FALLBACK colour.** It is orange here so it differs from the amber of REFERRED. fs-08 calls it amber ([design system](design-system.md), open question 8). Owner: Omkar Kadam.
 8. **One flag or two.** The Wave 0 list has `console_polish` for presenter mode, the moment card and the polish. fs-08 proposes `presenter_mode` and `moment_card`. Owner: Ujjwal Pardeshi.
@@ -1980,6 +1980,7 @@ Settled since v1.2: the placement of the mini-app (a third column and a standalo
 
 ## Changelog
 
+- 2026-10-02 · v1.4 · status lines match the build: every screen and console part BUILT behind its flag; the static demo banner and the demo clock sheet of section 8 are built (open question 5 settled)
 - 2026-10-02 · v1.3 · rewritten as a build-ready screens document: the seven console pages as built (commit 86575ea) and the mini-app as the 354 px screen in a 372 px frame with three tabs (S1 to S11, Ask and voice, the slip sheet, complaints, consent and the standalone route), every screen with its layout, components and six states; error screens for a blurry slip, a wrong document, a name that does not match and a blocked camera; the six console changes (provider panel, ops strip, what-if drawer, presenter mode, `/evals`, the moment card) placed against the measured 1280×720 budget; the claim state machine with REFERRED and DISPUTE; responsive rules; copy keys checked against `messages.py` and the copy deck. Journey ids corrected, invented zone names, the emoji and the teal demo colour removed, the old priority labels replaced by build waves
 - 2026-10-02 · v1.2 · second fact-check pass: removed invented STT latency estimate, clarified Gemini/Tesseract as planned (N2/N3), fixed EMI vs EDI terminology
 - 2026-10-02 · v1.1 · fact-check pass: fixed ungrounded Bima Bharosa duration (14 days per portal), GRO SLA label, removed H5 reference

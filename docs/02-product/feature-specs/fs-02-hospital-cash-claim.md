@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Build-ready draft v1.6 · 2 Oct 2026 · K2 is BUILT and tested: silent detection, check-in, one photo, reader adapter, nine personal checks, outcomes, officer review, payout. N3 (live slip reading and the pre-check) is PLANNED for Wave 2, behind the flag `n3_slip_precheck` |
+| Status | Build-ready draft v1.6 · 2 Oct 2026 · K2 is BUILT and tested: silent detection, check-in, one photo, reader adapter, nine personal checks, outcomes, officer review, payout. N3 (live slip reading and the pre-check) is BUILT, behind the flag `n3_slip_precheck` |
 | Owner | Omkar Kadam (product, copy, screens); Ujjwal Pardeshi (reader chain, endpoints, engine) |
 | Audience | Product, engineering, underwriting, compliance, AI governance |
 | Related | [Facts and sources](../../01-strategy/facts-and-sources.md) · [SPEC §8–9, §13.5–13.6, §14.1](../../SPEC.md) · [DEMO §3:30–5:45](../../DEMO.md) · [Policy wording and CIS](../policy-wording-and-cis.md) · [User journeys J4, J5, J9](../user-journeys.md) · [AI architecture and guardrails](../../04-engineering/ai-architecture-and-guardrails.md) · [AI evaluation plan](../../04-engineering/ai-evaluation-plan.md) · [Data model and API §5](../../04-engineering/data-model-and-api.md) · [ADR 0003](../../04-engineering/adr/0003-free-ai-provider-chain.md) · [ADR 0004](../../04-engineering/adr/0004-live-simulated-fallback-labels.md) · [ADR 0007](../../04-engineering/adr/0007-hospital-cash-framing.md) · [ADR 0009](../../04-engineering/adr/0009-synthetic-data-only-to-free-tier-ai.md) · [Mini-app (fs-04)](fs-04-merchant-mini-app.md) · [Ask Chhatri (fs-05)](fs-05-ask-chhatri.md) · [Policy engine and audit (fs-09)](fs-09-policy-engine-and-audit.md) |
@@ -11,12 +11,12 @@
 
 - K2 (BUILT): a covered shop that is silent for a full day in calm weather gets a check-in at 11:20 the next morning. The merchant sends one photo of a hospital document, a reader extracts five fields, and the policy engine runs nine checks. Any HARD fail is DECLINED. A SOFT fail or an unsure SOFT check is REFERRED to a claims officer. Everything else is APPROVED: half of the usual day, at most ₹1,500 a day, for up to 3 days.
 - Today the photo goes straight from the reader to the engine. A bad photo becomes a referral and the merchant waits for a person. There is no chance to retake it.
-- N3 (PLANNED, Wave 2) adds a pre-check between the photo and the engine. It reads the photo, shows the merchant what was read and asks "is this right?" (H5). It checks the document class, the slots the checks need and a confidence gate (H15). A bad photo gets one plain reason and a retake. The merchant sees a checklist, never a score.
+- N3 (BUILT, Wave 2, flag `n3_slip_precheck`) adds a pre-check between the photo and the engine. It reads the photo, shows the merchant what was read and asks "is this right?" (H5). It checks the document class, the slots the checks need and a confidence gate (H15). A bad photo gets one plain reason and a retake. The merchant sees a checklist, never a score.
 - The pre-check never decides. It does not say that a name matches or that a claim will be paid. Only the engine does, after the merchant confirms. Showing a match early would let someone try slips until one passes.
-- Reader chain: Gemini vision (PLANNED) → Sarvam Vision (BUILT adapter) → REFERRED. Offline, the simulated reader reads the sample slips. Every result carries mode, provider, model and fallback reason (H26).
+- Reader chain: Gemini vision → Sarvam Vision → REFERRED (BUILT; each live link needs its key and an open data gate, and was tested against fakes only). Offline, the simulated reader reads the sample slips. Every result carries mode, provider, model and fallback reason (H26).
 - Slip text is untrusted (H16). The model fills a fixed schema, writes no merchant text, never sees KYC or amounts, and its output is validated and scanned. A slip that tells the model what to read is the same threat as a forged slip, and this spec does not claim to detect forgery.
 - Only synthetic slips go to free-tier AI (ADR 0009). The image is kept in memory for the officer today. Retention, deletion and the patient name inside the audit log are open (§12).
-- Speed and accuracy figures here are targets. The evaluation harness (H25) is PLANNED for Wave 3 and nothing has been measured ([AI evaluation plan](../../04-engineering/ai-evaluation-plan.md)).
+- Speed and accuracy figures here are targets. The offline evaluation harness and the S4 slip generator (H25) are BUILT; the live S4 run is not, so nothing has been measured ([AI evaluation plan](../../04-engineering/ai-evaluation-plan.md)).
 
 ## 1. Summary
 
@@ -88,7 +88,7 @@ Test counts come from `pytest --collect-only` on that date.
 | 6 | A name in Devanagari gets the text "the name on the slip doesn't match your KYC". | `SLIP_TO_HUMAN_BY_CHECK` maps FAIL and UNSURE of NAME_MATCHES_KYC to `SLIP_TO_HUMAN` | Untrue for UNSURE: the name could not be scored. Open question 3. |
 | 7 | Nothing expires. | `PersonalFlow._checkins` entry is dropped only when a claim is filed | An open check-in stays open. Open question 2. |
 
-### 2.3 PLANNED
+### 2.3 Planned at commit 86575ea (BUILT since, behind `n3_slip_precheck`)
 
 | Part | Wave |
 |---|---|
@@ -165,7 +165,7 @@ sequenceDiagram
     end
 ```
 
-### 5.2 Pre-check flow (PLANNED, Wave 2)
+### 5.2 Pre-check flow (BUILT, Wave 2)
 
 ```mermaid
 sequenceDiagram
@@ -212,7 +212,7 @@ stateDiagram-v2
     instalment_paused --> [*]
 ```
 
-### 5.4 Pre-check states (PLANNED)
+### 5.4 Pre-check states (BUILT)
 
 ```mermaid
 stateDiagram-v2
@@ -240,9 +240,9 @@ stateDiagram-v2
 | Zone in an area event | alerts feed plus fired triggers | SIMULATED |
 | Weekly off day | merchant profile | SIMULATED |
 | Slip image | upload through `/photo` or `/slip-precheck` | synthetic samples only |
-| Slip fields | the reader | LIVE with `SARVAM_API_KEY`, SIMULATED otherwise. Gemini PLANNED. |
+| Slip fields | the reader chain | LIVE with a Gemini or Sarvam key and an open data gate, SIMULATED otherwise |
 | KYC name | merchant record | SIMULATED. Never sent to a reader. |
-| Read label | the reader chain | PLANNED (H26) |
+| Read label | the reader chain | BUILT (H26) |
 
 ## 7. Decision logic
 
@@ -256,7 +256,7 @@ At 11:20 each replayed day, covered merchants who were silent yesterday and have
 
 | Link | Status | Notes |
 |---|---|---|
-| Gemini vision | PLANNED, Wave 2 | `integrations/gemini_vision.py` implements `SlipReader`. Needs `GOOGLE_API_KEY` and a model id in `GEMINI_MODEL` (name proposed). The model is chosen on the day from the current free tier in Google AI Studio and must accept image input. If it does not, a separate `GEMINI_VISION_MODEL` (proposed) overrides it. No Gemini model name or quota is written here because both change. |
+| Gemini vision | BUILT, Wave 2 | `integrations/gemini_vision.py` implements `SlipReader`. Needs `GOOGLE_API_KEY` and a model id in `GEMINI_MODEL`. The model is chosen on the day from the current free tier in Google AI Studio and must accept image input. If it does not, a separate `GEMINI_VISION_MODEL` overrides it. No Gemini model name or quota is written here because both change. |
 | Sarvam Vision | BUILT adapter | `LiveSarvamSlipReader`, live with `SARVAM_API_KEY`. The constructor takes `timeout_s`, so the interactive path can pass a tighter bound than the built 60 s. |
 | Simulated reader | BUILT | Used when the chain has no live link, when the free-tier gate is closed or when the demo forces fallback. Reads the sample slips only. |
 | REFERRED | BUILT behaviour | When no link answers, the claim is filed with an empty read and a claims officer decides. |
@@ -390,7 +390,7 @@ Every pre-check response and every `slip.read` audit row carries `mode`, `provid
 | Free-tier gate closed | SIMULATED | simulated | FREE_TIER_BLOCKED |
 | Static demo in the browser | SIMULATED | mock | MOCK_BACKEND |
 
-The `SlipExtraction.source` strings are `sarvam-doc-ai`, `simulated` and `read-failed` today. PLANNED additions: `gemini-vision` (proposed) and `mock` (browser only). A photo that is not one of the samples reads as unreadable in the simulator, so with the gate closed or no keys it ends with a person, after the retakes.
+The `SlipExtraction.source` strings are `sarvam-doc-ai`, `simulated` and `read-failed` at commit 86575ea. Added since: `gemini-vision` (BUILT) and `mock` (browser only). A photo that is not one of the samples reads as unreadable in the simulator, so with the gate closed or no keys it ends with a person, after the retakes.
 
 Sources (H13). The receipt and the officer view show the slip as a Source object of [fs-09 §8.2](fs-09-policy-engine-and-audit.md): kind `SLIP`, ref `slip:MD-…`, `as_of` the read time, clause C3. Origin is LIVE for a live reader and SIMULATED otherwise. fs-09 §8.3 lists only `sarvam-doc-ai` as LIVE today and gains `gemini-vision` when the adapter exists.
 
@@ -422,7 +422,7 @@ Expected day: the forecast P50 of the first silent day, rounded to the nearest �
 
 Anil, Wednesday 20 Aug 2025: expected ₹4,300, ½ × ₹4,300 = ₹2,150, capped at ₹1,500, 1 day, total ₹1,500. Paise: 215000 per day, 150000 paid, 150000 total.
 
-## 8. API (PLANNED, Wave 2)
+## 8. API (BUILT, Wave 2)
 
 Both routes answer 404 `not_found` when the flag is off. Envelope and error style are the BUILT ones (`{"ok": true, "data": …}` and `{"ok": false, "error": {"code", "message", "fields"?}}`). Ids and times in examples are illustrative; slip values are those of the sample slips.
 
@@ -606,7 +606,7 @@ After `SEND_TO_TEAM` or a confirmed READY slip the BUILT texts follow: a `SLIP_T
 
 ### 9.3 Officer view
 
-The case evidence (BUILT) shows the image, the five fields with confidence and source, the KYC name, the name score (Latin names only), the silent days, expected against actual hours and the checks. PLANNED additions on the same card, all optional so BUILT cases still render: the read label (mode, provider, model, fallback reason), "merchant confirmed the fields" or "sent to the team as read", the number of photos sent, and an injection flag. The officer sees the confidence number. The merchant does not.
+The case evidence (BUILT) shows the image, the five fields with confidence and source, the KYC name, the name score (Latin names only), the silent days, expected against actual hours and the checks. Additions on the same card, all optional so older cases still render (backend BUILT: `evidence.precheck` with `precheck_id`, `filed_as`, `photos`, `injection_suspected` and the label fields `mode`, `provider`, `model`, `fallback_reason`; the `Evidence.tsx` lines are task N3.11): the read label (mode, provider, model, fallback reason), "merchant confirmed the fields" or "sent to the team as read", the number of photos sent, and an injection flag. The officer sees the confidence number. The merchant does not.
 
 ## 10. Screens and states
 
@@ -710,7 +710,7 @@ Cash before cover (s.64VB) is enforced by PREMIUM_PREPAID. Data minimisation, pu
 | AC-K2-12 | If a HARD check fails on the officer's re-run, the decision is DECLINED even on approve. |
 | AC-K2-13 | Four verified silent days give WITHIN_AUTO_LIMIT FAIL, REFERRED, SLIP_TO_HUMAN_DAYS, and an explanation that shows all four days. |
 
-### 13.2 N3 (PLANNED)
+### 13.2 N3 (BUILT)
 
 | ID | Criterion |
 |---|---|
@@ -746,9 +746,9 @@ Actors in the BUILT log: `model` (detection), `ai-agent`, `policy-engine`, `offi
 |---|---|---|---|
 | `silence.detected` | model | silent_day, first_silent_day, expected_day_paise, p10_day_paise | BUILT |
 | `message.outbound`, `message.inbound` | ai-agent (outbound), merchant:<id> (inbound) | message kind and ids | BUILT |
-| `slip.read` | ai-agent | source, confidence, document_type, fields_read (names only). PLANNED additions: precheck_id, attempt, mode, provider, model, fallback_reason, attempts | BUILT, extended |
-| `precheck.shown` | ai-agent | precheck_id, status, reason, attempt | PLANNED |
-| `precheck.confirmed` | merchant:<id> | precheck_id, action, claim_id | PLANNED |
+| `slip.read` | ai-agent | source, confidence, document_type, fields_read (names only). Added with N3: precheck_id, attempt, mode, provider, model, fallback_reason, attempts | BUILT, extended |
+| `precheck.shown` | ai-agent | precheck_id, status, reason, attempt | BUILT |
+| `precheck.confirmed` | merchant:<id> | precheck_id, action, claim_id | BUILT |
 | `decision.personal` | policy-engine | full decision with every check, plus the claim summary (no slip) | BUILT |
 | `case.open` | policy-engine | case id, kind PERSONAL_CLAIM_REVIEW, claim and decision ids | BUILT |
 | `decision.officer` | officer:<id> | superseding decision, note | BUILT |
@@ -783,7 +783,7 @@ Every figure here is a target. Nothing has been measured.
 | Uploads and phone routes | `backend/tests/api/test_uploads.py`, `test_merchants_phone.py` | 37, 43 |
 | Demo flows over HTTP | `backend/tests/test_demo_flows.py`, `make demo-check` | 11 |
 
-### 16.2 PLANNED (paths proposed)
+### 16.2 Planned tests (status on 2 Oct 2026, evening: BUILT as `tests/precheck/test_status_table.py`, `tests/replay/test_slip_precheck.py`, `tests/integrations/test_gemini_vision.py`, `test_slip_chain.py`, `tests/conversation/test_slip_injection.py` with `tests/fixtures/slips/redteam.jsonl`, `tests/precheck/test_untrusted_slip_text.py` (metadata stripping), `tests/api/test_slip_precheck_api.py` and `test_honest_wording_covers_slip_keys`)
 
 | Test | Path | Covers |
 |---|---|---|

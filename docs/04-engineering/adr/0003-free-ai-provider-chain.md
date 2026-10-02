@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Accepted as a decision, 2 Oct 2026. Implementation status: the Sarvam links are BUILT. The Gemini links, the FALLBACK label, per-component toggles, the forced-fallback switch and the free-tier gate are PLANNED (Wave 2). Accepting the decision is not evidence that the planned parts exist |
+| Status | Accepted as a decision, 2 Oct 2026. Implementation status: BUILT. The Sarvam and Gemini links, the FALLBACK label, per-component switches, the forced-fallback switch and the free-tier gate exist (Wave 2, behind flags); Gemini and Sarvam were tested against fakes only. Tesseract is not built |
 | Owner | Ujjwal Pardeshi |
 | Date | 2026-10-02 |
 | Related | [SPEC §0.1, §14](../../SPEC.md) · [AI architecture and guardrails §3](../ai-architecture-and-guardrails.md) · [Free-tier stack and setup](../free-tier-stack-and-setup.md) · [ADR 0001](0001-policy-engine-is-the-only-payout-authority.md) · [ADR 0004](0004-live-simulated-fallback-labels.md) · [ADR 0009](0009-synthetic-data-only-to-free-tier-ai.md) · [Ask Chhatri (fs-05) §10](../../02-product/feature-specs/fs-05-ask-chhatri.md) · [Hospital-cash claim (fs-02) §7.2](../../02-product/feature-specs/fs-02-hospital-cash-claim.md) · [Facts and sources (A17, A19)](../../01-strategy/facts-and-sources.md) |
@@ -25,7 +25,7 @@ Every AI need gets an ordered chain of free-tier providers that ends in somethin
 
 **1. One chain per need.** Chains are fixed in order and end deterministically.
 
-| Need | Chain | BUILT | PLANNED |
+| Need | Chain | BUILT at commit 86575ea | Added in Wave 2 (BUILT, behind flags) |
 |---|---|---|---|
 | Ask Chhatri answer (N2) | Rules for known intents, then Gemini chat, then Sarvam chat, then a catalogue template | Rules, templates and the Sarvam chat adapter | Gemini chat adapter, the Ask service and its guard (Wave 2) |
 | Intent for UNKNOWN text | Sarvam chat (intent value only, 500 characters at most), then the rules' UNKNOWN | BUILT | Replaced by the Ask path when N2 is on: the model no longer chooses intents |
@@ -77,7 +77,7 @@ Tesseract is a PLANNED later link for slips, after Sarvam and before REFERRED. I
 - Key exposure: keys are environment-only, `.env` is not committed, and keys are rotated after the event.
 - A model is renamed or retired: the id is an environment variable and is echoed in every label.
 - The two providers behave differently on the same prompt: validation and the guard are provider-independent, and the evaluation runs each provider separately.
-- Provider terms allow reuse of free-tier content: only synthetic data is sent, and the data gate is planned ([ADR 0009](0009-synthetic-data-only-to-free-tier-ai.md)).
+- Provider terms allow reuse of free-tier content: only synthetic data is sent, and the data gate enforces it ([ADR 0009](0009-synthetic-data-only-to-free-tier-ai.md)).
 
 ## How we will know it was right
 
@@ -103,6 +103,7 @@ Tesseract is a PLANNED later link for slips, after Sarvam and before REFERRED. I
 
 ## Changelog
 
+- 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v3 · aligned with the code and the Wave 2 specs: decision Accepted while implementation is PLANNED, stated explicitly; one chain per need with BUILT and PLANNED columns; the intent call is Sarvam for UNKNOWN text only and is replaced by the Ask path; Gemini adapters follow the Sarvam pattern with the model id in an environment variable and no model name or quota in documents; Tesseract and browser speech recognition are planned and not in the Wave 2 chain; retry facts corrected (waits of 0.5 s then 1 s); removed the invented adapter size, "judges expect two providers" note, free-tier limits for browser speech, the "marked LIVE if reachable" rule, the status-flapping mitigation and the time-of-day milestones
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes the provider chain (Gemini PLANNED, Sarvam TODAY) and synthetic-only rule for free tiers.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: restored Gemini free tier as PLANNED first provider (Oct 2–3) for N2 and N3; clarified TODAY vs PLAN split; updated context, decision table, alternatives, consequences, signals, and follow-up tasks to reflect provider chain with Gemini primary, Sarvam secondary, deterministic fallback.

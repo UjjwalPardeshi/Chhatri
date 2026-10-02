@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| Status | Accepted as a decision, 2 Oct 2026. Enforcement today is by construction: every merchant, KYC name, sales figure and slip in the prototype is synthetic, and no code checks it. The gate described here is PLANNED (Wave 2) and does not exist yet |
+| Status | Accepted as a decision, 2 Oct 2026. Enforcement is by construction (every merchant, KYC name, sales figure and slip in the prototype is synthetic) and, since Wave 2, by the gate of section 3, BUILT in `backend/chhatri/integrations/free_tier.py` |
 | Owner | Ujjwal Pardeshi |
 | Date | 2026-10-02 |
 | Related | [SPEC §0.1, §3, §14](../../SPEC.md) · [AI architecture and guardrails §5](../ai-architecture-and-guardrails.md) · [Free-tier stack and setup](../free-tier-stack-and-setup.md) · [ADR 0003](0003-free-ai-provider-chain.md) · [ADR 0004](0004-live-simulated-fallback-labels.md) · [Hospital-cash claim (fs-02) §12](../../02-product/feature-specs/fs-02-hospital-cash-claim.md) · [Ask Chhatri (fs-05) §16](../../02-product/feature-specs/fs-05-ask-chhatri.md) · [Regulatory and compliance](../../05-business/regulatory-and-compliance.md) · [Facts and sources (A19, A22)](../../01-strategy/facts-and-sources.md) |
 
 ## TL;DR
 
-Only synthetic data is sent to AI services that run on free tiers or free credits. Today that holds because the whole prototype is synthetic. No code enforces it. The planned gate is one setting, `CHHATRI_DATA_IS_SYNTHETIC` (name proposed), which every free-tier link must pass before it is called. When the setting is false or unset the links are skipped and the result is labelled `FREE_TIER_BLOCKED`. This ADR does not choose a processor for real data. That is a decision for a pilot, and §Real data lists what must come first.
+Only synthetic data is sent to AI services that run on free tiers or free credits. That holds because the whole prototype is synthetic, and a gate enforces it: one setting, `CHHATRI_DATA_IS_SYNTHETIC`, which every free-tier link must pass before it is called. When the setting is false or unset the links are skipped and the result is labelled `FREE_TIER_BLOCKED`. This ADR does not choose a processor for real data. That is a decision for a pilot, and §Real data lists what must come first.
 
 ## Context
 
@@ -29,23 +29,24 @@ Only synthetic data is sent to AI services that run on free tiers or free credit
 | Text to speech | Reply text, 2,500 characters at most | Sarvam | key is set, demo merchants only |
 | Memory | Learn-loop facts: kind, time, merchant and zone ids, and a short text with ids, outcomes, amounts and dates. No names | The LLM configured for Cognee | `COGNEE_ENABLED` and an `LLM_API_KEY`, off by default |
 
-**What will leave (PLANNED).** The Ask question (500 characters at most) with a fact sheet of display strings and the clause text, to Gemini or Sarvam. The fact sheet holds no names, phone numbers, KYC names or shop names. A cleaned copy of the slip image to Gemini or Sarvam. Voice audio to Sarvam, or to the browser's own speech service when browser recognition is used. In Chrome that service is remote, so it counts as another processor.
+**What leaves with Waves 2 and 3 on (BUILT, behind their flags).** The Ask question (500 characters at most) with a fact sheet of display strings and the clause text, to Gemini or Sarvam. The fact sheet holds no names, phone numbers, KYC names or shop names. A cleaned copy of the slip image to Gemini or Sarvam. Voice audio to Sarvam, or to the browser's own speech service when browser recognition is used. In Chrome that service is remote, so it counts as another processor.
 
 ## Decision
 
 **1. The rule.** Synthetic data only, to every AI service on a free tier or free credits, and to any service whose terms have not been read.
 
-**2. Enforcement today.** By construction, nothing more. This is a real limit. A person who uploads a real photo to a running backend that has a key would send it to a free tier. The mitigations that exist or are planned are: the live demo runs on the demo laptop ([demo runbook](../../06-delivery/demo-runbook.md)), the static demo (N7, PLANNED) has no backend and calls no provider, and the first upload shows a notice (`SLIP_NOTICE` in fs-02 and `ASK_VOICE_NOTICE` in fs-05, both proposed copy, ask for sample slips and sample sentences only).
+**2. Enforcement.** By construction, and by the gate of section 3, which only reads a deployment's declaration. This is a real limit: a person who uploads a real photo to a running backend that has a key and declares its data synthetic would send it to a free tier. The other mitigations are: the live demo runs on the demo laptop ([demo runbook](../../06-delivery/demo-runbook.md)), the static demo (N7) has no backend and calls no provider, and the first upload shows a notice (`SLIP_NOTICE` in fs-02 and `ASK_VOICE_NOTICE` in fs-05, both proposed copy, ask for sample slips and sample sentences only).
 
-**3. The gate (planned design, not code).**
+**3. The gate (BUILT, Wave 2).** `free_tier_allowed(component)` and `free_tier_gate_detail()` in `backend/chhatri/integrations/free_tier.py`; tests in `backend/tests/integrations/test_free_tier_gate.py`, `test_registry.py`, `backend/tests/ask/test_wiring.py`, `test_ask_service.py`, `backend/tests/replay/test_static.py` and `backend/tests/api/test_feature_flags.py`. The design as specified:
 
-- A setting `chhatri_data_is_synthetic`, read from `CHHATRI_DATA_IS_SYNTHETIC` (name proposed). It is per deployment, not per merchant. The default is false, so a deployment that forgets to set it fails closed. The example environment file for this synthetic prototype sets it to true (planned change).
+- A setting `chhatri_data_is_synthetic`, read from `CHHATRI_DATA_IS_SYNTHETIC`. It is per deployment, not per merchant. The default is false, so a deployment that forgets to set it fails closed. The example environment file for this synthetic prototype sets it to true, and `make env` warns when an existing `.env` does not.
 - One function, `free_tier_allowed(component)`, in the integrations layer. Every chain asks it before it calls a free-tier link. The check is not a decorator on business functions and not a list of merchant ids.
 - When it says no: the link is skipped, the attempt is recorded as blocked, the result is labelled SIMULATED with `FREE_TIER_BLOCKED` ([fs-05 §10](../../02-product/feature-specs/fs-05-ask-chhatri.md)), and one audit entry notes it per request. Templates or the simulated reader answer. A photo that is not a sample then reads as unreadable and goes to a person.
-- The gate state is shown in `/api/preflight`, the provider panel and the startup log.
+- The gate state is shown in `/api/preflight` (row `free_tier_gate`), the provider panel (reason `FREE_TIER_BLOCKED` on a keyed component) and the start-up log (`free-tier data gate: ...`).
+- The paths that call Sarvam directly (the chat intent, voice notes, photos without the pre-check, the Soundbox voice) get the simulators when the gate is closed, and Cognee stays off, so a closed gate means zero free-tier calls everywhere.
 
 ```python
-# Planned design, not code: where the gate sits in a chain.
+# Design sketch: where the gate sits in a chain (the code is `chhatri/ai/chain.py`, `_skip_reason`).
 def run_chain(component, links, request):
     attempts = []
     for link in links:
@@ -115,6 +116,7 @@ What the gate does not do: it does not look inside a payload, and it cannot tell
 
 ## Changelog
 
+- 2026-10-02 · v4 · the gate is BUILT: the chains skip a free-tier link with FREE_TIER_BLOCKED (noted in the request's audit entry), the chat, voice-note, photo and Soundbox paths that call Sarvam directly get the simulators, Cognee stays off, and the state is a `/api/preflight` row, a start-up log line and the panel reason; `make env` warns when an existing `.env` lacks `CHHATRI_DATA_IS_SYNTHETIC=true`
 - 2026-10-02 · v3 · aligned with the code and the Wave 2 specs: decision Accepted while the gate is PLANNED, stated explicitly; enforcement today is by construction; the gate is a deployment setting that fails closed and is labelled `FREE_TIER_BLOCKED`; the old decorator and its code, the claim that demo mode gates AI (it only hands the officer token to the console), the invented merchant list, the "question text only" description (the Ask call also sends a fact sheet), the Tesseract latency note, the paid-API production guidance, the unverified claim about Sarvam's terms and the 30-day log retention were removed; the data-flow table now lists what is sent today and what will be sent
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly enforces synthetic-only rule for all free-tier AI services (Sarvam TODAY, Gemini PLANNED).
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: clarified that synthetic-only rule applies to EVERY free tier (Gemini + Sarvam today, and any future free service); updated context, decision, alternatives, consequences, signals, follow-ups, and open questions to reflect both Gemini (PLANNED Oct 2–3) and Sarvam (today); added guard implementation for Gemini; expanded privacy checklist.

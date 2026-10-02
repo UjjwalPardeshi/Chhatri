@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.4 · K4 and K7 BUILT (commit 86575ea) · H13 and H14 PLANNED, build wave 1 |
+| Status | v1.4 · K4 and K7 BUILT (commit 86575ea) · H13 and H14 BUILT, wave 1 |
 | Owner | Ujjwal Pardeshi |
 | Date | 2 Oct 2026 |
 | Audience | Engineers, compliance officers, claims officers, security review |
@@ -16,8 +16,8 @@
 - **Name mismatch is SOFT:** `NAME_MATCHES_KYC` below 85 sends the claim to a claims officer (REFERRED). It never declines a claim by itself.
 - **Officer path:** a claims officer decides only REFERRED personal claims. The engine re-runs every check on fresh facts. Any HARD fail gives DECLINED even if the officer approves. An approval records each SOFT issue as `WAIVED_BY_OFFICER`. A DISPUTE is a different case kind (see fs-06).
 - **K7 (BUILT):** a SHA-256 hash chain in an append-only SQLite table. `GET /api/audit` pages it and `GET /api/audit/verify` returns `{valid, entries, head_hash, first_bad_seq}`.
-- **H13 (PLANNED, wave 1):** every check row, money number and clause shown to a merchant or officer carries a Source (what it came from, its id, its time, LIVE or SIMULATED).
-- **H14 (PLANNED, wave 1):** every explanation can carry a counterfactual (what would have changed the outcome). The engine generates it and checks it by re-running the engine, so the LLM never writes it.
+- **H13 (BUILT, wave 1):** every check row, money number and clause shown to a merchant or officer carries a Source (what it came from, its id, its time, LIVE or SIMULATED).
+- **H14 (BUILT, wave 1):** every explanation can carry a counterfactual (what would have changed the outcome). The engine generates it and checks it by re-running the engine, so the LLM never writes it.
 - **Receipt:** one new endpoint, `GET /api/decisions/{decision_id}/receipt`, returns the decision with its sources, clauses, counterfactuals, payout and audit hash.
 - **Priority:** everything here is P0. H13, H14 and the receipt are build wave 1 (demo spine) behind feature flags. If one is not finished it stays hidden; it is never shown half-working.
 
@@ -46,9 +46,9 @@ H13 and H14 make the decision legible. H13 says where each fact came from. H14 s
 | Audit and decision routes | BUILT | `api/routers/records.py`: `GET /api/audit`, `GET /api/audit/verify`, `GET /api/decisions/{decision_id}`, `GET /api/policy` | Add the receipt route |
 | Console audit page | BUILT | `frontend/src/pages/Audit.tsx`: whole log newest first, grouped by simulated minute, filters, Verify chain | None |
 | Console policy page | BUILT, read-only | `frontend/src/pages/Policy.tsx`: authority table, checks, rules, live tests. There is no way to edit a rule in the console | None |
-| H13 sources | PLANNED, wave 1 | new `policy/provenance.py` | Section 8 |
-| H14 counterfactuals | PLANNED, wave 1 | new `policy/counterfactual.py` | Section 9 |
-| Receipt endpoint | PLANNED, wave 1 | `GET /api/decisions/{decision_id}/receipt` | Section 10 |
+| H13 sources | BUILT, wave 1 | `policy/provenance.py` | Section 8 |
+| H14 counterfactuals | BUILT, wave 1 | `policy/counterfactual.py` | Section 9 |
+| Receipt endpoint | BUILT, wave 1 | `GET /api/decisions/{decision_id}/receipt` | Section 10 |
 | Rules versioning and re-evaluation of open cases | PLANNED | none | After the hackathon (open question 1) |
 
 ## 3. User stories and jobs to be done
@@ -104,7 +104,7 @@ sequenceDiagram
   Engine->>Engine: Run the checks that apply - 9 per claim
   Engine->>Engine: Compute amount and explanation
   Engine-->>Flow: Decision APPROVED, REFERRED or DECLINED
-  Note over Flow,Engine: PLANNED H13 H14 - build_receipt adds sources and counterfactuals
+  Note over Flow,Engine: H13 H14 - build_receipt adds sources and counterfactuals
   Flow->>Rec: record the decision
   Rec->>Audit: append decision.area or decision.personal
   alt APPROVED
@@ -218,7 +218,7 @@ Money is integer paise, computed with `Decimal` and ROUND_HALF_UP, starting from
 
 The officer never changes the amount. The route needs the officer bearer token (`POST /api/cases/{case_id}/approve` or `/decline`). The demo hands the token to the console; real officer login is outside the hackathon scope (fs-06 section 11).
 
-## 8. H13: Source on every check, number and clause (PLANNED, wave 1)
+## 8. H13: Source on every check, number and clause (BUILT, wave 1)
 
 The idea list calls this "Verified-by badges". On screen the label is **Source**, because every input is SIMULATED today and the chip must never suggest that an outside body verified a number.
 
@@ -298,7 +298,7 @@ Money facts in the explanation (`facts[]` in the receipt):
 3. The chip says where a value came from. It never says "verified by" an outside body. A SIMULATED origin always shows the word.
 4. The Ask Chhatri guard (H17) may quote only clause ids and numbers that appear in the receipt.
 
-## 9. H14: Counterfactuals the engine checks by re-running (PLANNED, wave 1)
+## 9. H14: Counterfactuals the engine checks by re-running (BUILT, wave 1)
 
 A counterfactual is a sentence that says what would have changed the outcome, with numbers. The module `backend/chhatri/policy/counterfactual.py` generates it from engine facts. An LLM never writes, edits or ranks it.
 
@@ -385,7 +385,7 @@ The Z9 explanation reaches screens through `POST /api/whatif/area` with no overr
 
 New catalogue keys `CF_<CHECK_CODE>`, `CF_ZONE_NO_TRIGGER` and `CF_AMOUNT_*` go in `backend/chhatri/conversation/messages.py` and in the honest-wording scan (X7). All are proposed. Hindi lines need review by a native speaker before use. A template may read only the fields of its counterfactual object, and a test checks that every digit in a rendered text appears in those fields.
 
-## 10. Receipt endpoint (PLANNED, wave 1)
+## 10. Receipt endpoint (BUILT, wave 1)
 
 `GET /api/decisions/{decision_id}/receipt`. The existing `GET /api/decisions/{decision_id}` stays as it is. The receipt adds what H2, H3, H13 and H14 need. Same envelope `{ok, data}`. Unknown id: 404. The id pattern is `D-` plus at least 6 digits.
 
@@ -512,8 +512,8 @@ The engine supports the RBI FREE-AI principles (A23) as follows. This is a desig
 | A REFERRED claim whose cover has lapsed since | Officer approves | A HARD check fails, DECLINED, no payout | `decision.officer`, `case.resolve` |
 | An auditor calls `GET /api/audit/verify` | The chain is intact | `{valid: true, entries, head_hash, first_bad_seq: null}` | none |
 | A row is edited directly in SQLite | `verify` runs | `valid: false` and `first_bad_seq` is that row | none |
-| PLANNED: receipt for D-000142 | `GET /api/decisions/D-000142/receipt` | Every check and fact has at least one Source with a `ref` that resolves; `counterfactuals` holds only verified items | none |
-| PLANNED: Z9 at 17:00, no alert, hours 59, 58, 67 | The zone explanation is requested | `ZONE_NO_TRIGGER` names the missing alert and the hours not below 50, and the re-run of `trigger_verdict` with the flip fires | none |
+| Receipt for D-000142 | `GET /api/decisions/D-000142/receipt` | Every check and fact has at least one Source with a `ref` that resolves; `counterfactuals` holds only verified items | none |
+| Z9 at 17:00, no alert, hours 59, 58, 67 | The zone explanation is requested | `ZONE_NO_TRIGGER` names the missing alert and the hours not below 50, and the re-run of `trigger_verdict` with the flip fires | none |
 
 ## 15. Telemetry and audit events
 

@@ -455,7 +455,7 @@ The built INSTALMENT_PAUSED line says the instalment is paused and does not say 
 
 ## 4. Trust receipt (H2, H3, wave 1)
 
-The receipt is for one decision. It exists as a receipt only when the payout is CREDITED; before that the same screen reads as a decision record. It carries the formula (the built EXPLAIN text), where each number came from (section 5), the checks (section 6.1), what would have changed the result (section 6.2), the rules version, the decision time and the first characters of the audit entry. `GET /api/decisions/{decision_id}/receipt` (PLANNED) returns it.
+The receipt is for one decision. It exists as a receipt only when the payout is CREDITED; before that the same screen reads as a decision record. It carries the formula (the built EXPLAIN text), where each number came from (section 5), the checks (section 6.1), what would have changed the result (section 6.2), the rules version, the decision time and the first characters of the audit entry. `GET /api/decisions/{decision_id}/receipt` (BUILT, wave 1) returns it.
 
 ### 4.1 Rows and buttons
 
@@ -949,9 +949,9 @@ The first step is built: a DISPUTE case with a 24 hour clock. The other steps ar
 | `grv.title` | Complaints and escalation | शिकायत और आगे के कदम | तक्रार आणि पुढचे टप्पे | Help screen row and heading; hidden until N5 is switched on |
 | `grv.intro` | If you are not happy with an answer, you can take a complaint up one step at a time. Each step shows its reply time, or says that it is not confirmed yet. | अगर आप किसी जवाब से संतुष्ट नहीं हैं, तो शिकायत को एक-एक कदम ऊपर ले जा सकते हैं। हर कदम के साथ जवाब का समय दिखता है, या यह कि वह अभी तय नहीं है। | एखाद्या उत्तराने समाधान न झाल्यास आपण तक्रार एकेक टप्पा पुढे नेऊ शकता. प्रत्येक टप्प्यासोबत उत्तराची वेळ दिसते, किंवा ती अजून निश्चित नाही असे दिसते. | first lines of the screen |
 | `grv.step.PAYTM_DISPUTE` | Our claims officer | हमारा क्लेम अधिकारी | आमचा क्लेम अधिकारी | step PAYTM_DISPUTE; BUILT as the DISPUTE case with a 24 hour clock |
-| `grv.step.INSURER_GRO` | The insurer's grievance officer | बीमा कंपनी का शिकायत अधिकारी | विमा कंपनीचा तक्रार अधिकारी | step INSURER_GRO; outside Chhatri; PLANNED (N5) |
-| `grv.step.BIMA_BHAROSA` | IRDAI Bima Bharosa portal | IRDAI का बीमा भरोसा पोर्टल | IRDAI चे बीमा भरोसा पोर्टल | step BIMA_BHAROSA; the merchant files it; PLANNED (N5) |
-| `grv.step.OMBUDSMAN` | Insurance Ombudsman | बीमा लोकपाल | विमा लोकपाल | step OMBUDSMAN; the merchant files it; PLANNED (N5) |
+| `grv.step.INSURER_GRO` | The insurer's grievance officer | बीमा कंपनी का शिकायत अधिकारी | विमा कंपनीचा तक्रार अधिकारी | step INSURER_GRO; outside Chhatri; BUILT (N5, `n5_grievances`) |
+| `grv.step.BIMA_BHAROSA` | IRDAI Bima Bharosa portal | IRDAI का बीमा भरोसा पोर्टल | IRDAI चे बीमा भरोसा पोर्टल | step BIMA_BHAROSA; the merchant files it; BUILT (N5, `n5_grievances`) |
+| `grv.step.OMBUDSMAN` | Insurance Ombudsman | बीमा लोकपाल | विमा लोकपाल | step OMBUDSMAN; the merchant files it; BUILT (N5, `n5_grievances`) |
 | `grv.step.LENDER_GRIEVANCE` | The lender's grievance officer | लेंडर का शिकायत अधिकारी | लेंडरचा तक्रार अधिकारी | step LENDER_GRIEVANCE; the ladder of an instalment complaint |
 | `grv.step.PAYTM_SUPPORT` | Paytm support | Paytm सपोर्ट | Paytm सपोर्ट | step PAYTM_SUPPORT; the ladder of a payment, app or data complaint |
 | `grv.what.PAYTM_DISPUTE` | A person in Chhatri's team looks at the numbers again. | छतरी की टीम का एक व्यक्ति आँकड़े दोबारा देखता है। | छत्रीच्या टीममधील एक व्यक्ती आकडे पुन्हा पाहते. | one line under the step name |
@@ -1023,7 +1023,7 @@ Consent is for one purpose, and it can be withdrawn. There are three purposes: s
 
 ### 14.1 Notice and boxes on the buy screen
 
-The keys without a dot prefix belong to the notice module of the backend. The notice is versioned; the boxes start unticked; the two boxes marked Needed for cover must be ticked to continue. Until this wave the buy screen shows the single line buy.consent.notice (section 2.4).
+The keys without a dot prefix belong to the notice module of the backend. The notice is versioned; the boxes start unticked; the two boxes marked Needed for cover must be ticked to continue. Until this wave the buy screen shows the single line buy.consent.notice (section 2.4). The mini-app carries the same words under its own keys: `notice` is `buy.consent.text`, `box.sales`, `box.settlement` and `box.slip` are `buy.consent.box.<PURPOSE>`, `tag.required` and `tag.optional` are `buy.consent.tag.*`, `hint` is `buy.consent.hint` and `error.stale` is `buy.consent.error` (`frontend/src/miniapp/copy/en.ts`, `hi.ts`, `mr.ts`).
 
 | Key | English | Hindi | Marathi (draft, needs a native speaker's review) | Facts and when shown |
 |---|---|---|---|---|
@@ -1035,6 +1035,7 @@ The keys without a dot prefix belong to the notice module of the backend. The no
 | `tag.required` | Needed for cover | कवर के लिए ज़रूरी | कवरसाठी आवश्यक | tag beside a required checkbox |
 | `tag.optional` | Optional | ज़रूरी नहीं | ऐच्छिक | tag beside an optional checkbox |
 | `hint` | Tick the two boxes marked Needed for cover to continue. | आगे बढ़ने के लिए “कवर के लिए ज़रूरी” वाले दोनों बॉक्स चुनें। | पुढे जाण्यासाठी “कवरसाठी आवश्यक” असे लिहिलेले दोन्ही बॉक्स निवडा. | shown while a required box is unticked |
+| `buy.consent.version` | Notice version {version} | सूचना संस्करण {version} | सूचना आवृत्ती {version} | proposed; the notice version in small type under the notice (`notice-1`) |
 | `error.stale` | The notice changed. Please read it again. | सूचना बदल गई है। कृपया उसे फिर से पढ़ें। | सूचना बदलली आहे. कृपया ती पुन्हा वाचा. | the notice version changed between viewing and paying |
 
 ### 14.2 Purposes
@@ -1175,6 +1176,17 @@ The static demo runs in the browser against the in-browser mock backend. This de
 | `offline.banner` | Offline. Showing data from {time}. | ऑफ़लाइन। {time} का डेटा दिख रहा है। | ऑफलाइन. {time} चा डेटा दिसत आहे. | facts: `time`; the last good data stays on screen from memory; no copy is stored |
 | `offline.blocked` | This needs the internet. Please try again when you are online. | इसके लिए इंटरनेट चाहिए। ऑनलाइन होने पर फिर से कोशिश करें। | यासाठी इंटरनेट लागते. ऑनलाइन झाल्यावर पुन्हा प्रयत्न करा. | - |
 | `offline.static` | This is the static demo. It runs in your browser with made-up data. Nothing is sent anywhere. | यह स्टैटिक डेमो है। यह आपके ब्राउज़र में बनावटी डेटा के साथ चलता है। कुछ भी कहीं नहीं भेजा जाता। | हा स्टॅटिक डेमो आहे. तो आपल्या ब्राउझरमध्ये बनावट डेटासह चालतो. काहीही कुठेही पाठवले जात नाही. | N7; shown as a banner in the static build; nothing here claims that a public address exists |
+| `clock.sheet.title` | Demo date and time | डेमो की तारीख़ और समय | डेमोची तारीख आणि वेळ | proposed; title of the demo clock sheet, opened from the clock of the standalone route (screens and flows 8) |
+| `clock.sheet.note` | Move the demo clock. The replay is made up. | डेमो की घड़ी आगे-पीछे करें। यह रीप्ले काल्पनिक है। | डेमोचे घड्याळ पुढे-मागे करा. हा रिप्ले काल्पनिक आहे. | proposed; under the sheet title |
+| `clock.sheet.play` | Play | चलाएँ | सुरू करा | proposed; button while the replay is paused |
+| `clock.sheet.pause` | Pause | रोकें | थांबवा | proposed; the same button while the replay runs |
+| `clock.sheet.start` | Back to the start | शुरुआत पर वापस | सुरुवातीला परत | proposed; resets the replay |
+| `clock.chapter.alert` | Alert | अलर्ट | अलर्ट | proposed; chapter button with its time (monsoon 14:00) |
+| `clock.chapter.trigger` | Trigger | ट्रिगर | ट्रिगर | proposed; chapter button (monsoon 17:00) |
+| `clock.chapter.paid` | Paid | भुगतान | पेमेंट | proposed; chapter button (monsoon 17:04) |
+| `clock.chapter.instalment` | Instalment | किस्त | हप्ता | proposed; chapter button (monsoon 17:05) |
+| `clock.chapter.checkin` | Check-in | हालचाल | विचारपूस | proposed; chapter button (illness replays 11:20) |
+| `clock.chapter.cover` | Cover asked | कवर माँगा | कवर मागितले | proposed; chapter button (buy_cover 18:10) |
 
 ### 15.4 SIMULATED
 
@@ -1424,4 +1436,5 @@ Marathi is a draft. Please check, in this order:
 
 ## Changelog
 
+- 2026-10-02 · v1.1 · the demo clock sheet keys (section 15.3) and `buy.consent.version` (section 14.1), all proposed; the receipt route and the grievance steps marked BUILT
 - 2026-10-02 · v1 · first version: all new P0 strings in three languages, Marathi drafts for the 51 built keys, built text quoted exactly

@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-- **One token set, two surfaces.** The console (seven pages) is BUILT with plain CSS tokens. The merchant mini-app (N1) is PLANNED with Tailwind CSS v4 and shadcn/ui, scoped under a `.miniapp` root, its theme mapped onto the same tokens. The decision record is section 12 and the mapping is section 13.
+- **One token set, two surfaces.** The console (seven pages) is BUILT with plain CSS tokens. The merchant mini-app (N1) is BUILT, behind `n1_miniapp`, with Tailwind CSS v4 and shadcn/ui, scoped under a `.miniapp` root, its theme mapped onto the same tokens. The decision record is section 12 and the mapping is section 13.
 - **Everything here is P0 and lands in a wave.** W0 setup (stack and new tokens), W1 demo spine (mini-app core), W2 live AI (mode badges), W3 trust and rights, W4 judge wow (console polish for the projector), W5 ship. Sections say BUILT or PLANNED.
 - **The draft's contrast numbers were wrong.** Amber `#e39a4f` on white is 2.33:1 (the draft said 5.2:1), orange `#fb923c` is 2.26:1 and teal `#14919b` is 3.78:1. Section 2.3 replaces them with calculated values. Every colour pair used for text now passes 4.5:1.
 - **Honest labels.** LIVE is green, SIMULATED is grey, FALLBACK is orange, each with an icon and a word (section 11). The mode comes from the API. No client code decides it.
@@ -28,7 +28,7 @@ Section numbers 1, 2.5, 6.3 and 8.1 are stable: other specs cite them.
 
 Trustworthy, scannable and dense. The officer queue, the live map, the case panel and the audit log each show one decision. Nothing is hidden: every payout and every hold is explained where it appears. Live updates count up or flash and never jump. Empty states and error paths are written out (section 5.5). Icons are task-specific inline SVG, never emoji. The map ramp runs red to amber to green and every label carries its number and shop count, so colour never carries a signal alone (section 7.1). There are no purple AI gradients and no glass effects.
 
-### 1.2 The merchant mini-app (PLANNED, phone frame)
+### 1.2 The merchant mini-app (BUILT, phone frame)
 
 Clear, and one step at a time. The merchant is a shopkeeper who reads Hindi by preference, is busy, and may read slowly. Each screen answers one question and ends with one next step (the next-best-action bar, fs-04 section 12). The selected language is large. The other language appears small, where the product already has both (a formula, a status). Explanations name the clause and use the merchant's own rupee figures. An error says what to do next.
 
@@ -51,19 +51,19 @@ Clear, and one step at a time. The merchant is a shopkeeper who reads Hindi by p
 | Console components and 29 inline icons | BUILT | n/a | `frontend/src/components/` |
 | Global reduced-motion rule, count-up and flash hooks | BUILT | n/a | `styles/base.css`, `state/motion.ts` |
 | LIVE and SIMULATED chip and popover | BUILT | n/a | `components/layout/IntegrationBadges.tsx` |
-| Status tokens, field border, focus colour, radius aliases (section 2.3) | PLANNED | W0 | `tokens.css` |
-| Tailwind v4 and shadcn, scoped (sections 12 and 13) | PLANNED | W0 | `frontend/src/miniapp/` |
-| Mini-app components (section 5.2) | PLANNED | W1 core, W2, W3 | `frontend/src/miniapp/` |
-| Verified-by badges (H13) | PLANNED | W1 | mini-app receipt, console case panel |
-| FALLBACK mode, provider panel, mode on AI replies (X6, H26) | PLANNED | W2 | header chip, panel, Ask screen |
-| Console polish: tokenised sizes, `--faint` text fix, focus ring, presenter mode, moment card | PLANNED | W4 | console CSS and `state/presenter.tsx` |
+| Status tokens, field border, focus colour, radius aliases (section 2.3) | BUILT | W0 | `tokens.css` |
+| Tailwind v4 and shadcn, scoped (sections 12 and 13) | BUILT | W0 | `frontend/src/miniapp/` |
+| Mini-app components (section 5.2) | BUILT | W1 core, W2, W3 | `frontend/src/miniapp/` |
+| Verified-by badges (H13) | BUILT | W1 | mini-app receipt, console case panel |
+| FALLBACK mode, provider panel, mode on AI replies (X6, H26) | BUILT | W2 | header chip, panel, Ask screen |
+| Console polish: tokenised sizes, `--faint` text fix, focus ring, presenter mode, moment card | BUILT | W4 | console CSS and `state/presenter.tsx` |
 | Marathi (N8) type check on the venue laptop | PLANNED | W4 | mini-app |
 
 ---
 
 ## 2. Design tokens
 
-Source of truth: `frontend/src/styles/tokens.css`, 114 lines, BUILT. Token names are final and are not renamed. W0 adds the tokens marked PLANNED below to the same `:root` block, because the Tailwind theme (section 13) points at them. Contrast ratios are calculated with the WCAG 2.x relative-luminance formula on 2 Oct 2026. Re-run them when a token changes.
+Source of truth: `frontend/src/styles/tokens.css`, 137 lines, BUILT. Token names are final and are not renamed. W0 added the tokens marked BUILT, W0 below to the same `:root` block, because the Tailwind theme (section 13) points at them. Contrast ratios are calculated with the WCAG 2.x relative-luminance formula on 2 Oct 2026. Re-run them when a token changes.
 
 ### 2.1 Palette (BUILT)
 
@@ -96,16 +96,16 @@ Source of truth: `frontend/src/styles/tokens.css`, 114 lines, BUILT. Token names
 | `--ink-3` | `#475569` | Tertiary text | 7.58:1 on white |
 | `--muted` | `#5b6474` | Muted text | 5.97:1 on white, 5.46:1 on `--paper`, 5.27:1 on `--paper-2` |
 | `--faint` | `#8a93a3` | Icons, lines, disabled controls | 3.10:1 on white, 2.83:1 on `--paper`. **Fails as text.** fs-08 section 13.2 moves 9 text declarations to `--muted` |
-| `--field-border` (PLANNED, W0) | `#707a8c` | Outline of inputs, selects, switch tracks | 4.33:1 on white, 3.96:1 on `--paper`, 3.82:1 on `--paper-2`. WCAG 1.4.11 asks 3:1 for a control's edge, and `--line-strong` cannot give it |
+| `--field-border` (BUILT, W0) | `#707a8c` | Outline of inputs, selects, switch tracks | 4.33:1 on white, 3.96:1 on `--paper`, 3.82:1 on `--paper-2`. WCAG 1.4.11 asks 3:1 for a control's edge, and `--line-strong` cannot give it |
 | `--amber-ink` | `#a8520f` | Text on amber tints | 5.41:1 on white, 4.79:1 on `--amber-soft` |
 | `--amber-solid` | `#b45309` | Amber fill with white text | White on it 5.02:1 |
 | `--amber-soft` | `#fcefe0` | Amber tint | n/a |
 | `--red-soft`, `--red-line` | `#fbeaea`, `#f1c4c4` | Red tint and its border | `--red` on `--red-soft` 5.56:1 |
 | `--green-soft` | `#e4f4e9` | Green tint | `--green` on it is 4.40:1 and **fails as text**. Use `--green-ink` |
-| `--green-ink` (PLANNED, W0) | `#166534` | Text on green tints | 7.13:1 on white, 6.25:1 on `--green-soft` |
+| `--green-ink` (BUILT, W0) | `#166534` | Text on green tints | 7.13:1 on white, 6.25:1 on `--green-soft` |
 | `--grey-soft` | `#eceff4` | Neutral tint | `--ink-3` on it 6.57:1, `--muted` on it 5.18:1 |
 
-### 2.3 Status colours (PLANNED, W0)
+### 2.3 Status colours (BUILT, W0)
 
 The draft proposed status colours without checking them. These are the corrected set. Add this block to `:root` in `tokens.css`:
 
@@ -170,11 +170,11 @@ Status indicators carry an icon and a word, never colour alone.
 | `--on-navy` | `#ffffff` | Strong text | 17.27:1 on navy |
 | `--on-navy-2` | `#c8d3ea` | Secondary text | 11.48:1 on navy |
 | `--on-navy-3` | `#93a4c6` | Tertiary text, the SIMULATED part of the header chip | 6.88:1 on navy, 5.35:1 on `--navy-3` |
-| `--fallback-on-navy` (PLANNED, W2) | `#fb923c` | FALLBACK segment of the header chip | 7.63:1 on navy, 5.93:1 on `--navy-3` |
+| `--fallback-on-navy` (BUILT, W2) | `#fb923c` | FALLBACK segment of the header chip | 7.63:1 on navy, 5.93:1 on `--navy-3` |
 
 `--accent` on navy is 6.23:1, so it works as a focus ring there. `--blue` on navy is 3.00:1, which is below the 3:1 a line or icon needs: never use `--blue` as an icon or line on navy.
 
-### 2.5 Type scale (BUILT; presenter column PLANNED, W4)
+### 2.5 Type scale (BUILT; presenter column BUILT, W4)
 
 Sizes are in px so the projector and phones render the deck's sizes exactly. Presenter mode (fs-08 section 12) gives each token the value of the next larger one.
 
@@ -235,7 +235,7 @@ The Overview keeps its own larger raw sizes and is not part of presenter mode.
 
 In the mini-app Tailwind's `--spacing` is 4 px, so `p-4`, `gap-6` and `mt-14` equal `--sp-4`, `--sp-6` and `--sp-14`. Every `--sp-N` is N × 4 px, so the two scales line up by construction.
 
-### 2.7 Radius (BUILT; aliases PLANNED, W0)
+### 2.7 Radius (BUILT; aliases BUILT, W0)
 
 | Token | Value | Use | Tailwind class in the mini-app |
 |---|---|---|---|
@@ -317,7 +317,7 @@ Both families are self-hosted in `frontend/public/fonts/`, declared in `public/f
 --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 ```
 
-- Body text uses `--font`. `.hi` and `[lang='hi']` switch to `--font-hi` (BUILT in `base.css`). The mini-app base adds `[lang='mr']` (PLANNED, W0).
+- Body text uses `--font`. `.hi` and `[lang='hi']` switch to `--font-hi` (BUILT in `base.css`). The mini-app base adds `[lang='mr']` (BUILT, W0).
 - Ids, hashes and decision numbers use `.mono`. Amounts use `.num` (`font-variant-numeric: tabular-nums`). Measured on 2 Oct 2026: Ubuntu's digits are already equal width (the strings 1111 and 8888 are both 92 px wide at 40 px), so `.num` is a safeguard for fallback fonts.
 - The rupee sign U+20B9 is not in the Ubuntu `latin` files. It is in the `latin-ext` files and in the Noto Devanagari files (checked by drawing the glyph from each file on 2 Oct 2026). `unicode-range` defers the `latin-ext` download until an amount appears on screen. PLANNED (W0, optional): preload the 400 and 500 `latin-ext` files in `index.html`, so the opening amount does not swap fonts.
 
@@ -325,7 +325,7 @@ Both families are self-hosted in `frontend/public/fonts/`, declared in `public/f
 
 BUILT in the console: body is `--fs-base` (14 px) at line height 1.4, with antialiased, legibility-optimised rendering. Headings h1 to h4 are weight 500 with letter spacing -0.01em and no margin. Weights in use, counted by rule on 2 Oct 2026: 500 (115), 700 (18), 400 (8), 300 (3, Overview) and 600 (1, `overview-story.css`; Ubuntu has no 600, so the browser draws it at 700).
 
-PLANNED for the mini-app. The class names are the Tailwind names from section 13:
+BUILT for the mini-app. The class names are the Tailwind names from section 13:
 
 | Role | Class | Size and weight | Example |
 |---|---|---|---|
@@ -370,7 +370,7 @@ Formats are in section 9. Summary: `₹1,380`, `₹4,25,420` (Indian grouping), 
 
 29 inline SVG glyphs in `components/common/Icon.tsx` (`IconName`): play, pause, step, reset, sound-on, sound-off, mic, send, attach, camera, speaker, check, cross, question, dash, shield, north, umbrella, chevron, stop, map, phone, arrow, more, drop, close, zoom, notes, bolt. Filled paths on a 24×24 viewBox, drawn in `currentColor`. No icon font and no external request, so the console works offline.
 
-### 4.2 Mini-app (PLANNED, W0 to W1)
+### 4.2 Mini-app (BUILT, W0 to W1)
 
 `lucide-react` 1.49.0 (ISC licence): outline icons, 2 px stroke on a 24 px grid, named imports, so the bundle holds the icons in use. Sizes: 16 px beside text, 20 px in buttons, 24 px in the tab bar, 40 px in empty and error states. Every name below exists in 1.49.0 (checked 2 Oct 2026).
 
@@ -414,7 +414,7 @@ Files are under `frontend/src/components/`.
 
 CSS classes reserved for the console: `.card`, `.btn` (32 px high), `.badge` and its colour variants, `.table`, `.muted`, `.eyebrow`, `.stack`, `.mono`. Mini-app markup does not use them. It may use `num` and `hi` (fs-04 section 5.2).
 
-### 5.2 Mini-app components (PLANNED)
+### 5.2 Mini-app components (BUILT)
 
 Files live in `frontend/src/miniapp/` (screens, `ui/` for generated shadcn and 21st.dev files, `lib/`). "Source" names the shadcn component or the 21st.dev entry (`author/name`), and the fallback when a 21st.dev pick is used. The 21st.dev picks come from catalogue descriptions and previews. **Nobody has installed or read their code yet**, so each pick is a starting point to check with the list in section 5.4, never a dependency the design relies on. The six shared states are in section 5.5.
 
@@ -458,7 +458,7 @@ Files live in `frontend/src/miniapp/` (screens, `ui/` for generated shadcn and 2
 | ConsentActivityList | Custom `ul` | N6 (W3) | Empty, loading | Time, purpose and what was used, as text |
 | EraseConfirm | shadcn `alert-dialog` | N6 (W3) | Idle, confirm, done, error | The button names the action. Focus starts on Cancel. Esc cancels |
 
-### 5.3 Console additions (PLANNED)
+### 5.3 Console additions (BUILT)
 
 Plain CSS with the tokens above. No Tailwind in console files. Class names follow the console's BEM-like style (`block__element`).
 
@@ -509,7 +509,7 @@ npx shadcn@latest add "https://21st.dev/r/<author>/<component>?api_key=$API_KEY_
 
 Every screen has the same six states.
 
-| State | Console (BUILT) | Mini-app (PLANNED) |
+| State | Console (BUILT) | Mini-app (BUILT) |
 |---|---|---|
 | Loading | `Loading`: a spinner and "Loading…" in a polite `output`, inside `AsyncView`. A veil over the map reads "Loading the replay…" or "Moving the replay clock…" during a load or seek | Skeleton shaped like the final layout, `aria-busy="true"`, no spinner text |
 | Empty | Page text: Claims "No cases" and "Doubtful claims and disputes land here."; Audit "The log fills as the replay runs" with a launcher; Merchant "No payouts yet." | One sentence and the next-best action (copy deck ids `empty.*`) |
@@ -538,7 +538,7 @@ BUILT in the console:
 | Pulses | The chip a launcher asks the presenter to tap (`chip-hint`), the Soundbox LED (`led`), the replay clock (`clock-pulse`) | Three pulses of 1.4 s or 0.8 s, and one of 900 ms | 1 ms |
 | Slow near payout | Replay speed | 1 simulated minute per second between 16:58 and 17:06 | Unchanged: it is a speed, not an animation |
 
-PLANNED for the mini-app:
+BUILT for the mini-app:
 
 | Motion | Value | Notes |
 |---|---|---|
@@ -612,7 +612,7 @@ Rules:
 
 1. **The ramp runs red to amber to green.** It is not safe for red-green colour deficiency, and the v1.1 wording that called it a non-red-green ramp was wrong. The guard is the label: every zone label carries its number and shop count ("Z7 · 37% · 46 shops"), so no one has to read the colour. A triggered zone's label is a navy chip with a red edge, and a slow-day label is a white card.
 2. **The ramp colours are fills.** Against white the amber and the green are both 2.33:1. They are never text and never the edge of a control. Text near the map sits on its own opaque chip or card, so its contrast never depends on the ramp.
-3. **The legend** is a gradient bar with ticks at 40%, 50% (the floor, in red words), 70% and 100%+, the line "Pays below 50% for 3 h, with alert", and a key for the hatch ("Heavy rain") and the dotted area ("No shops"). The number 50 and the 3 hours are a constant in `lib/colour.ts` today. PLANNED (W4, fs-08 section 13.2): read them from `GET /api/policy`, so a rules change reaches the legend and the sparkline rule.
+3. **The legend** is a gradient bar with ticks at 40%, 50% (the floor, in red words), 70% and 100%+, the line "Pays below 50% for 3 h, with alert", and a key for the hatch ("Heavy rain") and the dotted area ("No shops"). BUILT (W4, fs-08 section 13.2): the number 50 and the 3 hours are read from `GET /api/policy` (`lib/rules.ts` `triggerRule`), so a rules change reaches the legend and the sparkline rule; the constant in `lib/colour.ts` only stands in until the policy has loaded.
 4. **The mini-app has no map and no ramp.**
 
 ### 7.2 Charts and bars (BUILT)
@@ -709,7 +709,7 @@ Widening the scope changed no height: header 52 px, control bar 84 px and footer
 
 Designed at 1280×720. Existing breakpoints in the console CSS: 1100, 900, 700, 640, 600 and 480 px. At 900 px and below the Live and Claims pages stack in one column. At 480 px and below the merchant phone drops its drawn bezel and becomes the page. The navigation scrolls sideways on a phone. New console parts follow section 8.1.
 
-### 10.2 Merchant page (PLANNED, W1)
+### 10.2 Merchant page (BUILT, W1)
 
 | Width | Layout |
 |---|---|
@@ -718,7 +718,7 @@ Designed at 1280×720. Existing breakpoints in the console CSS: 1100, 900, 700, 
 | Below 900 px | One column in the order phone, frame, panel |
 | `/merchant/:id/app` | The mini-app alone, centred, at most 430 px wide, full viewport height, no console chrome |
 
-### 10.3 Inside the mini-app (PLANNED, W1)
+### 10.3 Inside the mini-app (BUILT, W1)
 
 Sizes are design targets, to confirm in the W1 build.
 
@@ -751,13 +751,13 @@ The mode of a source comes from the API. No component decides it, and presenter 
 
 - The three words are product terms. They stay in Latin capitals in every language and are written as capitals in the source, never produced with `text-transform` (which does nothing for Devanagari). The sentence around them is translated.
 - A badge is an icon and a word. It never relies on colour.
-- **Console (BUILT):** `IntegrationBadges` shows the header chip, with LIVE brand chips and "+N simulated", or "Simulated · 15", and a popover titled "Live vs simulated". The mode label `.integration__mode` is grey for SIMULATED and green for LIVE. PLANNED (W2, X6): an orange FALLBACK segment, a "forced" chip and the provider panel (screens and flows section 9.1). fs-08 calls the FALLBACK tone amber. Here it is orange (`--fallback`), so that it differs from the amber of REFERRED. Open question 8.
-- **Mini-app (PLANNED):** the app bar carries one summary badge. Where sources differ, FALLBACK outranks SIMULATED and SIMULATED outranks LIVE, so the summary shows the least live state on the screen. Each source badge on the receipt carries its own mode (section 11.4).
+- **Console (BUILT):** `IntegrationBadges` shows the header chip, with LIVE brand chips and "+N simulated", or "Simulated · 15", and a popover titled "Live vs simulated". The mode label `.integration__mode` is grey for SIMULATED and green for LIVE. BUILT (W2, X6, behind `x6_provider_panel`): an orange FALLBACK segment, a "forced" chip and the provider panel (screens and flows section 9.1). fs-08 calls the FALLBACK tone amber. Here it is orange (`--fallback`), so that it differs from the amber of REFERRED. Open question 8.
+- **Mini-app (BUILT):** the app bar carries one summary badge. Where sources differ, FALLBACK outranks SIMULATED and SIMULATED outranks LIVE, so the summary shows the least live state on the screen. Each source badge on the receipt carries its own mode (section 11.4).
 - **Placement.** A mode badge and a claim pill never share one slot in a row, because orange and amber are close for red-green deficiency (section 2.3). They differ in word and icon as well.
 
 ### 11.2 Claim, check and payout pills
 
-| Engine state | Tone | Console today (BUILT) | Mini-app icon (PLANNED) | English label |
+| Engine state | Tone | Console today (BUILT) | Mini-app icon (BUILT) | English label |
 |---|---|---|---|---|
 | APPROVED, credit pending | Decided | None: the case panel says it in a credit note | `clock` | "Approved. Credit is on its way." |
 | APPROVED and credited | Paid | Outcome and case status APPROVED: green badge (text moves to `--green-ink` in W4) | `circle-check` | "Paid" |
@@ -774,17 +774,17 @@ Labels come from fs-04 section 14.2 and the copy deck, which wins if they differ
 | State | Tone and icon |
 |---|---|
 | Check PASS, FAIL, UNSURE, N/A, WAIVED_BY_OFFICER (BUILT) | Green with check, red with cross, amber with question, grey with dash, amber with shield |
-| Payout PENDING, CREDITED, FAILED (PLANNED mapping) | Decided, paid, blocked |
-| Cover NONE, PENDING_PAYMENT, WAITING, ACTIVE, LAPSED, CANCELLED (PLANNED mapping) | Neutral, referred, decided, paid, referred, neutral |
+| Payout PENDING, CREDITED, FAILED (BUILT mapping) | Decided, paid, blocked |
+| Cover NONE, PENDING_PAYMENT, WAITING, ACTIVE, LAPSED, CANCELLED (BUILT mapping) | Neutral, referred, decided, paid, referred, neutral |
 | SLA on an open case (BUILT, in words) | "SLA N left" (ok), the same within 4 hours of due (warn), "overdue N" (overdue) |
 
 A check is shown with its result word, its severity (HARD or SOFT) and the engine's own text. The mini-app prints the engine words in English next to the translated label.
 
-### 11.3 Evaluation status chips (PLANNED, W3, `/evals`)
+### 11.3 Evaluation status chips (BUILT, W3, `/evals`)
 
 The page shows one chip per metric ([AI evaluation plan](../04-engineering/ai-evaluation-plan.md) section 3): NOT MEASURED (grey, `circle-dashed`), MISSED (red, `circle-x`), MET, WIDE INTERVAL (amber, `triangle-alert`) and MET (green, `circle-check`). A metric with no run shows NOT MEASURED and no number.
 
-### 11.4 Verified-by badge (H13, PLANNED, W1)
+### 11.4 Verified-by badge (H13, BUILT, W1)
 
 A source badge is a pill that names which system produced or checked a value, with a `badge-check` icon, the source kind in words, and the mode word where there is one.
 
@@ -1271,6 +1271,7 @@ The console's `a` rule (blue, underline on hover), `button` rule (pointer cursor
 
 ## Changelog
 
+- 2026-10-02 · v1.3 · status lines match the build: the mini-app, the W0 tokens, the mode badges, the verified-by badge, presenter mode, the moment card and the policy-driven legend are BUILT behind their flags; only the Marathi type check on the venue laptop is left for a person
 - 2026-10-02 · v1.2 · rewritten to be build-ready: decision record for Tailwind CSS v4 and shadcn/ui scoped under `.miniapp` with the verified entry file, `components.json`, packages and wave 0 steps; theme mapping onto `tokens.css`; the W0 tokens (`--demo`, `--fallback`, status, field border, focus, radius aliases) with calculated contrast; projector type scale, chrome scope and 1280×720 budget; Devanagari rules; component inventory with sources, states and accessibility notes; motion with reduced motion; LIVE, SIMULATED and FALLBACK badges, claim pills and the verified-by badge. Corrected the draft's contrast numbers (amber, orange, teal), the GSAP snippet, the Ubuntu 600 weight and Google Fonts loading, the non-red-green ramp claim and the component paths, and replaced the old priority labels with build waves. Checked the Wave 0 scaffold in the working tree against the recipe and compiled the entry file over its 17 generated files (section 12.10): style `radix-nova`, the `shadcn/tailwind.css` import, the `mini-pulse` rename, the `cn` package, the one-time edits to the generated files, and three more checks in section 13.6
 - 2026-10-02 · v1.1 · second fact-check pass: clarified provider badge shows Sarvam LIVE (Gemini planned in N2)
 - 2026-10-02 · v1 · initial draft: tokens, principles, component inventory, N1 new components.

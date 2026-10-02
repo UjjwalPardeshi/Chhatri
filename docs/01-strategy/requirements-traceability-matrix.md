@@ -87,64 +87,64 @@ Every K, N, X and H item serves at least one requirement. Credits for the H item
 |---|---|---|---|---|
 | K1 | Area auto-claim | BUILT | PS-1, PS-3, PS-5, PS-6, PS-8 | [fs-01](../02-product/feature-specs/fs-01-area-auto-claim.md) |
 | K2 | Hospital-cash claim | BUILT | PS-1, PS-6, PS-10, PS-12 | [fs-02](../02-product/feature-specs/fs-02-hospital-cash-claim.md) |
-| K3 | EDI holiday request | BUILT as a simulated pause | PS-2 | [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) |
+| K3 | EDI holiday request | BUILT; with `x4_lender_request` the simulated lender decides (X4) | PS-2 | [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) |
 | K4 | Policy engine and payout authority | BUILT | PS-9, IR-6, IR-7 | [fs-09](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) |
 | K5 | Explanations and disputes | BUILT | PS-7, PS-14 | [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) |
 | K6 | Cover purchase with the waiting period | BUILT | PS-1, PS-3, PS-11 | [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) |
 | K7 | Hash-chained audit log | BUILT | PS-9, IR-5 | [fs-09](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) |
 | K8 | Claims-officer console | BUILT | PS-10, PS-13, PS-14, IR-1 | [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) |
-| N1 | Merchant mini-app | PLANNED · Wave 1 (consent and grievance screens Wave 3, Marathi Wave 4) | PS-4, PS-7, PS-11, PS-13 | [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md) |
-| N2 | Ask Chhatri | PLANNED · Wave 2 | PS-5, PS-11, PS-14 | [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
-| N3 | Slip reading with a pre-check | PLANNED · Wave 2 | PS-5, PS-6, PS-12 | [fs-02](../02-product/feature-specs/fs-02-hospital-cash-claim.md) |
-| N4 | Real voice | PLANNED · Wave 2 | PS-5, PS-10 | [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
-| N5 | Grievance ladder | PLANNED · Wave 3 | PS-14, IR-7 | [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) |
-| N6 | Consent centre | PLANNED · Wave 3 | IR-2 | [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) |
-| N7 | Public static demo and backup video | PLANNED · Wave 5 (the repo owner deploys; no address exists yet) | PS-4, IR-1 | [fs-08 §9.7](../02-product/feature-specs/fs-08-claims-officer-console.md), [build plan](../06-delivery/build-plan.md) |
-| N8 | Marathi | PLANNED · Wave 4 | PS-10, IR-4 | [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md), [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
+| N1 | Merchant mini-app | BUILT · behind `n1_miniapp` (consent and grievance screens behind `n6_consents` and `n5_grievances`, Marathi behind `n8_marathi`) | PS-4, PS-7, PS-11, PS-13 | [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md) |
+| N2 | Ask Chhatri | BUILT · behind `n2_ask_chhatri` (Gemini and Sarvam tested against fakes only) | PS-5, PS-11, PS-14 | [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
+| N3 | Slip reading with a pre-check | BUILT · behind `n3_slip_precheck` | PS-5, PS-6, PS-12 | [fs-02](../02-product/feature-specs/fs-02-hospital-cash-claim.md) |
+| N4 | Real voice | BUILT · behind `n4_voice` | PS-5, PS-10 | [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
+| N5 | Grievance ladder | BUILT · behind `n5_grievances` | PS-14, IR-7 | [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) |
+| N6 | Consent centre | BUILT · behind `n6_consents` | IR-2 | [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) |
+| N7 | Public static demo and backup video | Static build BUILT; deploying it (the repo owner) and the backup video are not done | PS-4, IR-1 | [fs-08 §9.7](../02-product/feature-specs/fs-08-claims-officer-console.md), [build plan](../06-delivery/build-plan.md) |
+| N8 | Marathi | BUILT as a draft · behind `n8_marathi`, until a native speaker reviews it | PS-10, IR-4 | [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md), [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
 
 ### 4.2 Fixes
 
 | ID | Fix | Status | Serves | Spec |
 |---|---|---|---|---|
-| X1 | Fix the 2 failing frontend tests | PLANNED · Wave 0 (started in the working tree, not yet at a checkpoint) | IR-1 | [build plan](../06-delivery/build-plan.md) |
-| X2 | Validate the expected day at claim creation | PLANNED · Wave 1 | PS-9 | [fs-01](../02-product/feature-specs/fs-01-area-auto-claim.md) |
-| X3 | Fail loudly on a zone missing from the price table | PLANNED · Wave 1 | PS-9 | [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) |
-| X4 | EDI guard and lender-decides wording | PLANNED · Wave 1 | PS-2 | [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) |
-| X5 | A clean 404 for an unknown merchant | PLANNED · Wave 1 | PS-9 | [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) |
-| X6 | Provider panel with LIVE, SIMULATED and FALLBACK, and a demo fallback switch | PLANNED · Wave 2 | IR-1, PS-5 | [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) |
-| X7 | Honest-wording test | PLANNED · Wave 1 | IR-1, IR-6 | [fs-09](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) |
-| X8 | No loan offers during distress, and a message cap | PLANNED · Wave 3 | IR-7, PS-2 | [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) |
+| X1 | Fix the 2 failing frontend tests | BUILT · Wave 0 | IR-1 | [build plan](../06-delivery/build-plan.md) |
+| X2 | Validate the expected day at claim creation | BUILT · Wave 1 | PS-9 | [fs-01](../02-product/feature-specs/fs-01-area-auto-claim.md) |
+| X3 | Fail loudly on a zone missing from the price table | BUILT · Wave 1 | PS-9 | [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) |
+| X4 | EDI guard and lender-decides wording | BUILT · behind `x4_lender_request` | PS-2 | [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) |
+| X5 | A clean 404 for an unknown merchant | BUILT · Wave 1 | PS-9 | [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) |
+| X6 | Provider panel with LIVE, SIMULATED and FALLBACK, and a demo fallback switch | BUILT · behind `x6_provider_panel` | IR-1, PS-5 | [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) |
+| X7 | Honest-wording test | BUILT · Wave 1 | IR-1, IR-6 | [fs-09](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) |
+| X8 | No loan offers during distress, and a message cap | BUILT · behind `x8_distress_guard` | IR-7, PS-2 | [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) |
 
 ### 4.3 Ideas from other teams
 
 | ID | Idea | Status | Serves |
 |---|---|---|---|
-| H1 | Step-by-step tracker with "you are here" | PLANNED · Wave 1 | PS-13 |
-| H2 | "Why this amount" with source badges | K5 card BUILT; N1 view PLANNED · Wave 1 | PS-7, PS-9 |
-| H3 | Payout receipt | PLANNED · Wave 1 | PS-9, IR-5 |
-| H4 | Honest-wording test (X7) | PLANNED · Wave 1 | IR-1 |
-| H5 | The merchant confirms what was read | PLANNED · Wave 2 | PS-12 |
-| H6 | Zero-login public demo (N7) | PLANNED · Wave 5 | PS-4 |
-| H7 | Provider panel with a fallback switch (X6) | PLANNED · Wave 2 | IR-1 |
-| H8 | Real operational counts | PLANNED · Wave 4 | IR-1, PS-9 |
-| H9 | No loan offers in distress (X8) | PLANNED · Wave 3 | IR-7 |
+| H1 | Step-by-step tracker with "you are here" | BUILT · behind `n1_miniapp` | PS-13 |
+| H2 | "Why this amount" with source badges | BUILT (K5 card; N1 view behind `n1_miniapp`) | PS-7, PS-9 |
+| H3 | Payout receipt | BUILT · Wave 1 | PS-9, IR-5 |
+| H4 | Honest-wording test (X7) | BUILT · Wave 1 | IR-1 |
+| H5 | The merchant confirms what was read | BUILT · behind `n3_slip_precheck` | PS-12 |
+| H6 | Zero-login public demo (N7) | Static build and deep-link fallback BUILT; not deployed | PS-4 |
+| H7 | Provider panel with a fallback switch (X6) | BUILT · behind `x6_provider_panel` | IR-1 |
+| H8 | Real operational counts | BUILT · behind `h8_ops_strip` | IR-1, PS-9 |
+| H9 | No loan offers in distress (X8) | BUILT · behind `x8_distress_guard` | IR-7 |
 | H10 | Deterministic core, no model authority over money | BUILT | PS-9, IR-6 |
-| H11 | Bilingual templates, not model translation | Hindi and English BUILT; Marathi PLANNED · Wave 4 | PS-10, IR-4 |
+| H11 | Bilingual templates, not model translation | Hindi and English BUILT; Marathi a draft behind `n8_marathi` | PS-10, IR-4 |
 | H12 | Visible, measured test counts | PLANNED · Wave 5 | IR-1 |
-| H13 | Verified-by badges | PLANNED · Wave 1 (console chips Wave 4) | PS-9, IR-5 |
-| H14 | Counterfactual in every explanation | PLANNED · Wave 1 (console Wave 4) | PS-7, PS-9, PS-14 |
-| H15 | Slip pre-check: class, slots, confidence gate | PLANNED · Wave 2 | PS-6, PS-12 |
-| H16 | Prompt-injection defence | PLANNED · Wave 2 | IR-6 |
-| H17 | Clause citations in answers | PLANNED · Wave 2 | PS-11, IR-6 |
-| H18 | Voice confirmation chips | PLANNED · Wave 2 | PS-10 |
-| H19 | Scam-message warning | PLANNED · Wave 2 | PS-9 |
-| H20 | Jargon lens | PLANNED · Wave 1 | PS-7, PS-11 |
-| H21 | Next-best-action bar | PLANNED · Wave 1 (chat replies Wave 2) | PS-6, PS-13 |
-| H22 | Grievance ladder with response clocks | PLANNED · Wave 3 | PS-14, IR-7 |
-| H23 | Consent activity log and "forget my slip" | PLANNED · Wave 3 | IR-2 |
-| H24 | What-if panel for judges | PLANNED · Wave 4 | PS-9, IR-1 |
-| H25 | Published AI evaluation | PLANNED · Wave 3 | IR-1, IR-6 |
-| H26 | Mode, provider and reason on every AI reply | PLANNED · Wave 2 | IR-1, PS-5 |
+| H13 | Verified-by badges | BUILT · Wave 1 (console chips Wave 4) | PS-9, IR-5 |
+| H14 | Counterfactual in every explanation | BUILT · Wave 1 (console Wave 4) | PS-7, PS-9, PS-14 |
+| H15 | Slip pre-check: class, slots, confidence gate | BUILT · behind `n3_slip_precheck` | PS-6, PS-12 |
+| H16 | Prompt-injection defence | BUILT · Wave 2 | IR-6 |
+| H17 | Clause citations in answers | BUILT · behind `n2_ask_chhatri` | PS-11, IR-6 |
+| H18 | Voice confirmation chips | BUILT · behind `n4_voice` | PS-10 |
+| H19 | Scam-message warning | BUILT · behind `n2_ask_chhatri` | PS-9 |
+| H20 | Jargon lens | BUILT · behind `n1_miniapp` | PS-7, PS-11 |
+| H21 | Next-best-action bar | BUILT · behind `n1_miniapp` (chat replies behind `n2_ask_chhatri`) | PS-6, PS-13 |
+| H22 | Grievance ladder with response clocks | BUILT · behind `n5_grievances` | PS-14, IR-7 |
+| H23 | Consent activity log and "forget my slip" | BUILT · behind `n6_consents` | IR-2 |
+| H24 | What-if panel for judges | BUILT · behind `h24_whatif` | PS-9, IR-1 |
+| H25 | Published AI evaluation | Offline harness and `/evals` page BUILT behind `h25_evals`; no run stored, live suites need keys | IR-1, IR-6 |
+| H26 | Mode, provider and reason on every AI reply | BUILT · Wave 2 | IR-1, PS-5 |
 
 ## 5. Gaps we can see today
 

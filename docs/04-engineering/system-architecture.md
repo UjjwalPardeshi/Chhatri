@@ -32,7 +32,7 @@ flowchart TB
     I["Partner insurer<br/>SIMULATED in demo"]
     L["Lender<br/>SIMULATED: EDI holiday rules"]
     WX["Open-Meteo API<br/>LIVE or cached fixtures"]
-    G["Gemini (PLANNED)<br/>+ Sarvam<br/>LIVE with SARVAM_API_KEY<br/>SIMULATED: deterministic"]
+    G["Gemini + Sarvam<br/>LIVE with a key and CHHATRI_DATA_IS_SYNTHETIC=true<br/>SIMULATED: deterministic"]
     
     M -->|voice, slip photo| W
     M -->|settlement deduction| A
@@ -80,10 +80,10 @@ flowchart TB
 5. Policy engine runs `evaluate_personal_claim` (HARD checks: cover active, premium paid, silence verified; SOFT checks: slip readable, name matches KYC, dates match, ≤3 days).
 6. Decision: APPROVED ₹1,500 → payout workflow, or SOFT fail → REFERRED to officer, or HARD fail → DECLINED.
 
-**Ask Chhatri (PLANNED N2 — grounded assistant):**
+**Ask Chhatri (N2, BUILT behind `n2_ask_chhatri` — grounded assistant):**
 1. Merchant asks a question in Hindi/English via WhatsApp or console text.
-2. Intent detected: the word list first (always LIVE); the Sarvam chat model only for text the rules call UNKNOWN (LIVE with key, otherwise UNKNOWN stands).
-3. Grounded chat model (PLANNED: Gemini Flash free tier or Sarvam) generates answer from policy wording.
+2. Intent detected by the word lists (always LIVE). With N2 on no model chooses an intent; a question about a rule goes to the grounded path even when a keyword matches (explain-first, N2.7). With N2 off, the Sarvam chat model classifies only text the rules call UNKNOWN.
+3. Grounded chat chain (Gemini, then Sarvam, then a template) answers from the fact sheet and the clause table.
 4. Guard rejects any money figure not in decision facts, any unsupported promise.
 5. Answer rendered in HTML with clause citations and merchant's own numbers.
 
@@ -329,13 +329,13 @@ sequenceDiagram
 
 ### 3.3 Ask Chhatri with fallback
 
-**Provider chain (PLANNED):** Gemini Flash free tier → Sarvam chat → deterministic templates.
+**Provider chain (BUILT):** Gemini (model id from `GEMINI_MODEL`) → Sarvam chat → deterministic templates, each live link behind the free-tier data gate (ADR 0009).
 
 ```mermaid
 sequenceDiagram
     participant Merchant as Merchant<br/>(console or<br/>WhatsApp)
     participant Intents as Intent<br/>detector
-    participant LLM as LLM<br/>(Gemini PLANNED,<br/>Sarvam fallback)
+    participant LLM as LLM<br/>(Gemini,<br/>Sarvam fallback)
     participant Guard as Guard<br/>(money validator)
     participant Render as Render<br/>(HTML + citations)
     
@@ -366,7 +366,7 @@ Every integration is built by `registry.py` (`build_integrations`) and reports `
 | Component | Live when | Simulated | Label |
 |---|---|---|---|
 | **Sarvam** (STT, TTS, chat, vision) | `SARVAM_API_KEY` set and reachable | SimulatedSTT, SimulatedTTS, templates, fallbacks | SIMULATED (LIVE if key set) |
-| **Gemini** (chat, vision, PLANNED N2/N3) | PLANNED: integration pending 2–3 Oct; will require `GOOGLE_API_KEY` | SIMULATED (until integration ships) | SIMULATED (PLANNED) |
+| **Gemini** (chat, vision, N2/N3) | `GOOGLE_API_KEY` and `GEMINI_MODEL` set, and `CHHATRI_DATA_IS_SYNTHETIC=true` | Templates, the simulated slip reader | SIMULATED (LIVE with key, model and open gate); FALLBACK when forced or failed (X6) |
 | **WhatsApp Cloud API** | All four WHATSAPP_* keys + WHATSAPP_DEMO_RECIPIENT | SimulatorChannel (in-console phone) | SIMULATED |
 | **Paytm payment link** | `PAYTM_MCP_URL` or (`PAYTM_MID` + `PAYTM_KEY_SECRET`) | SimulatedPaytmLinks (`https://paytm.me/sim-…`) | SIMULATED |
 | **n8n workflows** | `N8N_BASE_URL` set | InProcessWorkflowEngine | SIMULATED |
@@ -396,11 +396,11 @@ def build_integrations(settings: Settings) -> Integrations:
     # Else: intents.py word-list classifier + deterministic templates
     
     # Slip reading
-    # PLANNED: Gemini Vision adapter; today use Sarvam or simulation
+    # Gemini vision comes first in the slip chain (integrations/slip_chain.py); this block is the Sarvam link
     if settings.sarvam_api_key:
         slips = LiveSarvamSlipReader(settings.sarvam_api_key)
     else:
-        slips = SimulatedSlipReader()  # Reads JSON embedded in PNG; Tesseract OCR planned
+        slips = SimulatedSlipReader()  # Reads JSON embedded in PNG; Tesseract is a later option
     
     # Messaging
     if all([settings.whatsapp_access_token, settings.whatsapp_demo_recipient]):
@@ -677,6 +677,7 @@ These items are not in scope for the hackathon but are understood:
 
 ## Changelog
 
+- 2026-10-02 · status synced with the working tree: Gemini, Ask, the chains and the data gate BUILT behind flags
 - 2026-10-02 · v1.4 · second fact-check pass: Ask Chhatri (N2) marked as PLANNED in high-level request flows section; clarified that intent detection is always LIVE but grounded chat model is PLANNED.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: Gemini reframed as PLANNED in status table; mermaid diagrams updated to label Gemini PLANNED and Sarvam as fallback; Ask Chhatri sequence diagram clarified with provider chain order; integration registry code comment added to note Gemini Vision is PLANNED.
 - 2026-10-02 · v1.2 · logic and truth audit fixes

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.4 · K8 BUILT (commit 86575ea): seven pages, officer queue, audit, backtest, read-only policy · X6 and H26 labels PLANNED, wave 2 · H8, H24, presenter mode, projector polish and the trigger-to-payout moment PLANNED, wave 4 |
+| Status | v1.5 · K8 BUILT (commit 86575ea): seven pages, officer queue, audit, backtest, read-only policy · X6 and H26 labels BUILT, wave 2 · H8, H24, presenter mode, projector polish and the moment card BUILT, wave 4 (behind `h8_ops_strip`, `h24_whatif`, `console_polish`) |
 | Owner | Omkar Kadam (console), Ujjwal Pardeshi (backend routes and engine) |
 | Date | 2 Oct 2026 |
 | Audience | Console and backend engineers, designers, the person presenting |
@@ -12,9 +12,9 @@
 
 - **K8 serves two people.** The claims officer decides only what the engine could not: a REFERRED personal claim, or a DISPUTE. The presenter walks judges through a replay. Seven pages are BUILT and run against the real backend or the in-browser mock.
 - **The console never changes a rule.** `/policy` is read-only. There is no policy editor and no `POST /api/policy`. A rule change is a code change with a new `rules_version`, so every decision stays tied to the rules that made it. The old plan for an editor is dropped.
-- **X6 and H26 (PLANNED, wave 2).** A provider panel shows LIVE, SIMULATED or FALLBACK for every component, with a demo switch that forces a component into FALLBACK. AI output carries mode, provider and reason.
-- **H8 (PLANNED, wave 4).** An ops strip of five numbers with exact definitions (section 10), from `GET /api/ops/summary`.
-- **H24 (PLANNED, wave 4).** A what-if panel. A judge changes the alert, the three hourly sales indices or the shop count, and the real trigger rule recomputes. Read-only, `POST /api/whatif/area`.
+- **X6 and H26 (BUILT, wave 2).** A provider panel shows LIVE, SIMULATED or FALLBACK for every component, with a demo switch that forces a component into FALLBACK. AI output carries mode, provider and reason.
+- **H8 (BUILT, wave 4).** An ops strip of five numbers with exact definitions (section 10), from `GET /api/ops/summary`.
+- **H24 (BUILT, wave 4).** A what-if panel. A judge changes the alert, the three hourly sales indices or the shop count, and the real trigger rule recomputes. Read-only, `POST /api/whatif/area`.
 - **Also wave 4.** Presenter mode, projector polish against the design-system type scale, and a trigger-to-payout moment card built on the replay pieces that exist today.
 - **Priority.** Everything here is P0, built in waves behind feature flags (section 19). A piece that is not finished is hidden, never shown half-working.
 
@@ -42,7 +42,7 @@ Credits, by project name only (links in [Competitive landscape](../../01-strateg
 | Backtest page | BUILT | `pages/Backtest.tsx`, from `GET /api/backtest` | One caveat line (section 13.3) |
 | Integration badges | BUILT | `components/layout/IntegrationBadges.tsx`: LIVE or SIMULATED for 15 names | X6 adds FALLBACK, a switch and two names (section 9) |
 | Presenter aids | BUILT | "Slow near payout", scenario chapters, launchers that pause at 17:06, `?presenter=1` notes on the Merchant page, "Enable sound" | Presenter mode extends them (section 12) |
-| Ops strip, what-if panel, presenter mode, moment card | PLANNED, wave 4 | Nothing is written | Sections 10 to 13 |
+| Ops strip, what-if panel, presenter mode, moment card | BUILT, wave 4, behind flags | `components/layout/OpsStrip.tsx`, `components/panel/WhatIf.tsx`, `state/presenter.tsx`, `components/layout/PresenterControls.tsx`, `components/panel/MomentCard.tsx` | Sections 10 to 13 |
 
 **Not built and not planned:** a policy editor, bulk approve, per-person officer identity (the audit actor is the fixed `officer:officer`), an export or screenshot block, a Tesseract fallback. The console has no analytics or tracking.
 
@@ -133,7 +133,7 @@ The last call is `useSettle`: on a paused replay it steps the clock by 5 minutes
 | Case kind | Opens when | Buttons | Result | The merchant hears |
 |---|---|---|---|---|
 | `PERSONAL_CLAIM_REVIEW` | A personal claim is REFERRED | Approve, Decline | The engine re-runs every check on fresh facts. A HARD fail gives DECLINED even if the officer approved. An approval stores each SOFT check as `WAIVED_BY_OFFICER` and starts the payout. The new decision supersedes the REFERRED one. Case ends APPROVED or DECLINED | `OFFICER_APPROVED` at credit time, or `OFFICER_DECLINED` with a reason |
-| `DISPUTE` | The merchant disputes the latest paid decision | Approve, Decline (PLANNED labels: "Confirm payout", "Reject dispute") | The amount never changes. No new decision, no new payout. Case ends CLOSED with the officer's note, or "Payout confirmed by a claims officer" or "Dispute declined by a claims officer" | `OFFICER_DECLINED` with `REASON_OFFICER_DISPUTE` (area) or `REASON_OFFICER_DISPUTE_PERSONAL`, the same for both buttons. The note is not sent |
+| `DISPUTE` | The merchant disputes the latest paid decision | "Confirm payout" and "Reject dispute" (BUILT labels; they call approve and decline) | The amount never changes. No new decision, no new payout. Case ends CLOSED with the officer's note, or "Payout confirmed by a claims officer" or "Dispute declined by a claims officer" | `OFFICER_DECLINED` with `REASON_OFFICER_DISPUTE` (area) or `REASON_OFFICER_DISPUTE_PERSONAL`, the same for both buttons. The note is not sent |
 | `AREA_REVIEW` | The enum and the API schema have it, and `CaseService` can open one. No flow opens one today | n/a | n/a | n/a |
 
 Only OPEN cases can be decided. Anything else, or a case without a decision, is 409. The full flows are in [fs-06](fs-06-explanations-disputes-and-grievance.md) section 5 and the engine rules in [fs-09](fs-09-policy-engine-and-audit.md) section 7.
@@ -152,10 +152,10 @@ Only OPEN cases can be decided. Anything else, or a case without a decision, is 
 | Slip image | `GET /api/media/{media_id}` | BUILT |
 | Audit | `GET /api/audit?after=&limit=`, `GET /api/audit/verify` | BUILT |
 | Backtest, Policy | `GET /api/backtest`, `GET /api/policy` | BUILT |
-| Case panel receipt data | `GET /api/decisions/{decision_id}/receipt` (fs-09 section 10) | PLANNED, wave 1 |
-| Provider switch | `POST /api/integrations/{component}/fallback` | PLANNED, wave 2 |
-| Ops strip | `GET /api/ops/summary` | PLANNED, wave 4 |
-| What-if | `POST /api/whatif/area` | PLANNED, wave 4 |
+| Case panel receipt data | `GET /api/decisions/{decision_id}/receipt` (fs-09 section 10) | BUILT, wave 1 |
+| Provider switch | `POST /api/integrations/{component}/fallback` | BUILT, wave 2 (flag `x6_provider_panel`) |
+| Ops strip | `GET /api/ops/summary` | BUILT, wave 4 (flag `h8_ops_strip`) |
+| What-if | `POST /api/whatif/area` | BUILT, wave 4 (flag `h24_whatif`) |
 
 Every response keeps the `{ok, data}` or `{ok, error}` envelope. Lists carry `meta {total, limit, offset}`.
 
@@ -202,7 +202,7 @@ Header: wordmark, seven page links (Claims shows the open-case count), a "Connec
 | Presenter notes | `?presenter=1` opens the presenter's script at the bottom of the merchant panel on the Merchant page |
 | Enable sound | One click unlocks Soundbox and voice playback |
 
-## 8. Case panel changes (PLANNED)
+## 8. Case panel changes (BUILT, wave 4)
 
 ### 8.1 DISPUTE labels (wave 4)
 
@@ -220,7 +220,7 @@ Under the decision block, one line from `counterfactuals[0].text_en` (for exampl
 
 A feed line when the lender refuses or does not answer: "{shop}: lender refused the holiday ({code})" (fs-03 section 8.3). The "Loan instalment" row of the merchant panel shows the request status. The "instalments paused" KPI counts grants only.
 
-## 9. X6 provider panel and H26 labels (PLANNED, wave 2)
+## 9. X6 provider panel and H26 labels (BUILT, wave 2)
 
 ### 9.1 What the presenter sees
 
@@ -285,7 +285,7 @@ flowchart LR
 
 `provider`, `model` and `fallback_reason` use the vocabulary of fs-05 section 10.1. `switchable` is true only in demo mode, for the lender always and for the other components in the table while they are LIVE. `last_call` is null or `{at, outcome, ms}`, set by live adapters only. The example is illustrative: it shows shape, not measured values.
 
-**`POST /api/integrations/{component}/fallback`** (PLANNED). Body `{"force": true}` or `{"force": false}`. It needs the officer bearer token. It answers 200 with the updated row (same shape as one list item). It is idempotent: forcing a forced component returns the same row.
+**`POST /api/integrations/{component}/fallback`** (BUILT, `api/routers/fallback.py`). Body `{"force": true}` or `{"force": false}`. It needs the officer bearer token. It answers 200 with the updated row (same shape as one list item). It is idempotent: forcing a forced component returns the same row.
 
 | Case | Answer |
 |---|---|
@@ -320,7 +320,7 @@ Backend: `domain/enums.py` (`IntegrationMode.FALLBACK`), `integrations/statuses.
 
 In the mock every component is SIMULATED. The mock serves the same rows. The `lender` switch works in the mock, because the mock lender is already simulated (a forced lender gives `NO_RESPONSE`). The other switches are disabled with the reason "static demo: nothing live to force".
 
-## 10. H8 ops strip (PLANNED, wave 4)
+## 10. H8 ops strip (BUILT, wave 4)
 
 ### 10.1 Placement and cells
 
@@ -355,7 +355,7 @@ The Live KPI tiles count all credited payouts of the run. Every scenario today i
 
 ### 10.3 API
 
-`GET /api/ops/summary`. No token (counts and ids only, no personal data). 409 `conflict` before a scenario is loaded, like `GET /api/state`. Example for the monsoon replay at 17:06 after Anil's dispute, with X4 on:
+`GET /api/ops/summary`. No token (counts and ids only, no personal data). 409 `no_scenario` before a scenario is loaded, like `GET /api/state`. Example for the monsoon replay at 17:06 after Anil's dispute, with X4 on:
 
 ```json
 {
@@ -404,7 +404,7 @@ New `api/routers/ops.py`, new `replay/view_ops.py` (the only place these counts 
 
 [data-model-and-api.md](../../04-engineering/data-model-and-api.md) section 5.7 sketches an earlier shape (`oldest_case_id`, `auto_ratio`, `premium_status`). This spec supersedes it: `next_due_case` replaces `oldest_case_*`, `claims_today` replaces `decisions_by_outcome` and `auto_ratio`, and `premium_status` is dropped because no operations job on stage needs it.
 
-## 11. H24 what-if panel (PLANNED, wave 4)
+## 11. H24 what-if panel (BUILT, wave 4)
 
 ### 11.1 What a judge does
 
@@ -430,7 +430,7 @@ Request (only `zone_id` is required):
 {
   "zone_id": "Z9",
   "at": "2025-08-19T17:00:00+05:30",
-  "overrides": {"alert": "RAIN", "hourly_index_pct": [49, 49, 49], "shops_in_index": 64, "already_triggered_today": false},
+  "overrides": {"alert": "RAIN", "hourly_index_pct": [49, 49, 49], "shops_in_index": 62, "already_triggered_today": false},
   "example_merchant_id": "S-0142"
 }
 ```
@@ -453,9 +453,9 @@ Response for Z9 at 17:00 with a rain alert and all three hours at 49 (values fro
     "rules_version": "pilot-0.1",
     "fixed": {"index_floor_pct": 50, "consecutive_hours": 3, "min_shops_in_index": 20, "lower_bound_pct": 90},
     "baseline": {"alert": "NONE", "alert_id": null, "hourly_index_pct": [59, 58, 67], "window_index_pct": 61,
-                 "shops_in_index": 64, "already_triggered_today": false, "fires": false, "status": "slow_day"},
+                 "shops_in_index": 62, "already_triggered_today": false, "fires": false, "status": "slow_day"},
     "scenario": {"alert": "RAIN", "alert_id": null, "hourly_index_pct": [49, 49, 49], "window_index_pct": 49,
-                 "shops_in_index": 64, "already_triggered_today": false, "fires": true, "status": "triggered", "drop_pct": 51},
+                 "shops_in_index": 62, "already_triggered_today": false, "fires": true, "status": "triggered", "drop_pct": 51},
     "changed": ["alert", "hourly_index_pct"],
     "conditions": [
       {"code": "ALERT_COVERS_WINDOW", "label_en": "A rain or civic alert covers all 3 hours",
@@ -481,7 +481,7 @@ The `conditions` array always has five entries. The other three have the same sh
 | `ALERT_COVERS_WINDOW` | A RAIN or CIVIC alert, issued by the evaluation time, is valid for every hour of the window | no alert, fails | `ALERT`, `CLAUSE` |
 | `HOURS_BELOW_FLOOR` | Every hourly index is strictly below `index_floor_pct` (50) | 59, 58, 67, fails | `SALES_INDEX`, `RULES` |
 | `WINDOW_BELOW_BOUND` | The window index is strictly below the zone's conformal lower bound | 61 below 90, passes | `SALES_INDEX`, `ZONE_BOUND` |
-| `SHOPS_QUORUM` | Shops in the index are at least `min_shops_in_index` (20) | 64, passes | `SALES_INDEX`, `RULES` |
+| `SHOPS_QUORUM` | Shops in the index are at least `min_shops_in_index` (20) | 62, passes | `SALES_INDEX`, `RULES` |
 | `FIRST_TRIGGER_TODAY` | The zone has not triggered earlier today | not yet, passes | `SALES_INDEX` |
 
 These five codes are the conditions that `trigger_verdict` (fs-09 section 9.5) returns, and the check codes in fs-09 section 8.4 map onto them. `status` uses the detector's zone statuses (`triggered`, `watch`, `slow_day`, `normal`, `no_data`), computed by the same function.
@@ -512,7 +512,7 @@ With **no overrides** the call returns the baseline, `changed` is empty, and for
 
 The mock implements the same contract in `frontend/src/mock/routes.ts` using its own trigger function (`mock/area.ts`), which weights hours equally. A shared vectors file (the pattern of `money.vectors.json`) lists inputs and the expected `conditions[].met` and `fires`. Both the backend test and the mock test read it. They compare verdicts, not window decimals, so a one-point difference in the mock window index is allowed.
 
-## 12. Presenter mode (PLANNED, wave 4)
+## 12. Presenter mode (BUILT, wave 4)
 
 ### 12.1 What it changes
 
@@ -544,7 +544,7 @@ Single-key shortcuts are active **only while presenter mode is on**, so a viewer
 | `?` | Show this list |
 | Esc | Close the drawer or popover |
 
-## 13. Projector polish and the trigger-to-payout moment (PLANNED, wave 4)
+## 13. Projector polish and the trigger-to-payout moment (BUILT, wave 4)
 
 Design-system §8.1 sets 1280×720 as the console minimum, and the e2e suite already runs at that size. Everything below is a target to verify on the venue projector, not a measured result.
 
@@ -579,9 +579,9 @@ The moment is the four minutes from trigger to money. Most of it exists. The car
 |---|---|---|---|
 | 16:58 | Slow window starts (the launcher already plays at 1 minute per second from 16:57) | Speed drops to 1 simulated minute per second | BUILT |
 | 17:00 | Trigger | Three zones turn red, "zones triggered" counts 0 to 3 and flashes, zone chip reads Triggered, feed rows appear | BUILT |
-| 17:00 to 17:03 | Paying | Moment card: "Triggered at 17:00 · paying 312 shops · credit due 17:04" with a progress track | PLANNED |
-| 17:04 | Money | Toast "₹1,380 credited · 17:04", "shops paid" counts 0 to 312, "trigger to money" reads 4 min, Soundbox line plays if sound is on | BUILT, card line PLANNED |
-| 17:05 | Instalment | Feed row. Card: "123 instalments paused", and after X4 "123 holiday requests, 123 granted" | BUILT, card line PLANNED |
+| 17:00 to 17:03 | Paying | Moment card: "Triggered at 17:00 · paying 312 shops · credit due 17:04" with a progress track | BUILT (`console_polish`) |
+| 17:04 | Money | Toast "₹1,380 credited · 17:04", "shops paid" counts 0 to 312, "trigger to money" reads 4 min, Soundbox line plays if sound is on | BUILT, card line BUILT (`console_polish`) |
+| 17:05 | Instalment | Feed row. Card: "123 instalments paused", and after X4 "123 holiday requests, 123 granted" | BUILT, card line BUILT (`console_polish`; the holiday words need `h8_ops_strip`) |
 | 17:06 | Hold | The launcher pauses the replay and the presenter talks | BUILT |
 
 At 1 minute per second the beats from 16:58 to 17:06 take 8 seconds. That is why the replay pauses at 17:06.
@@ -702,7 +702,7 @@ Real action names (SPEC §11) that the console causes or shows:
 | `case.officer_notified`, `case.officer_reminded`, `case.sla_checked` | The `human-review` and `follow-up` workflows | `workflow:...` |
 | `scenario.loaded` | A scenario loads (`day`, `start`, `end`, `seed`, `rules_version`) | `system` |
 
-PLANNED: `integration.fallback_set` (section 9.4) and the optional `forced_components` field of `scenario.loaded`. These do not exist today and this spec adds nothing else. Verifying the chain, the ops summary and the what-if call write no entry. There is no `audit.verify`, `policy.updated` or `audit.verify.failed` event.
+BUILT: `integration.fallback_set` (section 9.4) and the optional `forced_components` field of `scenario.loaded` (written only when a component is forced). This spec adds nothing else. Verifying the chain, the ops summary and the what-if call write no entry. There is no `audit.verify`, `policy.updated` or `audit.verify.failed` event.
 
 The console collects no analytics. Resolution time and the share of disputes can be derived from `case.open` and `case.resolve` entries. Nothing computes them, and the ops strip lists only what section 10 defines.
 
@@ -741,7 +741,7 @@ Everything is P0. Waves are the team plan: 0 setup, 1 demo spine, 2 live AI, 3 t
 - Backend: `backend/tests/api/test_cases_records.py` (`test_case_queue_and_detail`, `test_officer_approves_in_one_tap`, `test_officer_action_errors`, `test_audit_paging_and_verify`, `test_policy_and_backtest`), `test_meta_live.py` (`test_integrations_lists_every_component`, `test_session_is_404_outside_demo_mode`, `test_zone_panel_uses_the_deck_strings`), `test_route_table.py` (`test_route_table_matches_spec_exactly`, `test_officer_routes_need_the_bearer_token`), `test_schemas.py`.
 - E2E (`frontend/tests/e2e`): `demo.spec.ts`, `smoke.spec.ts`, `screens.spec.ts`, at 1280×720.
 
-### New tests (PLANNED)
+### New tests (BUILT)
 
 | Test | File | Checks |
 |---|---|---|
@@ -790,6 +790,7 @@ Open the console, confirm the badges, force the lender, play the storm with pres
 
 ## Changelog
 
+- 2026-10-02 · v1.5 · status lines match the build: case panel changes, presenter mode, projector polish and the moment card BUILT behind their flags
 - 2026-10-02 · v1.4 · rewritten as a build-ready console spec: policy page confirmed read-only and the editor dropped; real files, routes, queue order, colour ramp and tests replace invented ones; X6 provider panel with FALLBACK, switch contract and H26 labels; H8 ops strip with exact metric definitions and JSON; H24 what-if panel with `POST /api/whatif/area`; presenter mode; projector polish against the type scale; trigger-to-payout moment card; DISPUTE labels; P1 labels replaced by build waves
 - 2026-10-02 · v1.3 · second fact-check pass
 - 2026-10-02 · v1.2 · final consistency pass against the code

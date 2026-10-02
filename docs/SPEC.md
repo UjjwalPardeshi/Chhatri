@@ -152,7 +152,7 @@ Enums (`chhatri/domain/enums.py`): `ShopType`, `Language`, `AlertKind`, `AlertLe
 
 IDs (`chhatri/ids.py`): deterministic, sequence based per prefix — `D-000001` decisions,
 `P-000001` payouts, `CL-000001` claims, `IP-000001` pauses, `PR-000001` premiums, `M-000001`
-messages, `MD-000001` media, `Q-000001` cover quotes, `E-{zone}-{yyyymmdd}` area triggers; cases
+messages, `MD-000001` media, `PC-000001` slip pre-checks (N3), `Q-000001` cover quotes, `E-{zone}-{yyyymmdd}` area triggers; cases
 start at `C-2291` (the deck's case number). Alerts are created by the simulator, not the factory:
 `A-{yyyymmdd}-{nn}` numbered per issue day in issue order (e.g. `A-20250819-01`). **The IdFactory,
 store, audit log and event bus are recreated on every scenario load**, so the first case opened in
@@ -381,8 +381,8 @@ premium:
 
 Annual limit uses a **rolling 365 days** ending on the event date (no policy-year boundary).
 Per-zone premiums come from the backtest (§18) and are stored in
-`backend/artifacts/premiums.json` (`{zone_id: premium_per_day_paise}`); when absent, every zone
-uses `min_per_day_rupees`.
+`backend/artifacts/premiums.json` (`{zone_id: premium_per_day_paise}`); a zone with no price is an
+error (X3: start-up logs it and `/api/preflight` lists it), and `min_per_day_rupees` is the floor of every entry.
 
 9.2 **Checks** (`CheckCode`, severity):
 
@@ -401,7 +401,7 @@ uses `min_per_day_rupees`.
 | DATES_MATCH | personal | SOFT | admission ≤ each silent day ≤ (discharge or ∞) |
 | WITHIN_AUTO_LIMIT | personal | SOFT | silent days ≤ `max_auto_days` |
 | NOT_ALREADY_PAID | all | HARD | no approved payout for (merchant, date, kind) |
-| WITHIN_ANNUAL_LIMIT | all | HARD | paid this policy year + amount ≤ annual limit |
+| WITHIN_ANNUAL_LIMIT | all | HARD | paid in the rolling 365 days + amount ≤ annual limit |
 
 **Check status semantics.** HARD checks are only PASS / FAIL / NOT_APPLICABLE (missing data ⇒
 FAIL). SOFT checks: SLIP_READABLE is FAIL when there is no slip or `document_type` is not one of
@@ -468,10 +468,15 @@ day. Scenario setup gives every pilot merchant `prepaid_through ≥ scenario day
 - `PayoutService.execute(decision) -> Payout`: only for `APPROVED` decisions; idempotent on
   `decision_id`; `rail="Paytm settlement (simulated)"`; `credited_at = decided_at +
   payout_rail_delay_minutes`; writes audit.
-- `InstalmentService.pause_next(merchant, decision) -> InstalmentPause | None`: pauses the next
-  day's instalment (tomorrow relative to the event date) if the merchant has a loan and it is
-  not already paused; lender "Simulated lender (NBFC partner)"; the paused instalment moves to
-  the end of the tenure (no penalty); audited.
+- `InstalmentService.request_holiday(merchant, event_date, decision, at) -> HolidayOutcome | None` (X4, flag
+  `x4_lender_request`): after the payout is CREDITED, *asks* the merchant's lender to pause the next day's
+  instalment (tomorrow relative to the event date) if the merchant has a loan and no request exists for that
+  instalment; the simulated lender ("Simulated lender (NBFC partner)") decides by its own rule and answers
+  `GRANTED` (the instalment moves to the end of the tenure, no penalty, and an `InstalmentPause` is
+  recorded), `REFUSED` with a reason code, or `NO_RESPONSE` after one attempt within the time limit
+  (`CHHATRI_LENDER_TIMEOUT_SECONDS`). A refusal or no answer never touches the payout; audited
+  (`instalment.holiday_request`, `instalment.holiday_decision`, `instalment.pause` on a grant only).
+  With the flag off, `pause_next(merchant, event_date, decision, at)` pauses unconditionally as before.
 - `PremiumService`: `create_link(merchant, quote)` via the `PaymentLinks` integration; on paid
   callback, extend `prepaid_through`; audited.
 
@@ -517,7 +522,7 @@ facts; amounts via `format_inr`:
 |---|---|---|
 | AREA_PAYOUT_INTRO | `{name_hi} जी, आज भारी बारिश से आपके इलाके की बिक्री {drop}% गिरी।` | `{name_en} ji, heavy rain cut your area's sales by {drop}% today.` |
 | PAYOUT_CARD | `आज के सेटलमेंट के साथ जमा` | `Credited with today's settlement` · badge `No claim needed` |
-| INSTALMENT_PAUSED | `कल की {instalment} की किस्त रोक दी गई है।` | `Tomorrow's {instalment} instalment is paused.` |
+| HOLIDAY_GRANTED | `आपके लेंडर ने कल की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।` | `Your lender has paused tomorrow's {instalment} instalment. It moves to the end of your loan with no penalty.` |
 | SOUNDBOX | `Paytm par {amount} prapt hue — Chhatri se` | `{amount} received on Paytm, from Chhatri` |
 | CHECKIN_SILENT | `{name_hi} जी, आपकी दुकान कल से बंद दिख रही है। सब ठीक है?` | `Your shop has been closed since yesterday. Is everything okay?` |
 | ASK_SLIP | `जल्दी ठीक हो जाइए। अस्पताल की पर्ची की एक फ़ोटो भेज दीजिए।` | `Get well soon. Please send one photo of the hospital slip.` |
@@ -534,9 +539,16 @@ facts; amounts via `format_inr`:
 
 Weekday names hi: सोमवार मंगलवार बुधवार गुरुवार शुक्रवार शनिवार रविवार. Dates hi: `27 अगस्त`.
 
+The EDI holiday is the lender's decision (X4, [fs-03](02-product/feature-specs/fs-03-edi-holiday.md) §8, copy deck
+§3.3), so the instalment line names the lender: HOLIDAY_GRANTED above, with `HOLIDAY_GRANTED_TODAY` and
+`HOLIDAY_GRANTED_ON` when the instalment is due today or on another day, `HOLIDAY_REFUSED` (with the lender's
+reason, `HOLIDAY_REASON_*`) and `HOLIDAY_NO_RESPONSE`. With the flag `x4_lender_request` off the BUILT
+unconditional pause keeps its three lines, INSTALMENT_PAUSED (`कल की {instalment} की किस्त रोक दी गई है।` ·
+`Tomorrow's {instalment} instalment is paused.`), `INSTALMENT_PAUSED_TODAY` and `INSTALMENT_PAUSED_ON`.
+
 13.5 **Flows**
-- *Area payout* (after credit): AREA_PAYOUT_INTRO → PAYOUT_CARD(amount) → INSTALMENT_PAUSED (at
-  the pause time, if a pause happened) → SOUNDBOX event.
+- *Area payout* (after credit): AREA_PAYOUT_INTRO → PAYOUT_CARD(amount) → HOLIDAY_GRANTED (at the
+  request time, once the lender granted; HOLIDAY_REFUSED or HOLIDAY_NO_RESPONSE otherwise) → SOUNDBOX event.
 - *WHY_AMOUNT*: EXPLAIN_AREA filled from the merchant's latest area decision (or personal
   equivalent). If no payout today: FALLBACK_HELP.
 - *DISPUTE_AMOUNT*: open `DISPUTE` case → DISPUTE_ACK → CASE_CHIP. (Slide 8 "EXPLAINED": the
@@ -651,8 +663,8 @@ used only by `GET /api/weather/now` (Mumbai rain now, shown as a LIVE widget whe
 `{"run_id", "workflow", "step", "payload"}` (payload passed through unchanged), expecting
 `200 {"ok": true, "data": {"step", "status": "done"|"skipped"}}`; any non-2xx stops the n8n run.
 Workflow payloads: `payout` `{decision_id, merchant_id}`; `human-review` `{case_id, merchant_id}`;
-`follow-up` `{case_id}`. Step names: `execute_payout`, `credit_payout`, `pause_instalment`,
-`notify_merchant`, `open_case`, `notify_officer`, `check_case_sla`. Workflows: `payout` (execute_payout → credit_payout → notify_merchant → pause_instalment), `human-review`
+`follow-up` `{case_id}`. Step names: `execute_payout`, `credit_payout`, `request_holiday`,
+`notify_merchant`, `open_case`, `notify_officer`, `check_case_sla`. Workflows: `payout` (execute_payout → credit_payout → notify_merchant → request_holiday), `human-review`
 (open_case → notify_officer), `follow-up` (check_case_sla → notify_officer, both at +24 simulated hours;
 there are no Wait nodes, the backend schedules each step at decision time + its offset, §24.5). The in-process
 `InProcessWorkflowEngine` executes the same step list when n8n is absent. n8n never decides: every
@@ -752,13 +764,14 @@ All JSON; errors use the envelope `{"ok": false, "error": {"code", "message", "f
 (`fields` maps input names to reasons for validation errors); successes
 `{"ok": true, "data": …}` (lists add `"meta": {"total", "limit", "offset"}`). Officer and
 internal routes need `Authorization: Bearer <CHHATRI_OFFICER_TOKEN>` / `X-Chhatri-Secret`.
-CORS allows `CHHATRI_CONSOLE_ORIGIN`. Simple in-memory rate limits on webhook and upload routes.
+CORS allows `CHHATRI_CONSOLE_ORIGIN`. Simple in-memory rate limits on webhook, upload, message and what-if routes.
 Uploads: images ≤ 5 MB (jpeg/png/webp), audio ≤ 5 MB and ≤ 30 s (ogg/opus/webm/mp3/wav/m4a).
 
 | Method & path | Purpose |
 |---|---|
 | GET /api/health | `{status, version, seed}` |
-| GET /api/integrations | list of `{name, mode, detail}` |
+| GET /api/integrations | list of `{name, mode, detail}`; with flag `x6_provider_panel` 17 rows (adds `gemini_chat`, `gemini_vision`) with `mode` LIVE, SIMULATED or FALLBACK and `provider`, `model`, `fallback_reason`, `switchable`, `forced`, `last_call` |
+| POST /api/integrations/{component}/fallback `{force}` | Officer. X6 demo switch: forces a component into its fallback path or releases it; answers the updated row; audit `integration.fallback_set` (flag `x6_provider_panel` and demo mode: 404 otherwise; 409 when the component cannot be forced) |
 | GET /api/session | demo mode only: `{officer_token}` (404 when `CHHATRI_DEMO_MODE=false`) |
 | GET /api/preflight | readiness: artefacts loaded, scenario loadable, integrations, clock; each `{name, ok, detail}` |
 | GET /api/weather/now | live Open-Meteo rain for Mumbai (only when `OPENMETEO_LIVE=true`) |
@@ -772,6 +785,8 @@ Uploads: images ≤ 5 MB (jpeg/png/webp), audio ≤ 5 MB and ≤ 30 s (ogg/opus/
 | GET /api/merchants?zone_id=&q=&limit=&offset= | list |
 | GET /api/merchants/{id} | merchant, cover, loan, expected today, payouts, decisions |
 | GET /api/merchants/{id}/messages | conversation |
+| GET /api/merchants/{id}/cover | N1 cover card with the derived status (WAITING, ACTIVE, ...), zone price and waiting period (data-model 5.1; no flag) |
+| GET /api/merchants/{id}/claims | N1 claim tracker: one item per claim and dispute with its five steps and the lender's answer (data-model 5.1; no flag) |
 | POST /api/merchants/{id}/messages `{text}` | inbound text from the phone simulator |
 | POST /api/merchants/{id}/voice (multipart `file`) | inbound voice (STT) |
 | POST /api/merchants/{id}/voice-demo `{key}` | canned voice note (`why`, `dispute`, `ill`, `cover`) |
@@ -779,14 +794,28 @@ Uploads: images ≤ 5 MB (jpeg/png/webp), audio ≤ 5 MB and ≤ 30 s (ogg/opus/
 | GET /api/cases?status= · GET /api/cases/{id} | officer queue |
 | POST /api/cases/{id}/approve `{note}` · /decline `{note}` | officer action (auth) |
 | GET /api/decisions/{id} · GET /api/payouts?zone_id=&date= | records |
+| GET /api/decisions/{id}/receipt | H2, H3, H13, H14 decision receipt: checks with sources, the verified counterfactual, audit position, payout, lender answer, grievance path (data-model 5.8; no flag) |
 | GET /api/audit?after=&limit= · GET /api/audit/verify | audit |
 | GET /api/policy | rules + authority table |
 | GET /api/backtest | backtest report |
-| POST /api/premium/link `{merchant_id}` | premium link (auth) |
+| POST /api/premium/link `{merchant_id, consents?, notice_version?}` | premium link (auth); `consents` and `notice_version` matter only with `n6_consents` |
+| POST /api/merchants/{id}/ask `{question, lang?, stt_id?, confirmed_mentions?}` | N2 Ask Chhatri: rules answer known intents, UNKNOWN text goes down the Gemini → Sarvam → template chain; clause chips (H17), facts with sources, next action (H21), scam warning (H19), H26 label; 409 `mentions_unconfirmed` for an unconfirmed voice chip (flag `n2_ask_chhatri`: 404 while off; rate group `messages`; data-model 5.2) |
+| POST /api/voice/stt | N4 speech to text: multipart `{merchant_id, file, lang_hint?}` or JSON `{merchant_id, transcript, source: "browser"}`; transcript, one chip per amount or date (H18), H26 label; audio is not stored (flag `n4_voice`: 404 while off; rate group `uploads`; data-model 5.11) |
+| POST /api/voice/tts `{merchant_id, ask_id, lang}` | N4 text to speech of an earlier answer only: `audio_url` under `/api/media/` or null so the browser speaks it (flag `n4_voice`; rate group `uploads`) |
+| POST /api/merchants/{id}/slip-precheck | N3 slip pre-check, flag `n3_slip_precheck` (data-model 5.3; mock: `frontend/src/mock/precheckRoutes.ts`) |
+| POST /api/merchants/{id}/slip-precheck/{precheck_id}/confirm | confirm or send to the team, flag `n3_slip_precheck` |
 | POST /api/webhooks/paytm | payment callback (form or JSON) |
 | GET,POST /webhooks/whatsapp | WhatsApp webhook |
 | POST /internal/workflows/{step} | n8n callbacks (secret) |
 | GET /api/media/{id} | stored audio/image bytes |
+| GET /api/ops/summary | H8 ops counts at the replay clock: open cases, next due, claims decided by the engine, money paid today, holiday requests (flag `h8_ops_strip`: 404 while off; 409 before a load) |
+| POST /api/whatif/area `{zone_id, at?, overrides?, example_merchant_id?}` | H24 read-only recompute of a zone's trigger with edited inputs, and one shop's amount arithmetic (flag `h24_whatif`: 404 while off; rate group `whatif`, 300 a minute) |
+| GET,POST /api/merchants/{id}/grievances | N5 grievance ladder (H22): GET lists newest first with the ladder, clocks and next action; POST `{action: OPEN\|ESCALATE\|RESOLVE, ...}` opens (201, 200 for a repeat), escalates or resolves. A dispute opens the same DISPUTE case as the chat path (flag `n5_grievances`: 404 while off; group `messages` on the write; data-model 5.4) |
+| GET /api/merchants/{id}/consents | N6 consent centre: the three purposes with state, notice texts and held slips (flag `n6_consents`: 404 while off; data-model 5.5) |
+| GET /api/merchants/{id}/consents/activity | H23 what was used, for what and when: a projection of the audit log through a fixed map, newest first, `limit`, `offset`, `purpose` (flag `n6_consents`) |
+| POST /api/merchants/{id}/consents/{consent_id}/withdraw | N6 turn one purpose off (officer token; 409 `already_withdrawn`, 409 `case_open`; flag `n6_consents`; group `messages`) |
+| POST /api/merchants/{id}/slips/{slip_id}/forget | H23 erase one stored slip (officer token; 409 `case_open`, 409 `already_erased`; the audit log is never edited; flag `n6_consents`; group `messages`) |
+| GET /api/evals/summary | H25 results of the offline evaluation suites, read from `backend/artifacts/evals/summary.json` (flag `h25_evals`: 404 while off; 200 with every suite `NOT_MEASURED` when no run is stored; no provider call, no rate group) |
 
 19.1 SSE events (`event:` = type, `id:` = event id, `data:` = JSON `{id, type, at, data}` with
 `data` shaped as below, types from §19.2): `scenario {clock: ClockState}` (load/reset),
@@ -809,6 +838,10 @@ type Envelope<T> = { ok: true; data: T; meta?: { total: number; limit: number; o
 
 type IntegrationStatus = { name: "sarvam_stt"|"sarvam_tts"|"sarvam_chat"|"sarvam_vision"|"whatsapp"|"paytm"|"n8n"|"memory"|"weather"|"soundbox"|"sales_data"|"alerts"|"payout_rail"|"lender"|"kyc";
                            mode: "LIVE"|"SIMULATED"; detail: string };
+// Flag x6_provider_panel on (data-model 5.6): 17 rows, the 15 above then "gemini_chat"|"gemini_vision", each
+type ProviderRow = { name: IntegrationStatus["name"] | "gemini_chat" | "gemini_vision"; mode: "LIVE"|"SIMULATED"|"FALLBACK";
+                     detail: string; provider: string; model: string | null; fallback_reason: string | null;
+                     switchable: boolean; forced: boolean; last_call: { at: string; outcome: string; ms: number } | null };
 
 type ClockState = { now: string /* ISO IST */; scenario: ScenarioName | null; scenario_title: string;
                     running: boolean; speed: number /* sim minutes per real second */; start: string; end: string;

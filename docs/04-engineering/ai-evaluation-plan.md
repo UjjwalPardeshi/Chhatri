@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 · PLANNED for Wave 3, behind the flag `evals` (name proposed). Nothing in this document has been measured. Until a run is stored, the console page shows NOT MEASURED |
+| Status | v1.1 · 2 Oct 2026 · Wave 3 BUILT for the offline part, behind the flag `h25_evals`: the harness with S1 part A, S2 part A and S6 (fakes), the S4 slip generator, the route and the page. The live suites (S2 part B, S3, S4 scoring, S5), `--replay` and the grading sheet are not built: they need keys, recordings and graders. No run is stored, so the console page shows NOT MEASURED |
 | Owner | Ujjwal Pardeshi (harness, sets, scorers, API); Omkar Kadam (Hindi review, grading, the `/evals` page) |
 | Audience | Engineers who build the harness, reviewers who grade answers, and anyone who asks how an AI number was produced |
 | Related | [AI architecture and guardrails §6](ai-architecture-and-guardrails.md) · [Ask Chhatri (fs-05) §2.2, §6.3, §18](../02-product/feature-specs/fs-05-ask-chhatri.md) · [Hospital-cash claim (fs-02) §7.3, §15, §16](../02-product/feature-specs/fs-02-hospital-cash-claim.md) · [ADR 0003](adr/0003-free-ai-provider-chain.md) · [ADR 0004](adr/0004-live-simulated-fallback-labels.md) · [ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md) · [Testing and quality strategy](testing-and-quality-strategy.md) · [Data model and API](data-model-and-api.md) · [Implementation guide](implementation-guide.md) · [PRD §5.1, §8](../02-product/prd.md) · [Metrics and impact](../02-product/metrics-and-impact.md) · [Competitive landscape](../01-strategy/competitive-landscape.md) |
@@ -10,7 +10,7 @@
 ## TL;DR
 
 - Nothing about the AI parts of Chhatri has been measured. The tests that exist check that code does what its authors wrote. They are not accuracy figures: the 48 intent tests pass by construction, and the simulated slip reader reads its own answer key.
-- H25 is a harness (`python -m chhatri.evals`, PLANNED) and a console page (`/evals`, PLANNED). Both belong to Wave 3, after the live AI of Wave 2. A number reaches the page only from a stored run.
+- H25 is a harness (`python -m chhatri.evals`, `make evals`, BUILT for the offline suites) and a console page (`/evals`, BUILT, flag `h25_evals`). A number reaches the page only from a stored run, and none is stored yet.
 - Six suites: intent routing (S1), the guard against unsupported figures and promises (S2), end-to-end Ask answers (S3), slip reading and the confidence gate (S4), voice (S5), and the labels and fallback behaviour of every chain (S6).
 - Ground rules: synthetic data only ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)). Held-out items are kept apart from the items used to tune. Every result is k of n with an interval. A simulated or mocked provider is never scored as accuracy. Every target is shown with its source, and a miss is shown as a miss.
 - Honest limits: generated slips are cleaner than real hospital paper, the sets are small, the authors grade their own answers, and a clean run bounds a failure rate without proving there are none (§9).
@@ -36,7 +36,19 @@ BUILT means in the code at commit 86575ea, with counts collected on 2 Oct 2026.
 | Slip image tests | `backend/tests/sim/test_slips.py` (6), `backend/tests/backtest/test_slips.py` (5) | Clean, blurred, other-name and late-admission slips render and are read back by the simulator | Anything about a live reader |
 | Live smoke script | `backend/scripts/live_smoke.py` | Whether each live service answers at all. Offline, every check is SKIPPED | Quality |
 
-The harness, the sets, the scorers, the API route and the page are all PLANNED. No number in this document is a result.
+Built since (working tree of 2 Oct 2026, evening):
+
+| What | Where | Status |
+|---|---|---|
+| Harness and CLI | `backend/chhatri/evals/` (`__main__.py`, `run.py`, `stats.py`, `metrics.py`, `summary.py`, `fixtures.py`), `make evals` | BUILT. Offline only: `--live` exits 1 with the reason (closed data gate, or no live suite built) |
+| S1 part A, S2 part A, S6 with fakes | `chhatri/evals/suites/intent.py`, `guard.py`, `chain.py`; sets `tests/fixtures/evals/intents.jsonl` (56 rows), `guard.jsonl` (51 rows) | BUILT |
+| S4 slip generator | `chhatri/evals/slipgen.py`, `python -m chhatri.evals --make-slips backend/var/evals/slips` | BUILT (AC-EVAL-08). The S4 scorer needs a live reader |
+| Red-team slips | `tests/fixtures/slips/redteam.jsonl`, `tests/conversation/test_slip_injection.py` | BUILT (task N3.13, as reads; staged photographs not made) |
+| Held-out leak scan | `tests/evals/test_held_out_leak.py` | BUILT (AC-EVAL-17) |
+| Route and page | `GET /api/evals/summary` (`api/routers/evals.py`), `frontend/src/pages/Evals.tsx`, mock `endpoints/evals.ts` | BUILT, flag `h25_evals` |
+| Live suites S2 part B, S3, S4, S5; `--replay`; grading sheet; `redteam.jsonl`, `ask.jsonl`, `voice.jsonl` and recordings | | Not built. They need keys, quota, team recordings and two graders (H25.4 to H25.6, H25.10) |
+
+No number in this document is a result, and no run is stored.
 
 ### 1.3 Out of scope
 
@@ -73,7 +85,7 @@ Credited by project name only ([Competitive landscape](../01-strategy/competitiv
 
 ## 4. The suites
 
-All suites are PLANNED for Wave 3. Build order: S2 part A and S1 part A first (offline, no key), then S4, S3, S5 and S6.
+The offline parts are BUILT (1.2). Build order: S2 part A and S1 part A first (offline, no key), then S4, S3, S5 and S6.
 
 | ID | Suite | Provider used | Offline part | Needs |
 |---|---|---|---|---|
@@ -88,7 +100,7 @@ All suites are PLANNED for Wave 3. Build order: S2 part A and S1 part A first (o
 
 **Question.** Do the rules, with explain-first routing ([fs-05 §2.2](../02-product/feature-specs/fs-05-ask-chhatri.md)), send a message to the right handler on text their authors did not write?
 
-**Set.** `backend/tests/fixtures/evals/intents.jsonl` (planned). Row shape, illustrative values:
+**Set.** `backend/tests/fixtures/evals/intents.jsonl` (BUILT, 56 rows). Row shape, illustrative values:
 
 ```json
 {"id": "i-001", "text": "क्या अस्पताल का खर्च भी मिलेगा?", "language": "hi", "script": "devanagari",
@@ -117,9 +129,9 @@ All suites are PLANNED for Wave 3. Build order: S2 part A and S1 part A first (o
 
 ### 4.2 S2 Guard red-team
 
-**Question.** What does the guard stop, and what does it block that it should not? Layer A is BUILT. Layer B (rules B1 to B9) is PLANNED ([fs-05 §6](../02-product/feature-specs/fs-05-ask-chhatri.md)).
+**Question.** What does the guard stop, and what does it block that it should not? Layer A and layer B (rules B1 to B9) are BUILT ([fs-05 §6](../02-product/feature-specs/fs-05-ask-chhatri.md)).
 
-**Part A, replay (offline, no provider).** `backend/tests/fixtures/evals/guard.jsonl` (planned). Each row is a reply that a model might write, the fact profile it is checked against, and the expected verdict. Row shape, illustrative values taken from fs-05 §6.3 row 19:
+**Part A, replay (offline, no provider).** `backend/tests/fixtures/evals/guard.jsonl` (BUILT, 51 rows). Each row is a reply that a model might write, the fact profile it is checked against, and the expected verdict. Row shape, illustrative values taken from fs-05 §6.3 row 19:
 
 ```json
 {"id": "g-019", "reply": "Payout is fifty thousand rupees.", "lang": "en",
@@ -284,7 +296,7 @@ A target is a goal set before measuring. None has been met or missed yet.
 
 ```mermaid
 flowchart LR
-  Sets["Labelled sets: intents, guard rows, questions, slips, voice"] --> Runner["python -m chhatri.evals (PLANNED)"]
+  Sets["Labelled sets: intents, guard rows, questions, slips, voice"] --> Runner["python -m chhatri.evals"]
   Runner --> Gate{"--live set, data gate open, provider configured?"}
   Gate -->|"no"| Off["Offline suites: S1 part A, S2 part A, S6 with fakes"]
   Gate -->|"yes"| Live["Live suites on the real chains, one configuration at a time"]
@@ -297,7 +309,7 @@ flowchart LR
   Api --> Page["Console page /evals, NOT MEASURED until a run exists"]
 ```
 
-### 6.1 Commands (planned)
+### 6.1 Commands
 
 ```text
 python -m chhatri.evals                              offline suites only, no network
@@ -317,9 +329,9 @@ python -m chhatri.evals --score-grades <sheet.csv>   read the graded Ask sheet
 | `--yes` | Skip the confirmation that follows the call count |
 | `--fail-on-miss` | Exit 2 when a target is missed (for the offline suites in CI) |
 
-Exit status: 0 when the run completed (whether or not a target was missed), 1 when it could not run. A `make evals` target (planned) runs the offline suites. Live runs share free-tier quota with the demo, so before any call the harness prints the number it will make (items, passes, configurations) and waits for `--yes`. On repeated `RATE_LIMITED` a suite stops and is stored as PARTIAL with the items done. The rest is never filled in.
+Exit status: 0 when the run completed (whether or not a target was missed), 1 when it could not run. `make evals` (BUILT) runs the offline suites. Of the commands above, `--replay` and `--score-grades` are not built, and `--live` is refused until the live suites exist; `--make-slips DIR` (with `--seed` and `--per-kind`) writes the S4 set. Live runs share free-tier quota with the demo, so before any call the harness prints the number it will make (items, passes, configurations) and waits for `--yes`. On repeated `RATE_LIMITED` a suite stops and is stored as PARTIAL with the items done. The rest is never filled in.
 
-### 6.2 Files (planned)
+### 6.2 Files
 
 | Path | Holds |
 |---|---|
@@ -337,7 +349,7 @@ Every fixture row and image is synthetic and carries `"synthetic": true` or the 
 
 ## 7. Results: file, API and page
 
-### 7.1 `summary.json` (planned)
+### 7.1 `summary.json`
 
 The run header holds `run_id`, `commit` (or `unknown`), start and end time, `data_origin` ("synthetic"), the SHA-256 of each held-out file, and one label per provider configuration used: `component`, `mode`, `provider`, `model`. Every metric record has the same shape. Shape of one record with no run (no values exist):
 
@@ -351,9 +363,9 @@ The run header holds `run_id`, `commit` (or `unknown`), start and end time, `dat
 
 A suite is `MEASURED`, `PARTIAL` (rate limits stopped it), or `NOT_MEASURED` with a reason (no run, simulated provider, gate closed, no key). Latency metrics hold `p50_ms`, `p95_ms` and the share within the target.
 
-### 7.2 `GET /api/evals/summary` (planned, Wave 3)
+### 7.2 `GET /api/evals/summary` (BUILT, Wave 3)
 
-Read-only, same envelope as the rest of the API (`{"ok": true, "data": ...}`). It reads the stored file and never calls a provider. With the flag `evals` off it answers 404 `not_found`, like the other flagged routes. With the flag on and no run stored it answers 200:
+Read-only, same envelope as the rest of the API (`{"ok": true, "data": ...}`). It reads the stored file and never calls a provider. With the flag `h25_evals` off it answers 404 `not_found`, like the other flagged routes. With the flag on and no run stored it answers 200:
 
 ```json
 {"ok": true, "data": {"measured": false, "run": null,
@@ -362,7 +374,7 @@ Read-only, same envelope as the rest of the API (`{"ok": true, "data": ...}`). I
 
 The list has one entry per suite S1 to S6. The registry entry belongs in [Data model and API §5](data-model-and-api.md). Whether to mirror the 404 of `/api/backtest` instead is open question 2.
 
-### 7.3 The `/evals` page (planned)
+### 7.3 The `/evals` page (BUILT)
 
 A console page in the style of `Backtest.tsx` (`useAsync`, `AsyncView`), a route in `App.tsx` and an entry in `Header.tsx`, shown only with the flag on. Content: the run header with the provider labels as chips (LIVE, SIMULATED, FALLBACK), one card per suite, and for each metric the value as k of n, the interval, the target with its source and the status chip of §3. Tables for the confusion matrices, the reliability table and the gate sweep. A fixed banner (proposed copy): "Synthetic data only. Results on generated slips and written questions say little about real merchants or real hospital paper." A link to this document. With no run, every card says NOT MEASURED and shows no number.
 
@@ -412,7 +424,7 @@ A flag may go on with a missed target. The page then shows the miss, and the pit
 | AC-EVAL-16 | The page shows NOT MEASURED, MISSED, MET and MET, WIDE INTERVAL states, k of n, labels, the banner, and matches the mock under `?mock=1` |
 | AC-EVAL-17 | A test fails when a held-out question, reply or utterance appears in a prompt, a word list, a rule file or a message template (proposed) |
 
-**Tests (planned).** `backend/tests/evals/` for the helpers (`stats`, scorers, normalisation, summary schema, cache, CLI options and exit codes, the socket guard, the held-out hash), the route in `backend/tests/api/test_evals.py`, and frontend unit tests beside the page and the mock. Paths follow the [implementation guide](implementation-guide.md). Live runs use the existing `live` marker and are skipped without keys.
+**Tests.** BUILT: `backend/tests/evals/` (`test_stats.py`, `test_suites.py`, `test_summary.py`, `test_slipgen.py`, `test_held_out_leak.py`), `backend/tests/api/test_evals.py` and `frontend/src/pages/Evals.test.tsx`. Planned in full: `backend/tests/evals/` for the helpers (`stats`, scorers, normalisation, summary schema, cache, CLI options and exit codes, the socket guard, the held-out hash), the route in `backend/tests/api/test_evals.py`, and frontend unit tests beside the page and the mock. Paths follow the [implementation guide](implementation-guide.md). Live runs use the existing `live` marker and are skipped without keys.
 
 **Tasks.** The single H25 rows in fs-02 §17 and fs-05 §20 stand for the tasks below that touch their suites.
 
@@ -441,4 +453,5 @@ A flag may go on with a missed target. The page then shows the miss, and the pit
 
 ## Changelog
 
+- 2026-10-02 · v1.1 · status synced with the code: the offline harness, S1 part A, S2 part A, S6, the slip generator, the leak scan, the route and the page are BUILT; the live suites, `--replay` and the grading sheet are not; flag name `h25_evals`
 - 2026-10-02 · v1 · first version. Defines H25: six suites (intent routing, guard red-team, Ask end to end, slip reading and the gate, voice, chains and labels) with sets, scoring, metrics and sourced or proposed targets; reporting rules (k of n, Wilson interval, held-out items, no accuracy from simulated providers); the planned `python -m chhatri.evals` harness, files, `GET /api/evals/summary` and the `/evals` page with a NOT MEASURED state; gates for the demo build, limits, acceptance criteria and tasks. Nothing has been measured

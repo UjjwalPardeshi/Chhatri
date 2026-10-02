@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.4 · K1 BUILT (commit 86575ea) · X2, receipt and what-if additions PLANNED (waves 1 and 4) |
+| Status | v1.4 · K1 BUILT (commit 86575ea) · X2, receipt and what-if additions BUILT (waves 1 and 4; the what-if behind `h24_whatif`) |
 | Owner | Omkar Kadam |
 | Date | 2 Oct 2026 |
 | Audience | Product, engineering, underwriting, compliance |

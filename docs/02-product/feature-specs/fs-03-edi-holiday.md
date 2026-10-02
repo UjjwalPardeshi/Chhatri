@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.4 · K3 BUILT as an unconditional pause (commit 86575ea) · X4 lender request, guard and wording PLANNED, build wave 1 · X8 PLANNED, build wave 3 |
+| Status | v1.4 · K3 BUILT as an unconditional pause (commit 86575ea) · X4 lender request, guard and wording BUILT, wave 1 · X8 BUILT, wave 3 |
 | Owner | Omkar Kadam |
 | Date | 2 Oct 2026 |
 | Audience | Product team, lender partners, engineers, claims officers |
@@ -12,10 +12,10 @@
 
 - **EDI means equated daily instalment.** An EDI holiday is the **lender's decision**. After a payout, Chhatri **requests** the holiday under a pre-agreed rule. The lender grants or refuses. The merchant is told what the lender decided.
 - **Today (BUILT):** after an APPROVED payout, the instalment step pauses the next instalment with no check, and the message "Tomorrow's ₹600 instalment is paused." reads as if Chhatri did it. The `Loan` record has no status, arrears or allowance.
-- **X4 (PLANNED, wave 1):** Chhatri sends the lender a request and acts on the answer. Chhatri checks its own preconditions first (payout credited, loan on record, no request yet). The simulated lender applies four conditions: loan active, not in arrears, allowance left, flag on. A refusal creates no pause, and the payout is untouched.
+- **X4 (BUILT, wave 1, flag `x4_lender_request`):** Chhatri sends the lender a request and acts on the answer. Chhatri checks its own preconditions first (payout credited, loan on record, no request yet). The simulated lender applies four conditions: loan active, not in arrears, allowance left, flag on. A refusal creates no pause, and the payout is untouched.
 - **Timing:** decision 17:00, credit 17:04, request 17:05 (the step runs 5 simulated minutes after the decision, 1 minute after the credit).
 - **Wording:** new lender-decides messages replace the three `INSTALMENT_PAUSED` lines. That needs a coordinated change of the catalogue, SPEC section 13.4, DEMO.md and the tests that pin them (section 8.4).
-- **X8 (PLANNED, wave 3):** no loan or top-up offer while a merchant is in distress, and a daily cap on proactive messages. No such offer exists in the product today.
+- **X8 (BUILT, wave 3, flag `x8_distress_guard`):** no loan or top-up offer while a merchant is in distress, and a daily cap on proactive messages (`conversation/message_guard.py`). No such offer exists in the product today.
 - **Priority:** K3, X4 and X8 are all P0, behind feature flags. An unfinished piece stays hidden.
 
 IDs covered: **K3 · X4 · X8**.
@@ -35,10 +35,10 @@ This matches the RBI (Digital Lending) Directions, 2025 (A25), which leave a def
 | Loan record | BUILT | `domain/models.py` (`Loan`): id, merchant, lender name, daily instalment, outstanding amount. No status, arrears or allowance | Unchanged. The lender keeps its own records (section 7.2) |
 | Merchant message | BUILT | `INSTALMENT_PAUSED`, `INSTALMENT_PAUSED_TODAY`, `INSTALMENT_PAUSED_ON` in `conversation/messages.py`; chosen in `conversation/notifications.py` | Replaced by lender-decides wording (section 8) |
 | Lender component status | BUILT | `lender`, always SIMULATED, "Simulated lender (NBFC partner)" (`integrations/statuses.py`) | Becomes a real simulated adapter |
-| Simulated lender adapter | PLANNED, wave 1 | new `integrations/lender.py`, a `Lender` port in `integrations/base.py` | Section 7 |
-| Request and decision records, ids `HR-` | PLANNED, wave 1 | `domain/models.py`, `ids.py`, `ledger/instalments.py` | Section 7.5 |
+| Simulated lender adapter | BUILT, wave 1 | new `integrations/lender.py`, a `Lender` port in `integrations/base.py` | Section 7 |
+| Request and decision records, ids `HR-` | BUILT, wave 1 | `domain/models.py`, `ids.py`, `ledger/instalments.py` | Section 7.5 |
 | Console and tracker rows | PLANNED, wave 1 and 4 | fs-08, fs-04 | Section 8.3 |
-| X8 message guard | PLANNED, wave 3 | `conversation/outbox.py` | Section 9 |
+| X8 message guard | BUILT, wave 3 | `conversation/message_guard.py`, `conversation/outbox.py` | Section 9 |
 
 ## 3. User stories and jobs to be done
 
@@ -115,8 +115,8 @@ stateDiagram-v2
 | Decision (APPROVED) and its payout (CREDITED) | policy engine (fs-09), `ledger/payouts.py` | BUILT |
 | Merchant's loan | `Store.city.loans`: id (`LN-0142` style), lender name, daily instalment, outstanding | SIMULATED |
 | Instalment date | event date + 1 day. A personal claim for Wednesday gives Thursday's instalment | BUILT |
-| Lender rule and records | the simulated lender (section 7.2) | PLANNED, SIMULATED |
-| Lender answer | `GRANTED` or `REFUSED` with a reason code | PLANNED, SIMULATED |
+| Lender rule and records | the simulated lender (section 7.2) | BUILT, SIMULATED |
+| Lender answer | `GRANTED` or `REFUSED` with a reason code | BUILT, SIMULATED |
 
 The example loan is Anil's (S-0142): ₹600 a day, lender "Simulated lender (NBFC partner)".
 
@@ -206,7 +206,7 @@ The ids are examples. Request ids are `HR-` plus a six-digit sequence per run, l
 - **Demo control.** The provider panel (X6, fs-08) can force the `lender` component to FALLBACK. In FALLBACK the simulated lender does not answer, so every request ends as `NO_RESPONSE`.
 - **The payout is independent.** The payout is credited at +4 before the request goes out. A refusal or no answer changes nothing about it.
 
-### 7.5 Records (PLANNED)
+### 7.5 Records (BUILT)
 
 `HolidayRequest` (frozen model): `id` (`HR-000001`, new prefix `HR` in `ids.py`), `merchant_id`, `loan_id`, `decision_id`, `payout_id`, `instalment_date`, `instalment_paise`, `requested_at`, `status` (`REQUESTED`, `GRANTED`, `REFUSED`, `NO_RESPONSE`), `reason_code`, `decided_at`. The existing `InstalmentPause` is created only for a grant and gains `request_id`. `GET /api/merchants/{id}` gains `holiday_requests[]` (all outcomes) next to the existing `pauses` (grants only). The KPI "instalments paused" counts grants only.
 
@@ -267,7 +267,7 @@ Wording rules: it always names the lender as the one who decided, never says "Ch
 | Backend tests | `test_notifications.py` (`test_monsoon_17_04_intro_card_soundbox_then_17_05_pause`, `test_instalment_wording_follows_the_date`, `test_instalment_on_a_date_in_hindi`), `replay/test_golden.py` (`test_illness_pays_1500_and_pauses_thursdays_instalment`), `replay/test_area_flow.py`, `cases/test_demo_flows.py` |
 | `frontend/src/mock` | Same new strings and the request and answer shape |
 
-## 9. X8: no loan offers during distress, and a message cap (PLANNED, wave 3)
+## 9. X8: no loan offers during distress, and a message cap (BUILT, wave 3)
 
 No loan or top-up offer exists in the product today. X8 is a guard that must be in place before any such message is ever added.
 
@@ -318,17 +318,17 @@ Since no `OFFER` exists, the tests add a fake `OFFER` key to exercise the guard.
 | The payout is still PENDING | The step runs | No request, the skip is audited | skip |
 | An officer approves a REFERRED claim | The payout credits and the step runs | Same path as an automatic payout | same |
 | A request is built for a hospital-cash payout | The payload is inspected | It has no claim kind, reason, slip field or amount | none |
-| PLANNED X8: an alert covers the zone | An `OFFER` message is queued | It is suppressed and `message.suppressed` is logged | `message.suppressed` |
-| PLANNED X8: the merchant has received the daily cap of `PROACTIVE` messages | Another `PROACTIVE` message is queued | It is suppressed. A `TRANSACTIONAL` message still goes out. | `message.suppressed` |
+| X8: an alert covers the zone | An `OFFER` message is queued | It is suppressed and `message.suppressed` is logged | `message.suppressed` |
+| X8: the merchant has received the daily cap of `PROACTIVE` messages | Another `PROACTIVE` message is queued | It is suppressed. A `TRANSACTIONAL` message still goes out. | `message.suppressed` |
 
 ## 13. Telemetry and audit events
 
 | Action | Subject | When | Data |
 |---|---|---|---|
-| `instalment.holiday_request` (PLANNED) | holiday request `HR-…` | The request is sent | merchant, loan, decision, payout, instalment date, instalment amount, lender |
-| `instalment.holiday_decision` (PLANNED) | holiday request `HR-…` | The lender answers, or the time limit passes | decision (`GRANTED`, `REFUSED`, `NO_RESPONSE`), reason code, moved to, penalty |
+| `instalment.holiday_request` (BUILT) | holiday request `HR-…` | The request is sent | merchant, loan, decision, payout, instalment date, instalment amount, lender |
+| `instalment.holiday_decision` (BUILT) | holiday request `HR-…` | The lender answers, or the time limit passes | decision (`GRANTED`, `REFUSED`, `NO_RESPONSE`), reason code, moved to, penalty |
 | `instalment.pause` (BUILT, kept) | instalment pause `IP-…` | Only on a grant | loan, lender, date, amount, decision id, moved to, penalty, plus `request_id` |
-| `message.suppressed` (PLANNED, X8) | message | A message is held back | merchant, kind, reason. No text. |
+| `message.suppressed` (BUILT, X8) | message | A message is held back | merchant, kind, reason. No text. |
 
 Actors are `workflow:payout` for the request, decision and pause entries, and `system` for X8. The ops strip (fs-08) shows holiday requests by outcome from these entries.
 

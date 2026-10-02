@@ -14,7 +14,7 @@ EDI means equated daily instalment. After a payout is credited, Chhatri **asks**
 The regulatory position (A25, to be confirmed with the partner insurer's compliance team and counsel): under the RBI (Digital Lending) Directions, 2025, any instalment deferral is the lender's decision under its board-approved policy. Chhatri can only request an EDI holiday, or have the insurer pay the instalment as part of the payout. Whether a pre-agreed holiday counts as a restructuring is for the lender's compliance team to decide.
 
 - **BUILT today:** the `pause_instalment` step pauses the next instalment with no check and no lender answer, and the message reads as if Chhatri did it.
-- **PLANNED, build wave 1 (X4):** the step becomes a request to a simulated lender that applies four conditions. A refusal creates no pause. The payout is never touched.
+- **BUILT, wave 1 (X4, flag `x4_lender_request`):** the step becomes a request to a simulated lender that applies four conditions. A refusal creates no pause. The payout is never touched.
 
 ## Context
 
@@ -90,7 +90,7 @@ The Insurance Act 1938, s.64VB (cash before cover) is unaffected: a holiday defe
 
 ## How we will know it was right
 
-1. A refusal creates no pause record and the payout stays CREDITED (`test_refusal_creates_no_pause`, planned in `backend/tests/ledger/test_instalments.py`).
+1. A refusal creates no pause record and the payout stays CREDITED (`test_refusal_creates_no_pause` in `backend/tests/ledger/test_instalments.py`).
 2. No merchant line says "Chhatri paused" or promises a follow-up (the honest-wording test X7 scans the `HOLIDAY_*` keys).
 3. With the default lender the KPI "instalments paused" is still 123 and counts grants only (`test_kpi_counts_grants_only`).
 4. A request built for a hospital-cash payout carries no claim kind, reason, slip field or amount (`test_request_carries_no_claim_reason_or_amount`).
@@ -116,6 +116,7 @@ The Insurance Act 1938, s.64VB (cash before cover) is unaffected: a holiday defe
 
 ## Changelog
 
+- 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v3 · restated against the code and fs-03: today's pause is unconditional (BUILT), the lender request is PLANNED in wave 1; lender rule L1 to L4 with reason codes and a fixed order; request carries no claim data; one attempt and a fail-safe no response; the `POST /api/merchants/{id}/edi-holiday-request` route, which does not exist in the code, removed (no public route for the request); the "We will follow up" wording removed; C-2291 corrected to a case id (the decision is D-000142); the regulatory position uses the facts-page hedge, with the unsupported "illegal" claim and the invented ₹5,000 example removed; SPEC references corrected
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly establishes EDI holiday as lender's decision with Chhatri as requester.
 - 2026-10-02 · v1 · first draft.

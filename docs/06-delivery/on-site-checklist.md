@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1 · 2 Oct 2026 · for use on 3 Oct. Items that need a Wave 2 or later feature say so, because that feature is PLANNED |
+| Status | v1 · 2 Oct 2026 · for use on 3 Oct. Items that need a Wave 2 or later feature say so; those features are BUILT behind flags and still need their rehearsal |
 | Owner | Ujjwal Pardeshi (machine and stack) with Omkar Kadam (room, slides, words) |
 | Audience | The two of us, and a backup operator |
 | Related | [Demo runbook](demo-runbook.md) · [Build plan](build-plan.md) · [Risk register](risk-register.md) · [DEMO.md](../DEMO.md) · [Final deck and video script](final-deck-and-video-script.md) · [Free-tier stack and setup](../04-engineering/free-tier-stack-and-setup.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) |

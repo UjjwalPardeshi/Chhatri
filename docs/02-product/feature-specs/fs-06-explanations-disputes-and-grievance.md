@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.4 · K5 BUILT (commit 86575ea) · N5 and H22 PLANNED, build wave 3 · dispute fixes PLANNED, build wave 1 |
+| Status | v1.4 · K5 BUILT (commit 86575ea) · N5 and H22 BUILT, wave 3 · dispute fixes BUILT, wave 1 |
 | Owner | Omkar Kadam |
 | Date | 2 Oct 2026 |
 | Audience | Product, engineering, compliance, claims officers |
@@ -12,9 +12,9 @@
 
 - **K5 (BUILT):** a merchant can ask "why this amount" and gets the formula in Hindi or English from the decision record. No LLM writes a number.
 - **Two flows, not one.** A **DISPUTE** is the merchant disagreeing with a decision: the officer answers, the amount never changes, and the case ends CLOSED. A **REFERRED review** is the engine unable to decide: the officer approves or declines, the engine re-runs every check, and an approval can pay. They are different case kinds with different logic (section 5).
-- **N5 and H22 (PLANNED, wave 3):** a grievance ladder with response clocks and a respondent router that says who owns the complaint: Paytm, the insurer or the lender. Build-ready in sections 7 and 8.
+- **N5 and H22 (BUILT, wave 3, flag `n5_grievances`):** a grievance ladder with response clocks and a respondent router that says who owns the complaint: Paytm, the insurer or the lender. Build-ready in sections 7 and 8.
 - **Clocks only where a source exists.** Our own 24-hour answer time (OWN_SLA), and the 14 days the Bima Bharosa portal states (PORTAL_STATED). Every other time is shown as "to be confirmed" (TO_CONFIRM). No timeline is invented.
-- **Evidence:** the receipt (`GET /api/decisions/{decision_id}/receipt`, PLANNED wave 1, fs-09) is what a merchant attaches to any grievance.
+- **Evidence:** the receipt (`GET /api/decisions/{decision_id}/receipt`, BUILT wave 1, fs-09) is what a merchant attaches to any grievance.
 - **Priority:** N5 and H22 are P0, wave 3, behind feature flags. The two dispute fixes in section 10 are wave 1.
 
 IDs covered: **K5 · N5 · H22**. H22 builds on an idea from Praman. The tracker steps for the REFERRED and DISPUTE paths belong to the merchant app (H1, fs-04); this spec gives them their data.
@@ -35,8 +35,8 @@ N5 turns "what if I still disagree" into a visible ladder: our claims officer, t
 | Officer approve or decline | BUILT | `POST /api/cases/{case_id}/approve` and `/decline`, `replay/officer.py` | None |
 | 24-hour clock and reminders | BUILT | `cases/service.py` (`due_by`), workflow `follow-up` (`check_case_sla`, `notify_officer`) | None |
 | Dispute with no paid decision | BUILT but cannot be decided (API 409) | `replay/officer.py` | Fix, wave 1 |
-| Receipt endpoint | PLANNED, wave 1 | fs-09 section 10 | |
-| Grievance ladder, clocks, router | PLANNED, wave 3 | new `cases/ladder.py`, `cases/grievances.py`, routes `GET` and `POST /api/merchants/{id}/grievances` | Sections 7 and 8 |
+| Receipt endpoint | BUILT, wave 1 | fs-09 section 10 | |
+| Grievance ladder, clocks, router | BUILT, wave 3 | `cases/ladder.py`, `cases/grievances.py`, routes `GET` and `POST /api/merchants/{id}/grievances` | Sections 7 and 8 |
 
 ## 3. User stories and jobs to be done
 
@@ -163,7 +163,7 @@ Logic, as built (details in fs-09 section 7.4):
 | Merchant message | `OFFICER_DECLINED` with `REASON_OFFICER_DISPUTE` or `_PERSONAL` | `OFFICER_APPROVED` or `OFFICER_DECLINED` with a reason |
 | Audit | `case.open`, `case.resolve` | `decision.personal`, `case.open`, `decision.officer`, `case.resolve` |
 
-### 5.4 Grievance ladder (PLANNED, wave 3)
+### 5.4 Grievance ladder (BUILT, wave 3)
 
 Each respondent has its own ladder. A step id is a stable string used in the API and in the receipt.
 
@@ -193,15 +193,15 @@ stateDiagram-v2
 | Input | Source | Mode today |
 |---|---|---|
 | Merchant message and intent | the chat flow (word-list intents; the chat model sees only UNKNOWN text) | SIMULATED channel |
-| Decision, checks, formula | policy engine, `GET /api/decisions/{decision_id}` (receipt PLANNED) | BUILT |
+| Decision, checks, formula | policy engine, `GET /api/decisions/{decision_id}` and the receipt | BUILT |
 | Case, evidence, clock | `cases/service.py`, `replay/evidence.py` | BUILT |
 | Officer identity | one shared officer bearer token. `GET /api/session` hands it to the console in the demo. The audit actor is `officer:officer` | SIMULATED |
-| Ladder steps and clock sources | static table in `cases/ladder.py` (PLANNED), values from section 4 | PLANNED |
+| Ladder steps and clock sources | static table in `cases/ladder.py`, values from section 4 | BUILT |
 | Lender decision (for `EDI_HOLIDAY` complaints) | fs-03, simulated lender | SIMULATED |
 
 ## 7. Decision logic and checks
 
-### 7.1 Respondent router (H22, PLANNED)
+### 7.1 Respondent router (H22, BUILT)
 
 The router is a fixed lookup table in code. It is not a model. The merchant picks a topic chip. Ask Chhatri (N2) may suggest a chip from a closed word list, and the merchant confirms it. The router then maps the topic to a respondent and a ladder.
 
@@ -236,7 +236,7 @@ Clock state is computed when the grievance is read, from the entry time and the 
 
 Escalation is never blocked by Chhatri. A merchant can move to the next step of the ladder at any time: after an answer they disagree with, after a stated clock has passed, or earlier. The tracker shows each step's own conditions as "to be confirmed" where no source exists. Escalating to `BIMA_BHAROSA` or `OMBUDSMAN` is self-reported: Chhatri cannot file on the merchant's behalf, so the app shows how to file and records the date the merchant says they filed.
 
-## 8. N5 and H22 build spec (PLANNED, wave 3)
+## 8. N5 and H22 build spec (BUILT, wave 3)
 
 ### 8.1 Data
 
@@ -323,7 +323,7 @@ Contact details for the insurer, lender and Paytm are not invented. The demo sho
 
 Escalating attaches the decision receipt (fs-09). The `grievance.escalate` audit entry stores `decision_id` and the receipt's audit sequence number, so a reviewer can find the decision entry and run `GET /api/audit/verify`.
 
-### 8.5 Audit events (PLANNED)
+### 8.5 Audit events (BUILT)
 
 | Action | Actor | Subject | Data |
 |---|---|---|---|
@@ -367,7 +367,7 @@ Hindi for both is to be written in the copy deck and reviewed by a native speake
 
 ## 10. Edge cases, failure modes and fixes
 
-| Case | Behaviour today | Fix (PLANNED) |
+| Case | Behaviour at commit 86575ea | Fix (BUILT in wave 1 where one is named) |
 |---|---|---|
 | Merchant disputes and has **no paid decision** | A case opens with no decision (summary "disputes a payout amount; no paid claim on record"). The officer cannot decide it: API 409 ("case has no decision to review"). The case stays OPEN. | Wave 1. If there is no decision at all, do not open a case: reply with `DISPUTE_NO_PAYOUT` and the counterfactual (fs-09). If the latest decision is DECLINED or REFERRED, link the dispute to it. An officer can always close a DISPUTE with a note. |
 | Merchant disputes a **DECLINED** decision | `open_dispute` only looks at the latest paid decision, so the dispute attaches to an older payout (or none). `dispute_reason_key` would also fail on a declined decision, which has no explanation. | Wave 1. In the tracker the Dispute button carries the `decision_id`. In chat the target is the latest final decision (APPROVED and credited, or DECLINED). `dispute_reason_key` gets a DECLINED branch that reuses the `REASON_<CHECK>` text. |
@@ -406,13 +406,13 @@ Hindi for both is to be written in the copy deck and reviewed by a native speake
 | A slip names "Sunil Pawar", KYC is "ANIL RAMESH JADHAV" | The claim is decided | REFERRED (`NAME_MATCHES_KYC` score 28, SOFT), ₹1,500 held, case C-2291 of kind `PERSONAL_CLAIM_REVIEW`, merchant gets `SLIP_TO_HUMAN` and the chip | `decision.personal`, `case.open` |
 | That case is OPEN | The officer taps Approve | All checks re-run, all HARD pass, a new APPROVED decision supersedes the REFERRED one, the case is APPROVED, the payout credits 4 minutes later and Anil gets `OFFICER_APPROVED` | `decision.officer`, `case.resolve`, `payout.execute`, `payout.credit` |
 | The same | The officer taps Decline | DECLINED, Anil gets `OFFICER_DECLINED` with "After checking the slip, this claim can't be paid." | `decision.officer`, `case.resolve` |
-| PLANNED: a merchant with no decision says "wrong" | The dispute is sent | No case opens. The reply is `DISPUTE_NO_PAYOUT`. | none |
-| PLANNED: topic `PAYOUT_AMOUNT` with D-000142 | `POST` with `action: OPEN` | Grievance `GR-000001`, respondent INSURER, DISPUTE case at `PAYTM_DISPUTE`, clock `OWN_SLA` 24 hours | `grievance.open`, `case.open` |
-| PLANNED: topic `EDI_HOLIDAY` | `POST` with `action: OPEN` | Respondent LENDER, ladder `LENDER_GRIEVANCE`, no case, clock `TO_CONFIRM` | `grievance.open` |
-| PLANNED: current step `PAYTM_DISPUTE` | `ESCALATE` with `escalate_from: PAYTM_DISPUTE` | Current step `INSURER_GRO`, clock `TO_CONFIRM`, the receipt sequence stored | `grievance.escalate` |
-| PLANNED: current step `INSURER_GRO` | `ESCALATE` with `filed_on` | Current step `BIMA_BHAROSA`, clock `PORTAL_STATED` counting from `filed_on` | `grievance.escalate` |
-| PLANNED: `filed_on` is 15 days before now | The grievance is read | The clock reads "The portal's stated 14 days have passed." | none |
-| PLANNED: `escalate_from` is not the current step | `ESCALATE` | 409 | none |
+| a merchant with no decision says "wrong" | The dispute is sent | No case opens. The reply is `DISPUTE_NO_PAYOUT`. | none |
+| topic `PAYOUT_AMOUNT` with D-000142 | `POST` with `action: OPEN` | Grievance `GR-000001`, respondent INSURER, DISPUTE case at `PAYTM_DISPUTE`, clock `OWN_SLA` 24 hours | `grievance.open`, `case.open` |
+| topic `EDI_HOLIDAY` | `POST` with `action: OPEN` | Respondent LENDER, ladder `LENDER_GRIEVANCE`, no case, clock `TO_CONFIRM` | `grievance.open` |
+| current step `PAYTM_DISPUTE` | `ESCALATE` with `escalate_from: PAYTM_DISPUTE` | Current step `INSURER_GRO`, clock `TO_CONFIRM`, the receipt sequence stored | `grievance.escalate` |
+| current step `INSURER_GRO` | `ESCALATE` with `filed_on` | Current step `BIMA_BHAROSA`, clock `PORTAL_STATED` counting from `filed_on` | `grievance.escalate` |
+| `filed_on` is 15 days before now | The grievance is read | The clock reads "The portal's stated 14 days have passed." | none |
+| `escalate_from` is not the current step | `ESCALATE` | 409 | none |
 
 ## 13. Telemetry and audit events
 

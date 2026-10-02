@@ -11,13 +11,21 @@ retried, because n8n already retries each callback (see "n8n workflows").
 
 `/api/integrations` reports these components: `sarvam_stt`, `sarvam_tts`, `sarvam_chat`,
 `sarvam_vision`, `whatsapp`, `paytm`, `n8n`, `memory`, `weather`, `soundbox`, `sales_data`, `alerts`,
-`payout_rail`, `lender`, `kyc`.
+`payout_rail`, `lender`, `kyc`. With the flag `x6_provider_panel` on it also lists `gemini_chat` and
+`gemini_vision` (17 rows), with `mode` LIVE, SIMULATED or FALLBACK, the provider, the model, the reason and
+a demo switch (data-model 5.6). `/api/preflight` always lists all 17.
+
+**Free-tier data gate (ADR 0009).** Gemini, Sarvam and Cognee's LLM run on free tiers, so they are called
+only when `CHHATRI_DATA_IS_SYNTHETIC=true` (set in `.env.example`; unset means false). With the gate closed
+they make zero calls even with a key: the chains label the answer SIMULATED with `FREE_TIER_BLOCKED`, the
+direct Sarvam paths get the simulators, Cognee stays off, and `/api/preflight` (row `free_tier_gate`), the
+start-up log and the panel say so.
 
 ---
 
 ## Sarvam: speech, voice, chat, vision (SPEC §14.1)
 
-**Live when** `SARVAM_API_KEY` is set. Models are configurable: `SARVAM_STT_MODEL` (`saaras:v3`),
+**Live when** `SARVAM_API_KEY` is set and the data gate is open. Models are configurable: `SARVAM_STT_MODEL` (`saaras:v3`),
 `SARVAM_TTS_MODEL` (`bulbul:v3`), `SARVAM_TTS_SPEAKER` (`ritu`), `SARVAM_CHAT_MODEL` (`sarvam-105b`).
 The base URL is `https://api.sarvam.ai` with header `api-subscription-key`. An auth failure is
 HTTP 403. The SDK is synchronous, so calls run in `asyncio.to_thread`.
@@ -174,9 +182,30 @@ built by `chhatri.integrations.whatsapp_payloads.template_payload`.
   - the webhook answers 200 with the completion body only after the last callback;
   - a 500 on `credit_payout` stops the payout run before `notify_merchant`, and the webhook answers 500.
 
+## Gemini: chat and vision (N2, N3; ADR 0003)
+
+**Live when** `GOOGLE_API_KEY` and `GEMINI_MODEL` are set and the data gate is open. `GEMINI_VISION_MODEL`
+optionally names a model that accepts images for the slip reader (default: `GEMINI_MODEL`). The model is
+chosen on the day from the AI Studio free tier; `make check-keys` lists the models the key can use and never
+prints the key. A key without a model id leaves Gemini out of the chains (reason `MODEL_NOT_SET`).
+
+One call is `POST {base}/models/{model}:generateContent` over httpx (`integrations/gemini_client.py`), with
+the key only in the `x-goog-api-key` header. The request asks for JSON shaped by the caller's schema with
+thinking off; if the API answers 400 to those fields, the call is sent once more with the schema in the
+prompt and the adapter keeps that shape. Interactive paths make one attempt per link. Every reply is checked
+against the full schema, then by the guard (Ask) or the field validator (slips). Tested against fakes only:
+the request shape has not been run against the real API.
+
+| Use | Adapter | Chain |
+|---|---|---|
+| Ask answer (flag `n2_ask_chhatri`) | `gemini_chat.py` | Gemini → Sarvam chat → catalogue template |
+| Slip read (flag `n3_slip_precheck`) | `gemini_vision.py`, on a cleaned copy with no metadata | Gemini vision → Sarvam Vision → REFERRED; the simulated reader only when nothing live applies |
+
+**Simulated**: templates answer Ask, and the simulated reader reads the sample slips.
+
 ## Memory (SPEC §14.6, §16)
 
-**Live when** `COGNEE_ENABLED=true` and the optional extra is installed (`pip install -e
+**Live when** `COGNEE_ENABLED=true`, the data gate is open, and the optional extra is installed (`pip install -e
 "backend[memory]"`) with an LLM configured for cognee. Otherwise an in-process networkx
 `MultiDiGraph` is used, with nodes for shops, zones, events, payouts, disputes, cases and decisions.
 `precedents()` ranks facts: same merchant 1.0, same zone 0.7, other 0.4. The officer console shows
@@ -193,5 +222,8 @@ timezone=Asia/Kolkata, start_date, end_date`. The replay and backtest never call
 
 ## Soundbox, sales, alerts, KYC, payout rail, lender
 
-These are always simulated and always labelled (SPEC §0.1). The Soundbox emits a `soundbox` SSE event
+These are always simulated and always labelled (SPEC §0.1). With the flag `x4_lender_request` on, the
+simulated lender decides each EDI holiday request by its own rule (active loan, not in arrears, allowance
+left, in the scheme) and can be forced to give no answer from the provider panel (X6); with the flag off it
+grants every pause as before. The Soundbox emits a `soundbox` SSE event
 with the text `Paytm par ₹1,380 prapt hue — Chhatri se`, plus TTS audio when Sarvam is live.

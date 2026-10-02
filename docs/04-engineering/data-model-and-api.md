@@ -12,9 +12,9 @@
 - **Domain model:** frozen pydantic models (Merchant, Cover, Loan, Alert, Decision, Payout, Case, ...). Money is integer paise, with a `*_label` string made by `format_inr`. Times are timezone-aware IST.
 - **Storage:** an in-memory store rebuilt on every scenario load, and an append-only, hash-chained audit log in a private in-memory SQLite database. Artefacts (model, backtest, premiums) are committed files.
 - **IDs:** `S-0142` merchant, `D-000142` decision, `CL-000142` claim, `C-2291` case (the first case after a fresh load), `A-20250818-01` alert, `E-Z7-20250819` trigger. Sequence ids restart on every scenario load.
-- **Existing API (BUILT):** 39 route handlers across 12 router modules (section 4.1). Envelope: `{ok, data}`, `{ok, data, meta}` for lists, `{ok: false, error: {code, message, fields?}}` for errors. Error codes are the 13 status names plus `no_scenario` (section 4.3).
-- **Planned API (section 5, PLANNED):** 18 new endpoints for the mini-app and its cover, claims and receipt views, Ask Chhatri, the slip pre-check, voice, the grievance ladder, the consent centre and "forget my slip", the provider fallback switch, the published evaluation, the ops strip and the what-if panel. Section 5 is the single source of truth for their paths, bodies and errors, and each one ships behind a feature flag (a flag that is off answers 404). Changes to existing endpoints are in 5.12.
-- **Mock parity:** every planned endpoint has an entry in the in-browser mock backend (`frontend/src/mock`), so the static demo works with no server (section 6).
+- **API (BUILT):** 57 route handlers (section 4.1). Envelope: `{ok, data}`, `{ok, data, meta}` for lists, `{ok: false, error: {code, message, fields?}}` for errors. Error codes are the 13 status names plus `no_scenario` (section 4.3).
+- **Feature additions (section 5, BUILT, each behind its flag where it has one):** 18 endpoints for the mini-app and its cover, claims and receipt views, Ask Chhatri, the slip pre-check, voice, the grievance ladder, the consent centre and "forget my slip", the provider fallback switch, the published evaluation, the ops strip and the what-if panel. Each ships behind a feature flag (a flag that is off answers 404). Changes to existing endpoints are in 5.12.
+- **Mock parity:** every section 5 endpoint has an entry in the in-browser mock backend (`frontend/src/mock`), so the static demo works with no server (section 6).
 - **Limits (BUILT):** per client address per minute, `messages` 60, `uploads` 20, `webhooks` 60; 32 open event streams; images and audio at most 5 MB, audio at most 30 seconds (`backend/chhatri/api/security.py`, `uploads.py`).
 
 ## 1. Domain model
@@ -403,7 +403,7 @@ Implementation: `backend/chhatri/ids.py` exports factory functions; tests seed t
 
 ## 4. Existing API: routes and methods
 
-### 4.1 Route table (existing API: 39 route handlers across 12 router modules)
+### 4.1 Route table (API: 57 route handlers)
 
 | Router | Method | Path | Purpose | Auth | SPEC § |
 |---|---|---|---|---|---|
@@ -446,6 +446,24 @@ Implementation: `backend/chhatri/ids.py` exports factory functions; tests seed t
 | **stream** | GET | `/api/stream` | SSE subscribe (Last-Event-ID resume) | none | 19.1 |
 | **internal** | POST | `/internal/workflows/{step}` | n8n → backend callback (n8n live mode) | X-Chhatri-Secret | 15 |
 | **media** | GET | `/api/media/{media_id}` | Stored media: voice notes and slip images | none | 14.1 |
+| **merchants** (section 5) | GET | `/api/merchants/{merchant_id}/cover` | Cover card with the derived status (5.1) | none | 5.1 |
+| | GET | `/api/merchants/{merchant_id}/claims` | Claim tracker items (5.1) | none | 5.1 |
+| **records** (section 5) | GET | `/api/decisions/{decision_id}/receipt` | Decision receipt with sources and counterfactual (5.8) | none | 5.8 |
+| **ask** | POST | `/api/merchants/{merchant_id}/ask` | Ask Chhatri, flag `n2_ask_chhatri` (5.2) | none | 5.2 |
+| **precheck** | POST | `/api/merchants/{merchant_id}/slip-precheck` | Read a slip and run the gate, flag `n3_slip_precheck` (5.3) | none | 5.3 |
+| | POST | `/api/merchants/{merchant_id}/slip-precheck/{precheck_id}/confirm` | Confirm, or send to the team (5.3) | none | 5.3 |
+| **grievances** | GET | `/api/merchants/{merchant_id}/grievances` | Grievance ladder, flag `n5_grievances` (5.4) | none | 5.4 |
+| | POST | `/api/merchants/{merchant_id}/grievances` | Open, escalate or resolve (5.4) | none | 5.4 |
+| **consents** | GET | `/api/merchants/{merchant_id}/consents` | Consent centre, flag `n6_consents` (5.5) | none | 5.5 |
+| | GET | `/api/merchants/{merchant_id}/consents/activity` | What was used, for what, when (5.5) | none | 5.5 |
+| | POST | `/api/merchants/{merchant_id}/consents/{consent_id}/withdraw` | Turn a purpose off (5.5) | officer | 5.5 |
+| | POST | `/api/merchants/{merchant_id}/slips/{slip_id}/forget` | Erase a slip (5.5) | officer | 5.5 |
+| **fallback** | POST | `/api/integrations/{component}/fallback` | Force or release a fallback, flag `x6_provider_panel`, demo mode (5.6) | officer | 5.6 |
+| **ops** | GET | `/api/ops/summary` | Ops counts, flag `h8_ops_strip` (5.7) | none | 5.7 |
+| **whatif** | POST | `/api/whatif/area` | Read-only engine re-run, flag `h24_whatif` (5.9) | none | 5.9 |
+| **evals** | GET | `/api/evals/summary` | Stored evaluation results, flag `h25_evals` (5.10) | none | 5.10 |
+| **voice** | POST | `/api/voice/stt` | Speech to text with chips, flag `n4_voice` (5.11) | none | 5.11 |
+| | POST | `/api/voice/tts` | Text to speech (5.11) | none | 5.11 |
 
 ### 4.2 Request/response envelope (SPEC §19)
 
@@ -493,7 +511,7 @@ Implementation: `backend/chhatri/ids.py` exports factory functions; tests seed t
 
 ### 4.3 Error codes
 
-Every failure leaves the API in the envelope of 4.2. The `code` is the default name of the HTTP status (`CODE_BY_STATUS` in `backend/chhatri/api/errors.py`), unless a route passes its own code with `ApiError(status, message, code=...)`. One own code exists today, `no_scenario`. The planned routes add five more, all on 409 (the last table). A client should treat the HTTP status as the stable part and the code as a string it may not know.
+Every failure leaves the API in the envelope of 4.2. The `code` is the default name of the HTTP status (`CODE_BY_STATUS` in `backend/chhatri/api/errors.py`), unless a route passes its own code with `ApiError(status, message, code=...)`. Besides `no_scenario`, the section 5 routes add five own codes, all on 409 (the last table). A client should treat the HTTP status as the stable part and the code as a string it may not know.
 
 | Code | HTTP | Where it comes from today |
 |---|---|---|
@@ -502,7 +520,7 @@ Every failure leaves the API in the envelope of 4.2. The `code` is the default n
 | `forbidden` | 403 | A wrong officer token or internal secret, a bad Paytm checksum, or a failed WhatsApp verification or signature |
 | `not_found` | 404 | An unknown path, merchant, zone, case, decision, media id, payment link or workflow subject. Also `GET /api/session` outside demo mode, a backtest report that was not generated, and live weather when `OPENMETEO_LIVE` is false |
 | `method_not_allowed` | 405 | A wrong method on an existing path |
-| `conflict` | 409 | An officer action on a case that is not OPEN, a workflow step that is not valid for its run, and, planned, a slip pre-check with no open silence check-in (5.3) |
+| `conflict` | 409 | An officer action on a case that is not OPEN, a workflow step that is not valid for its run, and a slip pre-check with no open silence check-in (5.3) |
 | `no_scenario` | 409 | No scenario is loaded. `POST /api/replay/load` first |
 | `payload_too_large` | 413 | An image over 5 MB, audio over 5 MB or 30 seconds, or another upload over its limit |
 | `unsupported_media_type` | 415 | An image that is not JPEG, PNG or WebP, audio that is not OGG/Opus, WebM, MP3, WAV or M4A, a damaged file, or a photo request that is neither multipart nor JSON |
@@ -514,7 +532,7 @@ Every failure leaves the API in the envelope of 4.2. The `code` is the default n
 
 The mock backend still answers with upper-case codes (`NOT_FOUND`, `VALIDATION_ERROR`) and a 400 for a body that is not JSON. Wave 1 moves it to the codes above (section 6.1).
 
-Codes that the planned routes add, all on HTTP 409 (section 5):
+Codes that the section 5 routes add, all on HTTP 409:
 
 | Code | Raised by | When |
 |---|---|---|
@@ -524,9 +542,9 @@ Codes that the planned routes add, all on HTTP 409 (section 5):
 | `case_open` | `POST .../consents/{consent_id}/withdraw` and `POST .../slips/{slip_id}/forget` (5.5) | An OPEN review case needs the data: the sales consent cannot be withdrawn and the slip cannot be erased until it is answered |
 | `already_erased` | `POST .../slips/{slip_id}/forget` (5.5) | The slip was erased before |
 
-## 5. Planned API surface (18 endpoints, all P0)
+## 5. Feature API surface (18 endpoints, all P0)
 
-Every endpoint in this section is PLANNED. None exists at commit 86575ea, where the route table (section 4.1) has 39 handlers. **This section is the single source of truth for every planned path, request, response and error.** Feature specs link here. If a spec and this section differ, this section wins and the spec is corrected. The build order, file lists and tests for each endpoint are in the [implementation guide](implementation-guide.md).
+Every endpoint in this section is BUILT in the working tree of 2 Oct 2026 (they were PLANNED at commit 86575ea, where the route table had 39 handlers; section 4.1 now has 57). Each route is pinned by `backend/tests/api/test_route_table.py`, and the flagged ones by `test_feature_routes.py`. **This section is the single source of truth for every path, request, response and error of these features.** Feature specs link here. If a spec and this section differ, this section wins and the spec is corrected. The build order, file lists and tests for each endpoint are in the [implementation guide](implementation-guide.md).
 
 Everything here is P0 (team decision, 2 Oct 2026). The work runs in waves behind feature flags. A route whose flag is off answers 404 `not_found`, as if it did not exist, so nothing is shown half-working.
 
@@ -565,7 +583,7 @@ When all 18 land, the route table has 57 handlers and `SPEC_ROUTES` in `backend/
 | Errors | The codes in section 4.3, including the few 409 codes that carry their own name (`mentions_unconfirmed`, `consent_required`, `already_withdrawn`, `case_open`, `already_erased`). A malformed id is 422 `validation_error` with `fields`. A well-formed unknown id (merchant, decision, precheck, slip, consent) is 404 `not_found`. No scenario loaded is 409 `no_scenario`. A flag that is off is 404 `not_found`. |
 | Unknown merchant | Every merchant-scoped route starts with the existing `merchant_or_404` helper (X5). |
 | AI label (H26) | Every AI-backed response carries `mode` (`LIVE`, `FALLBACK` or `SIMULATED`), `provider` (`rules`, `gemini`, `sarvam`, `template`, `simulated`, `mock`, `browser`, `none`), `model` (the configured model id, null when no model ran), `fallback_reason` and `attempts` (one `{provider, outcome, ms}` per link tried). Reasons that give `SIMULATED`: `NO_KEY`, `MODEL_NOT_SET`, `MOCK_BACKEND`, `FREE_TIER_BLOCKED`. Reasons that give `FALLBACK`: `TIMEOUT`, `RATE_LIMITED`, `PROVIDER_ERROR`, `INVALID_REPLY`, `GUARD_BLOCKED`, `INJECTION_SUSPECTED`, and `FORCED` (a configured link the presenter switched off is blocked, not missing). A model failure is never an HTTP error: the answer is 200 with a template and a FALLBACK or SIMULATED label. |
-| Rate limits | Per client address, per minute, existing groups (`backend/chhatri/api/security.py`): `messages` 60, `uploads` 20, `webhooks` 60. The group of each route is in the index. A hit is 429 `rate_limited` with `Retry-After`. The what-if route gets a group of its own (`whatif`, limit set at build time) because a slider sends several requests a second. Whether the free-tier model quota needs a lower group for the AI routes is an open point (implementation guide, open question 4). |
+| Rate limits | Per client address, per minute, existing groups (`backend/chhatri/api/security.py`): `messages` 60, `uploads` 20, `webhooks` 60. The group of each route is in the index. A hit is 429 `rate_limited` with `Retry-After`. The what-if route gets a group of its own (`whatif` 300) because a slider sends several requests a second. Whether the free-tier model quota needs a lower group for the AI routes is an open point (implementation guide, open question 4). |
 | Audit | Every write appends hash-chained audit entries. The action names are listed per endpoint and, all together, in 5.12. Entries never hold a merchant's free text, a transcript or a slip value. One BUILT exception remains until Wave 3: the NAME_MATCHES_KYC check text inside a decision entry quotes the patient name (5.5) |
 | Idempotency | A repeated OPEN of the same grievance returns the existing one (200) and writes nothing new. A repeated fallback switch returns the same row. A repeated confirm is 409 `conflict`, a repeated withdraw is 409 `already_withdrawn` and a repeated erase is 409 `already_erased`, because each would change nothing and the app should say so. |
 | No money, no tools | No AI-backed endpoint decides, changes or promises an amount. Only the policy engine decides money. The two chat actions that exist today (open a dispute, make a cover quote) run only when the word-list rules matched the text, never because a model chose them. |
@@ -729,7 +747,7 @@ Errors: 404 `not_found` (unknown merchant), 409 `no_scenario`.
 
 ### 5.2 N2: Ask Chhatri (grounded answers)
 
-Wave 2, flag `n2_ask_chhatri`. The route is PLANNED, and so are the Gemini provider, guard layer B and the injection and scam checks. What is BUILT today: the word-list intents, the message catalogue, the Sarvam chat adapter (LIVE only with `SARVAM_API_KEY`) and the `grounded()` guard, which no flow calls yet. The pipeline, the grounding, the guard, the injection defence (H16), the scam warning (H19), the clause chips (H17) and the next action (H21) are specified in [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md). This section fixes the route.
+Wave 2, flag `n2_ask_chhatri`. BUILT: the route (`api/routers/ask.py`, `chhatri/ask/`), the Gemini → Sarvam → template chat chain, guard layer B and the injection and scam checks, on top of the word-list intents, the message catalogue and the `grounded()` guard. Gemini and Sarvam are LIVE only with their keys and an open data gate ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)); they have been tested against fakes only. The pipeline, the grounding, the guard, the injection defence (H16), the scam warning (H19), the clause chips (H17) and the next action (H21) are specified in [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md). This section fixes the route.
 
 #### POST `/api/merchants/{merchant_id}/ask` — Ask a question
 
@@ -847,11 +865,11 @@ Only synthetic demo data is ever sent to a free-tier model ([ADR 0009](adr/0009-
 
 ### 5.3 N3: Slip pre-check (read, check the document, confirm)
 
-Wave 2, flag `n3_slip_precheck`. Both routes are PLANNED. Today the photo route (`POST /api/merchants/{id}/photo`) reads the slip and decides the claim in one step, so a bad photo becomes a referral and the merchant cannot retake it. The pre-check sits between the photo and the engine: it reads the slip, shows the merchant what was read, and **no claim is decided until the merchant confirms** or sends the slip to the team. The status table, the slot checklist, the confidence gate, the retake limit and the defence against instructions printed on a slip are specified in [fs-02](../02-product/feature-specs/fs-02-hospital-cash-claim.md) section 7.3. This section fixes the two routes.
+Wave 2, flag `n3_slip_precheck`. Both routes are BUILT (`api/routers/precheck.py`, `chhatri/precheck/`). With the flag off the photo route (`POST /api/merchants/{id}/photo`) reads the slip and decides the claim in one step, so a bad photo becomes a referral and the merchant cannot retake it. The pre-check sits between the photo and the engine: it reads the slip, shows the merchant what was read, and **no claim is decided until the merchant confirms** or sends the slip to the team. The status table, the slot checklist, the confidence gate, the retake limit and the defence against instructions printed on a slip are specified in [fs-02](../02-product/feature-specs/fs-02-hospital-cash-claim.md) section 7.3. This section fixes the two routes.
 
 With the flag on, the chat photo route hands the image to the same service, and its reply is a message whose `card` and `meta` carry the pre-check (fs-02 section 8.3). With the flag off both routes answer 404 `not_found`, the photo route behaves exactly as today and the golden demo flows do not change.
 
-Which provider reads the slip: Gemini vision (PLANNED), then Sarvam Vision (BUILT adapter, LIVE only with `SARVAM_API_KEY`). The simulated reader, which returns the data embedded in the three sample slip images, answers only when the chain has no live link, when the free-tier gate is closed ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)) or when the presenter forces fallback (5.6). It never stands in after a live link failed, so a simulated read is never shown as the fallback of a live one. Tesseract is a later option and is not in the Wave 2 chain.
+Which provider reads the slip: Gemini vision, then Sarvam Vision (both BUILT, each LIVE only with its key and an open data gate). The simulated reader, which returns the data embedded in the three sample slip images, answers only when the chain has no live link, when the free-tier gate is closed ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)) or when the presenter forces fallback (5.6). It never stands in after a live link failed, so a simulated read is never shown as the fallback of a live one. Tesseract is a later option and is not in the Wave 2 chain.
 
 ```mermaid
 flowchart TD
@@ -1058,7 +1076,7 @@ Audit: `precheck.confirmed` (actor `merchant:<id>`: precheck id, action, claim i
 
 ### 5.4 N5: Grievance ladder (open, escalate, resolve)
 
-Wave 3, flag `n5_grievances`. Both routes are PLANNED. The ladder steps, the respondent router (H22), the response clocks and the wording rules are specified in [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) sections 5.4, 7 and 8. A grievance is stored in memory per scenario load, like a case. Today a merchant can only dispute by chat (intent DISPUTE_AMOUNT opens a DISPUTE case); the grievance route calls the same case-opening code, so a dispute opened either way is the same case.
+Wave 3, flag `n5_grievances`. Both routes are BUILT (`api/routers/grievances.py`, `chhatri/cases/ladder.py`, `grievances.py`). The ladder steps, the respondent router (H22), the response clocks and the wording rules are specified in [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) sections 5.4, 7 and 8. A grievance is stored in memory per scenario load, like a case. A merchant can also dispute by chat (intent DISPUTE_AMOUNT opens a DISPUTE case); the grievance route calls the same case-opening code, so a dispute opened either way is the same case.
 
 #### GET `/api/merchants/{merchant_id}/grievances` — List grievances
 
@@ -1141,7 +1159,7 @@ Rules: a second `OPEN` for the same merchant, decision and topic while one is `O
 
 ### 5.5 N6 and H23: Consent centre, activity and "forget my slip"
 
-Wave 3, flag `n6_consents`. All four routes are PLANNED, and so is the consent model: **there is no consent model in the backend today**. The design, the effect of each withdrawal, the screens and the copy are in [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) section 9. This section fixes the routes. With the flag off the four routes answer 404 `not_found`, `POST /api/premium/link` ignores `consents` and every gate passes, so Waves 1 and 2 run exactly as today.
+Wave 3, flag `n6_consents`. All four routes and the consent model are BUILT (`api/routers/consents.py`, `chhatri/consent/`). The design, the effect of each withdrawal, the screens and the copy are in [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) section 9. This section fixes the routes. With the flag off the four routes answer 404 `not_found`, `POST /api/premium/link` ignores `consents` and every gate passes, so Waves 1 and 2 run exactly as before.
 
 There is no grant route, on purpose: consent is given by an action that needs the data, never on its own. It is recorded when a payment link is paid (from the app or from the chat notice) and when a first slip is sent. A pilot would store the consent a merchant gave in the Paytm app. The prototype seeds three ACTIVE records, source `SEEDED`, for every merchant with a seeded cover, labels them SIMULATED, writes no audit entry for them, and starts all of it afresh on every scenario load. A withdrawal replaces the record and never edits a decision, a payout or the audit log.
 
@@ -1325,7 +1343,7 @@ Audit: `slip.erased` (actor `merchant:<id>`, subject type `media`: slip id, clai
 
 ### 5.6 X6 and H26: Provider panel and fallback switch
 
-Wave 2, flag `x6_provider_panel`. PLANNED. A presenter forces one component into its fallback path to show that Chhatri still answers when a provider fails. The switch needs no key to be removed and changes no code path in the engine. It is a demo control, so it needs the officer bearer token (the console holds it, handed out by `GET /api/session` in demo mode) **and** `CHHATRI_DEMO_MODE` true. The behaviour, the panel and the copy are in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) section 9.
+Wave 2, flag `x6_provider_panel`. BUILT (`api/routers/fallback.py`, `integrations/panel.py`, `switch.py`, `switched.py`). A presenter forces one component into its fallback path to show that Chhatri still answers when a provider fails. The switch needs no key to be removed and changes no code path in the engine. It is a demo control, so it needs the officer bearer token (the console holds it, handed out by `GET /api/session` in demo mode) **and** `CHHATRI_DEMO_MODE` true. The behaviour, the panel and the copy are in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) section 9.
 
 #### GET `/api/integrations` — The component rows (existing route, extended)
 
@@ -1407,7 +1425,7 @@ State and audit. The forced set is **process-wide**, not per scenario: a backwar
 
 ### 5.7 H8: Ops strip
 
-Wave 4, flag `h8_ops_strip`. PLANNED. Counts only, read from the in-memory store of the loaded scenario: no projection, no model, no cohort analytics. The strip, its cells and its refresh are in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) section 10.
+Wave 4, flag `h8_ops_strip`. BUILT (`api/routers/ops.py`, `replay/view_ops.py`). Counts only, read from the in-memory store of the loaded scenario: no projection, no model, no cohort analytics. The strip, its cells and its refresh are in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) section 10.
 
 #### GET `/api/ops/summary` — Operations counts at the replay clock
 
@@ -1453,7 +1471,7 @@ Money is integer paise plus a `format_inr` label. Errors: 404 `not_found` (flag 
 
 ### 5.8 H2, H3, H13, H14: Decision receipt
 
-Wave 1, no flag (read-only). PLANNED. The existing `GET /api/decisions/{decision_id}` stays as it is. The receipt adds what the "why this amount" screen, the printable receipt and the console need: a **Source** on every check and number (H13), a **counterfactual** the engine verified by re-running itself (H14), the audit position, the payout, the lender's answer and the grievance path. The engine, the Source object and the counterfactual rules are specified in [fs-09](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) sections 8 to 10.
+Wave 1, no flag (read-only). BUILT (`api/routers/records.py`, `replay/view_receipt.py`, `policy/provenance.py`, `counterfactual.py`, `receipt.py`). The existing `GET /api/decisions/{decision_id}` stays as it is. The receipt adds what the "why this amount" screen, the printable receipt and the console need: a **Source** on every check and number (H13), a **counterfactual** the engine verified by re-running itself (H14), the audit position, the payout, the lender's answer and the grievance path. The engine, the Source object and the counterfactual rules are specified in [fs-09](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) sections 8 to 10.
 
 #### GET `/api/decisions/{decision_id}/receipt` — The receipt of one decision
 
@@ -1472,12 +1490,12 @@ The id pattern is `D-` plus at least six digits. The sources and counterfactuals
     "explanation": {
       "formula_en": "½ × ₹4,380 × 63% = ₹1,380",
       "formula_hi": "₹4,380 का 63% = ₹2,759.40; उसका आधा = ₹1,380",
-      "clause": "C4.1",
+      "clause": "C4",
       "facts": [
         {"key": "expected_day", "label_en": "Your usual Tuesday", "value": "₹4,380",
          "sources": [{"kind": "FORECAST", "label": "Expected day, forecast P50 to the nearest ₹10",
                       "ref": "forecast:S-0142:2025-08-19", "as_of": "2025-08-19T17:00:00+05:30",
-                      "origin": "SIMULATED", "clause": "C4.1"}]}
+                      "origin": "SIMULATED", "clause": "C4"}]}
       ]
     },
     "checks": [
@@ -1549,11 +1567,11 @@ On screen the chip says **Source**, never "verified by", because every input is 
 
 ### 5.9 H24: What-if panel (read-only)
 
-Wave 4, flag `h24_whatif`. PLANNED. A judge changes the weather alert, the hourly sales or the shop count of a zone and watches the **deterministic engine** recompute. The route calls the same pure `trigger_verdict` function that the live trigger uses (fs-09 section 9.5) and the same amount arithmetic, so no threshold is copied. **It writes nothing**: no store change, no audit entry, no id, no message, no event and no model call. The panel and its controls are in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) section 11.
+Wave 4, flag `h24_whatif`. BUILT (`api/routers/whatif.py`, `replay/whatif.py`). A judge changes the weather alert, the hourly sales or the shop count of a zone and watches the **deterministic engine** recompute. The route calls the same pure `trigger_verdict` function that the live trigger uses (fs-09 section 9.5) and the same amount arithmetic, so no threshold is copied. **It writes nothing**: no store change, no audit entry, no id, no message, no event and no model call. The panel and its controls are in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) section 11.
 
 #### POST `/api/whatif/area` — Recompute a zone's trigger and one shop's payout
 
-No token. A pure function of the loaded scenario and the request. Rate limited in a group of its own (`whatif`, limit set at build time), because a slider sends several requests a second. The drawer debounces about 150 ms and aborts the request in flight.
+No token. A pure function of the loaded scenario and the request. Rate limited in a group of its own (`whatif`, 300 a minute), because a slider sends several requests a second. The drawer debounces about 150 ms and aborts the request in flight.
 
 | Field | Type | Rule |
 |---|---|---|
@@ -1569,7 +1587,7 @@ Content-Type: application/json
 {"zone_id": "Z9", "overrides": {"alert": "RAIN", "hourly_index_pct": [49, 49, 49]}}
 ```
 
-The window index is recomputed from the hourly values with the zone's own expected sales for those hours: the sum of (index × expected) over the sum of expected, as an integer percent rounded half up, as the detector computes it. Baseline `already_triggered_today` means a trigger for this zone and day exists with `fired_at` before `at`. The baseline values are the real ones: at 17:00 of the monsoon replay Z9 (Chembur) read 61% over the window (hours 59%, 58% and 67%) with no alert, a lower bound of 90% and 64 shops, so it paid nothing.
+The window index is recomputed from the hourly values with the zone's own expected sales for those hours: the sum of (index × expected) over the sum of expected, as an integer percent rounded half up, as the detector computes it. Baseline `already_triggered_today` means a trigger for this zone and day exists with `fired_at` before `at`. The baseline values are the real ones: at 17:00 of the monsoon replay Z9 (Chembur) read 61% over the window (hours 59%, 58% and 67%) with no alert, a lower bound of 90% and 62 shops in the index (64 shops are covered in Z9, and two of them are off on Tuesdays), so it paid nothing.
 
 ```json
 {
@@ -1582,9 +1600,9 @@ The window index is recomputed from the hourly values with the zone's own expect
     "rules_version": "pilot-0.1",
     "fixed": {"index_floor_pct": 50, "consecutive_hours": 3, "min_shops_in_index": 20, "lower_bound_pct": 90},
     "baseline": {"alert": "NONE", "alert_id": null, "hourly_index_pct": [59, 58, 67], "window_index_pct": 61,
-                 "shops_in_index": 64, "already_triggered_today": false, "fires": false, "status": "slow_day"},
+                 "shops_in_index": 62, "already_triggered_today": false, "fires": false, "status": "slow_day"},
     "scenario": {"alert": "RAIN", "alert_id": null, "hourly_index_pct": [49, 49, 49], "window_index_pct": 49,
-                 "shops_in_index": 64, "already_triggered_today": false, "fires": true, "status": "triggered", "drop_pct": 51},
+                 "shops_in_index": 62, "already_triggered_today": false, "fires": true, "status": "triggered", "drop_pct": 51},
     "changed": ["alert", "hourly_index_pct"],
     "conditions": [
       {"code": "ALERT_COVERS_WINDOW", "label_en": "A rain or civic alert covers all 3 hours",
@@ -1612,7 +1630,7 @@ The example shows two of the five conditions (the other three have the same shap
 | `ALERT_COVERS_WINDOW` | A RAIN or CIVIC alert, issued by the evaluation time, is valid for every hour of the window | no alert, not met | `ALERT`, `CLAUSE` |
 | `HOURS_BELOW_FLOOR` | Every hourly index is strictly below `index_floor_pct` (50) | 59, 58, 67, not met | `SALES_INDEX`, `RULES` |
 | `WINDOW_BELOW_BOUND` | The window index is strictly below the zone's conformal lower bound | 61 below 90, met | `SALES_INDEX`, `ZONE_BOUND` |
-| `SHOPS_QUORUM` | Shops in the index are at least `min_shops_in_index` (20) | 64, met | `SALES_INDEX`, `RULES` |
+| `SHOPS_QUORUM` | Shops in the index are at least `min_shops_in_index` (20) | 62, met | `SALES_INDEX`, `RULES` |
 | `FIRST_TRIGGER_TODAY` | The zone has not triggered earlier today | not yet, met | `SALES_INDEX` |
 
 `status` uses the detector's own zone statuses (`triggered`, `watch`, `slow_day`, `normal`, `no_data`), computed by the same function. With `example_merchant_id` the response adds the amount arithmetic for one shop, from the engine's own `area_breakdown`. Z7 at 17:00 with all three hours at 45 and Anil as the example:
@@ -1634,7 +1652,7 @@ Errors: 404 `not_found` (flag off, unknown zone), 409 `no_scenario`, 409 `confli
 
 ### 5.10 H25: Published AI evaluation
 
-Wave 3, flag `h25_evals`. PLANNED. The route reads the result file written by the evaluation harness and shows nothing but what was measured. The harness, its six suites (S1 to S6), the targets and the way every figure is reported are in the [AI evaluation plan](ai-evaluation-plan.md). **Until a run is stored, every suite reads `NOT_MEASURED` and no number exists.** The server never runs the harness, and it never runs on stage.
+Wave 3, flag `h25_evals`. BUILT (`api/routers/evals.py`, `chhatri/evals/`). The route reads the result file written by the evaluation harness and shows nothing but what was measured. The harness, its six suites (S1 to S6), the targets and the way every figure is reported are in the [AI evaluation plan](ai-evaluation-plan.md). **Until a run is stored, every suite reads `NOT_MEASURED` and no number exists.** The server never runs the harness, and it never runs on stage.
 
 #### GET `/api/evals/summary` — Results of the evaluation suites
 
@@ -1695,7 +1713,7 @@ The static demo serves a copy of the stored `summary.json` when one is committed
 
 ### 5.11 N4: Voice (speech to text, text to speech)
 
-Wave 2, flag `n4_voice`. Both routes are PLANNED. BUILT today: the Sarvam speech adapters (LIVE with `SARVAM_API_KEY`, simulated otherwise), the voice-note route `POST /api/merchants/{id}/voice` and browser playback with `speechSynthesis`. Not built: browser speech recognition, the two routes below, the confirmation chips. The flow, the chains, the chip rules (H18) and the states are in [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) section 11. WhatsApp-style voice notes keep being answered at once as today.
+Wave 2, flag `n4_voice`. Both routes are BUILT (`api/routers/voice.py`, `chhatri/ask/voice.py`, `mentions.py`), with the confirmation chips, on top of the Sarvam speech adapters (LIVE with `SARVAM_API_KEY` and an open data gate, simulated otherwise), the voice-note route `POST /api/merchants/{id}/voice` and browser playback with `speechSynthesis`. The flow, the chains, the chip rules (H18) and the states are in [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) section 11. WhatsApp-style voice notes keep being answered at once as today.
 
 #### POST `/api/voice/stt` — Transcribe a question and find its amounts and dates
 
@@ -1758,7 +1776,7 @@ Content-Type: application/json
 
 ### 5.12 Changes to existing endpoints (no new route)
 
-The 39 routes of section 4.1 keep their paths, methods and auth. These behaviours change, always in a way that a client that ignores unknown fields survives. A change behind a flag is invisible while the flag is off.
+The 39 routes that existed before section 5 keep their paths, methods and auth. Every change below is BUILT. These behaviours change, always in a way that a client that ignores unknown fields survives. A change behind a flag is invisible while the flag is off.
 
 | Endpoint | Change | Feature | Wave |
 |---|---|---|---|
@@ -1769,16 +1787,18 @@ The 39 routes of section 4.1 keep their paths, methods and auth. These behaviour
 | POST `/api/merchants/{merchant_id}/messages` | With `n2_ask_chhatri` on, UNKNOWN text goes through the Ask service and the reply's `meta` carries `mode`, `provider`, `model`, `fallback_reason`, `clauses`, `next_action` and `scam_warning`. Known intents behave exactly as today. With `n6_consents` on, a photo sent without an ACTIVE slip consent gets SLIP_CONSENT_NEEDED and nothing is read | N2, N6 | 2, 3 |
 | POST `/api/merchants/{merchant_id}/photo` | With `n3_slip_precheck` on, the image goes to the pre-check service (5.3). The reply is a message whose `card` and `meta` carry the pre-check with three actions, and the message `meta` carries the label fields. With the flag off the route reads and decides in one step, as today | N3, H26 | 2 |
 | POST `/api/premium/link` | The body gains `consents` (a list of purposes) and `notice_version`. For a merchant without a live cover the two required purposes and the current version must be present, else 422 `validation_error` with `fields.consents` or `fields.notice_version`, and nothing is created. Paying the link turns them into consent records (5.5). With the flag off the two fields are ignored | N6 | 3 |
-| GET `/api/integrations` | Two new components, `gemini_chat` and `gemini_vision` (15 rows become 17), `mode` may be `FALLBACK`, and each row gains `provider`, `model`, `fallback_reason`, `switchable`, `forced` and `last_call` (5.6). `STATUS_NAMES` in `integrations/statuses.py` and SPEC section 19.2 change with it | X6 | 2 |
+| GET `/api/integrations` | Two new components, `gemini_chat` and `gemini_vision` (15 rows become 17), `mode` may be `FALLBACK`, and each row gains `provider`, `model`, `fallback_reason`, `switchable`, `forced` and `last_call` (5.6). `GEMINI_STATUS_NAMES` in `integrations/statuses.py` adds the two rows to the 15 of `STATUS_NAMES`, and SPEC section 19.2 has the `ProviderRow` shape. `/api/preflight` lists all 17 | X6 | 2 |
+| GET `/api/preflight` | Two more kinds of row: `free_tier_gate` (always `ok`, its detail says whether free-tier AI links may be called, ADR 0009) and the two Gemini integration rows, so it lists all 17 components | X6, ADR 0009 | 2 |
+| GET `/api/cases/{case_id}` | `evidence.precheck` (optional) on a case filed through the pre-check: `precheck_id`, `filed_as` (`FIELDS_CONFIRMED` or `SENT_TO_TEAM`), `photos`, `injection_suspected` and the read's `mode`, `provider`, `model`, `fallback_reason`. After an erase, `evidence.slip` is `{erased: true, erased_at}` | N3, N6 | 2, 3 |
 | POST `/api/replay/load`, `/api/replay/reset` | Also clear pre-checks, grievances and consents, which live in memory per scenario load. They do **not** clear the forced components, which are process-wide (5.6) | N3, N5, N6 | 2, 3 |
-| GET `/api/media/{media_id}` | Answers 404 after the slip was erased (5.5). A token or signed URL on this route is proposed (fs-02 task N3.14) and open (fs-08 question 7): an `<img>` tag cannot send a bearer header, so it would need a signed URL. It is not specified here | N6 | 3 |
-| GET `/api/audit` | New actions appear: `precheck.shown`, `precheck.confirmed`, `ask.answered`, `voice.transcribed`, `instalment.holiday_request`, `instalment.holiday_decision`, `grievance.open`, `grievance.escalate`, `grievance.resolve`, `consent.granted`, `consent.withdrawn`, `cover.cancelled`, `slip.erased`, `integration.fallback_set`, `message.suppressed`. The existing `slip.read` gains the label fields and `premium.not_settled` gains the reason "consent withdrawn". The hash chain is unchanged | all | 1 to 3 |
+| GET `/api/media/{media_id}` | Answers 404 after the slip was erased (5.5). A token or signed URL on this route is proposed (fs-02 task N3.14) and open (fs-08 question 7): an `<img>` tag cannot send a bearer header, so it would need a signed URL. It is not specified here and not built | N6 | 3 |
+| GET `/api/audit` | New actions appear: `precheck.shown`, `precheck.confirmed`, `ask.answered`, `voice.transcribed`, `instalment.holiday_request`, `instalment.holiday_decision`, `grievance.open`, `grievance.escalate`, `grievance.resolve`, `consent.granted`, `consent.withdrawn`, `cover.cancelled`, `slip.erased`, `integration.fallback_set`, `message.suppressed`, `voice.confirmed`, `instalment.holiday_skipped`. The existing `slip.read` gains the label fields and `premium.not_settled` gains the reason "consent withdrawn". The hash chain is unchanged | all | 1 to 3 |
 
-Nothing else changes. In particular `GET /api/cases/{case_id}` stays the officer's evidence bundle, which the merchant app never reads, and `GET /api/decisions/{decision_id}` keeps its shape.
+Nothing else changes. In particular `GET /api/cases/{case_id}` stays the officer's evidence bundle (with the two optional evidence keys above), which the merchant app never reads, and `GET /api/decisions/{decision_id}` keeps its shape.
 
 ## 6. Mock-mode parity (N7 static demo, `frontend/src/mock`)
 
-Every endpoint of section 5 has an entry in the in-browser mock backend, so the static demo (N7) and `npm run dev:mock` work with no server. This section says how the mock works today (BUILT), what it lacks, what each planned entry returns, and the test that keeps the mock and the backend from drifting apart. The build order and the files are in the [implementation guide](implementation-guide.md).
+Every endpoint of section 5 has an entry in the in-browser mock backend, so the static demo (N7) and `npm run dev:mock` work with no server. This section says how the mock works (BUILT), what it lacked on 2 Oct, what each section 5 entry returns, and the test that keeps the mock and the backend from drifting apart. The build order and the files are in the [implementation guide](implementation-guide.md).
 
 ### 6.0 How the mock works today (BUILT)
 
@@ -1803,17 +1823,19 @@ Every endpoint of section 5 has an entry in the in-browser mock backend, so the 
 | The sample slips read other values: name score 41 against 28 for the mismatch slip, the blurry slip at 0.41 with a document type against 0.22 with none, the mismatch slip at 0.93 against 0.94. The mock also writes the patient name into the `slip.read` audit entry, which the backend never does | `personal.ts` | Align to the answer keys of the sample PNGs (fs-02 task N3.12) | 2 |
 | `GET /api/integrations` has no `meta` and lists 15 rows without the X6 fields | `routes.ts`, `fixtures.ts` | Add `meta` and the extended rows (5.6) | 2 |
 
-### 6.2 Mock entries for the planned endpoints
+Status at the end of the build (2 Oct 2026, evening): the premium and Paytm entries, the lower-case codes, the zone prices, the Z3 and Z12 totals with the 123 count, and the 17 integration rows are in the mock and pinned by its tests and the contract test (6.3). The sample slip values are fs-02 task N3.12, owned by the mock.
+
+### 6.2 Mock entries for the section 5 endpoints
 
 Each feature gets its own small module in `frontend/src/mock/endpoints/`, so `routes.ts` stays short. Each module exports a list of routes that `routes.ts` spreads into `ROUTES`. Every handler checks its feature flag first and answers 404 `not_found` when it is off, like the backend. Per-scenario state (pre-checks, grievances, consents) lives in `MockRuntime`, so a scenario load clears it, as in the backend. Every AI-backed answer from the mock carries provider `mock`, mode `SIMULATED` and reason `MOCK_BACKEND`.
 
 | # | Endpoint | Module | What the mock returns |
 |---|---|---|---|
 | 1 | GET cover | `cover.ts` | The cover view of the mock merchant. The status is derived from `starts_on` and the mock clock by the rules of fs-07 section 5.3. The price is the zone price from the copied `premiums.json`. Ramesh gets `status: NONE`. The two status sentences come from `catalogue.ts` |
-| 2 | GET claims | `tracker.ts` | One item per mock claim and per dispute, with the five steps built from the mock decisions, payouts, instalment pauses and cases by the same rules as the backend (an AREA item is never REFERRED, a DISPUTE item has no steps). After X4 the EDI step reads the mock lender's answer |
+| 2 | GET claims | `tracker.ts` | One item per mock claim and per dispute, with the five steps built from the mock decisions, payouts, lender requests (with `x4_lender_request`: GRANTED, REFUSED, NO_RESPONSE as the backend says them), instalment pauses and cases by the same rules as the backend (an AREA item is never REFERRED, a DISPUTE item has no steps). After X4 the EDI step reads the mock lender's answer |
 | 3 | GET receipt | `receipt.ts` | The receipt of a mock decision with checks and Source objects. The three golden decisions (the monsoon payout D-000142, the approved illness claim, the referred mismatch claim) carry counterfactuals recorded from the backend, which the mini-app shows with the same footer as any other. Other decisions carry none |
 | 4 | POST ask | `ask.ts` | The nine intents answered by the mock conversation, and a few recorded model answers for the sample questions of fs-05 section 13.3. Anything else is FALLBACK_HELP. A line "recorded sample" is part of the answer (fs-05 section 12.5) |
-| 5 | POST slip-precheck | `precheck.ts` | The three sample slips, read with values equal to the backend's answer keys, then the same status table, checklist and retake counter (a TypeScript port of the table in 5.3). A photo that is not a sample reads as unreadable, as in the simulated reader |
+| 5 | POST slip-precheck | `precheck.ts` | With `n6_consents` on, the slip gate first: no ACTIVE slip consent and no `consent: true` with the notice in force is 409 `consent_required`; an OK given with the photo is recorded as SLIP_UPLOAD. Then the three sample slips, read with values equal to the backend's answer keys, then the same status table, checklist and retake counter (a TypeScript port of the table in 5.3). A photo that is not a sample reads as unreadable, as in the simulated reader |
 | 6 | POST precheck confirm | `precheck.ts` | Files the claim through the existing mock path (`inboundPhoto`), and returns `claim_id`, `decision_id`, `outcome`, `case_id` and `messages` |
 | 7 | POST voice/stt | `voice.ts` | For `source: "browser"` it parses the transcript with a TypeScript port of the fixed amount and date lookup. For an audio upload it returns the recorded transcript of the four voice-demo keys. The port and the backend parser both read one shared vectors file |
 | 8 | POST voice/tts | `voice.ts` | `audio_url: null`, provider `browser`, so the client speaks the text |
@@ -1885,6 +1907,7 @@ A mock that drifts from the backend would show the judges something the product 
 
 ## Changelog
 
+- 2026-10-02 · v1.7 · status synced with the working tree: every section 5 endpoint BUILT (57 route handlers, the 18 new rows added to 4.1), PLANNED wording removed, receipt example clause `C4` as the engine writes it, `checks[].erased` set after an erase, the what-if Z9 baseline carries `ZONE_NO_TRIGGER`, the gate rows of `/api/preflight`, mock gap status in 6.1, strict mirror schemas for the pre-check, grievance and consent routes in `chhatri/api/schemas/rights.py` (every 2xx body of those route tests is validated), and the case `evidence.precheck` lines and erased `evidence.slip`
 - 2026-10-02 · v1.6 · section 5 rewritten as the single registry of the 18 planned endpoints, in one house format: index with flag, wave, rate group and auth, shared conventions (AI label fields, error codes, audit, idempotency), and request, response and error tables for each, with real values from the running API where a value exists today; paths and shapes aligned to the feature specs (fs-02, fs-04 to fs-09), including the pre-check statuses, the three consent purposes, the fallback body `force`, the ops and what-if shapes; a section on the changes to existing endpoints; section 4.3 now lists the real error codes; section 6 now describes the real mock (`ROUTES` in `frontend/src/mock/routes.ts`) and what each planned endpoint returns there; TL;DR corrected (39 routes, limits)
 - 2026-10-02 · v1.5 · route table auth corrected (replay and case reads need no token; WhatsApp POST is signature-checked); one media route; example payloads made consistent: rupee labels match paise (₹1,380, ₹28,620, ₹58,900), cover fields match the Cover model, case kinds match the enum; route count 39
 - 2026-10-02 · v1.4 · second fact-check pass: corrected endpoint paths (/api/geo/zones, /api/geo/hexes, /api/state); removed non-existent endpoints (/api/alerts, /api/phone/*, /api/decisions list, /api/replay/scenarios, /api/replay/speed); corrected Case enums (AREA_REVIEW not GRIEVANCE, status values); clarified N1–N8 as PLANNED not live; fixed premium endpoint from POST /quote to POST /link; updated route count to 37; removed fallback switch from existing API table.

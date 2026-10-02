@@ -30,18 +30,23 @@ loan instalments                                                  |             
 
 | Package | Role |
 |---|---|
-| `config`, `clock`, `money`, `ids`, `events`, `domain/` | scaffold: settings, IST clock, paise + `format_inr`, deterministic ids, event bus, frozen pydantic models |
+| `config`, `clock`, `money`, `ids`, `events`, `features`, `domain/` | scaffold: settings, IST clock, paise + `format_inr`, deterministic ids, event bus, the 14 feature flags (all off by default), frozen pydantic models |
 | `sim/` | 24 real BMC wards as zones (§5), 1,820 simulated pilot shops at seed 20251019 (`backend/data/zones.json`) plus the uncovered demo merchant S-0907 (1,821 merchants), hourly sales with rain/slow-day/bandh/closure shocks, scripted scenarios (§6, §17.2), sample slips |
 | `forecast/` | LightGBM quantile models (P10/P50/P90) over shop-hours with `zone_id` and `shop_type` features ("LightGBM per area and shop type", §7.1); per-zone conformal lower bound (§7.4) |
 | `detect/` | trailing 3-hour zone index, trigger rule, silent-shop finder (§8) |
-| `policy/` | `rules.yaml` (`pilot-0.1`), checks, amounts, explanation strings, cover purchase (§9) |
-| `store/`, `audit/`, `ledger/`, `cases/` | in-memory store, SQLite hash-chained audit log (§11), payouts, instalment pauses and premiums (§10), officer cases starting at C-2291 (§12) |
-| `integrations/` | live and simulated Sarvam, WhatsApp, Paytm, Open-Meteo, n8n, memory and Soundbox, built by `registry.py` from `Settings` (§14) |
+| `policy/` | `rules.yaml` (`pilot-0.1`), checks, amounts, explanation strings, cover purchase and derived cover status (§9); sources on every check and number (`provenance.py`, H13), counterfactuals the engine verifies (`counterfactual.py`, H14), the receipt |
+| `store/`, `audit/`, `ledger/`, `cases/` | in-memory store, SQLite hash-chained audit log (§11), payouts, instalment pauses, EDI holiday requests (X4) and premiums (§10), officer cases starting at C-2291 (§12), the grievance ladder and respondent router (`cases/ladder.py`, `grievances.py`, N5) |
+| `integrations/` | live and simulated Sarvam, Gemini, WhatsApp, Paytm, Open-Meteo, n8n, memory, Soundbox and the simulated lender, built by `registry.py` from `Settings` (§14); the Ask and slip chains, the free-tier data gate (`free_tier.py`, ADR 0009) and the X6 fallback switch and panel |
 | `workflows/` | `WORKFLOWS` step lists with simulated-time offsets; in-process runner; n8n callback validation (§15) |
-| `conversation/` | intents, message catalogue, guard, flows for WhatsApp and the phone simulator (§13) |
+| `conversation/` | intents, explain-first routing, message catalogue, two-layer guard, the X8 message guard, flows for WhatsApp and the phone simulator (§13) |
+| `ai/` | the provider chain runner and the H26 labels (mode, provider, model, fallback reason, attempts) |
+| `ask/` | Ask Chhatri (N2): fact sheet, clauses, model path, injection and scam checks, next action, voice and chips (N4) |
+| `precheck/` | the slip pre-check (N3): metadata stripping, field validation, status table, confirm or send to the team |
+| `consent/` | the consent centre, activity log and "forget my slip" (N6, H23) |
+| `evals/` | the offline evaluation harness and the S4 slip generator (H25) |
 | `replay/` | `ReplayEngine` (clock, play/pause/step/seek), `Orchestrator` (the integration core), `views` (the only place domain objects become JSON) (§17, §24.6) |
 | `backtest/` | two past monsoons, Chhatri vs a weather-only trigger, per-zone premiums (§18) |
-| `api/` | thin FastAPI routers over `AppState`/`Runtime`; SSE; security (§19, §21) |
+| `api/` | thin FastAPI routers over `AppState`/`Runtime` (57 route handlers, 18 of them from the feature waves, each flagged route 404 while its flag is off); SSE; security (§19, §21) |
 
 ## 3. Area claim: the monsoon replay (SPEC §8, §9, §17.2)
 

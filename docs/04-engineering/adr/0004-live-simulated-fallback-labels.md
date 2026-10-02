@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-Every component reports its status through `GET /api/integrations` and in the console header. Today there are 15 components: Sarvam speech-to-text, text-to-speech, chat and vision, WhatsApp, the Paytm link, n8n, Cognee memory and the weather feed, which can be LIVE, plus Soundbox, sales data, alerts, the payout rail, the lender and KYC, which are always SIMULATED. The status is LIVE or SIMULATED, set by whether the component's keys or settings are present (nothing is called to check). BUILT today. Gemini joins as `gemini_chat` and `gemini_vision` with N2 and N3 (Wave 2), and X6 adds a FALLBACK state for a link that failed, was blocked or was forced off. PLANNED. No simulated data is ever presented as live. This lets judges see what is live and what is a prototype.
+Every component reports its status through `GET /api/integrations` and in the console header. Today there are 15 components: Sarvam speech-to-text, text-to-speech, chat and vision, WhatsApp, the Paytm link, n8n, Cognee memory and the weather feed, which can be LIVE, plus Soundbox, sales data, alerts, the payout rail, the lender and KYC, which are always SIMULATED. The status is LIVE or SIMULATED, set by whether the component's keys or settings are present (nothing is called to check). BUILT today. Gemini joins as `gemini_chat` and `gemini_vision` (17 rows with the flag `x6_provider_panel`), and X6 adds a FALLBACK state for a link that failed, was blocked or was forced off. BUILT in Wave 2. No simulated data is ever presented as live. This lets judges see what is live and what is a prototype.
 
 ## Context
 
@@ -28,7 +28,7 @@ The SPEC (§0.1) commits to labelling. This ADR documents the mechanism and ensu
 | Component | LIVE when | Otherwise |
 |---|---|---|
 | Sarvam (STT, TTS, chat, vision) | `SARVAM_API_KEY` set | SIMULATED (deterministic simulators) |
-| Gemini (chat and vision, PLANNED, N2/N3, Wave 2) | PLANNED: will need a Google AI Studio key. No adapter and no row exist today | not applicable yet |
+| Gemini (chat and vision, N2/N3, Wave 2) | LIVE with `GOOGLE_API_KEY`, `GEMINI_MODEL` and an open data gate (`CHHATRI_DATA_IS_SYNTHETIC=true`); BUILT, tested against fakes only | SIMULATED with the reason NO_KEY, MODEL_NOT_SET or FREE_TIER_BLOCKED; templates or the simulated reader answer |
 | WhatsApp | all four `WHATSAPP_*` keys set AND `WHATSAPP_DEMO_RECIPIENT` set (SPEC §14.2) | SIMULATED (in-console phone) |
 | Paytm link | `PAYTM_MCP_URL` or `PAYTM_MID`+`PAYTM_KEY_SECRET` set | SIMULATED links |
 | n8n | `N8N_BASE_URL` set | SIMULATED (in-process runner, same steps) |
@@ -55,7 +55,7 @@ The team has no WhatsApp Cloud API or Paytm staging keys, so WhatsApp and the Pa
 
 **Console display.** BUILT: the header shows up to three green chips for what is LIVE (for example Sarvam, WhatsApp, Paytm) and then a grey "+N simulated". With nothing live it reads "Simulated · 15". Clicking it opens a popover that lists every component with its detail. PLANNED (X6, H7, Wave 2): an amber FALLBACK state for a link that failed, was blocked or was forced off, a "forced" chip, the provider, model, reason and last call for each row, and a demo switch ([fs-08 §9](../../02-product/feature-specs/fs-08-claims-officer-console.md)). Gemini adds the names `gemini_chat` and `gemini_vision` (proposed) there.
 
-**Merchant-facing labels (PLANNED, H26 and the N1 receipt, proposed wording).** Every AI reply and every receipt carries the mode, the provider and the reason when it is not LIVE:
+**Merchant-facing labels (BUILT, H26 and the N1 receipt, proposed wording).** Every AI reply and every receipt carries the mode, the provider and the reason when it is not LIVE:
 
 ```
 Decision: policy engine, rules pilot-0.1 (deterministic)
@@ -81,7 +81,7 @@ Payout: SIMULATED (demo settlement)
 - **Transparency:** judges know exactly what is live and what is mocked; no surprises.
 - **Honest positioning:** the team is not claiming the prototype is production-ready; it is a working demonstration with some simulated parts.
 - **Debuggability:** once X6 lands, a component that fails mid-demo shows FALLBACK, so the team knows what happened.
-- **Regulatory readiness:** once H26 lands (PLANNED), every AI reply carries its mode and provider, so a reviewer can see which components were live for a given answer.
+- **Regulatory readiness:** with H26 (BUILT), every AI reply carries its mode and provider, so a reviewer can see which components were live for a given answer.
 
 **Negative:**
 
@@ -100,8 +100,8 @@ Payout: SIMULATED (demo settlement)
 1. GET /api/integrations returns accurate status for all components at startup (tested before demo).
 2. Console header shows status badges; judges can see what is LIVE / SIMULATED / FALLBACK before the demo starts.
 3. No judge says "I thought that was real" about a simulated component after the demo.
-4. After X6 (PLANNED): if a component fails, its status changes to FALLBACK and the backup answers (tested with a network block and with the demo switch).
-5. After X6 (PLANNED): flipping a demo switch writes the audit entry `integration.fallback_set`, so a forced fallback is never hidden.
+4. With X6 (BUILT, flag `x6_provider_panel`): if a component fails, its status changes to FALLBACK and the backup answers (tested with a network block and with the demo switch).
+5. With X6 (BUILT): flipping a demo switch writes the audit entry `integration.fallback_set`, so a forced fallback is never hidden.
 
 ## Follow-ups
 
@@ -112,10 +112,11 @@ Payout: SIMULATED (demo settlement)
 ## Open questions
 
 1. Should the status badge include a "last checked" timestamp, or is "last call" enough? Owner: Ujjwal Pardeshi.
-2. If Sarvam is LIVE but slow, should the UI switch to browser speech (PLANNED, N4) and say so? The slow threshold is not set yet. Owner: Ujjwal Pardeshi.
+2. If Sarvam is LIVE but slow, should the UI switch to browser speech (N4, BUILT) and say so? The slow threshold is not set yet. Owner: Ujjwal Pardeshi.
 
 ## Changelog
 
+- 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v2.1 · aligned with the registry and the X6 spec: 15 components, status from settings (no reachability call), n8n and Cognee are SIMULATED today (FALLBACK arrives with X6), real `{name, mode, detail}` response and header chips, Weather needs `OPENMETEO_LIVE`, Soundbox always SIMULATED, merchant labels and the audit entry marked PLANNED, invented latency and timeout rules removed.
 - 2026-10-02 · v1.4 · status today is LIVE or SIMULATED; Gemini and the FALLBACK state are planned (N2/N3, X6)
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes LIVE/SIMULATED/FALLBACK labeling and Gemini PLANNED status.

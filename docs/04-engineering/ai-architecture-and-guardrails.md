@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1.6 · 2 Oct 2026 · describes what is BUILT (checked against commit 86575ea) and what is PLANNED (Waves 2 and 3, behind feature flags). Planned design is labelled as such. Nothing here has been measured |
+| Status | v1.7 · 2 Oct 2026 · the PLANNED parts of v1.6 (Waves 2 and 3) are BUILT in the working tree behind their feature flags, except Tesseract (a later option) and the live evaluation runs. Gemini and Sarvam were tested against fakes only. Nothing here has been measured |
 | Owner | Ujjwal Pardeshi |
 | Audience | AI engineers, compliance reviewers, pilot partners, RBI examiners |
 | Related | [System architecture](system-architecture.md) · [ML model card](ml-model-card.md) · [Data model and API](data-model-and-api.md) · [Free-tier stack](free-tier-stack-and-setup.md) · [AI evaluation plan](ai-evaluation-plan.md) · [ADR 0001](adr/0001-policy-engine-is-the-only-payout-authority.md) · [ADR 0003](adr/0003-free-ai-provider-chain.md) · [ADR 0004](adr/0004-live-simulated-fallback-labels.md) · [ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md) · [Ask Chhatri (fs-05)](../02-product/feature-specs/fs-05-ask-chhatri.md) · [Hospital-cash claim (fs-02)](../02-product/feature-specs/fs-02-hospital-cash-claim.md) · [Policy engine and audit (fs-09)](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) · [Facts and sources](../01-strategy/facts-and-sources.md) · [Regulatory compliance](../05-business/regulatory-and-compliance.md) |
@@ -11,14 +11,14 @@
 
 - Governing principle: the AI builds the case, code decides the money. Only `chhatri.policy.engine` produces APPROVED. No model output sets an amount, approves, pays or overrides a check (SPEC §0.2, [ADR 0001](adr/0001-policy-engine-is-the-only-payout-authority.md)).
 - BUILT today: the expected-sales model, area index and silent-shop detection (deterministic), word-list intents with a Sarvam call for UNKNOWN text that returns an intent only, Sarvam adapters for chat, document reading, speech to text and text to speech, offline simulators for all of them, the `grounded()` check (tested, not wired into any flow), upload validators and the audit log.
-- PLANNED, in waves behind flags: Gemini adapters (chat and vision), the Ask Chhatri service with a stricter guard, the slip pre-check, voice confirmation chips, mode, provider and reason labels on every AI result (H26), a free-tier data gate, and the evaluation harness (H25). Wave 2 is live AI. Wave 3 is the harness and the `/evals` page.
+- BUILT in Waves 2 and 3, behind flags: Gemini adapters (chat and vision), the Ask Chhatri service with a stricter guard, the slip pre-check, voice confirmation chips, mode, provider and reason labels on every AI result (H26), the free-tier data gate, and the offline evaluation harness (H25) with the `/evals` page. The live evaluation suites need keys and are not built.
 - Provider chains end in something deterministic: a template for text, the simulated reader or a person for slips, typed text for voice. A link is in a chain only when fully configured. No Gemini model name and no free-tier quota is written in these documents, because both change. The Sarvam defaults named in §3.4 are read from the code.
-- Only synthetic data goes to AI services on free tiers or free credits. Today that holds by construction, because the whole prototype is synthetic. A code gate is PLANNED ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)).
+- Only synthetic data goes to AI services on free tiers or free credits. It holds by construction, because the whole prototype is synthetic, and a code gate enforces it: with `CHHATRI_DATA_IS_SYNTHETIC` not true, no free-tier AI service is called ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)).
 - Honest limits: nothing is measured, model confidence is not calibrated, a forged slip cannot be detected, and the guard cannot catch a false sentence that has no numbers and no promise words (§4.7).
 
 ## 1. AI inventory
 
-BUILT means in the code at commit 86575ea. PLANNED means specified and not built. None of the PLANNED parts is a fact about the running system.
+BUILT means in the code at commit 86575ea. PLANNED means specified at that commit. **Status at the end of the build (working tree, 2 Oct 2026, evening):** every PLANNED cell below is BUILT behind its feature flag, except Tesseract (a later option, not in any chain) and the live evaluation runs. The "BUILT today" column is kept as the commit 86575ea baseline, so the flag-off behaviour stays visible.
 
 | Component | Technique and provider | Purpose | BUILT today | PLANNED | Fallback | Data sent out | Can it move money? |
 |---|---|---|---|---|---|---|---|
@@ -80,7 +80,7 @@ Tesseract is a PLANNED later link for slips, after Sarvam and before REFERRED. I
 - Uploads are validated by content: images up to 5 MB (JPEG, PNG or WebP), audio up to 5 MB and 30 s.
 - Planned interactive path: one attempt per link and per-link budgets set in the Wave 2 rehearsal so a whole chain fits its target. The targets are Ask in 5 s for at least 95 % of rehearsal questions and a slip read in 10 s for at least 90 % (PRD §5.1). Both are targets and neither is measured.
 
-### 3.3 Labels (H26, PLANNED)
+### 3.3 Labels (H26, BUILT)
 
 Every AI-backed result carries these fields. The definitions are in [fs-05 §10](../02-product/feature-specs/fs-05-ask-chhatri.md) and [fs-02 §7.3.8](../02-product/feature-specs/fs-02-hospital-cash-claim.md).
 
@@ -92,15 +92,15 @@ Every AI-backed result carries these fields. The definitions are in [fs-05 §10]
 | `fallback_reason` | null, or `NO_KEY`, `MODEL_NOT_SET`, `FORCED`, `MOCK_BACKEND`, `FREE_TIER_BLOCKED` (these give SIMULATED), or `TIMEOUT`, `RATE_LIMITED`, `PROVIDER_ERROR`, `INVALID_REPLY`, `GUARD_BLOCKED`, `INJECTION_SUSPECTED` (these give FALLBACK) |
 | `attempts` | one `{provider, outcome, ms}` per link tried, for the console |
 
-Today the registry reports only LIVE and SIMULATED per component. FALLBACK, per-component toggles, the new status names `gemini_chat` and `gemini_vision` (proposed) and the forced-fallback route `POST /api/integrations/{component}/fallback` are PLANNED (X6). The fixed list of 15 status names in `statuses.py` and SPEC §19.2 changes when they land.
+BUILT (X6, flag `x6_provider_panel`): FALLBACK, per-component switches, the status names `gemini_chat` and `gemini_vision` (`GEMINI_STATUS_NAMES` beside the 15 of `STATUS_NAMES` in `statuses.py`, 17 rows in the panel, `/api/preflight` and SPEC §19.2) and the forced-fallback route `POST /api/integrations/{component}/fallback`. With the flag off the registry reports LIVE and SIMULATED for the 15 components, as before.
 
 ### 3.4 Configuration
 
-BUILT: `SARVAM_API_KEY` and the model settings (`sarvam_chat_model` default `sarvam-105b`, `sarvam_stt_model` default `saaras:v3`, `sarvam_tts_model` default `bulbul:v3`). PLANNED: `GOOGLE_API_KEY` for Gemini and a model id in `GEMINI_MODEL` (name proposed), chosen on the day from the current free tier in Google AI Studio. A key without a model id leaves Gemini out of the chain and the provider panel says so. `CHHATRI_DATA_IS_SYNTHETIC` (name proposed) drives the data gate. Rule thresholds such as the slip confidence minimum live in `rules.yaml`, not in the environment.
+BUILT: `SARVAM_API_KEY` and the model settings (`sarvam_chat_model` default `sarvam-105b`, `sarvam_stt_model` default `saaras:v3`, `sarvam_tts_model` default `bulbul:v3`). BUILT: `GOOGLE_API_KEY` for Gemini, a model id in `GEMINI_MODEL` and an optional `GEMINI_VISION_MODEL`, chosen on the day from the current free tier in Google AI Studio (`make check-keys` lists them). A key without a model id leaves Gemini out of the chain and the provider panel says so. `CHHATRI_DATA_IS_SYNTHETIC` drives the data gate (`.env.example` sets it to true). Rule thresholds such as the slip confidence minimum live in `rules.yaml`, not in the environment.
 
 ## 4. Guardrails
 
-### 4.1 Grounding and clause citations (PLANNED)
+### 4.1 Grounding and clause citations (BUILT, flag `n2_ask_chhatri`)
 
 Ask Chhatri answers from three sources only: the merchant's engine facts, the constants in `rules.yaml` and the policy clauses C1–C12 with sub-clauses C4.1–C4.4. The fact sheet holds display strings made by the engine, so the model never calculates, and it holds no names, phone numbers, KYC names or shop names. The model returns clause ids and fact keys. The server validates them and adds the chips and the sources (H13). Details are in [fs-05 §5](../02-product/feature-specs/fs-05-ask-chhatri.md).
 
@@ -111,7 +111,7 @@ Clauses: C1 definitions, C2 area income loss, C3 hospital cash, C4 how much we p
 | Layer | Status | What it checks |
 |---|---|---|
 | A: `grounded()` in `conversation/guard.py` | BUILT, 25 tests, not called by any flow | Every digit run is an allowed number (Devanagari digits folded, grouping commas dropped, so "₹1,380.50" brings in "50"), and the normalised reply holds no promise stem in English, Hindi or Hinglish |
-| B: strict layer in front of A (`guard_strict.py`) | PLANNED, task N2.5 | B1 valid clause ids stripped and checked, B2 typed rupee and percent numbers, B3 number words, B4 a money word near a future marker, B5 outcome and certainty promises, B6 links, phones and handles, B7 length and script, B8 canary, B9 numbers only from the fact sheet |
+| B: strict layer in front of A (`guard_strict.py`) | BUILT, task N2.5 | B1 valid clause ids stripped and checked, B2 typed rupee and percent numbers, B3 number words, B4 a money word near a future marker, B5 outcome and certainty promises, B6 links, phones and handles, B7 length and script, B8 canary, B9 numbers only from the fact sheet |
 
 Any exception inside the guard counts as a block. A blocked reply is never shown: the next link tries, then a template answers. Verified examples run on 2 Oct 2026 (28 rows in [fs-05 §6.3](../02-product/feature-specs/fs-05-ask-chhatri.md)):
 
@@ -156,7 +156,7 @@ Any SOFT FAIL or unsure SOFT check gives REFERRED and opens a case in the office
 
 Rule ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)): only synthetic data goes to AI services on free tiers or free credits. Gemini's free tier may use content to improve Google products (facts A19). Health data on slips is sensitive under the DPDP Act, whose Rules are phased in (facts A22).
 
-Today the rule holds by construction. Every merchant, KYC name, sales figure and slip in the prototype is synthetic, and there is no code check. PLANNED: a gate that closes every free-tier link when the deployment does not declare its data synthetic, with the label `FREE_TIER_BLOCKED`.
+The rule holds by construction: every merchant, KYC name, sales figure and slip in the prototype is synthetic. BUILT: a gate (`integrations/free_tier.py`) that closes every free-tier link when the deployment does not declare its data synthetic. The chains skip the link with the label `FREE_TIER_BLOCKED`, recorded in the request's audit entry; the chat, voice-note, photo and Soundbox paths that call Sarvam directly get the simulators, and Cognee stays off. The gate state is a `/api/preflight` row, a start-up log line and the reason on the provider panel.
 
 | What leaves the server | Today (BUILT) | PLANNED |
 |---|---|---|
@@ -167,11 +167,11 @@ Today the rule holds by construction. Every merchant, KYC name, sales figure and
 | Reply text for speech | To Sarvam, for demo merchants | Same |
 | Learn-loop facts (ids, outcomes, amounts, dates, no names) | Only when Cognee is enabled, to its LLM | Same |
 
-Minimisation. The slip reader's schema has no diagnosis field. BUILT keeps the original image in memory so an officer can see it, with no deletion path. "Forget my slip" (N6) and masking the name in check text are PLANNED (Wave 3). Retention is set with the insurer. See [fs-02 §12.2](../02-product/feature-specs/fs-02-hospital-cash-claim.md).
+Minimisation. The slip reader's schema has no diagnosis field. BUILT keeps the original image in memory so an officer can see it, with no deletion path. "Forget my slip" (N6) is BUILT (flag `n6_consents`): it erases the photo and the slip text in the checks, and the receipt marks those checks `erased`. Masking the name in the check text at write time (fs-02 task N3.14) is not built, so audit entries written before an erase keep it. Retention is set with the insurer. See [fs-02 §12.2](../02-product/feature-specs/fs-02-hospital-cash-claim.md).
 
 ## 6. Evaluation and testing
 
-Nothing is measured. The evaluation harness (H25) is PLANNED for Wave 3, and the `/evals` page shows NOT MEASURED until a run exists. The [AI evaluation plan](ai-evaluation-plan.md) defines the sets, the metrics with labelled targets, how to run and how results appear.
+Nothing is measured. The offline evaluation harness (H25) and the `/evals` page are BUILT; no run is stored, so the page shows NOT MEASURED. The [AI evaluation plan](ai-evaluation-plan.md) defines the sets, the metrics with labelled targets, how to run and how results appear.
 
 What exists today is regression testing, which is not accuracy measurement:
 
@@ -242,6 +242,7 @@ These are ideas. They are not in any wave and not promised.
 
 ## Changelog
 
+- 2026-10-02 · v1.7 · status synced with the working tree: Waves 2 and 3 BUILT behind flags, the data gate enforced in code (chains, direct Sarvam paths, Cognee, preflight, start-up log), 17 provider rows
 - 2026-10-02 · v1.6 · rewritten against the code: BUILT versus PLANNED for every component, the label model (H26), BUILT adapter facts (timeouts, retries and waits), the two-layer guard with verified examples, injection defence for text and slips, the data gate, known limits, a cautious FREE-AI table and corrected failure modes; removed the circuit-breaker design, the 1 s, 2 s, 4 s backoff, the ROUGE-L evaluation and its targets, the invented monitoring thresholds, the claims that Ask Chhatri and the slip pre-check run today, Tesseract and browser recognition as available links, deletion of the slip after the decision, the "novel" claim, the test and time-of-day figures and the unverified Sarvam terms claim
 - 2026-10-02 · v1.5 · second fact-check pass: Tesseract marked as PLANNED (P1) not available in TODAY's provider chain; TL;DR updated to clarify TODAY vs PLAN tools.
 - 2026-10-02 · v1.4 · final consistency pass against the code: clarified that Ask Chhatri and slip reader can be LIVE with Sarvam key today (in addition to SIMULATED fallback).

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.4 · K6 BUILT (commit 86575ea) with fixes PLANNED in wave 1 · N6 and H23 PLANNED, build wave 3. Section 2 lists what exists today. |
+| Status | v1.4 · K6 BUILT (commit 86575ea) with its wave 1 fixes BUILT · N6 and H23 BUILT, wave 3. Section 2 lists what exists today. |
 | Owner | Omkar Kadam (screens, copy, notices) · Ujjwal Pardeshi (engine, store, endpoints) |
 | Date | 2026-10-02 |
 | Audience | Product, engineering, compliance, legal |
@@ -11,8 +11,8 @@
 ## TL;DR
 
 - **K6 (BUILT):** a merchant asks for cover in chat or in the app. The policy engine answers **OK or BLOCKED**, never "approved". A new cover always starts 7 days after the request date, whatever the answer. BLOCKED means an alert for the zone is in force, or was issued and starts within 72 hours. The payment link is still offered, for cover from the later date. The first payment prepays 30 days. Each evening at 21:00 (simulated) the settlement prepays the next day. The price is the zone's price from `backend/artifacts/premiums.json`; nothing is calculated for a merchant at purchase.
-- **Fixes (PLANNED, wave 1):** X3, a missing zone price fails loudly instead of costing ₹2; a cover bought through the link is WAITING and nothing flips it to ACTIVE, so the engine check and the chat status are wrong after the start date, and the status is derived from the date instead (section 5.3); the seeded and mock prices disagree with the zone prices.
-- **N6 and H23 (PLANNED, wave 3):** the consent centre. Three purposes, each with a switch: sales data, hospital slip, premium from the daily settlement. Consent is recorded when the merchant pays or sends a slip. Turning a purpose off says in plain words what stops, and it does stop (section 9.4). An activity log shows what was used, for what and when (H23). The button "Erase this slip" (proposed label) deletes the photo, the fields read from it and the copied text in the claim record (H23).
+- **Fixes (BUILT, wave 1):** X3, a missing zone price fails loudly instead of costing ₹2; a cover bought through the link is WAITING and nothing flips it to ACTIVE, so the engine check and the chat status are wrong after the start date, and the status is derived from the date instead (section 5.3); the seeded and mock prices disagree with the zone prices.
+- **N6 and H23 (BUILT, wave 3, flag `n6_consents`):** the consent centre. Three purposes, each with a switch: sales data, hospital slip, premium from the daily settlement. Consent is recorded when the merchant pays or sends a slip. Turning a purpose off says in plain words what stops, and it does stop (section 9.4). An activity log shows what was used, for what and when (H23). The button "Erase this slip" (proposed label) deletes the photo, the fields read from it and the copied text in the claim record (H23).
 - **Plain limits:** the audit log is append-only and hash-chained, so entries written before an erase can still quote a slip name; the screen says so. Withdrawing sales consent cancels the cover. That is a hackathon design decision for the insurer's compliance team and counsel to confirm. No refund is computed. There is no merchant login; the app borrows the demo officer session. Consents of the seeded merchants are made by the simulator and labelled SIMULATED.
 - **Priority:** everything here is P0 (team decision, 2 Oct). It is built in waves behind the flag `n6_consents`. An unfinished consent screen is hidden, never shown half-working.
 
@@ -49,7 +49,7 @@ N6 and H23 give the merchant control of the data behind all this. Today nothing 
 
 Nothing for N6 exists: no consent model, store, route, message or audit entry (searched on 2 Oct 2026).
 
-**PLANNED, by build wave**
+**Planned at commit 86575ea, by build wave (the backend parts of waves 1 and 3 are BUILT)**
 
 | Wave | What ships |
 |---|---|
@@ -159,15 +159,15 @@ stateDiagram-v2
     Active --> Active : evening settlement prepays the next day
     Active --> ActiveUnpaid : prepaid_through has passed
     ActiveUnpaid --> Active : a new link is paid
-    Waiting --> Cancelled : sales consent withdrawn (PLANNED)
-    Active --> Cancelled : sales consent withdrawn (PLANNED)
-    ActiveUnpaid --> Cancelled : sales consent withdrawn (PLANNED)
+    Waiting --> Cancelled : sales consent withdrawn (n6_consents)
+    Active --> Cancelled : sales consent withdrawn (n6_consents)
+    ActiveUnpaid --> Cancelled : sales consent withdrawn (n6_consents)
     Cancelled --> LinkIssued : buy again, new waiting period
 ```
 
 `LinkIssued` and `ActiveUnpaid` are drawn for clarity. They are not stored statuses: the first is a PENDING payment with no cover, the second is ACTIVE with `premium_due` true. A PENDING payment has no expiry in the code today (the enum has EXPIRED and FAILED, and nothing sets them), so an unpaid link just stays PENDING and the merchant can ask for a new quote.
 
-### 5.3 Derived status (PLANNED, wave 1, Ujjwal)
+### 5.3 Derived status (BUILT, wave 1, `policy/cover.py`)
 
 The status shown to the merchant and read by the engine is derived from the stored status and a date, so the WAITING gap cannot happen.
 
@@ -225,7 +225,7 @@ A miss has one consequence: from the next day PREMIUM_PREPAID fails (HARD), so a
 | Paid callback | `POST /api/webhooks/paytm`; checksum verified in REST mode; idempotent on the transaction id | SIMULATED | `mark_paid` |
 | Gross collections | The simulated sales history (`rt.world.history`) | SIMULATED | Evening settlement |
 | Officer token | `GET /api/session`, sent as a bearer token | BUILT, for the demo | `POST /api/premium/link` |
-| Consent records, notice text and version | New store and module (section 9.2) | PLANNED, wave 3 | Gates, S3, S10, S11 |
+| Consent records, notice text and version | `chhatri/consent/` (section 9.2) | BUILT, wave 3 | Gates, S3, S10, S11 |
 
 ## 7. Decision logic and checks
 
@@ -249,7 +249,7 @@ Boundary cases, all in `backend/tests/policy/test_cover.py` (alert A-20250818-01
 | An alert starting one minute earlier than that | BLOCKED | Within the look-ahead |
 | An alert for another zone | OK | Not relevant |
 
-### 7.2 Zone price (BUILT; X3 PLANNED, wave 1, Ujjwal)
+### 7.2 Zone price (BUILT; X3 BUILT, wave 1)
 
 Today `premium_per_day_paise` returns `table.get(zone, minimum)`, and a missing `premiums.json` gives an empty table with a logged warning, so every zone costs ₹2. X3 changes three things:
 
@@ -313,9 +313,9 @@ DEMO.md scenario `buy_cover`: Ramesh (S-0907, Zone 3) asks on Mon 18 Aug 2025 at
 
 Both go through the honest-wording test (X7) like every catalogue line.
 
-## 9. N6 consent centre and H23 build spec (PLANNED, wave 3)
+## 9. N6 consent centre and H23 build spec (BUILT, wave 3)
 
-Everything in this section is PLANNED. Nothing is built, and all of it sits behind the flag `n6_consents`: with the flag off the routes answer 404, the screens and the Help row are absent, S3 shows its one-line notice, and every gate passes, so waves 1 and 2 run exactly as today.
+The backend of this section is BUILT (`chhatri/consent/`, `api/routers/consents.py`), and all of it sits behind the flag `n6_consents`: with the flag off the routes answer 404, the screens and the Help row are absent, S3 shows its one-line notice, and every gate passes, so waves 1 and 2 run exactly as today.
 
 ### 9.1 Purposes
 
@@ -409,11 +409,11 @@ Paths are from the registry in [data-model-and-api.md](../../04-engineering/data
 
 | Method and path | Status | Auth | Purpose |
 |---|---|---|---|
-| `GET /api/merchants/{id}/consents` | PLANNED, wave 3 | none, like `GET /api/merchants/{id}` | The three purposes, with state, texts and held slips |
-| `POST /api/merchants/{id}/consents/{consent_id}/withdraw` | PLANNED, wave 3 | demo officer session | Turn a purpose off |
-| `GET /api/merchants/{id}/consents/activity` | PLANNED, wave 3 | none | The activity log (H23) |
-| `POST /api/merchants/{id}/slips/{slip_id}/forget` | PLANNED, wave 3 | demo officer session | Erase one slip (H23) |
-| `POST /api/premium/link` | BUILT; `consents` and `notice_version` PLANNED | officer token (BUILT) | Section 9.3 |
+| `GET /api/merchants/{id}/consents` | BUILT, wave 3 | none, like `GET /api/merchants/{id}` | The three purposes, with state, texts and held slips |
+| `POST /api/merchants/{id}/consents/{consent_id}/withdraw` | BUILT, wave 3 | demo officer session | Turn a purpose off |
+| `GET /api/merchants/{id}/consents/activity` | BUILT, wave 3 | none | The activity log (H23) |
+| `POST /api/merchants/{id}/slips/{slip_id}/forget` | BUILT, wave 3 | demo officer session | Erase one slip (H23) |
+| `POST /api/premium/link` | BUILT; `consents` and `notice_version` BUILT (wave 3) | officer token (BUILT) | Section 9.3 |
 
 There is no merchant login in the prototype. The two writes need the officer bearer token like `POST /api/premium/link`, and the app borrows the console's demo session (ADR 0005). The audit actor is `merchant:<id>` because the action is the merchant's, and the entry's `data.via` says `demo_officer_session`, so the log does not imply a login that does not exist. The writes share the chat routes' `messages` rate limit.
 
@@ -769,7 +769,7 @@ Test ids are the `data-testid` values of sections 9.5 and 9.9, plus the shell id
 - **AC-K6-08 Settlement.** Given a cover prepaid through day D at price P, when `settle_evening` runs for D with collections of at least P, then `prepaid_through` is D plus 1, a PAID `SETTLEMENT_DEDUCTION` payment of P exists and `premium.settled` is audited. With collections below P, `prepaid_through` is unchanged and `premium.not_settled` has the reason "collections below premium".
 - **AC-K6-09 Link outage.** Given the Paytm adapter raises an integration error, when `POST /api/premium/link` is called, then the reply has `quote` and `premium: null`, `premium.link_failed` is audited, and the chat says COVER_LINK_UNAVAILABLE.
 
-**N6 and H23 (PLANNED, wave 3, flag `n6_consents` on unless stated)**
+**N6 and H23 (BUILT, wave 3, flag `n6_consents` on unless stated)**
 
 - **AC-N6-01 Consent list.** Given `monsoon` is loaded, when Anil's app opens `/merchant/S-0142/app?screen=consents`, then `screen-consents` has `data-state="ready"`; `consent-card-SALES_DATA_FOR_CLAIM`, `consent-card-SLIP_DATA_FOR_HOSPITAL_CLAIM` and `consent-card-SETTLEMENT_DEDUCTION` exist; each `consent-switch-*` has `aria-checked="true"`; each `consent-source-*` shows the SIMULATED badge.
 - **AC-N6-02 Withdraw slip consent.** Given AC-N6-01, when the merchant taps `consent-switch-SLIP_DATA_FOR_HOSPITAL_CLAIM`, then `consent-withdraw-sheet` opens and `consent-effects` shows the slip effect text. When `consent-withdraw-confirm` is tapped, then the sheet closes, the switch has `aria-checked="false"` and is disabled, `consent-regrant-SLIP_DATA_FOR_HOSPITAL_CLAIM` is visible, `app-toast-host` shows "Turned off.", the WhatsApp thread ends with CONSENT_WITHDRAWN_SLIP, and `GET /api/merchants/S-0142/consents` returns the slip item with `status` `WITHDRAWN`.
@@ -808,7 +808,7 @@ Test ids are the `data-testid` values of sections 9.5 and 9.9, plus the shell id
 | `slip.read` | `ai-agent` | media | merchant, source, confidence, document type, which fields were read. Never the name |
 | `silence.detected` | `model` | merchant | silent day, expected day |
 
-**PLANNED, wave 3:**
+**Added in wave 3 (BUILT):**
 
 | Action | Actor | Subject | Data |
 |---|---|---|---|

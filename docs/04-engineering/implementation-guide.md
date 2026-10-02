@@ -32,7 +32,7 @@ Every feature in sections 3 to 7 has one card, with the same eight parts in the 
 | Backend | Real module paths, each marked as changed or (new) |
 | Frontend | Real paths. Mini-app code goes in `frontend/src/miniapp/` ([ADR 0005](adr/0005-mini-app-inside-the-console.md)); console code stays where it is |
 | Mock parity | What the in-browser mock backend must serve, in `frontend/src/mock/` |
-| Endpoints | The rows of [data-model section 5](data-model-and-api.md#5-planned-api-surface-18-endpoints-all-p0), or "none" |
+| Endpoints | The rows of [data-model section 5](data-model-and-api.md#5-feature-api-surface-18-endpoints-all-p0), or "none" |
 | Tests | The failing tests to write first: file, test name and what it asserts. Names that come from a spec are kept as written there, so a search finds both |
 | Done when | The commands and the spec criteria that must be true. Always includes the flag-off check |
 | Hidden behind | The flag, and what the product does with it off |
@@ -150,7 +150,7 @@ A file that two tracks touch has one owner per wave. Ask the owner, or make the 
 | AI adapters | `integrations/` | `gemini_chat.py`, `gemini_vision.py`, `chat_chain.py`, `slip_chain.py`, `speech_chain.py`, `free_tier.py`, `switch.py`, `lender.py` (all new) |
 | Cases and rights | `cases/`, `consent/` (new) | `cases/ladder.py`, `cases/grievances.py`; `consent/service.py`, `notice.py`, `activity.py` |
 | Replay views | `replay/` | `whatif.py` (new), `view_ops.py` (new), `provenance`-aware `decisions.py` |
-| Evaluation | `evals/` (new) | The harness package of the [AI evaluation plan](ai-evaluation-plan.md#62-files-planned) |
+| Evaluation | `evals/` (new) | The harness package of the [AI evaluation plan](ai-evaluation-plan.md#62-files) |
 | Tests | `backend/tests/<same area>/` | Beside the code. New folders get an `__init__.py` like the others |
 
 **Frontend.** The console is plain CSS and keeps its folders. The mini-app is a second system in one folder.
@@ -204,7 +204,7 @@ The ideas H13 to H26 are listed in the [executive summary](../00-executive-summa
 | X7, H4 | Honest-wording test | 1 | none | 3.6 |
 | N1 | Mini-app core (nine screens) | 1 | `n1_miniapp` | 3.7 to 3.11 |
 | H1 | Claim tracker | 1 | `n1_miniapp` | 3.10 |
-| H20, H21 | Jargon lens, next-best-action bar | 1 (chat replies 2) | `n1_miniapp` | 3.9, 3.11, 4.6 |
+| H20, H21 | Jargon lens, next-best-action bar | 1 (chat replies 2) | `n1_miniapp` | 3.9, 3.11, 4.3 |
 | N8 (Hindi, English) | Language switching | 1 | `n1_miniapp` | 3.11 |
 | Foundation, H26, H16 | Gemini adapters, chains, labels, data gate | 2 | none (labels), per feature | 4.1 |
 | N3, H5, H15, H16 | Slip pre-check | 2 | `n3_slip_precheck` | 4.2 |

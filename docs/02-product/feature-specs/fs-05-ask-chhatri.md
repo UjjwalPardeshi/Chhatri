@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Build-ready draft v1.6 · 2 Oct 2026 · N2 and N4 are PLANNED (Wave 2, behind feature flags). Built today: the word-list intents, the message catalogue, the Sarvam adapters and the `grounded()` check (tested, not wired into any flow) |
+| Status | Build-ready draft v1.6 · 2 Oct 2026 · N2 and N4 are BUILT behind feature flags. Built at commit 86575ea: the word-list intents, the message catalogue, the Sarvam adapters and the `grounded()` check. Since then BUILT: the Gemini adapters and chains, `AskService`, guard layer B, H16, H19, explain-first routing (N2.7), the `/ask`, `/voice/stt` and `/voice/tts` routes, the chips and the labels. Gemini and Sarvam were tested against fakes only |
 | Owner | Ujjwal Pardeshi (engineering); Omkar Kadam (copy and mini-app screens) |
 | Audience | Engineering, product, AI governance, compliance |
 | Related | [SPEC §13](../../SPEC.md) · [AI architecture and guardrails](../../04-engineering/ai-architecture-and-guardrails.md) · [AI evaluation plan](../../04-engineering/ai-evaluation-plan.md) · [Data model and API §5](../../04-engineering/data-model-and-api.md) · [ADR 0003](../../04-engineering/adr/0003-free-ai-provider-chain.md) · [ADR 0004](../../04-engineering/adr/0004-live-simulated-fallback-labels.md) · [ADR 0009](../../04-engineering/adr/0009-synthetic-data-only-to-free-tier-ai.md) · [Policy wording C1–C12](../policy-wording-and-cis.md) · [Hospital-cash claim (fs-02)](fs-02-hospital-cash-claim.md) · [Mini-app (fs-04)](fs-04-merchant-mini-app.md) · [Conversation design](../../03-design/conversation-design.md) · [Facts and sources](../../01-strategy/facts-and-sources.md) |
@@ -11,11 +11,11 @@
 
 - Ask Chhatri explains a merchant's cover, claims and payouts in Hindi and English, by text or voice (N2, N4). It is read-only for money: it never decides, changes or promises an amount.
 - Every answer is built from three sources only: the merchant's engine facts, the constants in `rules.yaml` and the policy clauses C1–C12. Answers show clause chips, source badges (H13), one next action (H21) and a label with mode, provider and fallback reason (H26).
-- Rules answer first. Only text the rules cannot answer goes to a model, in this order: Gemini (PLANNED) → Sarvam chat (BUILT adapter) → catalogue template. Unconfigured providers are left out of the chain, and the answer says which one replied and why.
-- A two-layer guard checks every model reply. Layer A is `grounded()` (BUILT). Layer B (PLANNED) adds typed numbers, number words, Hindi and Hinglish promise phrases, links and clause validation. §6.3 lists 28 examples checked on 2 Oct 2026.
+- Rules answer first. Only text the rules cannot answer goes to a model, in this order: Gemini → Sarvam chat → catalogue template (all BUILT). Unconfigured providers are left out of the chain, and the answer says which one replied and why.
+- A two-layer guard checks every model reply. Layer A is `grounded()` (BUILT). Layer B (BUILT, `guard_strict.py`) adds typed numbers, number words, Hindi and Hinglish promise phrases, links and clause validation. §6.3 lists 28 examples checked on 2 Oct 2026.
 - The question is untrusted text (H16). Scam-like messages get a fixed warning (H19). Nothing a model writes can open a case, make a quote or move money.
-- Voice (N4): Sarvam speech-to-text (BUILT adapter) → browser recognition (PLANNED) → text and chips. Amounts and dates heard in a voice question must be confirmed by tap before it is sent (H18).
-- Speed and accuracy figures here are targets until measured. The evaluation harness (H25) is PLANNED for Wave 3 and nothing has been measured yet ([AI evaluation plan](../../04-engineering/ai-evaluation-plan.md)).
+- Voice (N4): Sarvam speech-to-text → browser recognition → text and chips (all BUILT). Amounts and dates heard in a voice question must be confirmed by tap before it is sent (H18).
+- Speed and accuracy figures here are targets until measured. The offline evaluation harness (H25) is BUILT; no live run has been made, so nothing here is measured ([AI evaluation plan](../../04-engineering/ai-evaluation-plan.md)).
 
 ## 1. Summary
 
@@ -66,9 +66,9 @@ These come from running `classify()` on real questions. Today they get the reply
 | Why was my claim not paid? | WHY_AMOUNT | Explains the latest paid decision, not the claim that was not paid |
 | Can I buy cover during an alert? | BUY_COVER | A question makes a quote and a payment link |
 
-Fix (PLANNED, task N2.7): explain-first routing. Question-form text that asks about a rule goes to the grounded path even when a keyword rule matches. All 128 labelled utterances in `test_intents.py` must keep their intents, and the six questions above must reach the grounded path. The intent set of the evaluation plan measures it. A second limit: in the BUILT chat path an intent chosen by the model can run a write handler (an UNKNOWN message the model calls DISPUTE_AMOUNT opens a case). With N2 on this cannot happen because the model no longer returns an intent (§4). Hardening for the N2-off path is task N2.15.
+Fix (BUILT, task N2.7, `conversation/explain_first.py`): explain-first routing. Question-form text that asks about a rule goes to the grounded path even when a keyword rule matches. All 128 labelled utterances in `test_intents.py` must keep their intents, and the six questions above must reach the grounded path. The intent set of the evaluation plan measures it. A second limit: in the BUILT chat path an intent chosen by the model can run a write handler (an UNKNOWN message the model calls DISPUTE_AMOUNT opens a case). With N2 on this cannot happen because the model no longer returns an intent (§4). Hardening for the N2-off path is task N2.15 (BUILT: a model-chosen write intent runs no handler).
 
-### 2.3 PLANNED
+### 2.3 Planned at commit 86575ea (all BUILT since, behind `n2_ask_chhatri` and `n4_voice`; H25 offline part only)
 
 | ID | Change | Wave |
 |---|---|---|
@@ -105,7 +105,7 @@ flowchart TD
   R -->|"known intent"| H["BUILT handler and catalogue template"]
   R -->|"UNKNOWN or explain-type"| C{"Chain configured and data gate open?"}
   C -->|"no"| TS["Template answer, SIMULATED"]
-  C -->|"yes"| G["Gemini (PLANNED)"]
+  C -->|"yes"| G["Gemini"]
   G -->|"valid and guard passes"| A["Answer, clauses, facts, next action, label"]
   G -->|"error, timeout, invalid or blocked"| S["Sarvam chat"]
   S -->|"valid and guard passes"| A
@@ -138,7 +138,7 @@ flowchart TD
 
 ## 5. Grounding
 
-### 5.1 Fact sheet (PLANNED)
+### 5.1 Fact sheet (BUILT, `ask/facts.py`)
 
 Built per request by a read-only port. It holds no names, phone numbers, KYC names or shop names. Every value is a display string made by the engine (`format_inr`, the Explanation formulas), so the model never calculates.
 
@@ -149,7 +149,7 @@ Built per request by a read-only port. It holds no names, phone numbers, KYC nam
 | Open case | `case.open.id`, `.kind`, `.status` | cases |
 | Limits | `limits.annual_window_days` (365, from C4.3) | clause C4.3 |
 | Rules | `rules.payout_share`, `.area_daily_cap`, `.personal_daily_cap`, `.personal_max_auto_days`, `.annual_limit`, `.waiting_period_days`, `.alert_lookahead_hours`, `.name_match_min_score`, `.dispute_sla_hours`, `.premium_min_per_day`, `.first_payment_days` | `rules.yaml` version `pilot-0.1` |
-| Counterfactual | `decision.latest.counterfactual` when present | written by the engine (H14, PLANNED in K4 and K5); never by the model |
+| Counterfactual | `decision.latest.counterfactual` when present | written by the engine (H14, BUILT); never by the model |
 
 The allowed numbers are the digit runs of these values and nothing else. Numbers that appear only in the question are never allowed. Each key has a type (rupee, percent, count, days, hours, date, id) used by guard layer B.
 
@@ -157,7 +157,7 @@ The allowed numbers are the digit runs of these values and nothing else. Numbers
 
 The model sees C1–C12 as plain text, with the sub-clauses C4.1–C4.4 of [the policy wording](../policy-wording-and-cis.md). The backend does not read that document today. PLANNED: a committed extract `backend/data/policy/clauses.json` (id, English title, text) built by a script, with a test that fails when the extract and the document differ. Valid citation ids are exactly C1–C12 and C4.1–C4.4. The client shows the clause chip title and text from the same table.
 
-### 5.3 Prompt skeleton (planned design, not code)
+### 5.3 Prompt skeleton (the design; the code is `ask/model_path.py`)
 
 ```text
 SYSTEM
@@ -175,7 +175,7 @@ USER
 <untrusted>{question, at most 500 characters, tag characters removed}</untrusted>
 ```
 
-### 5.4 Model output schema (planned design)
+### 5.4 Model output schema (BUILT)
 
 ```json
 {
@@ -200,7 +200,7 @@ The reply is validated with `jsonschema` whatever the provider enforces (as `par
 
 Layer A is `grounded(reply, allowed_numbers)` in `conversation/guard.py` (BUILT): every digit run must be an allowed number (Devanagari digits folded, grouping commas dropped, so "₹1,380.50" brings in "50"), and the normalised reply must contain no promise stem. Layer B (PLANNED, `guard_strict.py`, task N2.5) runs first, then calls layer A, so `grounded()` keeps its 25 tests. Any exception inside the guard counts as a block. The guard checks `answer_hi` and `answer_en` separately.
 
-### 6.2 Layer B rules (PLANNED)
+### 6.2 Layer B rules (BUILT)
 
 | # | Rule | Blocks |
 |---|---|---|
@@ -371,7 +371,7 @@ BUILT adapter facts: timeout 10 s by default and 60 s for Sarvam doc-ai; retries
 
 ### 11.1 Status
 
-BUILT: Sarvam STT and TTS adapters (LIVE with the key, simulated otherwise), the voice note route, the recorder, `speechSynthesis` playback. PLANNED: `POST /api/voice/stt`, `POST /api/voice/tts`, browser speech recognition, confirmation chips (H18), the first-use notice and labels. H18 applies to the mini-app Ask screen. WhatsApp-style voice notes (`POST /api/merchants/{id}/voice`) are answered at once as today; amounts heard in them change nothing.
+BUILT: Sarvam STT and TTS adapters (LIVE with the key, simulated otherwise), the voice note route, the recorder, `speechSynthesis` playback. BUILT since, behind `n4_voice`: `POST /api/voice/stt`, `POST /api/voice/tts`, browser speech recognition, confirmation chips (H18), the first-use notice and labels. H18 applies to the mini-app Ask screen. WhatsApp-style voice notes (`POST /api/merchants/{id}/voice`) are answered at once as today; amounts heard in them change nothing.
 
 ### 11.2 Flow
 
@@ -399,7 +399,7 @@ sequenceDiagram
 
 | Step | Chain | Notes |
 |---|---|---|
-| Speech to text | Sarvam STT → browser recognition (PLANNED) → text box and chips | Sarvam accepts OGG/Opus and WebM (BUILT). Browser recognition runs on the client; in Chrome it sends audio to a remote service, so it needs a network and counts as another processor. Language support depends on the browser: test hi-IN on the demo laptop before relying on it. |
+| Speech to text | Sarvam STT → browser recognition (BUILT) → text box and chips | Sarvam accepts OGG/Opus and WebM (BUILT). Browser recognition runs on the client; in Chrome it sends audio to a remote service, so it needs a network and counts as another processor. Language support depends on the browser: test hi-IN on the demo laptop before relying on it. |
 | Text to speech | Sarvam TTS (demo merchants only, BUILT rule) → browser `speechSynthesis` (BUILT) → text only | Sarvam TTS takes at most 2,500 characters (v3). The BUILT outbox voices only the Hindi text; `lang` hi or en is added here. |
 
 Labels follow §10. Sarvam not configured gives SIMULATED with `NO_KEY` (browser recognition then answers with provider `browser`). A Sarvam error with the browser available gives FALLBACK. `language_probability` is shown to nobody and never used as recognition confidence.
@@ -595,9 +595,9 @@ Ask Chhatri follows the same design as the rest of the product against RBI's FRE
 |---|---|---|
 | `intent.detected` | BUILT | merchant id, intent, source (rules or llm) |
 | `message.inbound`, `message.outbound` | BUILT | no text |
-| `ask.answered` | PLANNED | merchant id, ask id, intent, mode, provider, model, fallback reason, clause ids, fact keys, guard verdict and reasons, injection level, scam flag, next action, attempts, `answer_sha256`. No question text and no answer text. |
-| `voice.transcribed` | PLANNED | stt id, provider, model, fallback reason, language code, duration, mention count. No transcript. |
-| `voice.confirmed` | PLANNED | stt id and the confirmed amounts and dates |
+| `ask.answered` | BUILT | merchant id, ask id, intent, mode, provider, model, fallback reason, clause ids, fact keys, guard verdict and reasons, injection level, scam flag, next action, attempts, `answer_sha256`. No question text and no answer text. |
+| `voice.transcribed` | BUILT | stt id, provider, model, fallback reason, language code, duration, mention count. No transcript. |
+| `voice.confirmed` | BUILT | stt id and the confirmed amounts and dates |
 
 ## 17. Acceptance criteria
 
@@ -662,7 +662,7 @@ All values are targets set before measuring. [The evaluation plan](../../04-engi
 |---|---|---|
 | Known intents never call the model; template per intent; formula templates after the day | `backend/tests/conversation/test_ask_chhatri.py` | AC-ASK-01, 02, 05 |
 | `test_grounded_answer` and `test_fallback_chain` (PRD ids) | same | AC-ASK-06, 09 to 16 |
-| Explain-first routing on the six questions and the 128 utterances | `backend/tests/conversation/test_routing.py` | AC-ASK-03 |
+| Explain-first routing on the six questions and the 128 utterances | `backend/tests/conversation/test_explain_first.py` (BUILT), with the Ask and chat paths in `tests/ask/test_ask_service.py` and `tests/conversation/test_ask_chat.py` | AC-ASK-03 |
 | `test_guard_no_unsupported_money` plus the 28 rows of §6.3 | `backend/tests/conversation/test_guard.py`, `test_guard_strict.py` | AC-ASK-07, 08, 18 |
 | Injection and scam tables of §7 and §8 | `test_injection.py`, `test_scam.py` | AC-ASK-17, 19 |
 | Labels and next action for every case in §9 and §10 | `test_ask_labels.py` | AC-ASK-04, 20, 21 |

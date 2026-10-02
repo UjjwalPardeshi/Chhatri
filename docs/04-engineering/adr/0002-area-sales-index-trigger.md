@@ -51,7 +51,7 @@ Expected sales come from a LightGBM quantile model. This keeps the idea behind t
 
 **Guards outside the trigger.** The shop's cover must have been bought before the alert was issued (`COVER_BEFORE_ALERT`) and its premium prepaid (`PREMIUM_PREPAID`), both HARD checks in the policy engine. A new cover always starts after the 7-day waiting period, and a quote taken while an alert is valid, or issued and starting within 72 hours (`cover.alert_lookahead_hours`), is marked BLOCKED for an immediate start (SPEC §9.5).
 
-**One rule, several readers (PLANNED).** Wave 1 extracts the conditions into a pure `trigger_verdict` ([fs-09](../../02-product/feature-specs/fs-09-policy-engine-and-audit.md) section 9.5) that the detector, the H14 counterfactual and the what-if panel (fs-08, `POST /api/whatif/area`) all call, so no threshold is copied.
+**One rule, several readers (BUILT).** Wave 1 extracted the conditions into a pure `trigger_verdict` ([fs-09](../../02-product/feature-specs/fs-09-policy-engine-and-audit.md) section 9.5) that the detector, the H14 counterfactual and the what-if panel (fs-08, `POST /api/whatif/area`) all call, so no threshold is copied.
 
 ## Alternatives considered
 
@@ -65,13 +65,13 @@ Expected sales come from a LightGBM quantile model. This keeps the idea behind t
 **Positive**
 
 - One shop cannot fake a zone's index, and a thin zone cannot fire.
-- Each condition is a number a merchant or judge can read. The explanation and the Z9 note show them today, and the receipt and the what-if panel (both PLANNED) will too.
+- Each condition is a number a merchant or judge can read. The explanation, the Z9 note, the receipt and the what-if panel (flag `h24_whatif`) show them.
 - Deterministic: the same seed gives the same triggers and ids (`backend/tests/replay/test_determinism.py`, the 21 tests of `backend/tests/detect/test_triggers.py`).
 
 **Negative**
 
 - Model dependency: a poor expected-sales model gives a poor trigger. The serving model's held-out P10–P90 band covers 78.2% of cells against 80% nominal (`coverage_p10_p90` in `manifest.json`), measured on simulated days.
-- The thresholds are published, on the Policy page and the map legend, and the what-if panel (PLANNED) will show them too. Gaming is limited by the zone-level index, the quorum and the per-shop checks, not by secrecy.
+- The thresholds are published, on the Policy page and the map legend, and the what-if panel (flag `h24_whatif`) shows them too. Gaming is limited by the zone-level index, the quorum and the per-shop checks, not by secrecy.
 - A zone whose bound is at or below the 50% floor is governed by the bound, and a zone with too few calibration windows cannot fire at all.
 
 **Risks**
@@ -116,6 +116,7 @@ What the backtest does show is that the rule pays when its conditions hold and n
 
 ## Changelog
 
+- 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v3 · circular calibration spelled out (scripted demo day, simulator-defined real drops, perfect-forecast alerts, same-simulator bound, mixed-cause headline); conformal bound described as the 2.5% rank, not P10; alert is any RAIN or CIVIC level; index over covered scheduled-open shops; sales and alerts are simulated (only the rainfall is the real Open-Meteo record); the "do not publish thresholds" mitigation is removed; real file paths and test names
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes the area sales index trigger and its backtest validation.
 - 2026-10-02 · v1.1 · fact-check pass: clarified that sales data is simulated for demo; reframed backtest results as specification validation; disclosed circular calibration openly; noted post-launch model retraining with production data.

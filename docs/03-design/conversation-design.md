@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1.4 · 2 Oct 2026 · Describes the conversation code that is built today and proposes new copy and flows. Everything proposed is PLANNED for waves 1 to 4, behind feature flags |
+| Status | Draft v1.4 · 2 Oct 2026 · Describes the conversation code that is built today and proposes new copy and flows. What was proposed for waves 1 to 4 is BUILT behind feature flags; new Hindi and Marathi lines still need a native review |
 | Owner | Omkar Kadam |
 | Audience | Engineers, designers, the native-speaker reviewer, support staff and anyone judging the bilingual flow |
 | Related | [Copy deck](copy-deck.md) · [Ask Chhatri](../02-product/feature-specs/fs-05-ask-chhatri.md) · [EDI holiday](../02-product/feature-specs/fs-03-edi-holiday.md) · [Merchant mini-app](../02-product/feature-specs/fs-04-merchant-mini-app.md) · [Hospital cash claim](../02-product/feature-specs/fs-02-hospital-cash-claim.md) · [Explanations, disputes and grievance](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) · [AI architecture and guardrails](../04-engineering/ai-architecture-and-guardrails.md) · [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) · [Implementation guide](../04-engineering/implementation-guide.md) · [Product requirements](../02-product/prd.md) · [Facts and sources](../01-strategy/facts-and-sources.md) |
@@ -40,8 +40,8 @@
 | WhatsApp Cloud API | SIMULATED | Payout notices, check-in, questions, disputes, voice | Hindi text with English beside it, cards, voice | No Cloud API keys are set. Business-initiated messages outside the 24 hour session need approved templates; two exist in the code, `chhatri_area_payout` and `chhatri_checkin`. Reply buttons (at most 3, titles at most 20 characters) are in the payload builder and in the inbound parser, and no message sets them yet |
 | Phone simulator | BUILT | The same flows, at `/merchant/{id}` | Text, cards, a voice player, voice chips (why, dispute, ill, cover), a photo button | Every outbound text message is voiced and cards and CASE_CHIP are not. Demo merchants get Sarvam audio when TTS is LIVE, else the browser speaks the Hindi text |
 | Soundbox | SIMULATED | Payout announcement | The SOUNDBOX line, spoken | Written as an audit event |
-| Merchant mini-app (N1) | PLANNED, wave 1 | Cover, claim tracker, receipt, explainer, buy, consent, grievance | Screens in the [copy deck](copy-deck.md) | Hindi and English from wave 1, Marathi with N8 |
-| Ask Chhatri (N2) | PLANNED, wave 2 | Questions about cover, a claim or a payout | A text box, a voice button, clause chips, a label (LIVE, FALLBACK or SIMULATED) | [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
+| Merchant mini-app (N1) | BUILT, wave 1 (`n1_miniapp`) | Cover, claim tracker, receipt, explainer, buy, consent, grievance | Screens in the [copy deck](copy-deck.md) | Hindi and English from wave 1, Marathi with N8 |
+| Ask Chhatri (N2) | BUILT, wave 2 (`n2_ask_chhatri`) | Questions about cover, a claim or a payout | A text box, a voice button, clause chips, a label (LIVE, FALLBACK or SIMULATED) | [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) |
 | Officer console | BUILT | Review of REFERRED cases, disputes, audit | English only | Strings in [copy deck section 16](copy-deck.md) |
 
 **Routing.** An inbound text goes through the checks of section 4.1 and then to the handler of its intent. A text that is empty or longer than 2,000 characters is refused. An inbound voice note is at most 30 seconds and 5 MB, and a photo is at most 5 MB. Every reply goes through the outbox, which stores it in the merchant thread and voices it.
@@ -365,7 +365,7 @@ Each row was run through `grounded` when this document was written.
 - It does not check length, script or a leaked prompt.
 - It does not read the catalogue.
 
-### 5.6 Layer B (PLANNED, wave 2)
+### 5.6 Layer B (BUILT, wave 2)
 
 [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) adds nine rules in front of layer A for model text. Both layers must pass.
 
@@ -402,7 +402,7 @@ Chhatri starts some messages and sends others as a reply to the merchant. The ta
 
 ### 6.2 X8: offers and the message limit
 
-X8 is PLANNED for wave 3 and has two parts. The rules and the tests are in [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) section 9.
+X8 is BUILT in wave 3, behind `x8_distress_guard` (`backend/chhatri/conversation/message_guard.py`), and has two parts. The rules and the tests are in [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) section 9.
 
 - **No offers in distress.** No loan, top-up or cross-sell message or card is sent while an alert covers the merchant's zone (valid now, or issued and starting within the 72 hour look-ahead), while a claim is being decided, while a case is open, while a referred decision waits for an officer, or while a grievance is open. No such offer exists in the product today, and the next-action list of section 10.6 has no offer kind, so the rule holds by construction.
 - **A limit on proactive messages.** At most `max_proactive_per_day` proactive messages for one merchant on one calendar day (IST). The spec proposes the value 3, as a setting to tune. Transactional messages are never limited or suppressed.
@@ -642,7 +642,7 @@ What Chhatri itself never does, and the warning says so: ask for an OTP, PIN or 
 | "Open bit.ly/abc to see your claim" | weak: short link | no (one weak) |
 | "Why did I get this amount?" | none | no |
 
-These rows apply the rules of the spec by hand. The check itself is PLANNED, so none was run against code. `scam.note` tells the merchant that the check is quick, can be wrong, and that a message with none of these signs can still be a scam.
+These rows apply the rules of the spec by hand; the check itself is BUILT since (the Ask path, `n2_ask_chhatri`), and these rows were written before it ran. `scam.note` tells the merchant that the check is quick, can be wrong, and that a message with none of these signs can still be a scam.
 
 ### 10.6 H21: next action (wave 1 for screens, wave 2 for chat)
 
@@ -911,6 +911,7 @@ When writing or changing a string:
 
 ## Changelog
 
+- 2026-10-02 · v1.5 · status lines match the build: the mini-app, Ask Chhatri, layer B and X8 are BUILT behind their flags
 - 2026-10-02 · v1.4 · adds the status of every message (BUILT or PROPOSED), the intent word lists and guard rules as they are in code, live-run examples and known dead ends, N4 voice states, H18 confirmation chips, H19 scam warning, H21 next action with WhatsApp reply buttons, and a lender-decides replacement for INSTALMENT_PAUSED; aligns the X8 offer rule, the message kinds and the daily limit with the EDI holiday spec; corrects the case id, the check-in facts and several stale claims
 - 2026-10-02 · v1.3 · second fact-check pass: clarified WhatsApp is SIMULATED today (no Cloud API keys)
 - 2026-10-02 · v1.2 · logic and truth audit fixes
