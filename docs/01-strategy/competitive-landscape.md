@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1.5 · 2 Oct 2026 |
+| Status | Draft v1.6 · 3 Oct 2026 · the rival scan is of 2 Oct; the status of Chhatri's own features is of 3 Oct |
 | Owner | Omkar Kadam |
 | Audience | Judges, mentors, the team, rivals; the public may read it, so be factual and generous |
 | Related | [Rival teardown appendix](rival-teardown-appendix.md) · [Facts and sources](facts-and-sources.md) · [Current-state audit](current-state-audit.md) · [Vision and positioning](../02-product/vision-and-positioning.md) · [PRD §3](../02-product/prd.md) · [Requirements traceability matrix](requirements-traceability-matrix.md) |
@@ -14,7 +14,7 @@
 - On 2 Oct 2026 we read 28 public repositories from the Paytm Build for India hackathons ([appendix](rival-teardown-appendix.md)). Two state Mumbai Track 2, three are from the Delhi edition, and 11 had a demo link that answered at least once. Among them we did not find one that starts a claim and pays it from the merchant's own sales. Most are guidance, readiness or claim-filing assistants.
 - Their strengths: step-by-step journeys, evidence and explanation traces, honest-wording tests, voice-first interfaces, published evaluations and zero-login demos. Praman's repository was updated on 2 Oct, after our first pass, and is the closest overlap in the claims stages.
 - We adopted 26 ideas, H1 to H26, and credit each project by name. H1 to H12 came from the first scan. H13 to H26 (section 4.2) came from the 2 Oct teardown.
-- Where others are ahead today: a public demo link, merchant-facing screens and live AI in the demo. We close these with N1 (Wave 1), N2 to N4 (Wave 2) and N7 (Wave 5). Everything is P0 and built in waves behind flags, so an unfinished feature is hidden, never shown half-working.
+- Where others are ahead today: a public demo link, and live AI that has actually been run. We have built the merchant mini-app (N1), Ask Chhatri, the slip pre-check and voice (N2 to N4) behind flags, but no AI key has been tried, and the static build (N7) is not deployed. An unfinished feature is hidden, never shown half-working.
 
 ## 1. What merchants have today
 
@@ -95,65 +95,65 @@ The Bengaluru tracks were "AI for Paytm Users" and "AI for Small Businesses", no
 
 **Legend.** Yes = found in the repository or README. Partial = partial, gated by an API key, or simulated. No = not found in our read of the repository (we may have missed it). n/a = the project is about something else.
 
-| Capability | Chhatri today (BUILT) | Chhatri planned | Praman | One-Tap Credit | Nirdesh | Sahaj | Claim Advocate | FinPath AI | SAHAAY |
+| Capability | Chhatri with the flags off | Chhatri with the flags on (BUILT) | Praman | One-Tap Credit | Nirdesh | Sahaj | Claim Advocate | FinPath AI | SAHAAY |
 |---|---|---|---|---|---|---|---|---|---|
 | Claim starts and pays itself from the merchant's own sales (area claim, no form) | Yes (K1, simulated sales) | Yes | No | n/a | No | No | No | No | No |
-| Hospital-cash claim with one photo and no claim form | Yes (K2: check-in, one photo, engine decision) | Yes, with a pre-check (N3, Wave 2) | No (readiness checklist; nothing is filed) | n/a | No | No | No | No | No |
-| Payout tied to a loan instalment | Partial (K3: a simulated pause, no lender decision) | Yes (X4, Wave 1: a request the lender decides) | No | No | No | No | No | No | No |
-| Walks the health-claims example end to end (understand, submit, track, resolve) | Partial (the claim runs in the console and phone simulator; no merchant app, pre-check or free Q&A) | Yes (N1, N2, N3, N5; Waves 1 to 3) | Partial (readiness, checklist, routing, drafts) | n/a | Partial (scripted) | No | Partial (review and appeal) | No | Partial |
+| Hospital-cash claim with one photo and no claim form | Yes (K2: check-in, one photo, engine decision) | Yes, with a pre-check (N3, `n3_slip_precheck`) | No (readiness checklist; nothing is filed) | n/a | No | No | No | No | No |
+| Payout tied to a loan instalment | Partial (K3: a simulated pause, no lender decision) | Yes (X4, `x4_lender_request`: a request the simulated lender decides) | No | No | No | No | No | No | No |
+| Walks the health-claims example end to end (understand, submit, track, resolve) | Partial (the claim runs in the console and phone simulator; no merchant app, pre-check or free Q&A) | Yes (N1, N2, N3, N5 behind their flags; the AI parts untried with a key) | Partial (readiness, checklist, routing, drafts) | n/a | Partial (scripted) | No | Partial (review and appeal) | No | Partial |
 | Rules decide the money, the model does not | Yes (K4) | Yes | Yes | Yes | No | Yes | Partial (the model reasons, rules validate) | Yes | Yes |
 | Tamper-evident audit log (hash chain) | Yes (K7) | Yes | No (an events table) | Partial (an audit trail, no hash chain found) | No | No | No | Partial (an `audit_logs` table, no hash chain found) | No |
-| Live AI in the demo, not only word lists | Partial (Sarvam when keyed; word-list intents) | Yes (Gemini, then Sarvam; Wave 2, with labels) | Partial (Sarvam, with a key) | Partial (Sarvam copy only) | No | Partial (Sarvam, Cognee) | Partial (Groq) | Partial (Gemini, with a fallback) | Partial (Groq) |
-| Indic voice | Partial (Hindi through Sarvam, with a key) | Yes (N4 Hindi, Wave 2; N8 Marathi, Wave 4) | Yes (Marathi) | No (text in four languages) | No (text in Bengali) | Yes (Hinglish) | No | No | Partial (Hindi voice input) |
-| Public demo link | No | Planned (N7, Wave 5; the repo owner deploys; no address yet) | No | Mixed | README link; homepage link 404 | Yes | Mixed | Yes | Yes |
-| Test count stated | Measured by us (below) | Re-measured in Wave 5 | 930 (README) | 32 (README) | None found | 54 (phase reports) | None stated (14 test files) | 18 (README) | None stated (4 test files) |
+| Live AI in the demo, not only word lists | Partial (Sarvam when keyed; word-list intents) | Partial (Gemini, then Sarvam, with labels; tested against fakes only, no key run) | Partial (Sarvam, with a key) | Partial (Sarvam copy only) | No | Partial (Sarvam, Cognee) | Partial (Groq) | Partial (Gemini, with a fallback) | Partial (Groq) |
+| Indic voice | Partial (Hindi through Sarvam, with a key) | Partial (N4 Hindi voice, `n4_voice`, untried with a key; N8 Marathi text, a draft) | Yes (Marathi) | No (text in four languages) | No (text in Bengali) | Yes (Hinglish) | No | No | Partial (Hindi voice input) |
+| Public demo link | No | Static build BUILT (N7); not deployed, no address yet | No | Mixed | README link; homepage link 404 | Yes | Mixed | Yes | Yes |
+| Test count stated | Measured by us (below) | Re-measured in the final run | 930 (README) | 32 (README) | None found | 54 (phase reports) | None stated (14 test files) | 18 (README) | None stated (4 test files) |
 
 **Key observations.**
 - We did not find an automatic area claim from the merchant's own sales in the other repositories we read.
-- Rivals lead on public demo links and merchant-facing screens, and Sahaj and Praman on voice. FINPATH offers five language options. We close the gap with N1, N4, N7 and N8.
-- Chhatri's own counts, measured on 2 Oct at commit 86575ea: backend 1,711 fast and 36 slow tests at 99.7% coverage, frontend 264 tests (262 pass until X1), infra 118, and 70 of 70 demo checks. Praman's README states 930. The counts are not comparable: different languages and test styles.
+- Rivals lead on public demo links and merchant-facing screens, and Sahaj and Praman on voice. FINPATH offers five language options. We have built N1, N4, N7 and N8, and they still need rehearsal, a key, a deployment and a native review.
+- Chhatri's own counts at the 2 Oct baseline (commit 86575ea): backend 1,711 fast and 36 slow tests at 99.7% coverage, frontend 264 tests, infra 118, and 70 of 70 demo checks. Since then the backend has grown to 3,284 collected tests (63 slow). Praman's README states 930. The counts are not comparable: different languages and test styles.
 
 ## 4. Feature harvest: what we learned and adopted
 
-We adopted 26 ideas and credit the source projects by name. Everything marked PLANNED is P0 (team decision, 2 Oct 2026) and is built in a wave behind a feature flag. The waves are 0 setup, 1 demo spine, 2 live AI, 3 trust and rights, 4 judge wow and 5 ship ([build plan](../06-delivery/build-plan.md)).
+We adopted 26 ideas and credit the source projects by name. Every idea is P0 (team decision, 2 Oct 2026). All of them are now built, each behind a feature flag where it is a screen or a route ([build plan](../06-delivery/build-plan.md)). "Built" means the code and its tests exist: the AI paths have not been run with a key.
 
 ### 4.1 H1 to H12 (first scan)
 
-| ID | Idea | Credit | What Chhatri does | Status and wave |
+| ID | Idea | Credit | What Chhatri does | Status |
 |---|---|---|---|---|
-| H1 | Step-by-step journey with "you are here" | Nirdesh; SAHAAY; FinSaathi (agniv-dutta) | N1 claim tracker: Detected → Checked → Decided → Paid → EDI holiday. Each step shows state, reason and next step, including the REFERRED and DISPUTE paths | PLANNED · Wave 1 |
-| H2 | Evidence trace: why this amount, with source badges | Claim Advocate; SAHAAY; Sahaj | The K5 card already shows the formula and numbers (BUILT). N1 adds source badges and the receipt link | K5 BUILT; N1 view PLANNED · Wave 1 |
-| H3 | Payout receipt | Sahaj (trust receipt); AI-CLARITY-LAYER (PDF statement) | N1 receipt: decision id, rules version, formula, sources, audit hash prefix, grievance path. Printable | PLANNED · Wave 1 |
-| H4 | Honest-wording test | Praman | X7: fails on promise words, money that is not in the decision facts, or "paid" before a payout record exists | PLANNED · Wave 1 |
-| H5 | The merchant confirms what was read; a readiness checklist with no score | Claim Advocate; FinPath AI; FINPATH | N3: shows what was read, and the merchant confirms before the checks run. A three-line checklist, no number | PLANNED · Wave 2 |
-| H6 | Zero-login public demo | FinPath AI | N7: a static build of the console in mock mode with a permanent SIMULATED banner. The repo owner deploys it. No address exists yet | PLANNED · Wave 5 |
-| H7 | Glass-box provider panel with a fallback switch | Sahaj; Resolve OS | X6: LIVE, SIMULATED or FALLBACK for each component, plus a switch that forces fallback | PLANNED · Wave 2 |
-| H8 | Real operational counts | Praman; Resolve OS | K8 ops strip: counts from the database only, never projected | PLANNED · Wave 4 |
-| H9 | No loan offers during distress; frequency cap | Vanifi; One-Tap Credit | X8: no loan, top-up or cross-sell message while an alert covers the zone or a claim or dispute is open. A message cap, and a test enforces it | PLANNED · Wave 3 |
+| H1 | Step-by-step journey with "you are here" | Nirdesh; SAHAAY; FinSaathi (agniv-dutta) | N1 claim tracker: Detected → Checked → Decided → Paid → EDI holiday. Each step shows state, reason and next step, including the REFERRED and DISPUTE paths | BUILT · `n1_miniapp` |
+| H2 | Evidence trace: why this amount, with source badges | Claim Advocate; SAHAAY; Sahaj | The K5 card already shows the formula and numbers (BUILT). N1 adds source badges and the receipt link | BUILT (K5 card; N1 view behind `n1_miniapp`) |
+| H3 | Payout receipt | Sahaj (trust receipt); AI-CLARITY-LAYER (PDF statement) | N1 receipt: decision id, rules version, formula, sources, audit hash prefix, grievance path. Printable | BUILT |
+| H4 | Honest-wording test | Praman | X7: fails on promise words, money that is not in the decision facts, or "paid" before a payout record exists | BUILT |
+| H5 | The merchant confirms what was read; a readiness checklist with no score | Claim Advocate; FinPath AI; FINPATH | N3: shows what was read, and the merchant confirms before the checks run. A three-line checklist, no number | BUILT · `n3_slip_precheck` |
+| H6 | Zero-login public demo | FinPath AI | N7: a static build of the console in mock mode with a permanent SIMULATED banner. The repo owner deploys it. No address exists yet | Static build BUILT; not deployed |
+| H7 | Glass-box provider panel with a fallback switch | Sahaj; Resolve OS | X6: LIVE, SIMULATED or FALLBACK for each component, plus a switch that forces fallback | BUILT · `x6_provider_panel` |
+| H8 | Real operational counts | Praman; Resolve OS | K8 ops strip: counts from the database only, never projected | BUILT · `h8_ops_strip` |
+| H9 | No loan offers during distress; frequency cap | Vanifi; One-Tap Credit | X8: no loan, top-up or cross-sell message while an alert covers the zone or a claim or dispute is open. A message cap, and a test enforces it | BUILT · `x8_distress_guard` |
 | H10 | Deterministic core; the model has no authority over money | Resolve OS; One-Tap Credit; Praman; COVE2E | K4 policy engine, thresholds in `rules.yaml`. The same principle as these projects. K4 was already built | BUILT |
-| H11 | Bilingual templates, not model translation | Nirdesh; Soundbox Saathi | The message catalogue, Hindi and English, filled from decision facts. Marathi (N8) uses the same catalogue | Hindi and English BUILT; Marathi PLANNED · Wave 4 |
-| H12 | Visible, measured test counts | Praman | README and pitch show measured counts and never round up | PLANNED · Wave 5 (X1, Wave 0, clears the 2 failing tests) |
+| H11 | Bilingual templates, not model translation | Nirdesh; Soundbox Saathi | The message catalogue, Hindi and English, filled from decision facts. Marathi (N8) uses the same catalogue | Hindi and English BUILT; Marathi a draft behind `n8_marathi` |
+| H12 | Visible, measured test counts | Praman | README and pitch show measured counts and never round up | Not done: the README does not state its counts; measured counts are written after the final run |
 
 ### 4.2 H13 to H26 (2 Oct teardown)
 
-All fourteen are PLANNED. Repository links are in section 2 and in the [appendix](rival-teardown-appendix.md).
+All fourteen are BUILT (the AI ones untried with a key). Repository links are in section 2 and in the [appendix](rival-teardown-appendix.md).
 
-| ID | Idea | Where it lands | Wave | Credit |
+| ID | Idea | Where it lands | Status | Credit |
 |---|---|---|---|---|
-| H13 | **Verified-by badges.** Every rule, number and clause shown to a merchant or officer carries its source (rules version and clause, sales index, alert id, KYC, slip) and time | K5, N1 receipt, N2, console | 1 (console chips 4) | [Praman](https://github.com/rithvikshettyy/praman-paytm) |
-| H14 | **Counterfactual in every explanation.** What would have changed the outcome, produced by the engine re-running its own rule and not by a model. Example (proposed wording): "Z9 fell to 61% with no alert; with an alert and 3 hours below 50% it would have paid" | K4, K5, N1 receipt, console | 1 (console 4) | [One-Tap Credit](https://github.com/carbonFibreCode/paytm-one-tap-credit); [Claim Advocate](https://github.com/arpit2705/Claim_Advocate) (evidence chain) |
-| H15 | **Slip pre-check.** Document-type check, slot checklist and a confidence gate ("ask, don't assume": below the threshold, confirm or retake). The merchant confirms the extracted fields before checks run | N3 | 2 | [Praman](https://github.com/rithvikshettyy/praman-paytm); [FinPath AI](https://github.com/Sushrut-Kale/paytm); [FINPATH](https://github.com/Rushilp21/Paytm-Hackathon---GDuo) |
-| H16 | **Prompt-injection defence** for slips and chat. Untrusted text is wrapped and never obeyed. Red-team tests | N2, N3, X7 | 2 | [Claim Advocate](https://github.com/arpit2705/Claim_Advocate) |
-| H17 | **Ask Chhatri cites policy clauses** (C1 to C12 chips). Every number comes from engine facts. A guard blocks unsupported numbers and promises | N2 | 2 | [Praman](https://github.com/rithvikshettyy/praman-paytm); [One-Tap Credit](https://github.com/carbonFibreCode/paytm-one-tap-credit); [Soundbox Saathi](https://github.com/ShivprasadChinnchole/soundbox-saathi) |
-| H18 | **Voice confirmation chips** for amounts and dates (proposed wording: "₹1,500 — सही है?") | N4 | 2 | [Sahaj](https://github.com/shiv9956/Sahaj) |
-| H19 | **Scam-message warning** in chat: OTP requests, advance fees, "guaranteed claim", urgency, short links | N2 | 2 | [FINPATH](https://github.com/Rushilp21/Paytm-Hackathon---GDuo) |
-| H20 | **Jargon lens.** Tap any insurance term for a plain Hindi or English explanation with an example | N1 coverage explainer | 1 | [Sahaj](https://github.com/shiv9956/Sahaj); [AeroFin AI](https://github.com/BhaskarShah05/paytm-aerofin-ai) |
-| H21 | **Next-best-action bar.** Every screen and every chat reply ends with a clear next step, with no dead ends | N1, N2 | 1 (chat replies 2) | [Sahaj](https://github.com/shiv9956/Sahaj) |
-| H22 | **Grievance ladder with response clocks** and a respondent router (who owns this complaint: Paytm, the insurer or the lender) | N5 | 3 | [Praman](https://github.com/rithvikshettyy/praman-paytm) |
-| H23 | **Consent activity log** (what was used, for what, when) and "forget my slip" erase | N6 | 3 | [Sahaj](https://github.com/shiv9956/Sahaj); [FINPATH](https://github.com/Rushilp21/Paytm-Hackathon---GDuo) |
-| H24 | **What-if panel for judges.** Change the rain or sales inputs and watch the deterministic engine recompute. Read-only, no writes | K8 console, N7 | 4 | [Resolve OS](https://github.com/sparsh101sparsh/resolve-os); [FinPath AI](https://github.com/Sushrut-Kale/paytm) |
-| H25 | **Published AI evaluation.** Intent accuracy on a labelled set, the guard's red-team block rate, and slip-field accuracy on synthetic labelled slips. Numbers appear only once measured | N2, N3, console `/evals` | 3 | [Sahaj](https://github.com/shiv9956/Sahaj); [Resolve OS](https://github.com/sparsh101sparsh/resolve-os) |
-| H26 | **Every AI reply carries its mode** (LIVE, SIMULATED or FALLBACK), provider and fallback reason | N2, N3, N4, X6 | 2 | [Rakshak](https://github.com/Akataruka/paytm-hackathon); [Soundbox Saathi](https://github.com/ShivprasadChinnchole/soundbox-saathi) |
+| H13 | **Verified-by badges.** Every rule, number and clause shown to a merchant or officer carries its source (rules version and clause, sales index, alert id, KYC, slip) and time | K5, N1 receipt, N2, console | BUILT | [Praman](https://github.com/rithvikshettyy/praman-paytm) |
+| H14 | **Counterfactual in every explanation.** What would have changed the outcome, produced by the engine re-running its own rule and not by a model. Example (proposed wording): "Z9 fell to 61% with no alert; with an alert and 3 hours below 50% it would have paid" | K4, K5, N1 receipt, console | BUILT | [One-Tap Credit](https://github.com/carbonFibreCode/paytm-one-tap-credit); [Claim Advocate](https://github.com/arpit2705/Claim_Advocate) (evidence chain) |
+| H15 | **Slip pre-check.** Document-type check, slot checklist and a confidence gate ("ask, don't assume": below the threshold, confirm or retake). The merchant confirms the extracted fields before checks run | N3 | BUILT · `n3_slip_precheck` | [Praman](https://github.com/rithvikshettyy/praman-paytm); [FinPath AI](https://github.com/Sushrut-Kale/paytm); [FINPATH](https://github.com/Rushilp21/Paytm-Hackathon---GDuo) |
+| H16 | **Prompt-injection defence** for slips and chat. Untrusted text is wrapped and never obeyed. Red-team tests | N2, N3, X7 | BUILT | [Claim Advocate](https://github.com/arpit2705/Claim_Advocate) |
+| H17 | **Ask Chhatri cites policy clauses** (C1 to C12 chips). Every number comes from engine facts. A guard blocks unsupported numbers and promises | N2 | BUILT · `n2_ask_chhatri` | [Praman](https://github.com/rithvikshettyy/praman-paytm); [One-Tap Credit](https://github.com/carbonFibreCode/paytm-one-tap-credit); [Soundbox Saathi](https://github.com/ShivprasadChinnchole/soundbox-saathi) |
+| H18 | **Voice confirmation chips** for amounts and dates (proposed wording: "₹1,500 — सही है?") | N4 | BUILT · `n4_voice` | [Sahaj](https://github.com/shiv9956/Sahaj) |
+| H19 | **Scam-message warning** in chat: OTP requests, advance fees, "guaranteed claim", urgency, short links | N2 | BUILT · `n2_ask_chhatri` | [FINPATH](https://github.com/Rushilp21/Paytm-Hackathon---GDuo) |
+| H20 | **Jargon lens.** Tap any insurance term for a plain Hindi or English explanation with an example | N1 coverage explainer | BUILT · `n1_miniapp` | [Sahaj](https://github.com/shiv9956/Sahaj); [AeroFin AI](https://github.com/BhaskarShah05/paytm-aerofin-ai) |
+| H21 | **Next-best-action bar.** Every screen and every chat reply ends with a clear next step, with no dead ends | N1, N2 | BUILT · `n1_miniapp`, chat replies `n2_ask_chhatri` | [Sahaj](https://github.com/shiv9956/Sahaj) |
+| H22 | **Grievance ladder with response clocks** and a respondent router (who owns this complaint: Paytm, the insurer or the lender) | N5 | BUILT · `n5_grievances` | [Praman](https://github.com/rithvikshettyy/praman-paytm) |
+| H23 | **Consent activity log** (what was used, for what, when) and "forget my slip" erase | N6 | BUILT · `n6_consents` | [Sahaj](https://github.com/shiv9956/Sahaj); [FINPATH](https://github.com/Rushilp21/Paytm-Hackathon---GDuo) |
+| H24 | **What-if panel for judges.** Change the rain or sales inputs and watch the deterministic engine recompute. Read-only, no writes | K8 console, N7 | BUILT · `h24_whatif` | [Resolve OS](https://github.com/sparsh101sparsh/resolve-os); [FinPath AI](https://github.com/Sushrut-Kale/paytm) |
+| H25 | **Published AI evaluation.** Intent accuracy on a labelled set, the guard's red-team block rate, and slip-field accuracy on synthetic labelled slips. Numbers appear only once measured | N2, N3, console `/evals` | Offline harness BUILT · `h25_evals`; no run stored | [Sahaj](https://github.com/shiv9956/Sahaj); [Resolve OS](https://github.com/sparsh101sparsh/resolve-os) |
+| H26 | **Every AI reply carries its mode** (LIVE, SIMULATED or FALLBACK), provider and fallback reason | N2, N3, N4, X6 | BUILT | [Rakshak](https://github.com/Akataruka/paytm-hackathon); [Soundbox Saathi](https://github.com/ShivprasadChinnchole/soundbox-saathi) |
 
 Specs: H13 and H14 in [fs-09](../02-product/feature-specs/fs-09-policy-engine-and-audit.md); H15 in [fs-02](../02-product/feature-specs/fs-02-hospital-cash-claim.md); H16 to H19 and H26 in [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md); H20 and H21 in [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md); H22 in [fs-06](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md); H23 in [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md); H24 and the console side of H26 in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md); H25 in the [AI evaluation plan](../04-engineering/ai-evaluation-plan.md).
 
@@ -184,19 +184,19 @@ Riskwolf uses an external index (A14). SEWA and crop insurance use rainfall, hea
 
 **Settlement-linked payout (BUILT, simulated rail).** The money is credited with the evening settlement, 4 simulated minutes after the decision, so the merchant can use it for the day or the instalment, instead of waiting weeks (compare SEWA, A9).
 
-**EDI holiday (K3 BUILT as a simulated pause; X4 PLANNED, Wave 1).** After an approved payout, Chhatri requests the lender's pre-agreed EDI holiday. The lender decides under its own policy: loan active, not in arrears, holiday allowance left. Today the prototype pauses the instalment directly through the simulated lender, with no guard and no grant or refuse step, and its message reads as if Chhatri paused it. X4 adds the guard (loan active, not in arrears, holiday allowance left) and the lender-decides wording.
+**EDI holiday (K3 BUILT as a simulated pause; X4 BUILT behind `x4_lender_request`).** After an approved payout, Chhatri requests the lender's pre-agreed EDI holiday. The lender decides under its own policy: loan active, not in arrears, holiday allowance left. With the flag off the prototype pauses the instalment directly through the simulated lender, with no guard and no grant or refuse step. With it on, X4 sends a request, applies the guard (loan active, not in arrears, holiday allowance left), lets the simulated lender grant or refuse, and the wording says the lender decides.
 
-**Same-day explanations in Hindi (BUILT).** The "why did I get this much?" answer is a Hindi and English template filled from the decision's own numbers. Ask Chhatri (N2, PLANNED, Wave 2) extends it to free questions, grounded in the policy and the decision.
+**Same-day explanations in Hindi (BUILT).** The "why did I get this much?" answer is a Hindi and English template filled from the decision's own numbers. Ask Chhatri (N2, BUILT behind `n2_ask_chhatri`) extends it to free questions, grounded in the policy and the decision.
 
-## 6. Where others are ahead today and how we close the gap
+## 6. Where others are ahead today and where we stand
 
-| Area | Current state | How Chhatri closes it |
+| Area | Current state | Where Chhatri stands |
 |---|---|---|
-| **Merchant-facing journey** | Several projects show step-by-step flows (Nirdesh, FinSaathi, SAHAAY, Claim Advocate, Praman). Chhatri has a claims-officer console and a WhatsApp-style phone simulator, with no merchant app | **N1 mini-app** (Wave 1): cover card, coverage explainer, claim tracker, receipt and help, Hindi first. Grievance and consent screens follow in Wave 3, Marathi in Wave 4 |
-| **Public demo link** | 11 of the 28 projects had a link that answered at least once on 2 Oct. Chhatri has none | **N7 static demo** (Wave 5): a mock-mode build of the console with a permanent SIMULATED banner. The repo owner deploys it to GitHub Pages or any free static host. No address exists until then |
-| **Live AI in the demo** | Several repositories describe a model, but our scan found no AI service calls in their code. Others are live only with a key | **N3, N2, N4** (Wave 2): Gemini free tier first, then Sarvam, then templates (N2) or a person (N3). Every reply is labelled LIVE, SIMULATED or FALLBACK (H26). A key counts only after a rehearsal call succeeds on the demo laptop |
-| **Explainability** | Sahaj, SAHAAY, Claim Advocate, Resolve OS and Praman trace their reasoning | **K5** explanation card is BUILT. Sources (H13) and counterfactuals (H14) arrive in Wave 1 |
-| **Test visibility** | Praman's README states 930. Chhatri's README does not state its counts | After X1 (Wave 0) and the full run in Wave 5: backend 1,747 (1,711 fast and 36 slow, 99.7% coverage), frontend 264, infra 118, demo-check 70 of 70. Never rounded up |
+| **Merchant-facing journey** | Several projects show step-by-step flows (Nirdesh, FinSaathi, SAHAAY, Claim Advocate, Praman). | **N1 mini-app** BUILT behind `n1_miniapp`: cover card, coverage explainer, claim tracker, receipt and help, Hindi first, with the grievance and consent screens behind `n5_grievances` and `n6_consents` and Marathi as a draft behind `n8_marathi`. It has not been rehearsed or tried with a merchant |
+| **Public demo link** | 11 of the 28 projects had a link that answered at least once on 2 Oct. Chhatri has none | **N7 static build** BUILT: a mock-mode build of the console with a permanent SIMULATED banner. The repo owner deploys it to GitHub Pages or any free static host. No address exists until then |
+| **Live AI in the demo** | Several repositories describe a model, but our scan found no AI service calls in their code. Others are live only with a key | **N3, N2, N4** BUILT behind flags: Gemini free tier first, then Sarvam, then templates (N2) or a person (N3). Every reply is labelled LIVE, SIMULATED or FALLBACK (H26). The chains are tested against fakes only. A key counts only after a rehearsal call succeeds on the demo laptop |
+| **Explainability** | Sahaj, SAHAAY, Claim Advocate, Resolve OS and Praman trace their reasoning | **K5** explanation card, plus sources (H13) and counterfactuals (H14) on the receipt, are BUILT |
+| **Test visibility** | Praman's README states 930. Chhatri's README does not state its counts | Not done: the measured counts are written after the final run. The 2 Oct baseline was backend 1,747 (1,711 fast and 36 slow, 99.7% coverage), frontend 264, infra 118, demo-check 70 of 70. Never rounded up |
 
 ## 7. Market facts and our positioning
 
@@ -222,6 +222,7 @@ Riskwolf uses an external index (A14). SEWA and crop insurance use rainfall, hea
 
 ## Changelog
 
+- 2026-10-03 · v1.6 · Chhatri's own status brought up to the code: the planned features are BUILT behind flags; the capability matrix, the H1 to H26 status columns and section 6 are rewritten; the rival scan itself is unchanged (2 Oct)
 - 2026-10-02 · v1.5 · second scan: added the three new repositories (JeevanFlow, ClaimSaathi, GrowSAATHI), Praman's 2 Oct update (README tests 703 to 930), FINPATH, AeroFin AI, Rakshak, AI-CLARITY-LAYER and Clarity; the H13 to H26 table with credits, wave and spec; wave and status for every H idea; capability matrix corrected (area and hospital-cash rows split, FinPath AI and FINPATH separated, wording "not found" instead of "no"); removed the uniqueness claim; fixed Nirdesh demo status, the SetuAI and Soundbox Saathi credits, and the Tailwind row (the mini-app uses it, scoped); linked the rival teardown appendix
 - 2026-10-02 · v1.4 · final fact-check: A3 and SEWA timings as sourced, unsourced payout times removed, hedged uniqueness, per-shop payout, scan dates corrected, one individual's handle removed
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned

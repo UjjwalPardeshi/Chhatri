@@ -310,21 +310,21 @@ Real action names (SPEC §11):
 
 ### 14.1 Existing tests (BUILT)
 
-| Area | File | Test functions |
+| Area | File | Tests collected (3 Oct 2026) |
 |---|---|---|
-| Area index | `backend/tests/detect/test_area_index.py` | 10 |
-| Triggers | `backend/tests/detect/test_triggers.py` | 21 (some parametrized): `test_seventeen_hundred`, `test_build_up`, `test_floor_is_strict`, `test_lower_bound_is_strict`, `test_alert_must_cover_whole_window`, `test_heatwave_does_not_count_but_civic_does`, `test_quorum`, `test_already_triggered_that_day` |
-| Checks | `backend/tests/policy/test_checks.py` | 16 |
-| Amounts | `backend/tests/policy/test_amounts.py` | 13 |
-| Engine | `backend/tests/policy/test_engine.py` | 22: `test_area_approved_anil_1380`, `test_area_capped`, `test_area_hard_fail_declines_with_first_failing_reason`, `test_area_annual_limit_declines` |
-| Payouts | `backend/tests/ledger/test_payouts.py` | 8 |
-| Replay | `backend/tests/replay/test_area_flow.py` | 10: `test_three_zones_trigger_at_17_00_on_the_scripted_alert`, `test_every_covered_shop_in_a_triggered_zone_gets_one_area_decision`, `test_payouts_are_executed_at_17_00_and_credited_at_17_04`, `test_kpis_and_the_audit_trail_after_the_storm` |
-| Golden numbers (slow) | `backend/tests/test_golden_numbers.py` | 13: `test_trigger_numbers`, `test_z9_is_a_slow_day_without_payout`, `test_312_shops_are_approved`, `test_anil_is_paid_1380_with_the_spec_explanation`, `test_z7_total_is_58900`, `test_ramesh_gets_nothing` |
+| Area index | `backend/tests/detect/test_area_index.py` | 14 |
+| Triggers | `backend/tests/detect/test_triggers.py` | 30 (some parametrized): `test_seventeen_hundred`, `test_build_up`, `test_floor_is_strict`, `test_lower_bound_is_strict`, `test_alert_must_cover_whole_window`, `test_heatwave_does_not_count_but_civic_does`, `test_quorum`, `test_already_triggered_that_day` |
+| Checks | `backend/tests/policy/test_checks.py` | 29 |
+| Amounts | `backend/tests/policy/test_amounts.py` | 22 |
+| Engine | `backend/tests/policy/test_engine.py` | 39: `test_area_approved_anil_1380`, `test_area_capped`, `test_area_hard_fail_declines_with_first_failing_reason`, `test_area_annual_limit_declines` |
+| Payouts | `backend/tests/ledger/test_payouts.py` | 9 |
+| Replay | `backend/tests/replay/test_area_flow.py` | 14: `test_three_zones_trigger_at_17_00_on_the_scripted_alert`, `test_every_covered_shop_in_a_triggered_zone_gets_one_area_decision`, `test_payouts_are_executed_at_17_00_and_credited_at_17_04`, `test_kpis_and_the_audit_trail_after_the_storm` |
+| Golden numbers (slow) | `backend/tests/test_golden_numbers.py` | 15: `test_trigger_numbers`, `test_z9_is_a_slow_day_without_payout`, `test_312_shops_are_approved`, `test_anil_is_paid_1380_with_the_spec_explanation`, `test_z7_total_is_58900`, `test_ramesh_gets_nothing` |
 | Demo check | `backend/scripts/demo_check.py` | 70 checks across the four scenarios |
 
-The whole backend suite is 1,711 fast and 36 slow tests at 99.7% coverage.
+The whole backend suite is 3,221 fast and 63 slow tests, measured on 3 Oct 2026, with 98.85% coverage of the fast suite.
 
-### 14.2 New tests (PLANNED)
+### 14.2 New tests (BUILT)
 
 | Test | File | What it checks |
 |---|---|---|
@@ -352,7 +352,7 @@ The whole backend suite is 1,711 fast and 36 slow tests at 99.7% coverage.
 ## Changelog
 
 - 2026-10-02 · v1.4 · fixed alert wording (any RAIN or CIVIC alert), hourly examples (Z7 35, 39, 37), lower bound (conformal, from manifest.json, Z7 92), AreaBreakdown figures, payout range and the Z9 case (no alert, no claim, no decision); added the zone reference table; corrected audit action names, inputs, case due time, annual limit and test counts; zone status is now a decision flow; build waves replace dates
-- 2026-10-02 · v1.3 · second fact-check pass
-- 2026-10-02 · v1.2 · final consistency pass against the code
-- 2026-10-02 · v1.1 · fact-check pass
+- 2026-10-02 · v1.3 · corrections
+- 2026-10-02 · v1.2 · consistency check against the code
+- 2026-10-02 · v1.1 · corrections
 - 2026-10-02 · v1 · first draft, spec compliance and code review

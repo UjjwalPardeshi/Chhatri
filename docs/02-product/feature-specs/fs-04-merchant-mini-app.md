@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | BUILT · spec v1.5 · the mini-app core (N1, nine screens) plus Ask Chhatri (N2), slip pre-check (N3), voice (N4), grievances (N5), consents (N6), and Marathi (N8) (Section 2 lists what exists today) |
+| Status | BUILT · spec v1.6 · the mini-app core (N1, nine screens) plus Ask Chhatri (N2), slip pre-check (N3), voice (N4), grievances (N5), consents (N6), and Marathi (N8) (Section 2 lists what exists today) |
 | Owner | Omkar Kadam (screens, copy, UI stack) · Ujjwal Pardeshi (endpoints and engine fields in Section 6) |
 | Date | 2026-10-02 |
 | Related | [ADR 0005](../../04-engineering/adr/0005-mini-app-inside-the-console.md) · [PRD](../prd.md) · [Design system](../../03-design/design-system.md) · [Screens and flows](../../03-design/screens-and-flows.md) · [Copy deck](../../03-design/copy-deck.md) · [Data model and API](../../04-engineering/data-model-and-api.md) · [Implementation guide](../../04-engineering/implementation-guide.md) · [Policy wording](../policy-wording-and-cis.md) · [User journeys](../user-journeys.md) · [fs-03 EDI holiday](fs-03-edi-holiday.md) · [fs-05 Ask Chhatri](fs-05-ask-chhatri.md) · [fs-06 explanations, disputes and grievance](fs-06-explanations-disputes-and-grievance.md) · [fs-07 cover purchase and consent](fs-07-cover-purchase-and-consent.md) · [Traceability matrix](../../01-strategy/requirements-traceability-matrix.md) · [Facts and sources](../../01-strategy/facts-and-sources.md) |
@@ -13,8 +13,8 @@
 - **Scope (N1):** nine screens in three tabs (Home, Claims, Help). It carries the claim tracker (H1), why-this-amount (H2), the trust receipt (H3) with verified-by badges (H13) and a counterfactual line (H14), the jargon lens (H20), the next-best-action bar (H21) and language switching (N8).
 - **Where:** inside the console's merchant page as a third column next to the WhatsApp simulator, and as a standalone full-screen route, `/merchant/:id/app`, for phones and the static demo (N7).
 - **Stack:** Tailwind CSS v4 and shadcn/ui, scoped to the mini-app under a `.miniapp` root class. The console keeps its plain CSS tokens.
-- **Priority:** everything here is P0 (team decision, 2 Oct). Work runs in waves behind feature flags. A screen that is not finished is hidden, never shown half-working. N1 core is Wave 1; Marathi is Wave 4.
-- **Honesty:** every status below says BUILT or PLANNED. Sales, alerts, KYC, payout rail, lender, Soundbox, WhatsApp and the Paytm link are SIMULATED and labelled. No N1 screen shows AI-written text.
+- **Priority:** everything here was P0 (team decision, 2 Oct) and is BUILT, behind feature flags. A screen that is not rehearsed is hidden, never shown half-working. N1 core was Wave 1; Marathi was Wave 4.
+- **Honesty:** every status below says what is BUILT and what is not done. Sales, alerts, KYC, payout rail, lender, Soundbox, WhatsApp and the Paytm link are SIMULATED and labelled. No N1 screen shows AI-written text.
 - **Copy:** a quoted merchant-facing string is either a line of `backend/chhatri/conversation/messages.py` (Section 14.1 lists them) or proposed copy that needs a native Hindi review (Section 14).
 
 ## 1. Summary
@@ -39,7 +39,7 @@ Ideas adopted from public rival projects (project names, not people; repo links 
 
 ## 2. Status today and what changes
 
-**BUILT (commit 86575ea, 2 Oct 2026)**
+**BUILT before the mini-app (commit 86575ea, 2 Oct 2026)**
 
 | Piece | Where |
 |---|---|
@@ -51,9 +51,9 @@ Ideas adopted from public rival projects (project names, not people; repo links 
 | Cover quote and payment link: `POST /api/premium/link` (officer-authenticated); simulated paid callback: `POST /api/webhooks/paytm` | `backend/chhatri/api/routers/premium.py`, `webhooks.py` |
 | Chat intents for "why this amount", dispute and buy cover | `backend/chhatri/conversation/` |
 | Rules for display: `GET /api/policy` | `backend/chhatri/api/routers/records.py` |
-| Frontend tests: 262 of 264 pass (X1 fixes the two failures) | `frontend/src/**/*.test.tsx` |
+| Frontend tests: 1,340 pass in 135 files (measured on 3 Oct 2026) | `frontend/src/**/*.test.tsx` |
 
-**BUILT since (Waves 0 to 5, 2 Oct 2026, uncommitted working tree until the freeze):** everything in this spec, behind its flag. The feature flags (`frontend/src/features.ts`), Tailwind v4 and shadcn scoped to `.miniapp` (`frontend/src/miniapp/miniapp.css`, `src/miniapp/ui/`), the frame and the standalone route, S1 to S9 (`src/miniapp/screens/`), the three endpoints and their mock parity (`src/mock/endpoints/cover.ts`, `tracker.ts`, `receipt.ts`), the next-best-action rules (`src/miniapp/hooks/nextBestAction.ts`, including `ask`, `send_slip` and `tick_consent`), the consent block on S3 (`src/miniapp/screens/BuyConsent.tsx`), Marathi (`src/miniapp/copy/mr.ts`, a draft until a native speaker reviews it) and the static build (`frontend/vite.spa-fallback.ts`). What still needs a person: the native review of the proposed Hindi and the Marathi draft, the deploy of the static build (repo owner) and the two rehearsals.
+**BUILT since (Waves 0 to 5, 2 Oct 2026):** everything in this spec, behind its flag. The feature flags (`frontend/src/features.ts`), Tailwind v4 and shadcn scoped to `.miniapp` (`frontend/src/miniapp/miniapp.css`, `src/miniapp/ui/`), the frame and the standalone route, S1 to S9 (`src/miniapp/screens/`), the three endpoints and their mock parity (`src/mock/endpoints/cover.ts`, `tracker.ts`, `receipt.ts`), the next-best-action rules (`src/miniapp/hooks/nextBestAction.ts`, including `ask`, `send_slip` and `tick_consent`), the consent block on S3 (`src/miniapp/screens/BuyConsent.tsx`), Marathi (`src/miniapp/copy/mr.ts`, a draft until a native speaker reviews it) and the static build (`frontend/vite.spa-fallback.ts`). What still needs a person: the native review of the proposed Hindi and the Marathi draft, the deploy of the static build (repo owner) and the two rehearsals.
 
 | Wave | What ships for the mini-app |
 |---|---|
@@ -64,14 +64,14 @@ Ideas adopted from public rival projects (project names, not people; repo links 
 | 4 judge wow | Marathi (`n8_marathi`) after native review |
 | 5 ship | N7 static build with the standalone route; deep-link fallback; rehearsals |
 
-**Gaps found while writing this spec** (verified on 2 Oct 2026; 1 to 4 are fixed in Wave 1, 5 and 6 stay as the open questions say):
+**Gaps found while writing this spec** (verified on 2 Oct 2026; 1 to 4 and 6 are fixed, 5 is still open):
 
-1. `GET /api/merchants/{id}/cover`, `GET /api/merchants/{id}/claims` and `GET /api/decisions/{decision_id}/receipt` do not exist yet (Wave 1, Ujjwal).
-2. The mock backend has no route for `POST /api/premium/link` or `POST /api/webhooks/paytm`, and it prices the demo merchants at ₹3 a day (`frontend/src/mock/fixtures.ts`). A mock quote for Ramesh would read ₹90 for 30 days, not the ₹424.80 that [DEMO.md](../../DEMO.md) shows (Z3, ₹14.16 a day). Fix in Wave 1 (Omkar): copy the zone premiums from `backend/artifacts/premiums.json` into the mock data and add both routes.
-3. Pilot covers are seeded at the ₹2 minimum, not at their zone's price (`backend/chhatri/sim/merchants.py`). Anil's cover would read ₹2 a day while Z7 is ₹18.62 a day. Fix in Wave 1 (Ujjwal, check the golden tests), or Home hides the per-day price until it is fixed.
-4. A cover bought through the payment link is WAITING and nothing flips it to ACTIVE when `starts_on` passes (`backend/chhatri/ledger/premiums.py`), so COVER_IN_FORCE would fail for it. The status must be derived from the date; fs-07 specifies the fix.
-5. A closed dispute sends the merchant OFFICER_DECLINED text whichever way the officer answers (`backend/chhatri/conversation/notifications.py`), so "payout confirmed" has no line of its own (open question 2).
-6. `Check.observed` and `Check.required` come from the engine as English text. Check labels need bilingual copy per check code (Section 10.2).
+1. FIXED. `GET /api/merchants/{id}/cover`, `GET /api/merchants/{id}/claims` and `GET /api/decisions/{decision_id}/receipt` exist (`backend/tests/api/test_cover_route.py`, `backend/tests/replay/test_view_claims.py`, `backend/tests/api/test_receipt.py`).
+2. FIXED. The mock has routes for `POST /api/premium/link` and `POST /api/webhooks/paytm` (`frontend/src/mock/endpoints/premium.ts`) and prices the demo merchants from the zone premiums of `premiums.json`, so a mock quote for Ramesh reads ₹424.80 for 30 days, as in [DEMO.md](../../DEMO.md) (Z3, ₹14.16 a day).
+3. FIXED. Pilot covers are seeded at their zone's price (`at_zone_price` in `backend/chhatri/sim/merchants.py`): Anil in Z7 pays ₹18.62 a day.
+4. FIXED. The cover status is derived from the dates, not stored (`backend/tests/policy/test_cover_status.py`), so a cover bought through the payment link is in force once `starts_on` passes.
+5. OPEN. A closed dispute sends the merchant OFFICER_DECLINED text whichever way the officer answers (`backend/chhatri/conversation/notifications.py`), so "payout confirmed" has no line of its own (open question 2).
+6. FIXED. Check labels have bilingual copy per check code (`CHK_*` keys in `frontend/src/miniapp/copy/`, section 10.2); the engine's `observed` and `required` are still English text.
 
 ## 3. Users and jobs to be done
 
@@ -159,7 +159,7 @@ Three bottom tabs, as in [screens and flows](../../03-design/screens-and-flows.m
 
 ### 4.6 Feature flags
 
-Flags are proposed names; the [implementation guide](../../04-engineering/implementation-guide.md) owns the mechanism (Wave 0) and the final list. The spec needs three things from the mechanism: a component can read a flag synchronously; "off" means absent from the UI (no empty shell, no "coming soon"); the current flag set is visible to the presenter.
+The flag names are those of the registry (`frontend/src/features.ts`, `backend/chhatri/features.py`); the [implementation guide](../../04-engineering/implementation-guide.md) owns the mechanism. The spec needs three things from the mechanism: a component can read a flag synchronously; "off" means absent from the UI (no empty shell, no "coming soon"); the current flag set is visible to the presenter.
 
 | Flag | Gates | Turns on in | Off means |
 |---|---|---|---|
@@ -710,30 +710,33 @@ Every explanation says what would have changed the outcome. **The engine writes 
 
 | `kind` | When | What it says |
 |---|---|---|
-| `FLIP` | REFERRED or DECLINED | The fix for each failing check: HARD fails for DECLINED, SOFT fails and unsure checks for REFERRED. "It would have paid with: {fix}, and {fix}." |
-| `CAP` | APPROVED, and a cap or the yearly limit lowered the amount | Names the limit and the amount without it. Example from the demo: "Without the ₹1,500 daily cap the amount would have been ₹2,150." |
-| `NONE` | APPROVED, nothing limited it | "Nothing limited this amount." (proposed) |
+| `FLIP_FROM_DECLINED`, `FLIP_FROM_REFERRED` | DECLINED or REFERRED | The fix for each failing check: HARD fails for DECLINED, SOFT fails and unsure checks for REFERRED. "If {condition}, it would have been paid." (the frame `CF_FRAME`: "If {condition}, {result}.", with several conditions joined by "and") |
+| `AMOUNT_SENSITIVITY` | APPROVED | What moves the amount: the cap, or the value of one more point of drop or one more day. Example from the demo: "One more point of area drop would add about ₹22." |
+| `EXPLAIN_ONLY` | A failing check with no honest single change (`NOT_ALREADY_PAID`, `WITHIN_ANNUAL_LIMIT`) | The engine's own numbers, with no "if" |
+| `ZONE_NO_TRIGGER` | A zone with no trigger (console only) | Which trigger conditions were not met |
 
-Fix templates per check (English, proposed; `{...}` comes from the rules or the decision):
+When the engine returns no counterfactual the card is absent. The app does not write a "nothing limited this amount" line.
 
-| Check | Fix |
+Condition phrases per check (English, the `CF_IF_*` keys of the catalogue in `messages.py`; `{...}` comes from the rules or the decision):
+
+| Check | Condition |
 |---|---|
-| COVER_IN_FORCE | your cover being in force on {day} |
-| PREMIUM_PREPAID | your premium being paid in advance through {day} |
-| COVER_BEFORE_ALERT | your cover being bought before alert {alert_id} was issued |
-| ALERT_ACTIVE | a weather alert for your area at that time |
-| INDEX_QUORUM | at least {min_shops_in_index} shops in your area's index |
-| BELOW_FLOOR | your area's sales below {index_floor_pct}% of expected for {consecutive_hours} hours |
-| BELOW_MODEL_RANGE | your area's sales below their usual range |
-| SILENCE_VERIFIED | your shop recording no sales for the whole day |
-| NOT_ALREADY_PAID | that day not having been paid already |
-| WITHIN_ANNUAL_LIMIT | room left under the {annual_limit_rupees} yearly limit |
-| SLIP_READABLE | a clearer slip (confidence {slip_confidence_min} or more) |
-| NAME_MATCHES_KYC | the name on the slip matching your KYC name (score {name_match_min_score} or more) |
-| DATES_MATCH | the slip dates covering the days your shop was closed |
-| WITHIN_AUTO_LIMIT | a claim of {max_auto_days} days or fewer |
+| COVER_IN_FORCE | your cover had been active on {date} |
+| PREMIUM_PREPAID | the premium for {date} had been paid in advance |
+| COVER_BEFORE_ALERT | your cover had been bought before the alert was issued, on {issued} |
+| ALERT_ACTIVE | a weather alert had covered your area for all {hours} hours |
+| INDEX_QUORUM | at least {min_shops} shops had been counted in your area (there were {shops}) |
+| BELOW_FLOOR | your area's sales had stayed below {floor_pct}% of the usual level for {hours} hours in a row |
+| BELOW_MODEL_RANGE | your area's sales had been lower than the usual range for a slow day |
+| SILENCE_VERIFIED | the claim had covered only the days with no sales ({dates}) |
+| SLIP_READABLE | the photo of the hospital document had been clear |
+| NAME_MATCHES_KYC | the name on the slip had matched the name on your Paytm account (KYC) |
+| DATES_MATCH | the stay on the slip had included {dates} |
+| WITHIN_AUTO_LIMIT | the claim had covered {max_auto_days} days or fewer |
 
-Two examples from the demo data. The engine lists every check that failed. Zone 9 fell to 61% on a day with no alert, so the sentence reads "It would have paid with: a weather alert for your area, your area's sales below 50% of expected for 3 hours, and your area's sales below their usual range." (The console's zone panel shows the same sentence, because no merchant decision exists for a zone that never triggered; a declined merchant's receipt uses the same templates.) The slip in the illness_mismatch scenario names Sunil Pawar against the KYC name ANIL RAMESH JADHAV, so it reads "It would have been paid automatically with: the name on the slip matching your KYC name (score 85 or more)." Both sentences are proposed wording.
+`NOT_ALREADY_PAID` and `WITHIN_ANNUAL_LIMIT` have no honest single change, so they use the `EXPLAIN_ONLY` sentences `CF_EXPLAIN_NOT_ALREADY_PAID` and `CF_EXPLAIN_WITHIN_ANNUAL_LIMIT`.
+
+Two examples from the demo data, as the engine writes them (`backend/tests/policy/test_counterfactual.py`). The slip in the illness_mismatch scenario names Sunil Pawar against the KYC name ANIL RAMESH JADHAV, so the REFERRED decision reads "If the name on the slip had matched the name on your Paytm account (KYC), it would have been paid." A sentence never repeats either name. Zone 9 fell to 61% on a day with no alert, so the console's zone panel reads "Zone 9 sales were 61% of the usual level, with no weather alert. A payout needs an alert for all 3 hours and every hour below 50%." (No merchant decision exists for a zone that never triggered.)
 
 ### 10.5 Print or save as PDF
 
@@ -819,7 +822,7 @@ Tests are table-driven: one case per rule id, one per priority conflict, and a t
 - **Separate from the console.** The console UI is English. The mini-app keeps its own language state, and the WhatsApp phone shows Hindi and English on every message regardless. This settles the language question that ADR 0005 v2 left open.
 - **Switch:** the globe button in the app bar (`app-lang-button`) opens S9. The root element carries `lang`, and fallback text carries its own `lang`.
 - **Fallback chain per string:** `mr` to `hi` to `en`. Hindi and English must be complete: a unit test fails on a missing key. Marathi may be incomplete; the test prints the measured count of Marathi keys, and S9 shows "Some text is shown in Hindi." while any key falls back.
-- **Strings from the backend** (`text_hi`, `text_en`, `reason_hi`, `reason_en`) have no Marathi until the message catalogue gains `mr` (Wave 4, Ujjwal). Until then they show in Hindi. The case chip (CASE_CHIP) has no Hindi line, so it shows English in Hindi and Marathi.
+- **Strings from the backend** (`text_hi`, `text_en`, `reason_hi`, `reason_en`) have no Marathi, because the message catalogue has no `mr`. They show in Hindi. The case chip (CASE_CHIP) has no Hindi line, so it shows English in Hindi and Marathi.
 - **Numbers and dates:** Indian grouping and ASCII digits in every language, using the `-u-nu-latn` locale extension (the default Marathi format uses Devanagari digits). Money shows the API's `*_label` as given.
 - **Fonts:** Ubuntu with Noto Sans Devanagari, already self-hosted. The `.hi` helper class and `lang="hi"` select the Devanagari font; the scoped base gives `lang="hi"` and `lang="mr"` text a line height of 1.6 and no letter spacing.
 - No audit event is written for a language change.
@@ -955,7 +958,7 @@ The badge shows the plain label in the selected language. `data-status` carries 
 ### 16.4 Compliance notes
 
 - **Cash before cover (Insurance Act 1938, s.64VB):** the app shows "paid through {date}" and explains that cover works on prepaid days. The design is to be confirmed with the partner insurer ([facts and sources](../../01-strategy/facts-and-sources.md)).
-- **Data protection (A22):** consent and erase are in fs-07 (Wave 3). Until then S3 shows a one-line notice, not a checkbox that records nothing.
+- **Data protection (A22):** consent and erase are in fs-07 (`n6_consents`). With that flag off, S3 shows a one-line notice, not a checkbox that records nothing.
 - **Clocks:** the app prints just the clocks that exist in `rules.yaml` (dispute 24 hours). Other grievance clocks come from fs-06.
 - **EDI holiday:** the lender's decision (ADR 0006).
 - Policy wording is an illustrative draft; no insurer or lender has agreed to anything.
@@ -1031,7 +1034,7 @@ Test data: scenario `monsoon` at 17:05 simulated unless stated, merchant S-0142,
 
 ## 18. Tasks by wave
 
-Owners: Omkar = mini-app; Ujjwal = backend and engine. Task ids use the prefix N1-T and are not feature ids.
+Owners: Omkar = mini-app; Ujjwal = backend and engine. Task ids use the prefix N1-T and are not feature ids. Status on 3 Oct 2026: every task is BUILT, except the native review in N1-T50 (the Marathi `mr` copy is a draft and the message catalogue has no `mr`) and the rehearsals in N1-T61 and the deploy in N1-T60, which need a person.
 
 | Task | Wave | Owner | What | Done when |
 |---|---|---|---|---|
@@ -1067,24 +1070,25 @@ Frontend coverage thresholds (lines 90, statements 90, functions 85, branches 80
 | Contract | Vitest and pytest | Mock fixtures and backend JSON parse with the same parsers |
 | Build output | `src/miniapp/builtCss.test.ts` (Vite build in Vitest) | No Preflight rule outside `.miniapp`; no utility with `!important`; a class that console code alone uses is absent |
 | Isolation | Playwright | Computed styles of console elements equal with and without the mini-app chunk (AC-05) |
-| End to end | Playwright, project `mock` | `miniapp-shell`, `miniapp-area-claim`, `miniapp-referred`, `miniapp-dispute`, `miniapp-buy-blocked`, `miniapp-receipt-print`, `miniapp-language` |
-| Live smoke | Playwright, project `live` | One spec: Home, tracker and receipt for Anil against a running backend |
+| End to end | Playwright, project `mock` | `miniapp-shell`, `miniapp-area-claim`, `miniapp-referred`, `miniapp-dispute`, `miniapp-buy-blocked`, `miniapp-receipt-print`, `miniapp-language`, `miniapp-isolation`, and the `human-miniapp-*` specs |
+| Live smoke | Playwright, project `live` | `miniapp-live-smoke`: Home, tracker and receipt for Anil against a running backend |
 | Backend | pytest (Ujjwal) | `cover` derived status; `claims` kinds and steps; `receipt` sources and audit prefix; counterfactual per check code; X4 states |
-| Accessibility | oxlint jsx-a11y (BUILT), manual keyboard pass | Optional `@axe-core/playwright` (PLANNED, free) |
+| Accessibility | oxlint jsx-a11y, `frontend/src/contrast.test.ts` (console tokens), a keyboard walk of the tabs in `human-miniapp-help-lang.spec.ts` (all BUILT) | An axe scan with `@axe-core/playwright` (free) is not added |
 
 ## Open questions
 
 1. **Native review.** Who reviews the proposed Hindi copy and glossary, and later the Marathi? Owner: Omkar Kadam.
 2. **Closed dispute wording.** Today OFFICER_DECLINED goes to the merchant whichever way the officer answers a dispute. Add a distinct "payout confirmed" line? Owner: Ujjwal Pardeshi (catalogue) with Omkar Kadam (copy).
-3. **Seeded premium.** Seed pilot covers at the zone price (Anil ₹18.62 a day), or keep the ₹2 seed and hide the per-day price on Home? Owner: Ujjwal Pardeshi.
+3. **Seeded premium.** Answered: pilot covers are seeded at the zone price (Anil ₹18.62 a day). Closed.
 4. **Demo access.** The standalone route borrows the officer session for `POST /api/premium/link`. Acceptable for the demo, or add a merchant-scoped quote endpoint (not in the registry)? Owner: Ujjwal Pardeshi.
-5. **Static hosting (N7).** Deep links need a single-page fallback on the free host; the repo owner deploys and no URL is claimed here. Owner: Omkar Kadam.
+5. **Static hosting (N7).** The deep-link fallback is built (`frontend/vite.spa-fallback.ts`); the repo owner deploys and no URL is claimed here. Owner: Omkar Kadam.
 6. **Engine text in English.** `observed` and `required` stay English in every language for the demo; add structured values later? Owner: Ujjwal Pardeshi.
-7. **Flag mechanism and names.** Confirm the names in Section 4.6 against the implementation guide. Owner: Omkar Kadam.
+7. **Flag mechanism and names.** Answered: the names in Section 4.6 are those of the registry in the code. Closed.
 8. **Counterfactual Hindi.** The fix templates need Hindi sentences in the catalogue. Who writes them? Owner: Ujjwal Pardeshi (keys) with Omkar Kadam (wording).
 
 ## Changelog
 
+- 2026-10-03 · v1.6 · the gaps of section 2 and the open questions 3 and 7 are marked fixed or answered against the code; the task and test-plan tables say what is built and what needs a person
 - 2026-10-02 · v1.5 · status lines match the build: every endpoint and screen BUILT behind its flag; the S3 consent block, the `ask`, `send_slip` and `tick_consent` rules and the Home "Ask Chhatri" button are in
 - 2026-10-02 · v1.4 · rewritten as a build-ready N1 spec: placement and routes (ADR 0005), UI stack scoped to the mini-app, nine screens with data contract and all states, claim-tracker state machine (area, personal, dispute, lender answer), trust receipt with verified-by badges and engine counterfactual, jargon lens, next-best-action bar, language switching, acceptance criteria with test ids, tasks by wave, feature flags. Fixed wrong rule keys, the Soundbox "LIVE" and "usual Monday" claims, invented coverage and premium copy, the `pay-cover` endpoint, client telemetry and the service-worker offline claim; removed effort hours and the old priority labels.
 - 2026-10-02 · v1.3 · second fact-check pass: fixed endpoint parameter from {id} to {decision_id}

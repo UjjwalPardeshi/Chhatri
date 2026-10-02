@@ -31,7 +31,7 @@
 
 ### 1.2 Coverage and cover start
 
-- Cover is bought through a payment link sent in the chat (the 30-day prepayment; BUILT, link SIMULATED). Buying inside the Paytm for Business app is the PLANNED mini-app (N1, Wave 1).
+- Cover is bought through a payment link sent in the chat (the 30-day prepayment; BUILT, link SIMULATED). Buying inside the Paytm for Business app is the mini-app (N1, BUILT behind a flag).
 - **Premium paid upfront:** first 30 days (link), then daily settlement deduction (standing consent).
 - **Cover starts:** 7 days after purchase (the waiting period), and each day's cover needs that day's premium received first (s.64VB cash before cover).
 - **Waiting period:** 7 days, always. A quote while an alert is active or forecast within 72 hours is marked BLOCKED: the new cover cannot apply to that alert, though the merchant can still buy cover for later (K6).
@@ -169,7 +169,7 @@ For hospital-cash claims, the slip's patient name must match the KYC name with a
 
 ### 5.4 Slip confidence floor (K2)
 
-- The slip reader's confidence must be at least 0.80 (today Sarvam Vision or its labelled simulator; Gemini is planned as the first provider).
+- The slip reader's confidence must be at least 0.80 (today Sarvam Vision or its labelled simulator; Gemini is the first provider in the chain, tested against fakes only).
 - Below 80%, the slip is REFERRED to a human, not auto-approved.
 
 **Economic role:** Blurry or forged slips are reviewed before payout.
@@ -239,7 +239,7 @@ Chhatri's role is claims adjudication and payout orchestration; the insurer bear
 | Claims are resolved in 24 hours (K5) | Median case resolution time | ≤ 24 h from opening |
 | Human-review cases are fair (disputes < 5%) | Disputed cases ÷ reviewed cases | < 5% |
 | EDI holiday acceptance (lender willingness) | Lender approves ≥ 90% of requests | ≥ 90% |
-| Grounded answers are accurate (N2, PLANNED) | Eval set: citations match policy ([AI evaluation plan](../04-engineering/ai-evaluation-plan.md)); not measured yet | ≥ 95% (target) |
+| Grounded answers are accurate (N2, BUILT, not measured) | Eval set: citations match policy ([AI evaluation plan](../04-engineering/ai-evaluation-plan.md)); not measured yet | ≥ 95% (target) |
 | Cost per payout is sustainable | (AI + operations cost per claim) | < 10% of average payout |
 
 ## Open questions
@@ -254,6 +254,6 @@ Chhatri's role is claims adjudication and payout orchestration; the insurer bear
 - 2026-10-02 · v1.5 · TL;DR says plainly that hospital cash is not priced yet; the 30 prepaid days are counted from the cover start date; the Paytm link is SIMULATED (no keys); index rule names the RAIN or CIVIC alert; hospital-cash outcomes corrected (SOFT failure or more than 3 days is REFERRED, hard failure is DECLINED); the unmeasured 5–10% figure is labelled a hypothesis and a pilot measurement plan added.
 - 2026-10-02 · v1.4 · unit economics rebuilt on the backtest pricing identity (65% loss ratio) with a sensitivity table; prices from the artefact; cover start and BLOCKED wording; officer waiver rule
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes
+- 2026-10-02 · v1.2 · corrections after a second read against the code
 - 2026-10-02 · v1.1 · fact-check pass.
 - 2026-10-02 · v1 · first draft.

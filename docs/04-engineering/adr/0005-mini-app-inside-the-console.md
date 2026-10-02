@@ -23,14 +23,14 @@
 
 **Constraint.** The final is on 3 Oct 2026: build on site, then demo. The demo runs live on the demo laptop, with the console full screen at 1280×720 and 100% zoom ([demo runbook](../../06-delivery/demo-runbook.md), [DEMO.md](../../DEMO.md)). The length of the demo slot is not announced. A second deployed app, a second device or a QR code is one more thing that can fail on the day.
 
-**What exists today (BUILT, commit 86575ea).**
+**What existed at commit 86575ea (the starting point).**
 
 - The merchant page, `frontend/src/pages/Merchant.tsx`: the WhatsApp phone simulator in a 372 px column, and a merchant panel (Soundbox device, money card, "What happened", merchant file, presenter notes).
 - A live-state provider with an SSE stream and a replay clock, and an in-browser mock backend (`npm run dev:mock`, `?mock=1`) that makes a static demo possible.
-- Plain CSS design tokens in `frontend/src/styles/tokens.css`: navy, blue and a light paper background, with Ubuntu and Noto Sans Devanagari self-hosted in `frontend/public/fonts/` (Noto covers Marathi). 262 of 264 frontend unit tests pass; fix X1 repairs the other two.
-- Endpoints the mini-app can use today are listed as BUILT under Decision 5.
+- Plain CSS design tokens in `frontend/src/styles/tokens.css`: navy, blue and a light paper background, with Ubuntu and Noto Sans Devanagari self-hosted in `frontend/public/fonts/` (Noto covers Marathi).
+- Endpoints the mini-app can use are listed under Decision 5.
 
-**Not built yet (PLANNED):** the mini-app, Tailwind, shadcn, the feature flags, and every endpoint marked PLANNED under Decision 5.
+**Status at the end of the build (3 Oct 2026):** BUILT. The mini-app (`frontend/src/miniapp/`), the scoped Tailwind and shadcn setup, the 14 feature flags and every endpoint in Decision 5 are in the code. The static build, the standalone route and the mock parity are BUILT too. Not done: the Marathi native review, and a deployed public URL for the static build.
 
 **Opportunity.** The console is React already. A mini-app inside it gives judges one browser window, and gives the team one API, one mock backend, one clock and one session.
 
@@ -84,7 +84,7 @@ The mini-app calls the same API as the console, through the same client and enve
 | BUILT, wave 2 | `POST /api/merchants/{id}/ask`, `POST /api/voice/stt`, `POST /api/voice/tts`, `POST /api/merchants/{id}/slip-precheck` and its `confirm`, `POST /api/integrations/{component}/fallback` |
 | BUILT, wave 3 | `GET` and `POST /api/merchants/{id}/grievances`, `GET /api/merchants/{id}/consents`, `POST /api/merchants/{id}/consents/{consent_id}/withdraw`, `GET /api/merchants/{id}/consents/activity`, `POST /api/merchants/{id}/slips/{slip_id}/forget` |
 
-Each planned endpoint is mocked in `frontend/src/mock` with the same view models before its screen turns on, so the static demo (N7) works without a backend. The demo has no merchant login: `POST /api/premium/link` needs the officer token, and the standalone route borrows the console's demo officer session. A pilot would use the merchant's own Paytm login.
+Each endpoint is mocked in `frontend/src/mock` with the same view models, so its screen works, so the static demo (N7) works without a backend. The demo has no merchant login: `POST /api/premium/link` needs the officer token, and the standalone route borrows the console's demo officer session. A pilot would use the merchant's own Paytm login.
 
 ### 6. Language
 
@@ -92,7 +92,7 @@ The mini-app keeps its own language state, separate from the console. The order 
 
 ### 7. Waves and flags
 
-Everything is P0 and is built in waves behind flags. Flag names are proposed (`n1_miniapp`, `n2_ask_chhatri`, `n3_slip_precheck`, `n5_grievances`, `n6_consents`, `n8_marathi`); the [implementation guide](../implementation-guide.md) owns the mechanism. Off means absent from the UI: no empty shell and no "coming soon".
+Everything is P0 and is built in waves behind flags. The flags are `n1_miniapp`, `n2_ask_chhatri`, `n3_slip_precheck`, `n4_voice`, `n5_grievances`, `n6_consents` and `n8_marathi`, among the 14 in `backend/chhatri/features.py` and `frontend/src/features.ts`; the [implementation guide](../implementation-guide.md) owns the mechanism. Off means absent from the UI: no empty shell and no "coming soon".
 
 | Wave | What ships for the mini-app |
 |---|---|
@@ -105,7 +105,7 @@ Everything is P0 and is built in waves behind flags. Flag names are proposed (`n
 
 ### 8. Honesty rules
 
-Every status says BUILT or PLANNED. Sales, alerts, KYC, payouts, the lender, Soundbox, WhatsApp and the Paytm link are SIMULATED and labelled as such in the app. The N1 screens show no AI-written text. The policy engine decides every amount; the app renders the numbers it is given and never computes them. The accessibility target is WCAG 2.2 AA, checked with the `jsx-a11y` lint rules and a manual keyboard pass.
+Every status says BUILT or not built. Sales, alerts, KYC, payouts, the lender, Soundbox, WhatsApp and the Paytm link are SIMULATED and labelled as such in the app. The N1 screens show no AI-written text. The policy engine decides every amount; the app renders the numbers it is given and never computes them. The accessibility target is WCAG 2.2 AA, checked with the `jsx-a11y` lint rules and a manual keyboard pass.
 
 ## Alternatives considered
 
@@ -156,7 +156,7 @@ These are targets for the build, not results. The acceptance criteria are in [fs
 3. Against a running backend, the tracker and the receipt for Anil show the decision and the ₹1,380 that the officer console shows (AC-17 and AC-27 on the live project).
 4. The mini-app follows the console's replay clock: seeking back removes a paid claim from Home (AC-41).
 5. In the mock project, Ramesh's price check ends BLOCKED with the right start date and price (AC-13), and Anil's claim reaches its receipt (AC-17, AC-27). The end-to-end specs are `miniapp-buy-blocked`, `miniapp-area-claim` and `miniapp-receipt-print`.
-6. The console is unchanged: its unit tests still pass (262 of 264 today, X1 fixes two), computed styles of console elements are equal with and without the mini-app chunk (AC-05), and the built CSS holds no Preflight rule outside `.miniapp` (AC-06).
+6. The console is unchanged: its unit tests pass (see the testing strategy for the measured count), computed styles of console elements are equal with and without the mini-app chunk (AC-05), and the built CSS holds no Preflight rule outside `.miniapp` (AC-06).
 
 ## Follow-ups
 
@@ -174,12 +174,13 @@ Owners: Omkar Kadam (frontend), Ujjwal Pardeshi (backend).
 
 1. **Public URL (N7).** The repo owner deploys the static build to a free host, and deep links need a single-page fallback there. No URL exists yet and none is claimed. Owner: Omkar Kadam.
 2. **Merchant session.** Should the live demo or a pilot add a merchant-scoped quote endpoint instead of borrowing the officer session? Owner: Ujjwal Pardeshi.
-3. **Flag mechanism and names.** Confirm the proposed names against the implementation guide. Owner: Omkar Kadam.
+3. **Flag mechanism and names.** Settled: the 14 names in `features.ts` and `features.py`, kept identical by `scripts/tests/test_feature_flags.py`.
 4. **Native review.** Who reviews the Hindi copy, and later the Marathi? Owner: Omkar Kadam.
 
 ## Changelog
 
+- 2026-10-03 · v3.1 · status synced with the code at the end of the build: BUILT, flags named, the stale test count and the PLANNED wording removed.
 - 2026-10-02 · v3 · amended. Resolved the contradictions between six listed screens, a five-tab bar and "five screens" in the signals: nine screens in three tabs, plus two consent screens in wave 3. Stated the placement exactly (third column at 1200 px and wider, two columns from 900 px, one below, a 372 px frame, plus the standalone route `/merchant/:id/app`) and dropped the 375 px overlay modes. Moved the code to `frontend/src/miniapp/` from `pages/MerchantApp.tsx`. Said that the app calls our API and nothing else (Gemini, Sarvam, WhatsApp and Paytm are backend integrations) and marked the endpoints that do not exist yet as PLANNED. Corrected the style description (the console uses navy and blue tokens, not green and white). Added the UI stack decision (Tailwind v4 and shadcn/ui, scoped, with the Vite 8 note), language as the mini-app's own state, waves and flags, and the alternatives iframe, console CSS alone and Tailwind globally. Replaced the past-tense "tested on 2 Oct" signal with targets.
-- 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly scopes mini-app as a PLANNED component (N1) for 2–3 Oct build.
+- 2026-10-02 · v2 · consistency check against the code: no changes needed; ADR correctly scopes mini-app as a PLANNED component (N1) for 2–3 Oct build.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: verified ADR 0005 correctly scopes mini-app APIs and mocking; no changes needed (compliant with canonical framing).
 - 2026-10-02 · v1 · first draft.

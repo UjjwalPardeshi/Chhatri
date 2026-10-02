@@ -16,7 +16,7 @@
 - **Devanagari.** Noto Sans Devanagari is self-hosted. Hindi and Marathi get line height 1.6, no uppercase, no letter spacing, and ASCII digits with Indian grouping (section 3.3).
 - **Projector.** Presenter mode steps every type token up by one (section 2.5). Measured at 1280×720, the shell chrome must step up too, or the honesty badges and the replay ticks stay at 11 px (section 8.1).
 - **Component picks.** The 21st.dev picks in section 5.2 come from catalogue descriptions and previews. Nobody has installed or read their code yet, and each pick has a shadcn fallback.
-- **The Wave 0 scaffold in the working tree needs a few changes to match section 13** (section 12.10): layered `important` utilities, re-declared `--muted` and `--accent`, a layered base, 32 px button sizes and a handful of classes in the generated files that the theme does not name. Two things it found are now in the recipe: the `shadcn/tailwind.css` import and the `mini-pulse` rename.
+- **The Wave 0 scaffold needed a few changes to match section 13** (section 12.10): layered `important` utilities, re-declared `--muted` and `--accent`, a layered base, 32 px button sizes and a handful of classes in the generated files that the theme does not name. The mini-app Tailwind setup was rebuilt on that recipe, and `frontend/src/miniapp/miniappCss.test.ts`, `builtCss.test.ts` and `unmappedClasses.test.ts` guard it. Two things the scaffold found are in the recipe: the `shadcn/tailwind.css` import and the `mini-pulse` rename.
 
 Section numbers 1, 2.5, 6.3 and 8.1 are stable: other specs cite them.
 
@@ -57,7 +57,7 @@ Clear, and one step at a time. The merchant is a shopkeeper who reads Hindi by p
 | Verified-by badges (H13) | BUILT | W1 | mini-app receipt, console case panel |
 | FALLBACK mode, provider panel, mode on AI replies (X6, H26) | BUILT | W2 | header chip, panel, Ask screen |
 | Console polish: tokenised sizes, `--faint` text fix, focus ring, presenter mode, moment card | BUILT | W4 | console CSS and `state/presenter.tsx` |
-| Marathi (N8) type check on the venue laptop | PLANNED | W4 | mini-app |
+| Marathi (N8) type check on the venue laptop | Not done: a person checks it on the venue laptop | W4 | mini-app |
 
 ---
 
@@ -435,7 +435,7 @@ Files live in `frontend/src/miniapp/` (screens, `ui/` for generated shadcn and 2
 | JargonTerm | Custom: a button styled as underlined text | S2, S5 to S7 (W1) | n/a | `aria-haspopup="dialog"`. Underline plus colour. A 44 px hit area through padding |
 | FormulaBlock | Custom | S6, S7 (W1) | n/a | One text node, for example `½ × ₹4,380 × 63% = ₹1,380`, with its own `lang`. Never `aria-hidden` |
 | SourceBadge (verified-by) | `badge` and `sheet` | S6, S7 (W1). Modes from W2 | LIVE, SIMULATED, FALLBACK, "Source missing" | A button. The sheet names system, id, time and version |
-| CounterfactualCard | `card` | S6, S7 (W1) | Has a line, or "Nothing limited this amount." (proposed) | Plain text, exactly as the API sends it |
+| CounterfactualCard | `card` | S6, S7 (W1) | Has a line, or the card is absent | Plain text, exactly as the API sends it |
 | ReceiptDocument | `card` and `dl`. Visual reference: 21st.dev `ravikatiyar162/ticket-confirmation-card` (a visual reference, no install). Print stylesheet | S7 (W1) | Loading, not found, error, print | A description list of terms and values. The printed header reads "Prototype · simulated data". The tab bar and action bar are hidden in print |
 | Skeleton | shadcn `skeleton`. Reserve the final height (pattern: 21st.dev `ddoemonn/skeleton-swap`) | All (W1) | Loading | `aria-busy="true"` on the screen. No text spinner. The pulse stops under reduced motion |
 | Toast | shadcn `sonner`, mounted inside `.miniapp` | S3, S5 (W1) | Success, error | A polite live region. Stays 6 s and pauses on hover and focus. The screen also shows the result of the action |
@@ -467,7 +467,7 @@ Plain CSS with the tokens above. No Tailwind in console files. Class names follo
 | ProviderPanel, FALLBACK segment, forced chip | Extends `layout/IntegrationBadges.tsx` | W2 (X6, H26) | Row per component with mode, provider, model, reason, last call. The switch works in demo mode. Orange tone through `--fallback-on-navy` on the header |
 | ModeChip on AI output | Phone bubbles, case evidence | W2 | Word and provider. Details on tap |
 | SourceChip column, CounterfactualLine | Case panel `Checks.tsx` | W4 (data from W1) | Origin word shown for every simulated source |
-| DisputeButtons | `CaseDetail.tsx` | W4 | "Confirm payout" and "Reject dispute" (proposed), same routes as Approve and Decline |
+| DisputeButtons | `CaseDetail.tsx` | W4 | "Confirm payout" and "Reject dispute", same routes as Approve and Decline |
 | OpsStrip | A band over the map column on Live, full width on Claims | W4 (H8) | Five cells, each a button. Count-up 500 ms. Placement: section 8.1 and screens and flows section 9.0 |
 | WhatIfDrawer | Over the Live right panel | W4 (H24) | Never writes. A pinned hour. Esc closes |
 | PresenterToggle and KeysSheet | Header | W4 | `aria-pressed`. Keys work while presenter mode is on |
@@ -516,7 +516,7 @@ Every screen has the same six states.
 | Error | `ErrorState` (title "Could not load this", reason, "Try again"), `InlineError` (dismissible), the header chip "Integrations unavailable", all `role="alert"` | `ErrorState` card: a sentence, Retry, and the code in small text |
 | Offline | `StaleNote`: "Showing the last data received · can't reach the server right now." with "Try again", over the stale content. The pill reads "Connecting..." or "Reconnecting..." while the stream is down | Banner "Offline. Showing data from {time}." The last data stays and actions that need the network are disabled with a reason |
 | SIMULATED | Header chip, footer line "Sales, alerts, KYC, payouts, lender and Soundbox are simulated", the "Mock data" badge, and "SOUNDBOX · SIMULATED" on the device card | A SIMULATED badge: one summary in the app bar and one per source |
-| FALLBACK | Not built. X6 adds an orange segment to the header chip (W2) | A FALLBACK badge and one reason line from `fallback_reason` |
+| FALLBACK | BUILT behind `x6_provider_panel`: an orange segment in the header chip (W2) | A FALLBACK badge and one reason line from `fallback_reason` |
 
 ---
 
@@ -808,7 +808,7 @@ The merchant mini-app (N1) is built with **Tailwind CSS v4 and shadcn/ui** (styl
 
 ### 12.2 Context
 
-- The console is 18 CSS files (about 7,750 lines) over one token file, with 262 passing tests (fs-04 section 2). Its bare-element rules (`h1` to `h4`, `a`, `button`) and class names (`.card`, `.btn`, `.badge`, `.table`) are used on every page.
+- The console is 22 CSS files including the token file (8,821 lines, counted on 3 Oct 2026). At the 2 Oct baseline it was 18 files and about 7,750 lines, with 262 passing tests. Its bare-element rules (`h1` to `h4`, `a`, `button`) and class names (`.card`, `.btn`, `.badge`, `.table`) are used on every page.
 - The mini-app needs nine screens in wave 1 and up to six more in waves 2 and 3, with bottom sheets, dialogs, accordions, switches, toasts and form controls. Each must be keyboard and screen-reader accessible. One person builds them in a few waves.
 - The mini-app must look like the console: the same palette, radius, type and motion.
 
@@ -1271,6 +1271,7 @@ The console's `a` rule (blue, underline on hover), `button` rule (pointer cursor
 
 ## Changelog
 
+- 2026-10-03 · v1.2 · the scaffold note, the CSS counts, the FALLBACK state and the proposed labels brought up to the code
 - 2026-10-02 · v1.3 · status lines match the build: the mini-app, the W0 tokens, the mode badges, the verified-by badge, presenter mode, the moment card and the policy-driven legend are BUILT behind their flags; only the Marathi type check on the venue laptop is left for a person
 - 2026-10-02 · v1.2 · rewritten to be build-ready: decision record for Tailwind CSS v4 and shadcn/ui scoped under `.miniapp` with the verified entry file, `components.json`, packages and wave 0 steps; theme mapping onto `tokens.css`; the W0 tokens (`--demo`, `--fallback`, status, field border, focus, radius aliases) with calculated contrast; projector type scale, chrome scope and 1280×720 budget; Devanagari rules; component inventory with sources, states and accessibility notes; motion with reduced motion; LIVE, SIMULATED and FALLBACK badges, claim pills and the verified-by badge. Corrected the draft's contrast numbers (amber, orange, teal), the GSAP snippet, the Ubuntu 600 weight and Google Fonts loading, the non-red-green ramp claim and the component paths, and replaced the old priority labels with build waves. Checked the Wave 0 scaffold in the working tree against the recipe and compiled the entry file over its 17 generated files (section 12.10): style `radix-nova`, the `shadcn/tailwind.css` import, the `mini-pulse` rename, the `cn` package, the one-time edits to the generated files, and three more checks in section 13.6
 - 2026-10-02 · v1.1 · second fact-check pass: clarified provider badge shows Sarvam LIVE (Gemini planned in N2)

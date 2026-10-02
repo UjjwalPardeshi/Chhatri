@@ -31,14 +31,29 @@ live, on 3 October 2026 (hackathon final):
 |---|---|---|
 | Sarvam STT/TTS/chat/vision | `SARVAM_API_KEY` set | deterministic simulator |
 | WhatsApp Cloud API | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` set | in-console phone simulator |
+| Gemini chat and vision (Ask Chhatri, slip reading; flags `n2_ask_chhatri`, `n3_slip_precheck`) | `GOOGLE_API_KEY` and `GEMINI_MODEL` set (`GEMINI_VISION_MODEL` optional) | templates, the simulated slip reader |
 | Paytm payment link | `PAYTM_MCP_URL` (MCP over SSE) **or** `PAYTM_MID`+`PAYTM_KEY_SECRET` (direct REST) | simulated link |
 | n8n workflows | `N8N_BASE_URL` set | in-process workflow runner (same steps) |
 | Cognee memory | `COGNEE_ENABLED=true` and cognee installed and LLM configured | in-process graph (networkx) |
 | Open-Meteo | always allowed, but replay/backtest use cached real data in `backend/data/weather/` | — |
 | Sales data, alerts feed, KYC, payouts rail, lender, Soundbox | never live | always simulated, always labelled |
 
-`GET /api/integrations` reports each component as `LIVE` or `SIMULATED`; the console header shows
-the badges. Nothing simulated may ever be presented as live.
+`GET /api/integrations` reports each component as `LIVE` or `SIMULATED` (with flag `x6_provider_panel`, also
+`FALLBACK`); the console header shows the badges. Nothing simulated may ever be presented as live.
+Sarvam, Gemini and Cognee run on free tiers, so they are called only when `CHHATRI_DATA_IS_SYNTHETIC=true`
+(ADR 0009); with it unset every such link is skipped and the component reads SIMULATED.
+
+### 0.3 Feature flags
+
+Every feature added after the first build (N1 mini-app, N2 Ask Chhatri, N3 slip pre-check, N4 voice, N5
+grievance ladder, N6 consent centre, N8 Marathi, X4 lender request, X6 provider panel, X8 distress guard, H8 ops
+strip, H24 what-if, H25 evaluation page, console polish) ships behind one of 14 flags, off by default. They are
+the names in `chhatri/features.py` (`FEATURE_NAMES`), read from `CHHATRI_FEATURES`; the console reads the same
+names from `VITE_FEATURES` (`frontend/src/features.ts`), and a test keeps the two lists identical. A route whose
+flag is off answers the ordinary 404 `not_found`. `GET /api/health` lists the flags that are on. The golden
+numbers and strings of §17.2 assume `x4_lender_request` on (the demo flag set) and hold with the other flags off;
+the scripted `make demo-check` flow stops by design at the `n3_slip_precheck` and `n6_consents` steps when those
+are on.
 
 ### 0.2 Non-negotiable principles
 
@@ -100,7 +115,7 @@ shapely 2.1, networkx 3.x, rapidfuzz 3.x, Pillow 12, PyYAML, python-multipart, s
 mcp 1.30.0 (1.x client API — **not** 2.x), paytmchecksum 1.7.0. Optional extra `memory`: cognee.
 Tests: pytest 9, pytest-asyncio 1.x (`asyncio_mode = "auto"`), pytest-cov.
 
-Frontend: Vite + React 19 + TypeScript + react-leaflet 5 + leaflet 1.9; vitest; Playwright for E2E.
+Frontend: Vite 8 + React 19 + TypeScript + react-leaflet 5 + leaflet 1.9; vitest; Playwright for E2E; the mini-app adds Tailwind v4, shadcn/Radix and sonner, scoped to `frontend/src/miniapp/`.
 Fonts: Ubuntu + Noto Sans Devanagari, self-hosted (offline-safe), to match the deck.
 
 ---
@@ -675,6 +690,11 @@ kind=None, limit=5)`. Simulated = networkx MultiDiGraph (nodes: shop, zone, even
 dispute, case, decision; edges: IN_ZONE, PAID_FOR, DISPUTED, DECIDED_BY, SIMILAR_TO). Live =
 cognee (`add` + `cognify` + `search`) behind the same interface, optional extra.
 
+14.8 **Gemini** (`GOOGLE_API_KEY`, `GEMINI_MODEL`, optional `GEMINI_VISION_MODEL`; `integrations/gemini_client.py`,
+`gemini_chat.py`, `gemini_vision.py`): `POST {base}/models/{model}:generateContent` over httpx with the key only in
+the `x-goog-api-key` header; used for Ask answers and slip reading, first in their chains (Gemini → Sarvam →
+template or REFERRED), never for money (§0.2). No model id has a default. Tested against fakes only.
+
 14.7 **Soundbox**: simulated only — emits a `soundbox` event with the SOUNDBOX text and TTS audio
 URL (if live TTS) to the console.
 
@@ -829,7 +849,7 @@ with `Last-Event-ID`. Keep-alive ping every 15 s (sse-starlette `ping=15`).
 
 
 ### 19.2 Response shapes (TypeScript notation; mirrored in `frontend/src/api/types.ts` and pydantic
-schemas in `chhatri/api/schemas.py`). Money fields end in `_paise` (integer) and are always
+schemas in `chhatri/api/schemas/`). Money fields end in `_paise` (integer) and are always
 accompanied by a preformatted `*_label` string from `format_inr` so the UI never re-derives money.
 
 ```ts
@@ -936,7 +956,8 @@ Routes: `/` Overview homepage (the whole idea, deck-grade: problem, how it works
 · `/policy`. Header: Chhatri wordmark, scenario picker, clock ("Mumbai · monsoon replay · 17:00 ·
 simulated"), play/pause/speed/seek, integration badges (LIVE green / SIMULATED grey).
 
-- **Live map**: Leaflet, CARTO Positron tiles (attribution) with graceful fallback to no tiles;
+- **Live map**: Leaflet; the ward outlines and hexes are drawn without tiles by default (CARTO now needs a key),
+  and a keyed tile URL in `VITE_TILE_URL` adds tiles with their attribution; a failing tile layer falls back to the plain outline map;
   ward outlines + H3 hexes coloured by sales vs expected on the deck's scale (40 % red →
   70 % amber → 100 %+ green; legend "Pays below 50% for 3 h, with alert"); zone labels
   "Z7 · 37% · 46 shops"; Anil's pin with "₹1,380 paid · 17:04" after credit; rain band overlay
@@ -959,6 +980,13 @@ simulated"), play/pause/speed/seek, integration badges (LIVE green / SIMULATED g
 - **Audit**: table + "Verify chain" → valid/invalid.
 - **Backtest**: metrics table Chhatri vs weather-only, per-zone loss ratios, labelled.
 - **Policy**: payout authority table + rules from `/api/policy`.
+- **Evals** (`/evals`, flag `h25_evals`): the results of the offline evaluation suites, or NOT MEASURED.
+- **Merchant mini-app** (flag `n1_miniapp`): a phone-sized app (`frontend/src/miniapp/`, Tailwind v4 and shadcn
+  scoped under `.miniapp`) as a third column beside the phone on `/merchant/:id` and as a standalone page at
+  `/merchant/:id/app`; Hindi and English, Marathi behind `n8_marathi`. It reads the same API and mock backend as
+  the console ([ADR 0005](04-engineering/adr/0005-mini-app-inside-the-console.md)).
+- **Provider panel and ops strip** (flags `x6_provider_panel`, `h8_ops_strip`, `h24_whatif`): the header panel
+  with the fallback switches, the ops counts, and the what-if drawer.
 Design tokens from the deck: navy `#0f1a33`, ink `#0f172a`, blue `#0b63c9`, accent `#38a3e8`,
 paper `#f3f5f8`, amber `#e39a4f`, red `#b91c1c`, green `#15803d`, WhatsApp header `#0b3d2e`,
 chat bg `#ece5dd`, bubble out `#d9fdd3`. Works at 1280×720 (projector) and on phones.
@@ -980,8 +1008,12 @@ errors never echo secrets or stack traces; CORS restricted; rate limits on webho
 - Policy engine tests cover every row of §9.2 and the authority table (§9.4).
 - Audit chain tamper test. Webhook signature tests. Guard tests.
 - `scripts/demo_check.py` runs every scenario through the HTTP API and asserts the outcomes.
-- Frontend: vitest for formatters/colour scale; Playwright E2E for the monsoon replay and the
-  officer approve flow.
+- Frontend: vitest for formatters/colour scale, the console and the mini-app; Playwright E2E (projects `mock` and
+  `live`) for the monsoon replay, the officer approve flow and the mini-app flows.
+- Route table: `backend/tests/api/test_route_table.py` pins §19 to exactly 57 routes, with their auth.
+- Feature flags: every flagged route answers 404 while its flag is off (`tests/api/test_feature_routes.py`), and
+  the golden numbers hold with every flag off.
+- Infra: `scripts/tests/` (n8n workflows generated from `WORKFLOWS`, compose, env, nginx, Makefile).
 
 ## 23. Developer commands
 
@@ -992,7 +1024,10 @@ backtest and writes `artifacts/MANIFEST.json`), `make test` (fast suite: `-m "no
 NOT depend on `make data`), `make test-slow` (golden numbers + full-artefact flows), `make dev`
 (uvicorn :8000 + vite :5173), `make demo-check` (`python backend/scripts/demo_check.py`), `make e2e`
 (Playwright against a running backend + console), `make up` (docker compose: backend, frontend,
-n8n with auto-imported workflows).
+n8n with auto-imported workflows). Also: `make test-backend`, `make test-frontend`, `make test-slow`,
+`make test-infra`, `make lint`, `make evals` (offline evaluation suites), `make env` (create `.env`),
+`make check-keys` (which keys are set; never prints them), `make n8n-workflows`, `make n8n-selftest`,
+`make down`. `make demo-check` runs in process with `CHHATRI_FEATURES=x4_lender_request`.
 
 ---
 

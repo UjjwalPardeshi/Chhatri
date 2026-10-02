@@ -61,7 +61,7 @@ Nothing for N6 exists: no consent model, store, route, message or audit entry (s
 **Known gaps in code that this spec depends on** (verified 2 Oct 2026):
 
 1. **WAITING never becomes ACTIVE.** `mark_paid` sets WAITING when the payment date is before `starts_on`, and nothing changes it later. `cover_in_force` needs status ACTIVE, so a claim for a day after `starts_on` on a link-bought cover fails COVER_IN_FORCE. The chat reply COVER_STATUS_STARTS also keeps saying "starts on", because `_cover_status` tests `status in NOT_YET_STARTED`. Fix: section 5.3.
-2. **A missing zone price silently costs ₹2** (X3). Two tests pin that behaviour today: `test_missing_file_falls_back_to_minimum` and `test_zone_without_entry_uses_minimum`.
+2. **A missing zone price silently costs ₹2** (X3). Two tests pinned that behaviour at the baseline; X3 flipped them to `test_missing_file_gives_no_zone_a_price` and `test_zone_without_entry_is_an_error`.
 3. **Pilot covers are seeded at the ₹2 minimum**, not at their zone price (`backend/chhatri/sim/merchants.py`, `cover_for`). The evening settlement takes the cover's own price, so Anil (Z7, ₹18.62 a day) would be charged ₹2. Check the golden tests before changing the seed. fs-04 open question 3 asks the same.
 4. **The mock backend** has no route for `POST /api/premium/link` or `POST /api/webhooks/paytm`, and it prices demo merchants at ₹3 a day (`frontend/src/mock/fixtures.ts`).
 5. **COVER_BLOCKED says "tomorrow's alert"** even when the blocking alert is in force today. One catalogue line serves both cases.
@@ -351,7 +351,7 @@ Rules:
 - At most one ACTIVE record per merchant and purpose. A grant after a withdrawal is a new record with a new id.
 - **Seed.** At scenario load every merchant with a seeded cover gets three ACTIVE records, source SEEDED, `granted_at` = the cover's `purchased_at`, `notice_version` null. They write no audit entries: they pre-date the replay, so a scenario that never touches consent keeps the audit chain it has today. The app labels them SIMULATED. A merchant with no cover (Ramesh) has none.
 - **Notice module** (new `backend/chhatri/consent/notice.py`): `NOTICE_VERSION`, and for each purpose the label, the data-used lines and the effect sentences, in Hindi and English. The API returns them, the mock copies them, and X7 scans them for promises. The app does not hold consent wording of its own.
-- **Payment carries the grant.** `PremiumPayment` gains `consent_purposes`, `notice_version`, `consent_source` and `consent_at`. `create_link` stores them on the PENDING payment; `mark_paid` turns them into `Consent` records and audits `consent.granted`. An unpaid link therefore leaves no consent behind.
+- **Payment carries the grant.** The model `PremiumPayment` is unchanged. What the app ticked is held as a `PendingGrant` (purposes, notice version, time) in the consent book, keyed by the payment id (`expect_grant` in `backend/chhatri/consent/purchase.py`, `expect_payment` in `consent/ledger.py`). When the payment is paid, `ConsentBook` turns it into `Consent` records (source `PAYMENT_APP`, or `PAYMENT_CHAT` when the chat notice covered it) and audits `consent.granted`. An unpaid link therefore leaves no consent behind.
 - The store, the audit log and the media are in memory for one scenario run. A reload starts all of them afresh.
 
 ### 9.3 How consent is granted
@@ -405,7 +405,7 @@ Placement: inside the payment flow of S3 (fs-04), above the button `buy-check`. 
 
 ### 9.6 API
 
-Paths are from the registry in [data-model-and-api.md](../../04-engineering/data-model-and-api.md) section 5; the same change updates section 5.5 there (its example returns `data_retention_days` and a re-grant message that this design does not have). `{id}` is a merchant id (`^S-\d{4}$`). Envelope as everywhere: `{ok, data}` or `{ok: false, error: {code, message, fields}}`.
+Paths are from the registry in [data-model-and-api.md](../../04-engineering/data-model-and-api.md) section 5; section 5.5 there holds the request and response examples. `{id}` is a merchant id (`^S-\d{4}$`). Envelope as everywhere: `{ok, data}` or `{ok: false, error: {code, message, fields}}`.
 
 | Method and path | Status | Auth | Purpose |
 |---|---|---|---|
@@ -858,23 +858,23 @@ All P0 (team decision, 2 Oct). Owners: Omkar (screens, copy, mock), Ujjwal (engi
 **Existing tests (BUILT)**
 
 - `backend/tests/policy/test_cover.py`: the quote boundaries of section 7.1 (`test_ramesh_blocked_by_red_alert`, `test_ok_without_relevant_alert`, `test_other_zone_alert_is_ignored`, `test_alert_valid_now_blocks`, `test_alert_not_yet_issued_does_not_block`, `test_alert_beyond_lookahead_does_not_block`, `test_ended_alert_does_not_block`, `test_earliest_relevant_alert_reported`).
-- `backend/tests/ledger/test_premiums.py`: the zone table, the link, `mark_paid` (WAITING, ACTIVE, extension, PENDING_PAYMENT) and the settlement. Two tests change with X3.
+- `backend/tests/ledger/test_premiums.py`: the zone table, the link, `mark_paid` (WAITING, ACTIVE, extension, PENDING_PAYMENT) and the settlement. Two tests changed with X3.
 - `backend/tests/replay/test_dispute_cover.py`: `test_cover_after_the_alert_is_blocked_but_the_paytm_link_is_offered`, `test_a_payment_link_outage_keeps_the_quote_and_is_audited`.
 - `backend/tests/replay/test_timed.py`: `test_the_evening_settlement_prepays_tomorrow_from_todays_collections`.
 - `backend/tests/conversation/test_slip_flow.py`: `test_slip_read_is_audited_without_the_patient_name`.
 - `make demo-check`: the `buy_cover` flow (quote, link, simulated payment, confirmation).
 
-**New tests (PLANNED)**
+**New tests (BUILT)**
 
 | Layer | Where | What |
 |---|---|---|
 | Backend | `backend/tests/policy/test_cover_status.py` | `effective_status` table, `premium_due`, the Ramesh worked example, `cover_in_force` for a WAITING cover after `starts_on` |
 | Backend | `backend/tests/ledger/test_premium_table.py` | X3: the raise names the zone; `load_static` logs; the preflight row |
-| Backend | `backend/tests/consent/test_consent_service.py` | Grant on payment (app and chat), an unpaid link leaves none, withdraw effects per purpose, `case_open`, `already_withdrawn`, a re-grant is a new record, the seed |
-| Backend | `backend/tests/consent/test_gates.py` | Area claim skipped without sales consent while other merchants are decided; outreach skipped; settlement reason "consent withdrawn"; SLIP_CONSENT_NEEDED; `evaluate_hour` with and without `excluded` (golden numbers unchanged with none) |
-| Backend | `backend/tests/consent/test_activity.py` | One row per mapped action, the merchant filter, fixed templates, nothing else, no slip name in the `illness_mismatch` run |
-| Backend | `backend/tests/consent/test_forget_slip.py` | All five places erased; codes, statuses and amount unchanged; the audit chain valid and the original entry still present; the `slip.erased` entry holds no text; `case_open`, `already_erased`, 404 |
-| Backend | `backend/tests/api/test_consents_routes.py` | Shapes, auth, errors, and 404 when the flag is off |
+| Backend | `backend/tests/api/test_consents.py` (the service through its routes) | Grant on payment (app and chat), an unpaid link leaves none, withdraw effects per purpose, `case_open`, `already_withdrawn`, a re-grant is a new record, the seed |
+| Backend | `backend/tests/api/test_consent_gates.py` | Area claim skipped without sales consent while other merchants are decided; outreach skipped; settlement reason "consent withdrawn"; SLIP_CONSENT_NEEDED; `evaluate_hour` with and without `excluded` (golden numbers unchanged with none) |
+| Backend | `backend/tests/consent/test_notice_and_activity.py`, `backend/tests/api/test_consents.py` | One row per mapped action, the merchant filter, fixed templates, nothing else, no slip name in the `illness_mismatch` run |
+| Backend | `backend/tests/api/test_consents.py` (`test_forget_erases_the_slip_and_keeps_the_decision` and its neighbours) | All five places erased; codes, statuses and amount unchanged; the audit chain valid and the original entry still present; the `slip.erased` entry holds no text; `case_open`, `already_erased`, 404 |
+| Backend | `backend/tests/api/test_consents.py`, `backend/tests/api/test_rights_schemas.py` | Shapes, auth, errors, and 404 when the flag is off |
 | Backend | the X7 test | Scans `consent/notice.py` and the new catalogue keys |
 | Frontend unit and component | `frontend/src/miniapp/screens/` | S10 and S11 in all six states; the switch opens the sheet and flips once the call succeeds; the disabled reasons; the erase sheet content; the S3 consent block (unticked, gating, 422) |
 | Contract | Vitest and pytest | Mock fixtures and backend JSON parse with the same parsers |
@@ -897,7 +897,7 @@ All P0 (team decision, 2 Oct). Owners: Omkar (screens, copy, mock), Ujjwal (engi
 ## Changelog
 
 - 2026-10-02 · v1.4 · rewritten. Fixed the quote outcome (OK or BLOCKED, never approved), the start date (request date plus 7 days in every case), prices (per zone from premiums.json, nothing calculated per merchant), audit action names, the cover life cycle and the WAITING gap, the settlement description and the code paths. Made N6 and H23 build-ready: purposes, consent record, gates, withdrawal effects, activity log, forget-my-slip with the audit-log limit stated, screens S10 and S11, purchase consent block, endpoints, acceptance criteria with test ids, tasks by wave. Removed the grant route that is not in the registry, the forecast-model claim at quote time, "continue with a flag" on withdrawal, effort hours and the old priority labels.
-- 2026-10-02 · v1.3 · second fact-check pass
-- 2026-10-02 · v1.2 · final consistency pass against the code
-- 2026-10-02 · v1.1 · fact-check pass
+- 2026-10-02 · v1.3 · corrections
+- 2026-10-02 · v1.2 · consistency check against the code
+- 2026-10-02 · v1.1 · corrections
 - 2026-10-02 · v1 · first draft

@@ -10,7 +10,7 @@
 ## TL;DR
 
 - Governing principle: the AI builds the case, code decides the money. Only `chhatri.policy.engine` produces APPROVED. No model output sets an amount, approves, pays or overrides a check (SPEC §0.2, [ADR 0001](adr/0001-policy-engine-is-the-only-payout-authority.md)).
-- BUILT today: the expected-sales model, area index and silent-shop detection (deterministic), word-list intents with a Sarvam call for UNKNOWN text that returns an intent only, Sarvam adapters for chat, document reading, speech to text and text to speech, offline simulators for all of them, the `grounded()` check (tested, not wired into any flow), upload validators and the audit log.
+- BUILT today: the expected-sales model, area index and silent-shop detection (deterministic), word-list intents with a Sarvam call for UNKNOWN text that returns an intent only, Sarvam adapters for chat, document reading, speech to text and text to speech, offline simulators for all of them, the `grounded()` check (layer A of the guard, called by the strict layer B that the Ask path uses when `n2_ask_chhatri` is on), upload validators and the audit log.
 - BUILT in Waves 2 and 3, behind flags: Gemini adapters (chat and vision), the Ask Chhatri service with a stricter guard, the slip pre-check, voice confirmation chips, mode, provider and reason labels on every AI result (H26), the free-tier data gate, and the offline evaluation harness (H25) with the `/evals` page. The live evaluation suites need keys and are not built.
 - Provider chains end in something deterministic: a template for text, the simulated reader or a person for slips, typed text for voice. A link is in a chain only when fully configured. No Gemini model name and no free-tier quota is written in these documents, because both change. The Sarvam defaults named in §3.4 are read from the code.
 - Only synthetic data goes to AI services on free tiers or free credits. It holds by construction, because the whole prototype is synthetic, and a code gate enforces it: with `CHHATRI_DATA_IS_SYNTHETIC` not true, no free-tier AI service is called ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)).
@@ -18,9 +18,9 @@
 
 ## 1. AI inventory
 
-BUILT means in the code at commit 86575ea. PLANNED means specified at that commit. **Status at the end of the build (working tree, 2 Oct 2026, evening):** every PLANNED cell below is BUILT behind its feature flag, except Tesseract (a later option, not in any chain) and the live evaluation runs. The "BUILT today" column is kept as the commit 86575ea baseline, so the flag-off behaviour stays visible.
+In this table the column "Baseline (flags off)" is what ran at commit 86575ea and still runs with every flag off. The column "Added behind flags, BUILT" lists what was specified then and is now BUILT behind its feature flag (checked against the code on 3 Oct 2026). The exceptions are Tesseract (a later option, in no chain) and the live evaluation runs, which need keys and are not built.
 
-| Component | Technique and provider | Purpose | BUILT today | PLANNED | Fallback | Data sent out | Can it move money? |
+| Component | Technique and provider | Purpose | Baseline (flags off) | Added behind flags, BUILT | Fallback | Data sent out | Can it move money? |
 |---|---|---|---|---|---|---|---|
 | Expected-sales model | LightGBM quantile regressors (P10, P50, P90) and a conformal lower bound per zone | The shop's normal sales by hour. Feeds the trigger and the published expected day | Trained on simulated sales driven by real rainfall, loaded from artifacts ([model card](ml-model-card.md)) | none | none. Without the artifacts the default scenario does not load: the API still starts and `/api/preflight` says what is wrong | none, runs in process | No. It is an input. The engine computes every amount from rules |
 | Area index and triggers | Arithmetic: actual sales divided by P50 per zone and 3-hour window, against rule thresholds | Detect an area loss event | Hourly, deterministic | none | none | none | No. The engine decides |
@@ -62,7 +62,7 @@ Why: every step from merchant input to money can be traced. The engine is small,
 
 A link is in a chain only when fully configured. The last link is deterministic. The order is fixed.
 
-| Need | Chain | BUILT | PLANNED |
+| Need | Chain | Baseline (flags off) | Added behind flags, BUILT |
 |---|---|---|---|
 | Intent for UNKNOWN text | Sarvam chat (intent only), then the rules' UNKNOWN | BUILT | Replaced by the Ask path when N2 is on |
 | Ask Chhatri | Rules for known intents, then Gemini, then Sarvam chat, then a template | Rules, templates and the Sarvam adapter | Gemini adapter and the whole service (Wave 2) |
@@ -70,7 +70,7 @@ A link is in a chain only when fully configured. The last link is deterministic.
 | Speech to text | Sarvam, then browser recognition, then typed text | Sarvam adapter, simulator | Browser recognition (Wave 2) |
 | Text to speech | Sarvam (demo merchants), then browser `speechSynthesis`, then text | BUILT | `/api/voice/tts` (Wave 2) |
 
-Tesseract is a PLANNED later link for slips, after Sarvam and before REFERRED. It is not in the Wave 2 chain, and its output would be parsed by rules and never given to a model. Browser speech recognition is PLANNED and not available today. Workflows and memory are not AI chains: the in-process runner is the default ([ADR 0008](adr/0008-in-process-workflows-on-stage.md)) and the memory graph is advisory.
+Tesseract would be a later link for slips, after Sarvam and before REFERRED. It is NOT BUILT and is in no chain; its output would be parsed by rules and never given to a model. Browser speech recognition is BUILT in the mini-app (`frontend/src/miniapp/components/voiceEngine.ts`, flag `n4_voice`) and depends on the browser. Workflows and memory are not AI chains: the in-process runner is the default ([ADR 0008](adr/0008-in-process-workflows-on-stage.md)) and the memory graph is advisory.
 
 ### 3.2 Adapter facts (BUILT)
 
@@ -78,7 +78,7 @@ Tesseract is a PLANNED later link for slips, after Sarvam and before REFERRED. I
 - Retries: only on HTTP 429 and 5xx, at most 3 attempts in all, with waits of 0.5 s then 1 s. A timeout is not retried. A failure raises `IntegrationError` with a safe message that never holds a provider body, a URL with credentials or a secret.
 - Sarvam speech to text accepts audio that passed the upload validators. Its "confidence" is a language probability, not recognition confidence. Text to speech is limited to 2,500 characters.
 - Uploads are validated by content: images up to 5 MB (JPEG, PNG or WebP), audio up to 5 MB and 30 s.
-- Planned interactive path: one attempt per link and per-link budgets set in the Wave 2 rehearsal so a whole chain fits its target. The targets are Ask in 5 s for at least 95 % of rehearsal questions and a slip read in 10 s for at least 90 % (PRD §5.1). Both are targets and neither is measured.
+- Interactive targets (not measured): Ask in 5 s for at least 95 % of rehearsal questions and a slip read in 10 s for at least 90 % (PRD §5.1). Per-link budgets are for the rehearsal to set, and no measurement of either target exists.
 
 ### 3.3 Labels (H26, BUILT)
 
@@ -126,12 +126,12 @@ Of the 21 replies in that table that must be blocked, layer A blocks 13 and the 
 ### 4.3 Schemas
 
 - Intent call (BUILT, `nlu.py`): the model must return one value of the nine intents. The reply is parsed and checked against the schema by `parse_json_reply`. Anything else raises `IntegrationError` and the rules' UNKNOWN stands. At most 500 characters are sent, behind a fixed system prompt.
-- Ask answer (PLANNED): `can_answer`, `answer_hi`, `answer_en`, `clause_ids`, `fact_keys`, no extra keys ([fs-05 §5.4](../02-product/feature-specs/fs-05-ask-chhatri.md)). Invalid JSON, a clause outside the table or a fact key outside the sheet is `INVALID_REPLY`.
-- Slip read (PLANNED): five fields and two numbers, no free text ([fs-02 §7.3.1](../02-product/feature-specs/fs-02-hospital-cash-claim.md)).
+- Ask answer (BUILT, `chhatri/ask/`): `can_answer`, `answer_hi`, `answer_en`, `clause_ids`, `fact_keys`, no extra keys ([fs-05 §5.4](../02-product/feature-specs/fs-05-ask-chhatri.md)). Invalid JSON, a clause outside the table or a fact key outside the sheet is `INVALID_REPLY`.
+- Slip read (BUILT, `chhatri/integrations/slip_chain.py`): five fields and two numbers, no free text ([fs-02 §7.3.1](../02-product/feature-specs/fs-02-hospital-cash-claim.md)).
 
 ### 4.4 Prompt injection
 
-BUILT: merchant text is cut to 500 characters, the system prompt is a constant, the intent output is an enum, and no money figure is ever filled in from model output. PLANNED: the question is wrapped as untrusted data with tag characters removed, strong signals (instruction overrides, "you are now", prompt-extraction phrases, role-tag lines, tag-like text, zero-width characters) skip every model, a per-request canary detects a prompt leak, and weak signals are only logged ([fs-05 §7](../02-product/feature-specs/fs-05-ask-chhatri.md)). For slips, the reader fills a fixed schema, sees no merchant data, and every string it returns is validated and scanned. A flagged read is discarded and goes to a person ([fs-02 §7.3.7](../02-product/feature-specs/fs-02-hospital-cash-claim.md)). Red-team sets are part of the evaluation plan.
+BUILT: merchant text is cut to 500 characters, the system prompt is a constant, the intent output is an enum, and no money figure is ever filled in from model output. BUILT behind `n2_ask_chhatri` (`chhatri/ask/injection.py`, `chhatri/ai/untrusted.py`): the question is wrapped as untrusted data with tag characters removed, strong signals (instruction overrides, "you are now", prompt-extraction phrases, role-tag lines, tag-like text, zero-width characters) skip every model, a per-request canary detects a prompt leak, and weak signals are only logged ([fs-05 §7](../02-product/feature-specs/fs-05-ask-chhatri.md)). For slips, the reader fills a fixed schema, sees no merchant data, and every string it returns is validated and scanned. A flagged read is discarded and goes to a person ([fs-02 §7.3.7](../02-product/feature-specs/fs-02-hospital-cash-claim.md)). Red-team sets are part of the evaluation plan.
 
 ### 4.5 Refusal, hand-off and labels
 
@@ -149,7 +149,7 @@ Any SOFT FAIL or unsure SOFT check gives REFERRED and opens a case in the office
 - The BUILT rules misroute some coverage questions to the wrong handler (six verified, [fs-05 §2.2](../02-product/feature-specs/fs-05-ask-chhatri.md)), and a model-chosen intent can run two write handlers in the BUILT chat path (task N2.15).
 - The simulated slip reader is the answer key embedded in the sample image. Any accuracy figure from it would be meaningless and must never be shown as one.
 - The patient name read from a slip appears in the audit log through the check text, and the log is append-only ([fs-02 §2.2](../02-product/feature-specs/fs-02-hospital-cash-claim.md)).
-- Hindi text of proposed strings needs native review. The guard has no Marathi word lists, so Marathi answers stay off until N8.
+- Hindi text of proposed strings needs native review. The guard has no Marathi word lists, so Ask answers are Hindi and English only (the API takes `hi` and `en`); the Marathi option covers the mini-app's own text.
 - The terms of Sarvam free credits are unverified. They are treated like Gemini's until read ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)).
 
 ## 5. Privacy and synthetic data
@@ -158,10 +158,10 @@ Rule ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)): only synthet
 
 The rule holds by construction: every merchant, KYC name, sales figure and slip in the prototype is synthetic. BUILT: a gate (`integrations/free_tier.py`) that closes every free-tier link when the deployment does not declare its data synthetic. The chains skip the link with the label `FREE_TIER_BLOCKED`, recorded in the request's audit entry; the chat, voice-note, photo and Soundbox paths that call Sarvam directly get the simulators, and Cognee stays off. The gate state is a `/api/preflight` row, a start-up log line and the reason on the provider panel.
 
-| What leaves the server | Today (BUILT) | PLANNED |
+| What leaves the server | Baseline (flags off) | Added behind flags, BUILT |
 |---|---|---|
 | Merchant text for an UNKNOWN intent | 500 characters at most, to Sarvam chat | Replaced by the Ask question |
-| Ask question and facts | not built | Question, fact sheet without names, clause text, to Gemini or Sarvam |
+| Ask question and facts | nothing | Question, fact sheet without names, clause text, to Gemini or Sarvam |
 | Slip image | The original bytes, to Sarvam doc-ai when the key is set | A cleaned copy without EXIF, XMP or text chunks, to Gemini or Sarvam |
 | Voice audio | To Sarvam when the key is set | Also the browser's speech service for browser recognition |
 | Reply text for speech | To Sarvam, for demo merchants | Same |
@@ -175,8 +175,8 @@ Nothing is measured. The offline evaluation harness (H25) and the `/evals` page 
 
 What exists today is regression testing, which is not accuracy measurement:
 
-- `tests/conversation/test_intents.py` has 48 test cases over 128 labelled utterances. The word lists were written beside them, so they pass by construction.
-- `grounded()` has 25 tests. The simulated slip reader has 19 tests and reads its own answer key.
+- `tests/conversation/test_intents.py` has 48 test cases over labelled utterances. The word lists were written beside them, so they pass by construction.
+- `grounded()` has 25 tests. The simulated slip reader (`tests/integrations/test_sarvam_sim.py`) has 19 tests and reads its own answer key.
 - Policy, amounts, names and demo flows are tested in [testing and quality strategy](testing-and-quality-strategy.md).
 
 ## 7. Monitoring in a pilot
@@ -199,7 +199,7 @@ These are proposed signals. No threshold is set until a first measured run exist
 
 This is a self-assessment of design intent, not a certification. RBI's FREE-AI committee report (13 Aug 2025, facts A23) lists seven sutras and is advisory until RBI issues directions. The sutra names below are the ones used in the facts document.
 
-| Sutra | BUILT | PLANNED |
+| Sutra | Baseline (flags off) | Added behind flags, BUILT |
 |---|---|---|
 | Trust | The audit log is hash-chained and verifiable (`GET /api/audit/verify`). Every decision stores all its checks. No model output moves money | Trust receipt with sources (fs-09) |
 | People First | REFERRED claims go to a person. Replies come from a bilingual catalogue. Loan or top-up offers never appear while an alert is active or a claim is open (fs-04 has no offer kind) | The slip pre-check asks the merchant to confirm and offers a person at every step |
@@ -211,19 +211,19 @@ This is a self-assessment of design intent, not a certification. RBI's FREE-AI c
 
 ## 9. Failure modes and degradation
 
-| Failure | BUILT behaviour | PLANNED behaviour | What the merchant sees |
+| Failure | Baseline behaviour (flags off) | Behaviour behind flags, BUILT | What the merchant sees |
 |---|---|---|---|
 | Sarvam chat unavailable | The rules' UNKNOWN stands and a warning is logged. Known intents are unaffected | Ask path falls to a template, label FALLBACK | FALLBACK_HELP for UNKNOWN text |
 | Model reply breaks the schema (for example an intent value that does not exist) | Rejected by `parse_json_reply`, the rules' UNKNOWN stands | `INVALID_REPLY`, next link | Same as above |
 | Sarvam speech to text fails or hears nothing | Empty transcript, VOICE_UNCLEAR | Browser recognition, then typed text | "माफ़ कीजिए, आवाज़ साफ़ नहीं सुनाई दी…" (VOICE_UNCLEAR) |
 | Sarvam text to speech fails, or merchant is not a demo merchant | Browser `speechSynthesis` (hi-IN), labelled. The text is always shown | `/api/voice/tts` chain | Text, with speech when the browser has a voice |
-| Ask models unavailable | not built | Template answer, label FALLBACK or SIMULATED. No case is opened | FALLBACK_HELP or ASK_HANDOFF |
+| Ask models unavailable | no Ask path | Template answer, label FALLBACK or SIMULATED. No case is opened | FALLBACK_HELP or ASK_HANDOFF |
 | Slip reader fails | An empty read (source `read-failed`) gives REFERRED and SLIP_TO_HUMAN_UNREADABLE with a case | Gemini, then Sarvam, then NEEDS_TEAM, then the merchant sends it to the team and it is REFERRED | "Thank you. We couldn't read the slip clearly, so our team will check it…" |
 | Slip read is wrong in a way the checks see (another name, other dates) | NAME_MATCHES_KYC or DATES_MATCH fails, REFERRED | The pre-check shows the read first and the merchant confirms or retakes | SLIP_TO_HUMAN variant and the case chip |
-| Prompt injection in a question | No AI path is wired to the guard yet | Strong signal skips every model. The guard blocks unsupported numbers and promises. No model can set an amount in any case | FALLBACK_HELP |
+| Prompt injection in a question | No Ask path | Strong signal skips every model. The guard blocks unsupported numbers and promises. No model can set an amount in any case | FALLBACK_HELP |
 | All providers down at the 17:00 trigger | Trigger, engine and workflows use no AI, so payouts proceed | Same. Only Ask, voice and slip reading degrade | Money texts are catalogue templates |
-| Gemini key without a model id | not built | Gemini left out of the chain, provider panel says "key set, model not set" | Nothing visible, the label says MODEL_NOT_SET |
-| Free-tier gate closed | not built | Live links skipped, label SIMULATED with `FREE_TIER_BLOCKED` | Templates or the simulated reader |
+| Gemini key without a model id | no Gemini link | Gemini left out of the chain, provider panel says "key set, model not set" | Nothing visible, the label says MODEL_NOT_SET |
+| Free-tier gate closed | gate in place, no Ask or Gemini link | Live links skipped, label SIMULATED with `FREE_TIER_BLOCKED` | Templates or the simulated reader |
 
 ## 10. Ideas after the hackathon
 
@@ -244,8 +244,8 @@ These are ideas. They are not in any wave and not promised.
 
 - 2026-10-02 · v1.7 · status synced with the working tree: Waves 2 and 3 BUILT behind flags, the data gate enforced in code (chains, direct Sarvam paths, Cognee, preflight, start-up log), 17 provider rows
 - 2026-10-02 · v1.6 · rewritten against the code: BUILT versus PLANNED for every component, the label model (H26), BUILT adapter facts (timeouts, retries and waits), the two-layer guard with verified examples, injection defence for text and slips, the data gate, known limits, a cautious FREE-AI table and corrected failure modes; removed the circuit-breaker design, the 1 s, 2 s, 4 s backoff, the ROUGE-L evaluation and its targets, the invented monitoring thresholds, the claims that Ask Chhatri and the slip pre-check run today, Tesseract and browser recognition as available links, deletion of the slip after the decision, the "novel" claim, the test and time-of-day figures and the unverified Sarvam terms claim
-- 2026-10-02 · v1.5 · second fact-check pass: Tesseract marked as PLANNED (P1) not available in TODAY's provider chain; TL;DR updated to clarify TODAY vs PLAN tools.
-- 2026-10-02 · v1.4 · final consistency pass against the code: clarified that Ask Chhatri and slip reader can be LIVE with Sarvam key today (in addition to SIMULATED fallback).
+- 2026-10-02 · v1.5 · corrections: Tesseract marked as PLANNED (P1) not available in TODAY's provider chain; TL;DR updated to clarify TODAY vs PLAN tools.
+- 2026-10-02 · v1.4 · consistency check against the code: clarified that Ask Chhatri and slip reader can be LIVE with Sarvam key today (in addition to SIMULATED fallback).
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes
+- 2026-10-02 · v1.2 · corrections
 - 2026-10-02 · v1 · first draft, from SPEC §7, §13, §14, INTEGRATIONS.md, code inspection (forecast/, integrations/, conversation/), and RBI FREE-AI report (A23)

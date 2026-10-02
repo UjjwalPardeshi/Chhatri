@@ -64,9 +64,9 @@ All of these positions are to be confirmed with the partner insurer's compliance
 
 | Fact | Where it comes from |
 |---|---|
-| Backend: 1,711 fast and 36 slow tests pass, with 99.7% coverage. | `make test-backend`, `make test-slow` ([Makefile](../../Makefile)) |
+| Backend: 3,284 tests collected (fast and slow). The earlier baseline was 1,711 fast and 36 slow tests passing at 99.7% coverage; the current pass count is not re-measured here. | `make test-backend`, `make test-slow` ([Makefile](../../Makefile)) |
 | `make demo-check` passes 70 of 70 checks. | [backend/scripts/demo_check.py](../../backend/scripts/demo_check.py) |
-| Frontend: 262 of 264 unit tests pass. Two fail: the Cases panel and the Overview live map. Fix X1 is planned. | `make test-frontend` (Vitest) |
+| Frontend: 1,340 of 1,340 unit tests pass in 135 files (3 Oct 2026). X1 is fixed. | `make test-frontend` (Vitest) |
 | Infra: 118 of 118 tests pass. | `make test-infra` |
 | Without API keys, every integration is SIMULATED and labelled. Intent detection is a word-list classifier, and the LLM is only a fallback for unknown text. Speech-to-text uses canned demo transcripts. The slip-reading simulator reads data embedded in the sample slip images. | [integrations/registry.py](../../backend/chhatri/integrations/registry.py), [conversation/intents.py](../../backend/chhatri/conversation/intents.py) |
 | The only trained model is a LightGBM quantile model of expected sales (p10/p50/p90). It was trained on simulated sales driven by real Open-Meteo rainfall (Colaba and Santacruz, 2024–2025). | [backend/chhatri/forecast/](../../backend/chhatri/forecast/) |
@@ -91,8 +91,8 @@ All of these positions are to be confirmed with the partner insurer's compliance
 
 1. Can a partner insurer's compliance team confirm the s.64VB design in section B? Owner: Omkar Kadam.
 2. Which lender partner would confirm how a pre-agreed EDI holiday is treated? Owner: Omkar Kadam.
-3. Refresh section D after fixes X1–X8 land, for example to 264 of 264 frontend tests. Owner: Ujjwal Pardeshi.
+3. Re-run section D after any further change. Owner: Ujjwal Pardeshi.
 
 ## Changelog
 
-- 2026-10-02 · v1 · first draft, from the team's fact-check of 1–2 Oct 2026.
+- 2026-10-02 · v1 · first draft, from a check of the prototype and the sources on 1–2 Oct 2026.

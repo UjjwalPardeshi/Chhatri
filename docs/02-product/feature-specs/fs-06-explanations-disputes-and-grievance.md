@@ -438,7 +438,7 @@ All P0. Owners: Omkar (merchant app, copy, console labels), Ujjwal (backend).
 
 ### Existing tests (BUILT)
 
-- `backend/tests/replay/test_dispute_cover.py`: `test_explained_numbers_then_a_dispute_case_c_2291`, `test_a_dispute_without_a_paid_claim_cannot_be_decided`, `test_only_referred_personal_claims_get_an_officer_decision`.
+- `backend/tests/replay/test_dispute_cover.py`: `test_explained_numbers_then_a_dispute_case_c_2291`, `test_a_review_case_with_no_decision_is_still_refused`, `test_only_referred_personal_claims_get_an_officer_decision`.
 - `backend/tests/replay/test_personal.py`: `test_a_mismatched_name_goes_to_a_human_with_the_evidence`, `test_the_officer_approves_and_the_money_follows_the_payout_workflow`, `test_the_officer_declines_and_the_merchant_is_told_at_once`, `test_officer_input_is_validated`, `test_follow_up_steps_check_the_sla_and_remind_the_officer`.
 - `backend/tests/conversation/test_notifications.py`: `test_officer_decline_tells_the_reason_with_the_case`, `test_officer_decline_forced_by_a_hard_check_names_it`, `test_closed_area_dispute_is_answered_with_the_area_numbers`, `test_closed_personal_dispute_is_answered_with_the_daily_limit`, `test_dispute_answer_validation`.
 - `backend/tests/conversation/test_reasons.py`: `test_dispute_reason_follows_what_was_disputed`, `test_every_hard_check_has_a_merchant_reason`, `test_slip_to_human_variant_priority`.
@@ -446,7 +446,7 @@ All P0. Owners: Omkar (merchant app, copy, console labels), Ujjwal (backend).
 - `backend/tests/api/test_cases_records.py`: `test_officer_approves_in_one_tap`, `test_officer_declines_without_a_note`, `test_officer_action_errors`.
 - `backend/tests/policy/test_explain.py` (formulas).
 
-### New tests (PLANNED)
+### New tests (BUILT)
 
 | Test | File | What it checks |
 |---|---|---|
@@ -454,11 +454,11 @@ All P0. Owners: Omkar (merchant app, copy, console labels), Ujjwal (backend).
 | `test_dispute_targets_a_declined_decision` | same | The case links the DECLINED decision and the answer uses its `REASON_<CHECK>` text. |
 | `test_second_dispute_returns_the_open_case` | same | One open case per decision. |
 | `test_dispute_never_changes_the_amount` | same | Confirm and reject both close the case with the decision and payout unchanged. |
-| `test_router_table` | `backend/tests/cases/test_grievances.py` | Every topic maps to the respondent in 7.1. |
-| `test_clock_kinds_and_sources` | same | Each step has the clock kind of 7.2. Only `OWN_SLA` and `PORTAL_STATED` carry a number. |
-| `test_portal_clock_counts_from_filed_on` | same | Day count and the "stated 14 days have passed" state. |
-| `test_open_is_idempotent_and_validated` | `backend/tests/api/test_grievances.py` | 201, then 200 with the same id, 404, 422, 409. |
-| `test_escalate_requires_the_current_step` | same | 409 otherwise. |
+| `test_the_router_is_a_fixed_lookup` | `backend/tests/cases/test_ladder.py` | Every topic maps to the respondent in 7.1. |
+| `test_steps_with_no_source_say_to_confirm_and_show_no_time` and `test_own_sla_clock_runs_then_is_overdue` | same | Each step has the clock kind of 7.2. Only `OWN_SLA` and `PORTAL_STATED` carry a number. |
+| `test_the_portal_clock_counts_days_from_the_filing_date` | same | Day count and the "stated 14 days have passed" state. |
+| `test_a_double_tap_returns_the_same_grievance_and_makes_no_second_case` and `test_bad_bodies_are_422` | `backend/tests/api/test_grievances.py` | 201, then 200 with the same id, 404, 422, 409. |
+| `test_the_ladder_escalates_one_rung_at_a_time_and_resolves` | same | 409 otherwise. |
 | `test_grievance_audit_has_no_merchant_text` | same | The audit entries hold ids and steps only. |
 | Mock routes | `frontend/src/mock/routes.test.ts` | The static demo serves the same shapes. |
 
@@ -477,7 +477,7 @@ Send the sample slip (patient "Sunil Pawar"). The decision is REFERRED, case C-2
 ## Changelog
 
 - 2026-10-02 · v1.4 · split DISPUTE and REFERRED into two flows with their own diagrams and logic; N5 and H22 made build-ready (ladder, clock kinds, respondent router, API shapes, audit, tests); regulatory timings limited to sourced figures; name mismatch is SOFT; officer token decision recorded; dispute fixes added; build waves replace P1
-- 2026-10-02 · v1.3 · final consistency pass against the code: clarified dispute vs REFERRED case decision logic; officer cannot change dispute amount
-- 2026-10-02 · v1.2 · logic and truth audit fixes
-- 2026-10-02 · v1.1 · fact-check pass: renamed mermaid participant `Off` → `Officer` (keyword issue); corrected open question 3 GRO SLA reference to avoid unverified durations; linked to facts-and-sources.md for Bima Bharosa timeline; replaced an internal reference with facts-and-sources.md.
+- 2026-10-02 · v1.3 · consistency check against the code: clarified dispute vs REFERRED case decision logic; officer cannot change dispute amount
+- 2026-10-02 · v1.2 · corrections
+- 2026-10-02 · v1.1 · corrections: renamed mermaid participant `Off` → `Officer` (keyword issue); corrected open question 3 GRO SLA reference to avoid unverified durations; linked to facts-and-sources.md for Bima Bharosa timeline; replaced an internal reference with facts-and-sources.md.
 - 2026-10-02 · v1 · first draft

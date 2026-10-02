@@ -10,8 +10,8 @@
 ## TL;DR
 
 - **Principle:** "The AI builds the case; code decides the money." Only the policy engine produces APPROVED decisions.
-- **Architecture:** FastAPI backend (Python 3.12, SQLite, hash-chained audit), React 19 console, in-process or n8n workflows.
-- **Inputs:** hourly sales per shop (simulated during replay), weather and civic alerts (real Open-Meteo), KYC and loan state (simulated).
+- **Architecture:** FastAPI backend (Python 3.12, an in-memory store, a hash-chained audit log in private in-memory SQLite), React 19 console, in-process or n8n workflows.
+- **Inputs:** hourly sales per shop (simulated), rainfall (real Open-Meteo data, cached in the repository), the alert feed, KYC and loan state (all simulated).
 - **Clock:** replay engine with manual control; 6 simulated minutes per real second by default (1–120 range); deterministic per seed.
 - **Integrations:** registry pattern; each component (Sarvam, WhatsApp, Paytm, n8n) is LIVE only when keys are set, otherwise labelled SIMULATED.
 - **Events:** SSE to console (tick, zone updates, decisions, payouts, cases, audit entries); bounded per-client queues prevent slow clients from blocking replay.
@@ -91,170 +91,65 @@ flowchart TB
 
 ### 2.1 Backend (Python 3.12, FastAPI 0.141)
 
+One package per concern, listed from the code (`backend/chhatri/`; the module-level contract is [SPEC §1 and §24](../SPEC.md)).
+
 ```
 backend/
-├── pyproject.toml                (scaffold, shared)
-├── Dockerfile                    (Python 3.12 slim, uid 10001, /app/var volume)
+├── pyproject.toml                (pins, ruff, pytest markers: slow, live)
+├── Dockerfile                    (Python 3.12 slim, uid 10001, artefacts baked in, /app/var volume reserved)
+├── data/                         (committed inputs: geo/, weather/ Open-Meteo fixtures, slips/, policy/, zones.json)
+├── artifacts/                    (committed, written by `make data`: model/, backtest/, calibration.json, premiums.json, MANIFEST.json)
+├── scripts/                      (build_data.py, calibrate.py, demo_check.py, make_slips.py, ...)
+├── tests/                        (one folder per package below)
 └── chhatri/
-    ├── config.py                 (Settings, env vars, SPEC §21)
-    ├── clock.py                  (IST, ManualClock, SystemClock)
-    ├── money.py                  (paise, format_inr, rupee arithmetic)
-    ├── events.py                 (Event, EventBus, bounded per-client queue)
-    ├── ids.py                    (S-NNNN, C-NNNN, A-yyyymmdd-nn factories, deterministic)
-    ├── domain/
-    │   ├── models.py             (Merchant, Zone, Cover, Alert, Claim, Decision, …; frozen pydantic)
-    │   └── enums.py              (ClaimKind, DecisionOutcome, CoverStatus, …)
-    ├── config/
-    │   └── (static settings loaded once)
-    ├── sim/
-    │   ├── geo.py                (24 BMC wards → zones Z3–Z12)
-    │   ├── city.py               (1,821 merchants + uncovered demo merchant S-0907)
-    │   ├── sales.py              (hourly sales per shop, rain/slow-day/bandh shocks)
-    │   ├── weather.py            (alerts: Red/Orange/Yellow/Green)
-    │   ├── alerts.py             (A-20250818-01 for monsoon scenario)
-    │   ├── scenarios.py           (monsoon, illness, illness_mismatch, buy_cover; SPEC §6)
-    │   └── slips.py              (sample hospital slips with embedded data)
-    ├── forecast/
-    │   ├── model.py              (LightGBM quantile model: p10/p50/p90)
-    │   └── calibrate.py          (conformal lower bound per zone)
-    ├── detect/
-    │   ├── area_index.py         (3-hour window index: Σactual / Σexpected)
-    │   ├── triggers.py           (alert + all 3 hours < 50% + < lower bound + ≥20 shops)
-    │   └── silent.py             (find shops with zero sales for a day)
-    ├── policy/
-    │   ├── rules.yaml            (version pilot-0.1: payouts, caps, checks, waiting periods)
-    │   ├── engine.py             (only source of APPROVED; pure function)
-    │   ├── checks.py             (HARD: cover active, premium paid; SOFT: slip readable, name match)
-    │   └── explain.py            (formula strings for decision facts: "½ × ₹4,380 × 63%")
-    ├── store/
-    │   ├── db.py                 (SQLite in-memory per scenario load, /app/var/scenario-name.db)
-    │   └── repositories.py       (Cover, Loan, Merchant, Payout, Instalment read/write)
-    ├── audit/
-    │   └── log.py                (hash-chained; append-only; verify at /api/audit/verify)
-    ├── ledger/
-    │   ├── payouts.py            (PENDING → CREDITED → SETTLED)
-    │   ├── instalments.py        (next instalment pause logic)
-    │   └── premiums.py           (prepaid through date, cash-before-cover check)
-    ├── cases/
-    │   └── service.py            (open case C-NNNN, track SLA, officer review)
-    ├── integrations/
-    │   ├── base.py               (Protocol definitions: ChatModel, SlipReader, MessagingChannel, …)
-    │   ├── registry.py           (build_integrations: wires LIVE vs SIMULATED per env vars)
-    │   ├── sarvam.py             (chat, vision, STT, TTS; LIVE | SimulatedSTT/TTS/Chat/SlipReader)
-    │   ├── whatsapp.py           (LiveWhatsAppChannel | SimulatorChannel with in-console phone)
-    │   ├── paytm.py              (McpPaytmLinks | RestPaytmLinks | SimulatedPaytmLinks)
-    │   ├── openmeteo.py          (LiveOpenMeteo | FixtureWeather)
-    │   ├── n8n.py                (N8nWorkflowEngine; callback validation)
-    │   ├── memory.py             (SimulatedMemoryGraph: networkx)
-    │   ├── soundbox.py           (SimulatedSoundbox: announcements)
-    │   └── statuses.py           (IntegrationStatus: name, kind, status, latency_ms, source)
-    ├── workflows/
-    │   ├── definitions.py        (WORKFLOWS step list; offsets from decision time)
-    │   ├── runner.py             (InProcessWorkflowEngine, N8nWorkflowEngine)
-    │   └── (effects: execute_payout, credit_payout, notify_merchant, pause_instalment, …)
-    ├── conversation/
-    │   ├── intents.py            (REPORT_ILLNESS, QUESTION, …; word-list classifier)
-    │   ├── nlu.py                (rules first; the chat model only for UNKNOWN text)
-    │   ├── messages.py           (message catalogue: CHECKIN_SILENT, ASK_SLIP, SLIP_TO_HUMAN, …)
-    │   ├── guard.py              ("no money figure outside decision facts" rule)
-    │   └── service.py            (flow logic for WhatsApp and in-console phone)
-    ├── replay/
-    │   ├── engine.py             (ManualClock, play/pause/step/seek; 6m/s default, 1–120 range)
-    │   ├── scheduler.py          (SimScheduler: schedule effects at simulated time)
-    │   ├── orchestrator.py       (on_minute, on_hour, run detection and claim evaluation)
-    │   ├── state.py              (AppState, load_static, load scenario)
-    │   └── views.py              (convert domain objects to JSON for API)
-    ├── backtest/
-    │   ├── run.py                (monsoon replay vs weather-only trigger)
-    │   └── report.py             (HTML backtest report)
-    ├── api/
-    │   ├── app.py                (FastAPI factory, lifespan, middleware)
-    │   ├── errors.py             (ApiError, error handler, 500 envelope)
-    │   ├── envelope.py           (ok, ok_list, error helpers)
-    │   ├── deps.py               (dependency injection: StateDep, RuntimeDep, SettingsDep)
-    │   ├── sse.py                (ServerSentEvent, StreamHub, bounded queue per client)
-    │   ├── security.py           (RateLimiter, officer token, internal secret, CORS)
-    │   ├── routers/
-    │   │   ├── meta.py           (health, integrations, session, preflight, weather)
-    │   │   ├── merchants.py      (list, detail, messages)
-    │   │   ├── live.py           (live map: zones, hexes, alerts)
-    │   │   ├── replay.py         (load, play, pause, step, seek, speed)
-    │   │   ├── stream.py         (SSE subscription)
-    │   │   ├── phone.py          (WhatsApp inbound/outbound sim, voice note)
-    │   │   ├── cases.py          (officer review, decision, SLA)
-    │   │   ├── records.py        (payouts, instalments, premiums, decisions)
-    │   │   ├── premium.py        (cover purchase, waiting period, payment link)
-    │   │   ├── webhooks.py       (n8n callbacks, WhatsApp inbound)
-    │   │   ├── media.py          (slip upload, audio file download)
-    │   │   └── internal.py       (internal/workflows/{step} for n8n)
-    │   ├── paytm_callback.py     (track paid transactions from MCP)
-    │   ├── whatsapp_inbox.py     (background WhatsApp worker)
-    │   └── ports.py              (AppStatePort protocol for testing)
-    ├── data/
-    │   ├── zones.json            (24 zones, 1,821 merchants, seed 20251019)
-    │   ├── weather/              (cached Open-Meteo fixtures for replay)
-    │   └── slips/                (sample hospital slip images with embedded JSON)
-    ├── artifacts/
-    │   ├── model/                (LightGBM quantile model files)
-    │   ├── backtest/             (monsoon + monsoon2025 reports)
-    │   ├── calibration.json      (conformal bounds per zone)
-    │   ├── premiums.json         (₹X per day per zone)
-    │   └── MANIFEST.json         (metadata, hashes, build date)
-    └── tests/
-        ├── test_policy/          (policy engine, checks, explanations)
-        ├── test_detect/          (trigger detection, area index)
-        ├── test_workflows/       (in-process and n8n runners)
-        ├── test_api/             (FastAPI routes, envelope, error handling)
-        ├── test_integrations/    (mocks for live/simulated swapping)
-        └── …(mirror of source structure)
+    ├── config.py clock.py money.py ids.py events.py features.py   (settings, IST clock, paise and format_inr, ids, event bus, the 14 flags)
+    ├── domain/                   (frozen pydantic models and enums)
+    ├── sim/                      (geo, city, merchants, sales, weather, alerts, scenarios, slips, truth)
+    ├── forecast/                 (LightGBM P10/P50/P90 model, conformal calibration, training, persistence)
+    ├── detect/                   (area index, triggers, silent-shop finder)
+    ├── policy/                   (rules.yaml pilot-0.1, engine, checks, amounts, explain, cover, provenance, counterfactual, receipt)
+    ├── store/  audit/  ledger/   (in-memory store, hash-chained audit log, payouts, instalments and holiday requests, premiums)
+    ├── cases/                    (case service, grievance ladder and respondent router)
+    ├── conversation/             (intents, nlu, message catalogue, guard and strict guard, explain-first, slip flow, notifications)
+    ├── ask/                      (Ask Chhatri: fact sheet, clauses, model path, injection and scam checks, voice)
+    ├── ai/                       (provider chain runner, H26 labels, untrusted-text wrapper)
+    ├── precheck/                 (slip pre-check: clean, rules, status table, confirm or send to the team)
+    ├── consent/                  (consent centre, activity log, forget my slip)
+    ├── integrations/             (registry; sarvam_*, gemini_*, whatsapp_*, paytm_*, openmeteo, n8n, memory, soundbox, lender, free_tier gate, switch)
+    ├── workflows/                (WORKFLOWS definitions, in-process runner, n8n callbacks)
+    ├── replay/                   (ReplayEngine, Orchestrator, steps, views: the only place domain objects become JSON)
+    ├── backtest/                 (two monsoons, Chhatri vs weather-only, per-zone premiums)
+    ├── pipeline/                 (the `make data` steps: geo, city, history, model, calibration, backtest)
+    ├── evals/                    (H25 offline evaluation harness and slip generator)
+    └── api/                      (app factory, deps, envelope, errors, security, sse, uploads, schemas/, demo/, routers/*)
+```
+
+Routers (`api/routers/`): `meta`, `live`, `replay`, `stream`, `merchants`, `phone`, `cases`, `records`, `premium`, `webhooks`, `media`, `internal`, plus the flagged feature routers `ask`, `voice`, `precheck`, `grievances`, `consents`, `ops`, `whatif`, `evals`, `fallback`.
 
 Data volumes:
-- Input: `CHHATRI_DATA_DIR` (default backend/data) — read-only, committed.
-- Artefacts: backend/artifacts/ — read-only committed files (model, backtest, premiums).
-- State: `CHHATRI_VAR_DIR` (default backend/var, Docker /app/var volume) — SQLite per scenario, audit logs, temporary files.
-```
+- Input: `CHHATRI_DATA_DIR` (default `backend/data`), read-only and committed.
+- Artefacts: `backend/artifacts/`, read-only and committed (model, backtest, premiums).
+- State: the store and the audit log are in memory and rebuilt on every scenario load. `CHHATRI_VAR_DIR` (default `backend/var`, Docker `/app/var`) is reserved; nothing is written there yet.
 
 ### 2.2 Frontend (React 19, Vite, TypeScript)
 
 ```
 frontend/
-├── package.json
-├── Dockerfile                    (Node build, nginx 1.30, unprivileged)
-├── nginx.conf                    (SPA fallback, /api proxied to backend, SSE unbuffered, 6 MB upload)
+├── package.json  vite.config.ts  vitest.config.ts  playwright.config.ts
+├── Dockerfile                    (Node build, nginx 1.30 unprivileged)
+├── nginx.conf                    (SPA fallback, /api proxied to the backend, SSE unbuffered, 6 MB body limit)
+├── tests/e2e/                    (Playwright specs; projects "mock" and "live")
 └── src/
-    ├── main.tsx                  (Vite entry, React Router)
-    ├── App.tsx                   (layout, theme toggle, sidebar)
-    ├── components/
-    │   ├── Map.tsx               (react-leaflet, hex map, zone layer)
-    │   ├── Phone.tsx             (WhatsApp phone simulator, message list)
-    │   ├── CasesPanel.tsx        (officer queue, case detail)
-    │   ├── AuditViewer.tsx       (hash-chain visualizer)
-    │   └── …(50+ components)
-    ├── pages/
-    │   ├── Overview.tsx          (home: hero + replay controls + monsoon map)
-    │   ├── Merchants.tsx         (list, search, detail view)
-    │   ├── Decisions.tsx         (payout decisions by area)
-    │   ├── Audit.tsx             (audit log viewer)
-    │   ├── Cases.tsx             (officer console)
-    │   ├── Backtest.tsx          (monsoon 2024 vs 2025)
-    │   └── Policy.tsx            (rules.yaml + explanations)
-    ├── api/
-    │   ├── client.ts             (fetch wrapper with envelope detection)
-    │   ├── types.ts              (TypeScript interfaces from API responses)
-    │   └── endpoints.ts          (GET /api/…, SSE subscription)
-    ├── state/
-    │   ├── store.ts              (Zustand store: scenario, runtime, merchant state)
-    │   └── sse.ts                (EventBus subscription, tick listener)
-    ├── mock/
-    │   ├── backend.ts            (in-memory mock API for ?mock=1 or dev:mock mode)
-    │   └── fixtures.ts           (monsoon data, sample decisions, merchants)
-    ├── styles/
-    │   ├── tokens.css            (design system: colours, spacing, type)
-    │   └── …(per-component CSS)
-    └── tests/
-        ├── pages/
-        ├── components/
-        └── …(vitest + Playwright E2E)
+    ├── main.tsx  App.tsx         (bootstrap picks the real API or the in-browser mock; routes)
+    ├── features.ts               (the 14 flags, read from VITE_FEATURES)
+    ├── pages/                    (Overview, Live, Claims, Merchant, Audit, Policy, Evals; Backtest is a lazy route)
+    ├── components/               (layout, map, panel, claims, phone, overview, audit, backtest, policy, evals, common, ...)
+    ├── api/                      (client, endpoints, sse, stream, types, contract/)
+    ├── state/                    (live provider, reducer, event hub, presenter and ops contexts, hooks)
+    ├── mock/                     (in-browser backend: fixtures, routes for every endpoint, conversation and ask)
+    ├── miniapp/                  (the merchant mini-app: shell/, screens/, components/, copy/ hi, en, mr, hooks/, ui/ shadcn primitives)
+    ├── content/  lib/  styles/   (deck copy, money and time helpers, plain CSS tokens)
+    └── *.test.ts(x)              (Vitest, next to the code)
 ```
 
 ### 2.3 n8n (optional, Docker 2.41.3)
@@ -291,7 +186,7 @@ sequenceDiagram
     Replay ->> Replay: 17:04 IST
     Workflow ->> SSE: payout event<br/>(CREDITED)
     Console ->> Console: Soundbox announcement
-    Workflow ->> Workflow: +5 min: pause_instalment
+    Workflow ->> Workflow: +5 min: request_holiday
     Replay ->> Replay: 17:05 IST
     Workflow ->> SSE: instalment event
 ```
@@ -435,7 +330,9 @@ def build_integrations(settings: Settings) -> Integrations:
 
 **Core:**
 - `CHHATRI_SEED=20251019` — deterministic id factory, shop sales, merchant list.
-- `CHHATRI_VAR_DIR=/app/var` — SQLite, audit logs (Docker: volume).
+- `CHHATRI_VAR_DIR=/app/var` — reserved for run state (Docker: volume); nothing is written there yet, because the store and the audit log are in memory.
+- `CHHATRI_FEATURES` — comma-separated flags from the 14 in `backend/chhatri/features.py`; empty means every feature is off. `.env.example` leaves it empty.
+- `CHHATRI_DATA_IS_SYNTHETIC=true` — the free-tier data gate (ADR 0009); false closes every Gemini and Sarvam link.
 - `CHHATRI_DEMO_MODE=true` — demo-only: `/api/session` hands officer token to console.
 - `CHHATRI_OFFICER_TOKEN` — if unset, auto-generated and logged at startup.
 - `CHHATRI_INTERNAL_SECRET` — X-Chhatri-Secret for n8n callbacks and internal routes.
@@ -464,13 +361,13 @@ def build_integrations(settings: Settings) -> Integrations:
 - `COGNEE_ENABLED=true/false` (memory graph; requires cognee installed)
 - `OPENMETEO_LIVE=true/false` (live weather widget; replay always uses cached)
 
-### 4.4 Proposed additions for future features (PLAN)
+### 4.4 Gemini variables
 
-The following env vars are candidates for new features (see [data-model-and-api.md §5](data-model-and-api.md)):
+- `GOOGLE_API_KEY` — the Google AI Studio key; unset leaves Gemini out of every chain.
+- `GEMINI_MODEL` — the text model id, with no default (the free-tier ids change; `make check-keys` lists them). A key without a model id leaves Gemini out.
+- `GEMINI_VISION_MODEL` — optional model for slips; the text model is used when empty.
 
-- `CHHATRI_GROUNDED_LLM_PROVIDER=gemini|sarvam|offline` — choose Ask Chhatri provider.
-- `CHHATRI_SLIP_CONFIDENCE_THRESHOLD=0.80` — readiness gate for N3.
-- `CHHATRI_NAME_MATCH_THRESHOLD=85` — rapidfuzz token-set-ratio for KYC matching.
+The thresholds once proposed as environment variables (slip confidence, name match) are rules in `rules.yaml` (`slip_confidence_min: 0.80`, `name_match_min_score: 85`), not settings.
 
 ## 5. Replay engine and accelerated clock (SPEC §17.1)
 
@@ -493,7 +390,7 @@ All domain time is timezone-aware Asia/Kolkata (IST); replays always start pause
 **Speed** (simulated minutes per real second):
 - Default: 6.0 (1 simulated hour = 10 real seconds).
 - Range: 1.0–120.0 (validated on API).
-- Adjustable from console: `/api/replay/speed?speed=12`.
+- Set with `POST /api/replay/play` and a body such as `{"speed": 12}`.
 
 **Tick events** (to console via SSE):
 - Published every 250 ms of real time, at most 4 per real second.
@@ -579,15 +476,16 @@ browser (CHHATRI_CONSOLE_ORIGIN)
   └─ http://localhost:8080 (nginx SPA fallback + reverse proxy)
        ├─ /api ──> backend:8000 (HTTP/1.1, buffering off, 1 h read timeout, no gzip on SSE)
        ├─ / (static console)
-       └─ (backend also exposes /webhook/chhatri-* for n8n callbacks)
+       └─ /webhooks ──> backend:8000 (WhatsApp webhook)
 
 Backend (image: chhatri-backend:local)
-  └─ /app/var (volume: backend-var, persists SQLite across restarts)
+  └─ /app/var (volume reserved for run state; nothing is written there yet)
 
 Optional n8n (image: n8n:2.41.3)
   └─ http://n8n:5678
-     ├─ posts to backend:8000/internal/workflows/{step}
-     └─ /n8n-data (volume: named volume, persists DB and config)
+     ├─ the backend starts a run at http://n8n:5678/webhook/chhatri-{workflow}
+     ├─ n8n posts each step to backend:8000/internal/workflows/{step}
+     └─ n8n-data (named volume: n8n's own database and config)
 
 docker-compose up -d --build --wait
 ```
@@ -598,11 +496,11 @@ docker-compose up -d --build --wait
 
 ### 7.3 Static mock mode for N7 (backup demo, GitHub Pages or Vercel)
 
-Build with `?mock=1` or `VITE_MOCK=1`:
+Build with `npm run build -- --mode mock` (add `VITE_FEATURES=n1_miniapp` or more flags to include the mini-app); a dev server or a preview can also take `?mock=1`:
 
 ```
-npm run build
-  └─ frontend/dist/ (pure HTML/JS/CSS, no server)
+npm run build -- --mode mock
+  └─ frontend/dist/ (pure HTML/JS/CSS plus 404.html for deep links, no server)
        └─ api calls to frontend/src/mock/backend.ts (in-browser)
             └─ monsoon replay plays at full speed (no server latency)
 ```
@@ -615,9 +513,8 @@ npm run build
 
 ### 8.1 Officer token
 
-- **Demo mode:** `/api/session` (GET, no auth) hands the token to console in HTML `<meta>` tag.
-- **Stored:** `localStorage.OFFICER_TOKEN` in browser.
-- **Sent:** Bearer token on protected routes: `/api/cases/{id}/decision`, `/api/internal/…`.
+- **Demo mode:** `GET /api/session` (no auth) answers `{officer_token}` and the console keeps it in memory (`setOfficerToken`).
+- **Sent:** as `Authorization: Bearer` on the officer routes: `/api/cases/{id}/approve` and `/decline`, `/api/premium/link`, the consent withdraw and forget routes, and the fallback switch. Internal routes use the shared secret instead (8.2).
 - **Gen:** if `CHHATRI_OFFICER_TOKEN` unset, auto-generated (random) at startup, logged once.
 
 ### 8.2 Internal secret
@@ -648,7 +545,7 @@ Details: [docs/SECURITY.md](../SECURITY.md) (rate limits, upload limits, error m
 These items are not in scope for the hackathon but are understood:
 
 - **Real rails:** Paytm MCP for settlement and EDI (today: simulated).
-- **Postgres:** Replace SQLite in-memory for durability across restarts.
+- **Postgres:** Replace the in-memory store and audit database for durability across restarts.
 - **Queue:** Async task queue (e.g. Celery, RQ) for long-running workflows instead of in-process.
 - **Auth:** OAuth 2.0 or JWT for officer console, merchant API keys.
 - **Observability:** structured logging (OpenTelemetry), metrics (Prometheus), traces (Jaeger).
@@ -656,18 +553,20 @@ These items are not in scope for the hackathon but are understood:
 - **CDN:** serve static assets (fonts, backtest reports) from CDN.
 - **Cost optimization:** Cognee memory graph for persistent case context, reducing LLM calls.
 
-## 10. Tech debt and fix IDs
+## 10. Fix IDs X1 to X8
 
-| Fix ID | Issue | Owner | ETA |
-|---|---|---|---|
-| X1 | Frontend: 2 failing unit tests (Cases panel, Overview live-map) | Ujjwal | 2 Oct eve |
-| X2 | Validate `published_expected_day` at claim creation | Ujjwal | 2 Oct eve |
-| X3 | Fail loudly when a zone is missing from premiums.json | Ujjwal | 2 Oct eve |
-| X4 | EDI-holiday guard: check loan active, not in arrears, lender policy flag | Ujjwal | 2 Oct |
-| X5 | Off-script merchant → clean 404, not KeyError | Ujjwal | 2 Oct |
-| X6 | Per-component Sarvam toggles, provider panel (H7) | Ujjwal | 2 Oct or 3 Oct |
-| X7 | Honest-wording test over message catalogue (H4) | Ujjwal | 2 Oct or 3 Oct |
-| X8 | No loan offers during alert/claim, daily message cap (H9) | Ujjwal | 2 Oct or 3 Oct |
+All eight fixes are in the code. The test column names a test that guards each one; the counts are in the [testing strategy](testing-and-quality-strategy.md).
+
+| Fix ID | Issue | Guarded by |
+|---|---|---|
+| X1 | Frontend: the Cases panel and Overview live-map unit tests (a longer test timeout) | `npm run test` (the whole frontend suite) |
+| X2 | Validate `published_expected_day` at claim creation | `backend/tests/domain/test_claim_model.py`, `backend/tests/policy/test_amounts.py` |
+| X3 | Fail loudly when a zone is missing from `premiums.json` | `backend/tests/ledger/test_premium_table.py` |
+| X4 | EDI holiday: the lender decides (flag `x4_lender_request`) | `backend/tests/integrations/test_lender.py`, `backend/tests/api/test_feature_flags.py` |
+| X5 | Off-script merchant gives a clean 404, not a KeyError | `backend/tests/api/test_unknown_merchant.py` |
+| X6 | Per-component fallback switch and provider panel | `backend/tests/api/test_fallback_route.py`, `backend/tests/integrations/test_fallback_switch.py` |
+| X7 | Honest-wording test over the message catalogue | `backend/tests/conversation/test_honest_wording.py` |
+| X8 | No loan offers during an alert or claim, a daily message cap | `backend/tests/conversation/test_message_guard.py` |
 
 ## Open questions
 
@@ -677,9 +576,10 @@ These items are not in scope for the hackathon but are understood:
 
 ## Changelog
 
+- 2026-10-03 · v1.5 · fact-checked against the code: package and frontend trees rewritten from the real folders, the workflow step is `request_holiday`, the storage and deployment notes no longer claim a SQLite file or a persisted volume, the fix table lists tests, the env variable list matches `config.py`
 - 2026-10-02 · status synced with the working tree: Gemini, Ask, the chains and the data gate BUILT behind flags
-- 2026-10-02 · v1.4 · second fact-check pass: Ask Chhatri (N2) marked as PLANNED in high-level request flows section; clarified that intent detection is always LIVE but grounded chat model is PLANNED.
+- 2026-10-02 · v1.4 · corrections: Ask Chhatri (N2) marked as PLANNED in high-level request flows section; clarified that intent detection is always LIVE but grounded chat model is PLANNED.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: Gemini reframed as PLANNED in status table; mermaid diagrams updated to label Gemini PLANNED and Sarvam as fallback; Ask Chhatri sequence diagram clarified with provider chain order; integration registry code comment added to note Gemini Vision is PLANNED.
-- 2026-10-02 · v1.2 · logic and truth audit fixes
-- 2026-10-02 · v1.1 · fact-check pass: removed an internal reference, added mermaid tags, fixed BLOCKED→DECLINED terminology
-- 2026-10-02 · v1 · first draft from codebase audit.
+- 2026-10-02 · v1.2 · corrections
+- 2026-10-02 · v1.1 · corrections: added mermaid tags, fixed BLOCKED→DECLINED terminology
+- 2026-10-02 · v1 · first draft from the code.

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
+| Status | Draft v1.6 · 3 Oct 2026 · the features it names are BUILT behind flags and not yet rehearsed |
 | Owner | Omkar Kadam |
 | Audience | The team |
 | Related | [Build plan](../06-delivery/build-plan.md) · [Risk register](../06-delivery/risk-register.md) · [Demo runbook](../06-delivery/demo-runbook.md) · [Pitch and judge Q&A](../06-delivery/pitch-and-judge-qa.md) |
@@ -40,8 +40,8 @@
 
 1. **Innovation & novelty.** Evidence: the trigger (merchant's own sales, area-level check, settlement-linked payout) vs. Riskwolf/SEWA basis risk. Credit H1–H12 ideas we adopted. Show that automatic claims from live data is unique among Track-2 projects.
 2. **Customer journey completeness.** Evidence: N1 mini-app (cover explainer, consent, claim tracker, grievance ladder, help) spans the whole journey. Three test cases (EXPLAINED, HUMAN, BLOCKED) show guardrails.
-3. **AI depth & quality.** Evidence: N2 (grounded LLM, no unsupported money figures, policy citations); N3 (slip reading with pre-check, confidence gates, fallbacks); N4 (real voice in Hindi and Marathi). Not just a word list or canned intents.
-4. **Live demo & system maturity.** Evidence: `make demo-check 70/70`; backend 1,747 tests (99.7%), frontend 264 tests; live hex map, WhatsApp phone, slip photos, officer console, audit and backtest pages. Deterministic replay.
+3. **AI depth & quality.** Evidence: N2 (grounded LLM, no unsupported money figures, policy citations); N3 (slip reading with pre-check, confidence gates, fallbacks); N4 (voice in Hindi and English; Marathi is text only). Not just a word list or canned intents.
+4. **Live demo & system maturity.** Evidence: `make demo-check` (70 of 70 at 86575ea; run it again at the freeze); the backend and frontend suites (the measured counts are written after the final run); live hex map, WhatsApp phone, slip photos, officer console, audit and backtest pages. Deterministic replay.
 5. **Regulatory fit & governance.** Evidence: deterministic policy engine only source of payout authority; audit chain with hash verification; consent design for DPDP rollout; EDI holiday is lender's decision (K3), not ours; grievance ladder with SLAs.
 6. **Business model & scalability.** Evidence: Paytm's 1.57 crore merchants (A1), ₹814 cr financial-services revenue (A2), existing merchant plan demonstrates market demand. Claim cost is ½ × expected day, capped. Partner insurer and lender underwrite risk.
 
@@ -65,17 +65,17 @@
 
 **Read this exactly when a judge asks "How much of this was pre-built?"**
 
-> "The prototype was built in three phases. **Before today (29 Sep–1 Oct),** we built the backend policy engine, the claims-officer console, the backtest, the audit log, the live hex map with the replay orchestrator, and the WhatsApp simulator. That is the core system. **On 2 Oct (today, before this stage),** we built the merchant mini-app (N1), the slip-reading pre-check (N3), the grounded assistant (N2), voice in Hindi (N4), and the static demo. **If we have time on stage,** we will finish voice in Marathi, the consent centre and the grievance ladder. The organisers confirmed that pre-built work is allowed. We have 20+ hours on the team before the final, and we used that time to ship a real system with tests, not slides."
+> "The prototype was built in two phases. **Before 2 Oct (29 Sep to 1 Oct),** we built the backend policy engine, the claims-officer console, the backtest, the audit log, the live hex map with the replay orchestrator, and the WhatsApp simulator. That is the core system. **On 2 Oct,** we built the merchant mini-app (N1), the slip-reading pre-check (N3), the grounded assistant (N2), voice in Hindi and English (N4), the complaints ladder (N5), the consent centre (N6), a Marathi draft (N8) and the static build (N7), each behind a feature flag. We have not run the live AI providers with a key, so we say which badges show LIVE. The organisers confirmed that pre-built work is allowed. We used the time before the final to ship a real system with tests, not slides."
 
 (If asked "Why pre-build?": "A claims engine is a data-processing system. It needs tests, an audit trail, and proof that the same seed produces the same output every time. We could not write that in 8 hours on-site. The architecture, the policy rules, and the demo numbers are locked now. Merchants and judges will see the system work, deterministically, every time.")
 
 ## 5. On-site day plan (3 Oct)
 
 **Before we arrive (evening 2 Oct):**
-- [ ] Code freeze: N1–N4, N7 and X1–X8 in `main`.
+- [ ] Code freeze: everything is in `main` behind flags; set the flag list on the demo card.
 - [ ] Backend + frontend deployable to a laptop (no cloud infra).
-- [ ] Static demo (N7) deployed to Vercel or GitHub Pages.
-- [ ] Backup video recorded (3-min and 7-min cuts, fallback if live fails).
+- [ ] Static demo (N7) deployed by the repo owner to GitHub Pages or a free static host (human-only; not done).
+- [ ] Backup video recorded (3-min and 7-min cuts, fallback if live fails) (human-only; not done).
 - [ ] All three test cases (monsoon, hospital-cash, blocked buy) ready to play from the replay scenarios.
 
 **Omkar's timeline (product, pitch, mini-app, disclosure):**
@@ -101,8 +101,8 @@
 
 ## 6. Rules of the stage
 
-**Live badges only for what is live today (commit 86575ea):**
-- **LIVE (on-stage only if keys are set):** Gemini free-tier (Ask Chhatri N2, slip reading N3) ← PLANNED, to be built 2–3 Oct. Sarvam (voice N4, STT/TTS) ← existing code. Browser Web Speech API (voice fallback, works offline).
+**Live badges only for what the screen shows as LIVE:**
+- **LIVE (on stage only if a key is set and the check call succeeded):** Gemini free tier (Ask Chhatri N2, slip reading N3) and Sarvam (voice N4, speech, chat, vision). Both are built and tested against fakes only: no key has been run. Browser speech recognition (voice fallback) needs the network and is labelled SIMULATED with provider `browser`.
 - **SIMULATED (label clearly in the UI):** sales data, alerts feed, KYC check, Soundbox, lender EDI holiday, n8n workflows (use in-process runner for demo), Paytm payment link (no staging keys available for hackathon).
 
 **Say the clock is a replay:**
@@ -117,8 +117,8 @@
 ## 7. Contingency ladder (in order of preference)
 
 1. **Live (primary).** All of N2, N3, N4 online. Sarvam and Gemini responding. Fallback switches off. Demo-check passes.
-2. **Force fallback (if latency is bad).** Turn on "force fallback" switches for N2, N3, N4 in the provider panel (X6). Show graceful degradation: templates instead of LLM, Tesseract OCR instead of Gemini, browser Web Speech instead of Sarvam. The demo still works; we explain why.
-3. **Static demo (N7, if internet is down or integrations are down for >2 min).** Load the public Vercel URL of the mock-mode console. It is fully offline, deterministic, no backend needed. We narrate the monsoon and hospital-cash flows while advancing the mock state. Judges see the full UI and journey.
+2. **Force fallback (if latency is bad).** Turn on "force fallback" switches for N2, N3, N4 in the provider panel (X6). Show graceful degradation: templates instead of a model (N2), the simulated reader or a person instead of a live reader (N3), browser speech instead of Sarvam (N4). The demo still works; we explain why.
+3. **Static demo (N7, if internet is down or integrations are down for >2 min).** Run `npm run preview` in `frontend/` to serve the mock-mode build on the laptop, or open the public address if the repo owner has deployed one. It is deterministic and needs no backend. We narrate the monsoon and hospital-cash flows while advancing the mock state. Judges see the full UI and journey.
 4. **Backup video (last resort, if the laptop fails or we are out of time).** Play a 7-minute recorded walkthrough (built today, 13:00–14:30). Same narrative as live demo, but pre-recorded. Judges see the full flow, polished, with perfect timing.
 
 **Decision rule:** if we are more than 2 minutes behind schedule or an integration hangs for >30 s, Ujjwal calls "fallback" and we move to the next option.
@@ -134,7 +134,7 @@
 - [ ] WhatsApp phone, hex map, and officer console are all live on the demo laptop.
 - [ ] Every LIVE badge is correct; every SIMULATED label is visible.
 - [ ] The disclosure statement is written on a card, word-for-word.
-- [ ] Backup: if internet is down, the static demo (N7) loads from localhost or Vercel in offline mode.
+- [ ] Backup: if internet is down, the static demo (N7) is served from the laptop with `npm run preview`.
 
 ### T-30
 
@@ -143,7 +143,7 @@
 - [ ] Replay clock: confirm 17:00 trigger timing. Confirm ₹1,380 and ₹58,900 are exact. Confirm Z7 is 37%, not 41%.
 - [ ] Test the "why this amount" voice answer. Is the Hindi correct? Is the clause citation (C4) in the reply?
 - [ ] Hospital-cash slip: upload a photo, confirm the pre-check shows readable, name-match, and date-match before running the APPROVED decision.
-- [ ] Blocked case: click "buy cover" during an alert. Confirm the message is "New cover starts after the waiting period — from 25 August. It won't apply to tomorrow's alert." (or the exact X6 wording).
+- [ ] Blocked case: click "buy cover" during an alert. Confirm the message is "New cover starts after the waiting period — from 25 August. It won't apply to tomorrow's alert." .
 - [ ] Pitch: Omkar can say the win theme (automatic claim from live data) in one sentence without notes.
 
 ### T-5 (five minutes before)
@@ -182,7 +182,7 @@
 
 - **[Demo runbook](../06-delivery/demo-runbook.md):** exact 3-min and 7-min runs, word-for-word narrative, fallback choreography, and time cues.
 - **[Pitch and judge Q&A](../06-delivery/pitch-and-judge-qa.md):** 45+ judge questions and answers, with evidence and regulatory hedges.
-- **[Build plan](../06-delivery/build-plan.md):** hour-by-hour plan for 2 Oct (docs, keys, N1–N4) and 3 Oct (final polish, rehearsal, demo).
+- **[Build plan](../06-delivery/build-plan.md):** the waves, checkpoints, flags and hide order for 2 and 3 Oct.
 - **[Risk register](../06-delivery/risk-register.md):** risks with mitigation and contingency.
 
 ## Open questions
@@ -193,8 +193,9 @@
 
 ## Changelog
 
+- 2026-10-03 · v1.6 · audit against the code: the features are BUILT behind flags, Marathi is text only (voice is Hindi and English), the disclosure statement and fallback ladder no longer name planned work or Tesseract
 - 2026-10-02 · v1.5 · second fact-check pass: verified Hindi message against DEMO.md; updated BLOCKED case message to match actual system message
 - 2026-10-02 · v1.4 · final consistency pass against the code
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.1 · fact-check pass: verified all prohibited claims are correctly listed in section 9; removed private note references; reframed partnership language
-- 2026-10-02 · v1 · first draft, from the team strategy notes with exact disclosure wording, the three wow moments, and the on-site timeline.
+- 2026-10-02 · v1.1 · fact-check pass: verified all prohibited claims are correctly listed in section 9; reframed partnership language
+- 2026-10-02 · v1 · first draft, with exact disclosure wording, the three wow moments, and the on-site timeline.

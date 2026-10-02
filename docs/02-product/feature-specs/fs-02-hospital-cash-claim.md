@@ -74,7 +74,7 @@ Test counts come from `pytest --collect-only` on that date.
 | Stored image | `ConversationService.handle_image` · `put_media` | The original bytes go to the in-memory store before any reading. `GET /api/media/{id}` serves them with no token. Ids look like `MD-000001` and restart on every scenario load. |
 | Officer evidence | `replay/evidence.py` · `slip_evidence`, `name_evidence` | Media URL, five fields, confidence, source, KYC name, name score (only for a Latin name), silent days, expected against actual hours. Case kind PERSONAL_CLAIM_REVIEW. |
 | Screens | `frontend/src/components/phone/Composer.tsx`, `components/claims/Evidence.tsx`, `NameCompare.tsx`, `SlipLightbox.tsx`, `mock/personal.ts` | Photo upload and sample slips in the phone; officer evidence in the console; mock for the static demo. |
-| Demo and tests | [DEMO](../../DEMO.md) §3:30–5:45, `make demo-check`, `tests/test_demo_flows.py` (11) | Scenarios `illness` and `illness_mismatch`. |
+| Demo and tests | [DEMO](../../DEMO.md) §3:30–5:45, `make demo-check`, `tests/test_demo_flows.py` (12) | Scenarios `illness` and `illness_mismatch`. |
 
 ### 2.2 Verified limits and drift (2 Oct 2026)
 
@@ -768,7 +768,7 @@ Every figure here is a target. Nothing has been measured.
 
 ## 16. Tests
 
-### 16.1 BUILT (counts of 2 Oct 2026)
+### 16.1 BUILT (tests collected on 3 Oct 2026)
 
 | Suite | Path | Tests |
 |---|---|---|
@@ -779,24 +779,24 @@ Every figure here is a target. Nothing has been measured.
 | Simulated reader | `backend/tests/integrations/test_sarvam_sim.py` | 19 |
 | Slip images | `backend/tests/sim/test_slips.py`, `backend/tests/backtest/test_slips.py`, `backend/tests/backtest/test_personal.py` | 6, 5, 8 |
 | Checks and names | `backend/tests/policy/test_checks.py`, `test_names.py` | 29, 11 |
-| Amounts and engine | `backend/tests/policy/test_amounts.py`, `test_engine.py` | 22, 40 |
+| Amounts and engine | `backend/tests/policy/test_amounts.py`, `test_engine.py` | 22, 39 |
 | Uploads and phone routes | `backend/tests/api/test_uploads.py`, `test_merchants_phone.py` | 37, 43 |
-| Demo flows over HTTP | `backend/tests/test_demo_flows.py`, `make demo-check` | 11 |
+| Demo flows over HTTP | `backend/tests/test_demo_flows.py`, `make demo-check` | 12 |
 
 ### 16.2 Planned tests (status on 2 Oct 2026, evening: BUILT as `tests/precheck/test_status_table.py`, `tests/replay/test_slip_precheck.py`, `tests/integrations/test_gemini_vision.py`, `test_slip_chain.py`, `tests/conversation/test_slip_injection.py` with `tests/fixtures/slips/redteam.jsonl`, `tests/precheck/test_untrusted_slip_text.py` (metadata stripping), `tests/api/test_slip_precheck_api.py` and `test_honest_wording_covers_slip_keys`)
 
 | Test | Path | Covers |
 |---|---|---|
-| Status table and invariant | `backend/tests/conversation/test_slip_precheck.py` | AC-SLIP-08 to 11 |
+| Status table and invariant | `backend/tests/precheck/test_status_table.py`, `backend/tests/replay/test_slip_precheck.py` | AC-SLIP-08 to 11 |
 | Gemini adapter against a fake HTTP server | `backend/tests/integrations/test_gemini_vision.py` | schema, parse, errors, confidence rule |
 | Reader chain | `backend/tests/integrations/test_slip_chain.py` | AC-SLIP-12 to 15, 17 |
 | Injection and red-team slips | `backend/tests/conversation/test_slip_injection.py` with fixtures in `backend/tests/fixtures/slips/` | AC-SLIP-16, 19 |
-| Metadata stripping | `backend/tests/api/test_image_clean.py` | AC-SLIP-18 |
+| Metadata stripping and untrusted slip text | `backend/tests/precheck/test_untrusted_slip_text.py` | AC-SLIP-18 |
 | Routes | `backend/tests/api/test_slip_precheck_api.py` | AC-SLIP-01 to 05, 09 |
 | Honest wording | `test_honest_wording_covers_slip_keys` in the X7 test | AC-SLIP-23 |
-| Sheet and card | frontend unit tests beside the components | AC-SLIP-19, 21 |
-| Sheet end to end | `frontend/tests/e2e/slip-precheck.spec.ts` (mock and live projects) | AC-SLIP-04 to 07, 22 |
-| Mock parity | `frontend/src/mock/*.test.ts` | AC-SLIP-22 |
+| Sheet and card | `frontend/src/miniapp/screens/SlipPrecheck.test.tsx`, `frontend/src/components/phone/PrecheckActions.test.ts` | AC-SLIP-19, 21 |
+| Sheet end to end | `frontend/tests/e2e/human-miniapp-slip.spec.ts` | AC-SLIP-04 to 07, 22 |
+| Mock parity | `frontend/src/mock/precheck.test.ts` | AC-SLIP-22 |
 
 ### 16.3 Manual rehearsal
 
@@ -849,9 +849,9 @@ Every figure here is a target. Nothing has been measured.
 ## Changelog
 
 - 2026-10-02 · v1.6 · rewritten as a build-ready spec: BUILT versus PLANNED status, N3 pre-check with the document-class check, slot checklist, confidence gate, confirm and retake (H5, H15), slip text defence (H16), labels (H26), reader chain Gemini vision then Sarvam Vision then REFERRED, exact API paths with examples, acceptance criteria, audit events, labelled targets and tests; corrected the reader path and timeout, the outcome logic (HARD is DECLINED, SOFT is REFERRED), the personal check list, the strings, the case kind, the document class and source names, the sample numbers, the officer-approve result, the retention claims, the audit names and the test counts; recorded verified findings (name in the audit text, stored original image, mock drift)
-- 2026-10-02 · v1.5 · second fact-check pass
-- 2026-10-02 · v1.4 · final consistency pass against the code
+- 2026-10-02 · v1.5 · corrections
+- 2026-10-02 · v1.4 · consistency check against the code
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes
-- 2026-10-02 · v1.1 · fact-check pass
+- 2026-10-02 · v1.2 · corrections
+- 2026-10-02 · v1.1 · corrections
 - 2026-10-02 · v1 · first draft, spec compliance, code review, H5 pre-check planned

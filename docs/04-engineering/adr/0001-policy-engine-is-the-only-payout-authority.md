@@ -95,6 +95,6 @@ No money moves without the engine. The payout step (`backend/chhatri/ledger/payo
 
 - 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v2.1 · fixed against the code: claim outcomes are APPROVED, REFERRED, DECLINED (BLOCKED is a cover quote outcome); name match is a SOFT check; officer path and WAIVED_BY_OFFICER added; Gemini, Ask Chhatri and the money-figure guard marked PLANNED; the AI no longer "suggests amounts"; signals made checkable.
-- 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly establishes policy engine as sole APPROVED authority.
+- 2026-10-02 · v2 · consistency check against the code: no changes needed; ADR correctly establishes policy engine as sole APPROVED authority.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: verified ADR 0001 correctly establishes policy engine as sole APPROVED authority; no changes needed (compliant with canonical framing).
 - 2026-10-02 · v1 · first draft.

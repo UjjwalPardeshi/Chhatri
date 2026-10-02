@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
+| Status | Draft v1.1 · 3 Oct 2026 · the scan is of 2 Oct; Chhatri's own status is of 3 Oct |
 | Owner | Omkar Kadam |
 | Audience | Judges, mentors, the team. The public may read this page, so it is factual and generous |
 | Related | [Competitive landscape](competitive-landscape.md) · [Requirements traceability matrix](requirements-traceability-matrix.md) · [Problem statement analysis](problem-statement-analysis.md) · [PRD §3](../02-product/prd.md) · [Facts and sources](facts-and-sources.md) |
@@ -135,7 +135,7 @@ These nine overlap most with Chhatri or taught us the most. Each note says what 
 - **What it is.** A review of a health claim before it is filed and after it is rejected, with a drafted appeal letter. It works only on medical claims, and its code says so.
 - **Strong.** Model reasoning is followed by deterministic validation of dates, limits and quotes. A sanitiser wraps untrusted text before a model sees it, with an adversarial test. Every response carries an evidence chain from verdict to clause to fact to document. Retrieval combines exact clause lookup with semantic search. Its agreement score is labelled "not a probability".
 - **What we took.** The evidence chain and the counterfactual idea (H2, H14). The merchant confirms what was read before checks run (H5). Untrusted text is wrapped and never obeyed, with red-team tests (H16).
-- **Where Chhatri differs.** One model provider, English only and no payout or lending side. Chhatri works in Hindi and English today, plans Gemini, then Sarvam, then templates for Ask Chhatri (N2, Wave 2), pays the claim and requests the EDI holiday.
+- **Where Chhatri differs.** One model provider, English only and no payout or lending side. Chhatri works in Hindi and English, has built a Gemini, then Sarvam, then templates chain for Ask Chhatri (N2, behind `n2_ask_chhatri`, tested against fakes only), pays the claim and requests the EDI holiday.
 - **Check before quoting.** Demo link: mixed. About 100 test functions in 14 files, with no README count.
 
 ### 3.5 One-Tap Credit (Team1)
@@ -195,7 +195,7 @@ These nine overlap most with Chhatri or taught us the most. Each note says what 
 ## 5. What this means for Chhatri
 
 1. **Our edge is narrow and specific.** In the repositories we read, we did not find a claim that starts itself. In Chhatri it does, from the merchant's own sales, and the payout is tied to a loan instalment request. We say this carefully: the sales are simulated and the lender is simulated.
-2. **We are behind on what a judge can open.** Several projects have a live link and a merchant-facing screen. N1 (Wave 1) builds the mini-app, N2 to N4 (Wave 2) put live AI behind labels, and N7 (Wave 5) builds a static copy.
+2. **We are behind on what a judge can open.** Several projects have a live link and a merchant-facing screen. We have built the mini-app (N1), put the AI paths behind labels (N2 to N4) and built a static copy (N7), all behind flags. None has been run with a key, and the static copy is not deployed.
 3. **The closest overlap is Praman.** It is strong in the understand, submit and resolve stages for health claims. Our answer is not to match its breadth. It is to show the full path (check-in, one photo, decision, payout, EDI request) with the sources, counterfactual and labels (H13, H14, H26) that Praman, One-Tap Credit and Rakshak showed us.
 
 ## Open questions
@@ -206,4 +206,5 @@ These nine overlap most with Chhatri or taught us the most. Each note says what 
 
 ## Changelog
 
+- 2026-10-03 · v1.1 · Chhatri's own status updated (features built behind flags); the scan is unchanged
 - 2026-10-02 · v1 · first version, from the 2 Oct scan: 28 projects in one table, notes on the nine closest, ideas not adopted. Includes the three repositories added after the first pass (JeevanFlow, ClaimSaathi, GrowSAATHI) and Praman's 2 Oct update

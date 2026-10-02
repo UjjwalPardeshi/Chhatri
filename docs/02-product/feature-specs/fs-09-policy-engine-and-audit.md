@@ -560,15 +560,15 @@ Everything is P0. Waves are from the team plan. Owners: Ujjwal (engine, backend)
 
 ### Existing tests (BUILT)
 
-- `backend/tests/policy/test_engine.py` (22 tests): `test_area_approved_anil_1380`, `test_personal_name_mismatch_referred_with_amount_and_explanation`, `test_personal_hard_beats_soft`, `test_officer_approves_referred_waives_soft_only`, `test_officer_decline`, `test_officer_cannot_override_hard_checks`, `test_officer_only_on_referred`, `test_engine_is_deterministic`.
-- `backend/tests/policy/test_checks.py` (16), `test_explain.py` (9), `test_amounts.py`, `test_names.py`, `test_cover.py`.
-- `backend/tests/audit/test_log.py` (17): `test_chain_links_and_same_inputs_same_hashes`, `test_append_only_triggers_block_update_and_delete`, `test_tamper_data_detected_via_direct_sqlite_edit`, `test_tamper_with_rehash_still_breaks_next_link`, `test_deleted_row_detected`, `test_decision_data_contains_every_check`.
+- `backend/tests/policy/test_engine.py` (39 tests): `test_area_approved_anil_1380`, `test_personal_name_mismatch_referred_with_amount_and_explanation`, `test_personal_hard_beats_soft`, `test_officer_approves_referred_waives_soft_only`, `test_officer_decline`, `test_officer_cannot_override_hard_checks`, `test_officer_only_on_referred`, `test_engine_is_deterministic`.
+- `backend/tests/policy/test_checks.py` (29), `test_explain.py` (10), `test_amounts.py`, `test_names.py`, `test_cover.py`.
+- `backend/tests/audit/test_log.py` (29): `test_chain_links_and_same_inputs_same_hashes`, `test_append_only_triggers_block_update_and_delete`, `test_tamper_data_detected_via_direct_sqlite_edit`, `test_tamper_with_rehash_still_breaks_next_link`, `test_deleted_row_detected`, `test_decision_data_contains_every_check`.
 - `backend/tests/api/test_cases_records.py`: `test_decision_record`, `test_audit_paging_and_verify`, `test_policy_and_backtest`, `test_officer_approves_in_one_tap`.
 - `backend/tests/cases/test_demo_flows.py`: `test_human_mismatch_referred_case_c2291_then_officer_pays_1500`.
 - `backend/tests/replay/test_golden.py`: `test_illness_mismatch_is_referred_and_the_officer_approves_1500`.
 - Frontend: `frontend/src/pages/Pages.test.tsx` (audit list, filter, verify; policy with live tests), `frontend/src/components/audit/auditGroups.test.tsx`, `frontend/src/components/policy/ruleFormat.test.ts`.
 
-### New tests (PLANNED)
+### New tests (BUILT)
 
 | Test | File | What it checks |
 |---|---|---|
@@ -583,7 +583,7 @@ Everything is P0. Waves are from the team plan. Owners: Ujjwal (engine, backend)
 | `test_amount_sensitivity_matches_engine` | same | The "one more point" figure equals the engine's difference. |
 | `test_counterfactual_text_uses_only_its_own_numbers` | same | Every digit in a rendered text appears in the object. |
 | `test_trigger_verdict_matches_evaluate_hour` | `backend/tests/detect/test_triggers.py` | The extracted rule gives the same result for all existing cases. |
-| `test_receipt_shape_and_404` | `backend/tests/api/test_receipt.py` | Envelope, fields, unknown id gives 404. |
+| `test_receipt_is_served_in_the_envelope` and `test_receipt_unknown_decision_is_404` | `backend/tests/api/test_receipt.py` | Envelope, fields, unknown id gives 404. |
 | `test_receipt_is_in_the_audit_payload` | same | The extras are inside the hash-chained entry. |
 | Receipt in the mock | `frontend/src/mock/routes.test.ts` | The static demo serves the same shape. |
 
@@ -609,7 +609,7 @@ make demo-check     # every scenario through the HTTP API
 ## Changelog
 
 - 2026-10-02 · v1.4 · fixed NAME_MATCHES_KYC (SOFT, REFERRED never DECLINED), 9 checks per claim, officer path (all checks re-run), audit routes and action names, reason-key count (13), case kind, slip storage wording, console pages; added H13 sources and clause map, H14 counterfactuals, receipt endpoint, build waves
-- 2026-10-02 · v1.3 · second fact-check pass
-- 2026-10-02 · v1.2 · final consistency pass against the code
-- 2026-10-02 · v1.1 · fact-check pass (fixed check severity: NAME_MATCHES_KYC is SOFT, corrected HARD/SOFT count to 10/4, clarified annual limit as rolling 365 days not calendar year)
+- 2026-10-02 · v1.3 · corrections
+- 2026-10-02 · v1.2 · consistency check against the code
+- 2026-10-02 · v1.1 · corrections (fixed check severity: NAME_MATCHES_KYC is SOFT, corrected HARD/SOFT count to 10/4, clarified annual limit as rolling 365 days not calendar year)
 - 2026-10-02 · v1 · First draft. K4 policy engine (14 checks, outcomes, officer path), K7 audit log (hash chain, tamper detection), rules pilot-0.1, explanation generation, merchant-facing copy, edge cases, tests, and compliance notes.

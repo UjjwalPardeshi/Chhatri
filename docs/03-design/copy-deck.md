@@ -2,16 +2,16 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 · Every new string is PROPOSED and ships in waves 1 to 4 behind feature flags. Built strings are quoted from the code. Marathi is a draft |
+| Status | Draft v1.1 · 3 Oct 2026 · The new strings were PROPOSED on 2 Oct; all but the 24 listed in section 1.9 are now in the code, behind feature flags. Built strings are quoted from the code. Marathi is a draft |
 | Owner | Omkar Kadam (copy, mini-app) with Ujjwal Pardeshi (catalogue keys, honest-wording checks) |
 | Audience | Frontend and backend engineers, designers, the native-speaker reviewer, compliance |
 | Related | [Conversation design](conversation-design.md) · [Design system](design-system.md) · [Screens and flows](screens-and-flows.md) · [Merchant mini-app](../02-product/feature-specs/fs-04-merchant-mini-app.md) · [Ask Chhatri](../02-product/feature-specs/fs-05-ask-chhatri.md) · [Explanations, disputes and grievance](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) · [Cover purchase and consent](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) · [Policy engine and audit](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) · [Policy wording](../02-product/policy-wording-and-cis.md) · [Implementation guide](../04-engineering/implementation-guide.md) · [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) |
 
 ## TL;DR
 
-- This deck holds every new string a merchant sees in the P0 work: 668 strings, each with a stable key, English, Hindi and Marathi. It also holds the Marathi drafts of the 51 built catalogue keys (Appendix A) and the English-only strings of the officer console (section 16).
+- This deck holds every new string a merchant sees in the P0 work: 687 strings (sections 2 to 15, counted on 3 Oct), each with a stable key, English, Hindi and Marathi. It also holds the Marathi drafts of the 51 built catalogue keys (Appendix A) and the English-only strings of the officer console (section 16).
 - Everything is P0. It ships in waves 0 to 5 behind feature flags (section 1.4). A feature that is not finished is hidden, never shown half-working, and its strings are not loaded.
-- BUILT strings are quoted exactly from `backend/chhatri/conversation/messages.py` (Appendix A) and from the code (Appendix B). Every other string is PROPOSED.
+- BUILT strings are quoted exactly from `backend/chhatri/conversation/messages.py` (Appendix A) and from the code (Appendix B). A string in sections 2 to 15 was PROPOSED on 2 Oct; on 3 Oct all but the 24 of section 1.9 were found in the code, with the same English text (a script compared them). The Facts column keeps its original wording, so a row may still say proposed.
 - Marathi is a draft and needs a native speaker's review. New Hindi lines should also be read by a Hindi speaker outside the team before the final.
 - Numbers that come from the rules never sit inside a string. A string carries a placeholder, and the rules or the engine's facts fill it. Demo numbers appear only in worked examples, and those rows say so.
 - No string promises money or approval. Words such as approved or मंज़ूर appear only in strings that are shown after a decision record exists.
@@ -25,8 +25,8 @@
 | Item | Rule |
 |---|---|
 | BUILT | The text exists in the code today. English, and Hindi where the catalogue has it, are quoted exactly. Where a row mixes built and new text, the last column says which. |
-| PROPOSED | New text for the P0 work. Nothing here is in the code yet, and nothing here may be shown before its wave and its flag are on. |
-| Languages | `en`, `hi`, `mr`. The catalogue today has `hi` and `en` only (`LANGUAGES` in `messages.py`). The domain `Language` enum already has `mr`. |
+| PROPOSED | New text for the P0 work. Most of it is now in the code (`frontend/src/miniapp/copy/`, `backend/chhatri/conversation/messages.py`) and shows only when its flag is on. The 24 strings of section 1.9 are not in the code. |
+| Languages | `en`, `hi`, `mr`. The catalogue has `hi` and `en` only (`LANGUAGES` in `messages.py`). The domain `Language` enum has `mr`. The mini-app has a Marathi draft for its own strings (`frontend/src/miniapp/copy/mr.ts`, shown only with `n8_marathi`, and a draft until a native speaker reviews it); the Marathi of the backend catalogue keys exists only in this deck. |
 | Catalogue keys | UPPER_CASE, for text the backend renders. Language-specific facts carry a suffix: `{date_en}`, `{date_hi}`, `{date_mr}`. The backend renders all languages at once. |
 | Mini-app keys | Dotted lower-case, for text the frontend renders. A plain `{date}` is formatted by the UI in the active language. |
 | Chips | Reply-button titles are at most 20 characters and at most 3 per message (WhatsApp limits, BUILT in `whatsapp_payloads.py`). A tapped title is replayed as text, so each chip must classify as intended (section 8.3). |
@@ -231,6 +231,26 @@ Two specs sometimes word the same thing in two ways. The deck picks one, so that
 | Scam warning | The Ask Chhatri spec warns about an OTP, PIN or password and about fees. | One more clause: "or asks you to install an app", so that a remote-access message is covered as well. | The remote-access signal is a strong signal in the same spec. |
 | Numbers inside a sentence | The mini-app spec writes "within 24 hours" in the sentence of the rule see_dispute_case. | `{sla_hours}`, so that a change of the dispute clock in `rules.yaml` reaches the screen. | No digit is typed into a string (section 1.2). |
 | Spec text copied into the deck | The hospital cash spec (section 9.2) and the cover and consent spec (sections 8.3 and 9.10) already carry English and Hindi. | The deck repeats their English and Hindi (except the slip notice and the sales-data effect above) and adds Marathi. If a spec changes its wording, change the deck row in the same commit. | One text for the engineers. The spec tables are the source until the first commit of this deck. |
+
+### 1.9 Strings in this deck that the code does not use (3 Oct 2026)
+
+Found by comparing the English of every row of sections 2 to 15 with the code. These 24 have no counterpart as written: either the screen shows other text, or the feature that would show them is not built. They stay here as proposals, and nothing may show them until a person decides.
+
+| Key | English |
+|---|---|
+| `settings.privacy` | Privacy and consents |
+| `tracker.next.after_detected`, `tracker.next.after_checked` | Next: Chhatri checks your cover and the numbers. Next: the decision. |
+| `TRACK_DECIDED_DECLINED` | Not paid. {reason_en} |
+| `CF_ZONE_NO_TRIGGER_HOURS` | Hour by hour: {hour_values}. |
+| `nba.btn.ask_lender` | Ask the lender about this |
+| `chip.disagree`, `chip.cover_status`, `chip.buy`, `chip.buy_again`, `chip.hospital`, `chip.someone_ill`, `chip.all_fine`, `chip.not_fine` | The WhatsApp reply-button titles of section 8.3. No message sets reply buttons in the code |
+| `scam.report` | You can report it to the national cyber crime helpline ({cyber_helpline}) or at {cyber_portal}. |
+| `activity.consent.granted` | You agreed: {label}. |
+| `receipt.erased` | Details erased on {date} at your request. The audit log still holds the decision. |
+| `empty.consents` | Nothing to show yet. Your choices appear here after you buy cover. |
+| `error.no_zone` | We could not find your area, so your cover details cannot be shown. |
+| `sim.whatsapp`, `sim.soundbox`, `sim.data` | The three SIMULATED strip lines of section 15.4 |
+| `fb.banner`, `fb.slip` | The FALLBACK banner and the slip line of section 15.5 |
 
 ## 2. Mini-app: shell, home, coverage explainer, buy (N1, wave 1)
 
@@ -517,6 +537,20 @@ Every rule, number and clause shown to a merchant or an officer carries a source
 | `src.SALES_DAY` | Your sales for the day | उस दिन की आपकी बिक्री | त्या दिवसाची आपली विक्री | kind SALES_DAY; origin SIMULATED today |
 | `src.PAYOUT_HISTORY` | Your earlier payouts | आपको पहले मिले भुगतान | आपल्याला आधी मिळालेली रक्कम | kind PAYOUT_HISTORY; origin SIMULATED today |
 | `src.LENDER` | Lender's answer | लेंडर का जवाब | लेंडरचे उत्तर | kind LENDER; origin SIMULATED today |
+
+The catalogue (`messages.py`) spells these keys `SRC_RULES`, `SRC_CLAUSE` and so on, upper case with an underscore; the English and Hindi text is the same. The ALERT label is the alert's own `source` text, so the catalogue has no `SRC_ALERT`.
+
+The labels that head the numbers of the receipt's explanation are `FACT_*` keys in the catalogue.
+
+| Key | English | Hindi | Marathi (draft, needs a native speaker's review) | Facts and when shown |
+|---|---|---|---|---|
+| `FACT_EXPECTED_DAY` | Your usual {weekday_en} | आपका आम {weekday_hi} | आपला नेहमीचा {weekday_mr} | facts: `weekday`; the expected-day row of the explanation |
+| `FACT_AREA_INDEX` | Area index | इलाके का इंडेक्स | परिसराचा इंडेक्स | the area sales index row |
+| `FACT_DROP_PCT` | Area drop | इलाके की गिरावट | परिसरातील घट | the drop row |
+| `FACT_SHARE` | Chhatri pays | छतरी देती है | छत्री देते | the payout share row |
+| `FACT_CAP` | Most paid for one day | एक दिन में ज़्यादा से ज़्यादा | एका दिवसासाठी जास्तीत जास्त | the daily cap row |
+| `FACT_DAYS` | Days claimed | दावे के दिन | दाव्याचे दिवस | the days row of a hospital-cash claim |
+| `FACT_AMOUNT` | Amount | रकम | रक्कम | the amount row |
 
 ### 5.2 Chip, origin and mode
 
@@ -1269,7 +1303,7 @@ The officer console is English only ([fs-08](../02-product/feature-specs/fs-08-c
 
 ## 17. Appendix A: the built catalogue with Marathi drafts
 
-The 51 keys of `backend/chhatri/conversation/messages.py`, quoted exactly from `CATALOGUE`. English and Hindi are built. The Marathi column is a draft and needs a native speaker's review. A key with no Hindi line in the catalogue (CASE_CHIP and the three payout card badges) has no Marathi line either; the badge strings are in section 4.2. In a Marathi text, `{name_mr}`, `{date_mr}`, `{starts_on_mr}`, `{prepaid_mr}`, `{paid_to_mr}`, `{reason_mr}`, `{formula_mr}` and `{weekday_mr}` replace the `_hi` facts. `name_mr` can reuse `owner_name_hi`, which is already Devanagari.
+The 51 keys that `backend/chhatri/conversation/messages.py` had before the 2 Oct build, quoted exactly from `CATALOGUE` (a test run on 3 Oct found every English and Hindi line equal to the code). The catalogue has since grown to 152 keys; the newer ones are quoted in the sections above (`HOLIDAY_*` in section 3.3, `TRACK_*` in section 3.2, `SRC_*` and `FACT_*` in section 5, `CF_*` in section 6, `ASK_*` in sections 9 and 10, `SLIP_*` in section 12, `DISPUTE_NO_PAYOUT` and `DISPUTE_ALREADY_OPEN` in section 13.2). English and Hindi are built. The Marathi column is a draft and needs a native speaker's review. A key with no Hindi line in the catalogue (CASE_CHIP and the three payout card badges) has no Marathi line either; the badge strings are in section 4.2. In a Marathi text, `{name_mr}`, `{date_mr}`, `{starts_on_mr}`, `{prepaid_mr}`, `{paid_to_mr}`, `{reason_mr}`, `{formula_mr}` and `{weekday_mr}` replace the `_hi` facts. `name_mr` can reuse `owner_name_hi`, which is already Devanagari.
 
 | Key | English (built) | Hindi (built) | Marathi (draft, needs a native speaker's review) | Facts |
 |---|---|---|---|---|
@@ -1436,5 +1470,6 @@ Marathi is a draft. Please check, in this order:
 
 ## Changelog
 
+- 2026-10-03 · v1.1 · compared every English line of sections 2 to 15 with the code: all but 24 are in the code (listed in section 1.9); the string count is 687; added the FACT_* labels; Appendix A checked equal to the catalogue; the catalogue has 152 keys
 - 2026-10-02 · v1.1 · the demo clock sheet keys (section 15.3) and `buy.consent.version` (section 14.1), all proposed; the receipt route and the grievance steps marked BUILT
 - 2026-10-02 · v1 · first version: all new P0 strings in three languages, Marathi drafts for the 51 built keys, built text quoted exactly

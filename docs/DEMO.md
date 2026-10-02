@@ -28,8 +28,11 @@ Every scenario load is deterministic: same ids, same amounts, and the first case
    off the 17:05 line is the old unconditional pause and the check fails on purpose. It must print
    `PASS: 70 passed, 0 failed, 0 skipped` (about 10 s in-process, about 50 s with n8n). It reloads
    scenarios, so run it before you open the console, never during the talk. `make demo-check` runs the
-   same checks in a separate in-process app on the committed artefacts, with the demo flag set switched on
-   by itself.
+   same checks in a separate in-process app on the committed artefacts, with every live integration off and
+   `CHHATRI_FEATURES=x4_lender_request` (the demo flag set, plus any flag you name in the environment). It does
+   not switch on `n3_slip_precheck` or `n6_consents`: with either on, the scripted flow stops by design (the
+   photo then needs the pre-check confirm or a slip consent, and a purchase needs the consent ticks). So run it
+   with those two off, and against a running backend give that backend the same flag set.
 3. Run `curl -s localhost:8000/api/preflight`. Every item must have `"ok": true`.
 4. Open the console at 1280×720 with browser zoom at 100 %, in a full-screen window.
 5. Click **Enable sound** in the header once. This is the one user gesture the browser needs;

@@ -123,7 +123,7 @@ The illustrative [policy wording, C3](../../02-product/policy-wording-and-cis.md
 
 - 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v2.1 · aligned with the code: check-in is CHECKIN_SILENT text at 11:20 (voice is N4); name, dates, readability and the 3-day limit are SOFT, so a REFERRED claim is decided whole by an officer; officer waives SOFT checks; silent-day definition; Gemini, pre-check and tracker marked PLANNED; Tesseract is a later link; policy wording quoted in short, exclusions deferred to C7; invented 3-minute demo and latency targets removed.
-- 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly frames hospital-cash as income claim with proper decision outcomes.
+- 2026-10-02 · v2 · consistency check against the code: no changes needed; ADR correctly frames hospital-cash as income claim with proper decision outcomes.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: verified ADR 0007 correctly frames hospital-cash as income claim and scopes extraction to Sarvam/Gemini/Tesseract with fallback order; no changes needed (compliant with canonical framing).
-- 2026-10-02 · v1.1 · fact-check pass: fixed HARD fail outcome from BLOCKED to DECLINED (claim outcomes are APPROVED/REFERRED/DECLINED only); reworded "verify" to note the formula is shown; removed overclaiming risk on the backtest.
+- 2026-10-02 · v1.1 · corrections: fixed HARD fail outcome from BLOCKED to DECLINED (claim outcomes are APPROVED/REFERRED/DECLINED only); reworded "verify" to note the formula is shown; removed overclaiming risk on the backtest.
 - 2026-10-02 · v1 · first draft.

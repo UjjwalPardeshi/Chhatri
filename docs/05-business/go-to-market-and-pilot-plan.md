@@ -10,7 +10,7 @@
 ## TL;DR
 
 - This is a plan for discussion. No insurer, lender or Paytm team has agreed to any date, cohort or budget in it.
-- Sell Chhatri inside Paytm for Business to device merchants, via Amit (field sales), Soundbox (announcement), WhatsApp (service). The in-app mini-app (N1) is PLANNED and today lives only in our own console.
+- Sell Chhatri inside Paytm for Business to device merchants, via Amit (field sales), Soundbox (announcement), WhatsApp (service). The in-app mini-app (N1) is BUILT behind a flag and today lives only in our own console.
 - Retrospective validation: if Paytm agrees to share aggregated data, analyse 2026 monsoon sales (Oct–Nov 2026) to test the model on real behaviour.
 - Phase 0 (Jan–Feb 2027): legal sign-off, consent cards and data pipelines. Phase 1 starts when the consent cards go live (mid-Feb 2027).
 - Phase 1 (mid-Feb to Apr 2027): shadow mode, with no payouts, for the merchants who have given consent (first milestone 2,000 by the end of Mar; a target of 5,000–10,000); measure precision and recall against self-reported losses.
@@ -28,9 +28,9 @@ Chhatri reaches merchants through three channels already owned by Paytm:
 
 | Channel | Role | Owner |
 |---|---|---|
-| **Paytm for Business app** | Merchant discovers cover, buys, and tracks claims. Feature inside the app (N1 mini-app, PLANNED, Wave 1; today a prototype surface in our own console). | Paytm Product |
+| **Paytm for Business app** | Merchant discovers cover, buys, and tracks claims. Feature inside the app (N1 mini-app, BUILT behind a flag; today a prototype surface in our own console). | Paytm Product |
 | **Soundbox** | Payout announcement in Hindi. "Paytm par ₹1,380 prapt hue — Chhatri se" (₹1,380 received on Paytm, from Chhatri). SIMULATED in the prototype. | Paytm Soundbox team |
-| **WhatsApp** (Chhatri service line) | Claims service, questions about cover, disputes. Merchant texts or sends a voice note; Chhatri replies in Hindi and English text. Voice replies are PLANNED (N4). SIMULATED in the prototype. | Chhatri / Paytm Customer Ops |
+| **WhatsApp** (Chhatri service line) | Claims service, questions about cover, disputes. Merchant texts or sends a voice note; Chhatri replies in Hindi and English text. Voice replies are BUILT behind `n4_voice` in the mini-app (N4). SIMULATED in the prototype. | Chhatri / Paytm Customer Ops |
 
 No separate app. No expensive field force broadcast. Cover is a feature, not a product.
 
@@ -221,13 +221,13 @@ Everything in this phase is contingent on the go/no-go decision at the end of Ph
 | **Insurer claims approval rate** | Phase 2a, 2b | ≥ 90% | If < 80%, policy rules need revision |
 | **EDI holiday grant rate** | Phase 2a, 2b | ≥ 90% | If < 70%, lender unwilling or terms not aligned |
 | **Case resolution SLA** | Phase 2a, 2b | 100% within 24 h | If < 90%, ops load too high; reduce pilot size |
-| **Ask Chhatri grounded-answer rate (N2, PLANNED)** | Ongoing | ≥ 95% (target; not measured, see the [AI evaluation plan](../04-engineering/ai-evaluation-plan.md)) | If < 90%, fix the prompts, guard or fallbacks (no model is trained) |
+| **Ask Chhatri grounded-answer rate (N2, BUILT, not measured)** | Ongoing | ≥ 95% (target; not measured, see the [AI evaluation plan](../04-engineering/ai-evaluation-plan.md)) | If < 90%, fix the prompts, guard or fallbacks (no model is trained) |
 
 **Loss ratio note:** The target of 60–70% reflects expected loss ratios if merchant behavior matches model assumptions. The pilot validates this hypothesis against real data. A result outside this band leads to repricing or trigger-rule changes before any expansion. Beyond the kill criteria (a loss ratio above 90% or below 30% in Phase 2b), the product stops.
 
 ## 5. Onboarding script for Amit (field executive)
 
-This script describes the future product inside the Paytm for Business app. Today the mini-app is PLANNED (N1) and is a prototype in our own console, and the Soundbox line and the lender are simulated. The lines about payouts describe the design, not a guarantee. Amit is a fictional persona.
+This script describes the future product inside the Paytm for Business app. Today the mini-app is BUILT behind a flag (N1) and is a prototype in our own console, and the Soundbox line and the lender are simulated. The lines about payouts describe the design, not a guarantee. Amit is a fictional persona.
 
 ### 5.1 Pre-visit (via WhatsApp, 2 days before)
 
@@ -331,7 +331,7 @@ If merchant did not buy: "सोच लिया? कवर ख़रीदन�
 
 ### 6.4 AI services (production)
 
-**Currently:** Sarvam free credits (BUILT, live only with `SARVAM_API_KEY`). The Gemini free tier is PLANNED (Wave 2).
+**Currently:** Sarvam free credits (BUILT, live only with `SARVAM_API_KEY`). The Gemini free tier is BUILT as the first provider in the chain, tested against fakes only (no key run).
 
 **For pilot and beyond:** Sarvam paid, about ₹10k–₹30k a month (estimate, unverified) for slip vision, STT/TTS, and chat at expected volume.
 
@@ -513,6 +513,6 @@ gantt
 - 2026-10-02 · v3 · second fact-check pass: aligned prototype premium range to the committed zone premiums (₹6.93–₹38.82, not ₹2–₹20); added "the price is open" statement; corrected year-round cover premium estimate to align with zone-dependent pricing.
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; all partner references correctly use future tense ("will be approached") and do not claim agreements.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes
+- 2026-10-02 · v1.2 · corrections after a second read against the code
 - 2026-10-02 · v1.1 · fact-check pass.
 - 2026-10-02 · v1 · first draft.

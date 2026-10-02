@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1 · Waves 0–1 have full cards; Waves 2–5 have index cards (full cards are written at the start of each wave) |
+| Status | v2 · 3 Oct 2026 · every card is BUILT in the code (Waves 0 to 5), except the items named NOT BUILT. The cards keep the wording written before each wave (failing-first test lists, `(new)` and `STARTED` marks); the named files exist, and a test title in a card may be worded differently in the code, so run the named file |
 | Owner | Ujjwal Pardeshi (backend, engine, AI) · Omkar Kadam (mini-app, console) |
 | Date | 2026-10-02 |
 | Related | [Build plan](../06-delivery/build-plan.md) · [Data model and API §5](data-model-and-api.md) · [Feature specs](../02-product/feature-specs/) · [Design system](../03-design/design-system.md) · [Copy deck](../03-design/copy-deck.md) · [AI evaluation plan](ai-evaluation-plan.md) |
@@ -20,7 +20,7 @@
 
 The [build plan](../06-delivery/build-plan.md) says what lands in which wave and when a checkpoint passes. The feature specs say what each feature does and when it is accepted. This guide says **which files to touch and which test to write first**, for every feature in every wave. It is a build order, not a design: where a spec and this guide differ on a name or a path, this guide is the one to follow, and the spec gets corrected.
 
-Status words are used the same way as in the specs. **BUILT** is in commit 86575ea. **STARTED** is in the working tree on 2 Oct 2026 and is not committed. **PLANNED** is neither. A file marked **(new)** does not exist yet. A command marked **(to create)** does not exist yet, and the guide never tells you to run one of those as if it did.
+Status words, as of 3 Oct 2026: everything in the cards is BUILT in the code. The words **STARTED**, **PLANNED**, **(new)** and **(to create)** record the state when the card was written on 2 Oct 2026, before its wave was built: a file marked **(new)** was created by that card and now exists, and a command marked **(to create)** now exists. Items that are still not built say NOT BUILT: Tesseract OCR, the live evaluation suites, a deployed public URL for the static build, and the Marathi native review.
 
 ### 1.2 The feature card
 
@@ -81,7 +81,8 @@ Two tracks run inside each wave. Ujjwal builds routes, engine changes, AI adapte
 | `make lint` | `ruff check` and `ruff format --check` for the backend and `scripts/` |
 | `make dev`, `make up`, `make down` | Run the backend and console locally, or the docker stack |
 | `make env` | Creates `.env` from `.env.example` with generated secrets |
-| `make check-keys` | STARTED (working tree): reports `SARVAM_API_KEY` and `GOOGLE_API_KEY` as SET or NOT SET |
+| `make check-keys` | Reports `SARVAM_API_KEY` and `GOOGLE_API_KEY` as SET or NOT SET, and lists the Gemini models a Google key can use |
+| `make evals` | The offline evaluation suites (H25); writes `backend/artifacts/evals/summary.json` |
 | `make data`, `make n8n-workflows`, `make n8n-selftest`, `make clean` | Artefacts, n8n workflow JSON, the n8n self-test, cleanup |
 
 | npm script (in `frontend/`) | What it runs |
@@ -101,7 +102,7 @@ cd frontend && npm run test -- src/miniapp/api/parse.test.ts                    
 cd frontend && npm run test:e2e:mock -- tests/e2e/miniapp-shell.spec.ts                           # an end-to-end spec
 ```
 
-**Commands to create.** The evaluation harness is PLANNED for Wave 3: `python -m chhatri.evals` and `make evals` do not exist yet ([AI evaluation plan section 6](ai-evaluation-plan.md#6-running-the-harness)). Card 5.4 builds them. No other new command is needed. The two jobs that look like they need one (the static copy with a deep-link fallback, the measured test counts) are done with a Vite plugin and with the output of the commands above (cards 7.1 and 7.3).
+**Commands.** The evaluation harness is BUILT: `python -m chhatri.evals` and `make evals` exist ([AI evaluation plan section 6](ai-evaluation-plan.md#6-running-the-harness)). No other new command is needed. The two jobs that look like they need one (the static copy with a deep-link fallback, the measured test counts) are done with a Vite plugin and with the output of the commands above (cards 7.1 and 7.3).
 
 ### 1.5 Rules that every card inherits
 
@@ -146,8 +147,8 @@ A file that two tracks touch has one owner per wave. Ask the owner, or make the 
 | Routes | `api/routers/` | `merchants.py` (cover, claims, ask, grievances, consents), `records.py` (receipt), `meta.py` (fallback switch, ops, evals), `phone.py` (slip pre-check), `voice.py` (new), `whatif.py` (new). Schemas in `api/schemas/` |
 | Engine | `policy/` | `provenance.py` (new, H13), `counterfactual.py` (new, H14), `cover.py` (derived status) |
 | Rule extraction | `detect/triggers.py` | `trigger_verdict` (pure, shared with the what-if) |
-| Conversation | `conversation/` | `ask.py` (new), `facts.py` (new), `clauses.py` (new), `injection.py` (new), `scam.py` (new), `slip_precheck.py` (new), `mentions.py` (new), `outbox.py` (X8) |
-| AI adapters | `integrations/` | `gemini_chat.py`, `gemini_vision.py`, `chat_chain.py`, `slip_chain.py`, `speech_chain.py`, `free_tier.py`, `switch.py`, `lender.py` (all new) |
+| Conversation and Ask | `conversation/`, `ask/`, `precheck/` | `conversation/`: `explain_first.py`, `guard_strict.py`, `message_guard.py` (X8), `outbox.py`, `slip_precheck_text.py`. `ask/`: `service.py`, `facts.py`, `clauses.py`, `injection.py`, `scam.py`, `mentions.py`, `voice.py`. `precheck/`: the slip pre-check service |
+| AI adapters | `integrations/` | `gemini_chat.py`, `gemini_vision.py`, `chat_chain.py`, `slip_chain.py`, `free_tier.py`, `switch.py`, `lender.py` (all new) |
 | Cases and rights | `cases/`, `consent/` (new) | `cases/ladder.py`, `cases/grievances.py`; `consent/service.py`, `notice.py`, `activity.py` |
 | Replay views | `replay/` | `whatif.py` (new), `view_ops.py` (new), `provenance`-aware `decisions.py` |
 | Evaluation | `evals/` (new) | The harness package of the [AI evaluation plan](ai-evaluation-plan.md#62-files) |
@@ -233,11 +234,11 @@ The ideas H13 to H26 are listed in the [executive summary](../00-executive-summa
 
 Wave 0 holds four things and nothing else: **X1** (the frontend tests pass), **the feature flags**, **Tailwind v4 and shadcn scoped to the mini-app**, and **the Gemini and Sarvam key checks**. Nothing visible turns on. The wave ends at CP0, which reviews what the working tree already holds, runs the suites and commits it.
 
-Two items that the [build plan](../06-delivery/build-plan.md#31-wave-0-setup) also lists next to Wave 0 are not Wave 0 work here. The `AppFrame` skeleton (N1-T03) starts Wave 1 (card 3.7), because it needs the flags and the Tailwind setup committed first. The static safety net (`npm run build -- --mode mock`, then `npm run preview`) is a check CP0 runs (2.5), not a task.
+Two items that the [build plan](../06-delivery/build-plan.md#31-wave-0--setup) also lists next to Wave 0 are not Wave 0 work here. The `AppFrame` skeleton (N1-T03) starts Wave 1 (card 3.7), because it needs the flags and the Tailwind setup committed first. The static safety net (`npm run build -- --mode mock`, then `npm run preview`) is a check CP0 runs (2.5), not a task.
 
-**Where Wave 0 stands on 2 Oct 2026.** Most of it exists in the working tree, uncommitted. The table says what each item still needs.
+**Where Wave 0 stood on 2 Oct 2026, before it was committed.** All of it is now in the code; the table records what each item needed then.
 
-| Item | Owner | In the working tree (STARTED) | Left to do |
+| Item | Owner | In the working tree on 2 Oct (STARTED) | Left to do then |
 |---|---|---|---|
 | X1 | Ujjwal | `frontend/src/test/setup.ts` and `frontend/vitest.config.ts` raise the two waits | Run the suite under load three times (2.1), then commit |
 | Flags | Omkar (console), Ujjwal (backend) | The registry in `backend/chhatri/features.py` and `frontend/src/features.ts`, `require_feature`, `<Feature>`, the `features` field of `GET /api/health`, the mock, the compose and Dockerfile wiring, `.env.example`, and their tests | Review, run, commit. Add the per-route registry test, write the demo flag card (2.2) |
@@ -246,7 +247,7 @@ Two items that the [build plan](../06-delivery/build-plan.md#31-wave-0-setup) al
 
 ### 2.1 X1 · The frontend tests pass
 
-**Owner** Ujjwal · **Wave** 0 · **Flag** none · **Spec** [PRD](../02-product/prd.md) X1, [build plan](../06-delivery/build-plan.md#31-wave-0-setup)
+**Owner** Ujjwal · **Wave** 0 · **Flag** none · **Spec** [PRD](../02-product/prd.md) X1, [build plan](../06-delivery/build-plan.md#31-wave-0--setup)
 
 **Goal.** `make test-frontend` passes every test, every time, including on a busy laptop. The PRD names two failing tests (the Cases panel and the Overview live map). They are not logic bugs.
 
@@ -293,7 +294,7 @@ kill "${pids[@]}"
 | Backend setting | `backend/chhatri/config.py` | `Settings.chhatri_features`, a string from `CHHATRI_FEATURES` |
 | Route gate | `backend/chhatri/api/deps.py` | `require_feature(name)`, a dependency factory like `rate_limit(group)`. Off: `ApiError(404, "not found")`, raised before the body is validated, so the route is indistinguishable from one that does not exist |
 | Start-up line | `backend/chhatri/api/app.py` | Logs `feature flags on: …` once, and a warning for names that are not flags |
-| Health | `backend/chhatri/api/routers/meta.py`, `api/schemas/service.py` | `GET /api/health` gains `features`, the sorted names that are on ([data-model 5.12](data-model-and-api.md#512-changes-to-existing-endpoints)) |
+| Health | `backend/chhatri/api/routers/meta.py`, `api/schemas/service.py` | `GET /api/health` gains `features`, the sorted names that are on ([data-model 5.12](data-model-and-api.md#512-changes-to-existing-endpoints-no-new-route)) |
 | Console registry | `frontend/src/features.ts` | `FEATURE_NAMES`, `parseFeatures`, `unknownFeatures`, `enabledFeatures`, `isFeatureEnabled(name)`, read from `VITE_FEATURES` at call time |
 | Console gate | `frontend/src/components/common/Feature.tsx` | `<Feature name="…" fallback={…}>children</Feature>` |
 | Mock | `frontend/src/mock/routes.ts` | `/api/health` lists `enabledFeatures()` like the backend |
@@ -363,13 +364,13 @@ settings = make_settings(chhatri_features="n2_ask_chhatri")
 5. Add a row to `FLAGGED_ROUTES` in `backend/tests/api/test_feature_routes.py` (new, below).
 6. Give the fake application the same route: an entry in `backend/tests/api/fake_views.py` for the fake-app tests, and one happy-path test against the real application on `small_world` in the style of `backend/tests/api/test_real_app.py`.
 7. Add the wire type to `frontend/src/api/types.ts`, the method to `frontend/src/api/endpoints.ts`, the mock handler in `frontend/src/mock/endpoints/<feature>.ts`, and the example file in `frontend/src/api/contract/` (card 3.8).
-8. Update the docs in the same commit: the SPEC section 19 row and the route table of [data-model section 4.1](data-model-and-api.md#41-route-table-39-handlers).
+8. Update the docs in the same commit: the SPEC section 19 row and the route table of [data-model section 4.1](data-model-and-api.md#41-route-table-api-57-route-handlers).
 
 **Left to do in Wave 0** (Omkar and Ujjwal, one commit each):
 
 | # | Task | Test (file and name) | What it asserts |
 |---|---|---|---|
-| 1 | Run the existing flag tests and read them once | `backend/tests/test_features.py` (7 tests), `backend/tests/api/test_feature_flags.py`, `scripts/tests/test_feature_flags.py`, `frontend/src/features.test.ts`, `frontend/src/components/common/Feature.test.tsx` | The registry, the 404 envelope, the health field, the start-up line, the lockstep and the `<Feature>` component |
+| 1 | Run the existing flag tests and read them once | `backend/tests/test_features.py` (14 tests), `backend/tests/api/test_feature_flags.py`, `scripts/tests/test_feature_flags.py`, `frontend/src/features.test.ts`, `frontend/src/components/common/Feature.test.tsx` | The registry, the 404 envelope, the health field, the start-up line, the lockstep and the `<Feature>` component |
 | 2 | The per-route registry (new): one place that lists every flagged route | `backend/tests/api/test_feature_routes.py` (new): `test_every_flagged_route_answers_404_with_its_flag_off`, `test_every_flagged_route_is_reachable_with_its_flag_on`, `test_every_route_in_the_registry_is_in_the_route_table` | Each `FLAGGED_ROUTES` row `(method, path, flag)` answers the same body as an unknown path while off, answers something other than that body while on (a domain 404 has its own message), and is in `SPEC_ROUTES`. The registry is empty in Wave 0 and each route card adds a row |
 | 3 | The flag-off baseline | `make demo-check` and `make test-slow` with `CHHATRI_FEATURES` and `VITE_FEATURES` unset | 70 of 70 and the golden numbers, unchanged |
 | 4 | Write the demo flag card | A section in the [demo runbook](../06-delivery/demo-runbook.md) or the checkpoint log: the flags on, the same text for both variables, and the sorted list that `curl -s localhost:8000/api/health` prints | The card equals the backend start-up line and the console's `enabledFeatures()` |
@@ -401,7 +402,7 @@ settings = make_settings(chhatri_features="n2_ask_chhatri")
 
 #### Step 1 · The W0 tokens
 
-Add the block of [design system section 2.3](../03-design/design-system.md#23-status-colours-planned-w0) to `:root` in `frontend/src/styles/tokens.css`: `--green-ink`, `--field-border`, `--focus`, the status names (`--paid`, `--paid-soft`, `--decided`, `--referred`, `--referred-soft`, `--blocked`, `--blocked-soft`, `--live`, `--live-soft`, `--demo`, `--demo-soft`, `--fallback`, `--fallback-soft`, `--fallback-on-navy`) and the three radius aliases (`--radius-control`, `--radius-card`, `--radius-panel`). The entry file below refers to them, and the mini-app is unreadable without them. Add the contrast test for the closed list of text and background pairs in the same commit (`frontend/src/contrast.test.ts`, [fs-08 section 13.2](../02-product/feature-specs/fs-08-claims-officer-console.md)); card 6.5 owns the list.
+Add the block of [design system section 2.3](../03-design/design-system.md#23-status-colours-built-w0) to `:root` in `frontend/src/styles/tokens.css`: `--green-ink`, `--field-border`, `--focus`, the status names (`--paid`, `--paid-soft`, `--decided`, `--referred`, `--referred-soft`, `--blocked`, `--blocked-soft`, `--live`, `--live-soft`, `--demo`, `--demo-soft`, `--fallback`, `--fallback-soft`, `--fallback-on-navy`) and the three radius aliases (`--radius-control`, `--radius-card`, `--radius-panel`). The entry file below refers to them, and the mini-app is unreadable without them. Add the contrast test for the closed list of text and background pairs in the same commit (`frontend/src/contrast.test.ts`, [fs-08 section 13.2](../02-product/feature-specs/fs-08-claims-officer-console.md)); card 6.5 owns the list.
 
 #### Step 2 · The packages
 
@@ -576,7 +577,7 @@ The file as built: [`frontend/src/miniapp/builtCss.test.ts`](../../frontend/src/
 
 ### 2.4 The Gemini and Sarvam key checks
 
-**Owner** Ujjwal · **Wave** 0 · **Flag** none · **Spec** [build plan key check](../06-delivery/build-plan.md#31-wave-0-setup), [ADR 0003](adr/0003-free-ai-provider-chain.md), [ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)
+**Owner** Ujjwal · **Wave** 0 · **Flag** none · **Spec** [build plan key check](../06-delivery/build-plan.md#31-wave-0--setup), [ADR 0003](adr/0003-free-ai-provider-chain.md), [ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)
 
 **Goal.** Before Wave 2 depends on them, learn from real calls that the free Gemini key and the Sarvam credits work, which Gemini model the key can use (one that accepts images, for slips), how fast each call is, and how much quota or credit is left. **This needs your keys. It was not run in this pass: no key was available, and nothing here is a measurement.** Everything below is a procedure with the expected output, and the numbers it asks for go into the CP0 log.
 
@@ -660,7 +661,7 @@ A hard rule for the same commits: `git status` shows no `.env`, and the checkpoi
 
 ## 3. Wave 1 · demo spine
 
-Wave 1 puts Anil's story end to end in the mini-app: home, tracker, receipt and cover, with the lender's answer in the right words. Ujjwal builds the routes and the engine changes in the order of the [build plan](../06-delivery/build-plan.md#32-wave-1-demo-spine) (U1.1 to U1.7), and Omkar builds the mini-app on the mock from the first minute (O1.1 to O1.5), so neither waits for the other. They meet at the contract test (3.8). Flags that turn on at CP1: `n1_miniapp` and `x4_lender_request`.
+Wave 1 puts Anil's story end to end in the mini-app: home, tracker, receipt and cover, with the lender's answer in the right words. Ujjwal builds the routes and the engine changes in the order of the [build plan](../06-delivery/build-plan.md#32-wave-1--demo-spine) (U1.1 to U1.7), and Omkar builds the mini-app on the mock from the first minute (O1.1 to O1.5), so neither waits for the other. They meet at the contract test (3.8). Flags that turn on at CP1: `n1_miniapp` and `x4_lender_request`.
 
 | Card | What | Owner | Flag | Build plan |
 |---|---|---|---|---|
@@ -712,7 +713,7 @@ The tracker's lender step is card 3.10, and the console feed line and holiday ro
 
 **Mock parity.** The merchant detail serves `holiday_requests`. The storm run still reports 123 paused instalments (the KPI counts grants only), with the Z7 total at ₹58,900.
 
-**Endpoints.** No new route. `GET /api/merchants/{merchant_id}` gains `holiday_requests` ([data-model 5.12](data-model-and-api.md#512-changes-to-existing-endpoints)), and the receipt's `edi` block ([5.8](data-model-and-api.md#58-h2-h3-h13-h14-the-decision-receipt)) reads the request.
+**Endpoints.** No new route. `GET /api/merchants/{merchant_id}` gains `holiday_requests` ([data-model 5.12](data-model-and-api.md#512-changes-to-existing-endpoints-no-new-route)), and the receipt's `edi` block ([5.8](data-model-and-api.md#58-h2-h3-h13-h14-decision-receipt)) reads the request.
 
 **Tests** (write in this order)
 
@@ -763,7 +764,7 @@ The tracker's lender step is card 3.10, and the console feed line and holiday ro
 | File | Test | What it asserts |
 |---|---|---|
 | `backend/tests/domain/test_claim_model.py` (new folder, with `__init__.py`) | `test_claim_rejects_an_unrounded_expected_day`, `test_claim_accepts_a_published_expected_day` | Creation fails loudly for ₹4,383 and passes for ₹4,380 |
-| `backend/tests/ledger/test_premiums.py` | `test_missing_file_falls_back_to_minimum` and `test_zone_without_entry_uses_minimum`, flipped and renamed | Both now expect the error |
+| `backend/tests/ledger/test_premiums.py` | the old fall-back-to-minimum tests, flipped and renamed `test_missing_file_gives_no_zone_a_price` and `test_zone_without_entry_is_an_error` | Both now expect the error |
 | `backend/tests/ledger/test_premium_table.py` (new) | `test_the_error_names_the_zone`, `test_load_static_logs_each_zone_without_a_price` | The message names the zone, and the log line lists every zone |
 | `backend/tests/replay/test_static.py` | `test_preflight_lists_zones_without_a_price` | The `premiums` row is not ok and names the zones |
 | `backend/tests/api/test_unknown_merchant.py` (new) | `test_every_merchant_route_answers_404_for_an_unknown_merchant`, `test_a_malformed_merchant_id_is_422` | Each `{merchant_id}` row of `SPEC_ROUTES` gives 404 `not_found` for `S-9999` and 422 `validation_error` with `fields` for `S-12` |
@@ -788,7 +789,7 @@ The tracker's lender step is card 3.10, and the console feed line and holiday ro
 | `backend/chhatri/replay/view_cover.py` (new), `backend/chhatri/api/schemas/miniapp.py` (new), `backend/chhatri/api/routers/merchants.py` | `cover_view(runtime, merchant_id)`, the strict `CoverView` schema, and `GET /api/merchants/{merchant_id}/cover` |
 | `backend/chhatri/sim/merchants.py` (`cover_for`) | K6-T04: seed pilot covers at the zone price (Anil ₹18.62). Run `make test-slow` and `make demo-check` after. If a golden number moves, revert the seed and have Home hide the per-day price instead (the other branch of the task) |
 
-**Frontend, mock.** The mock cover view is card 3.8 (`frontend/src/mock/endpoints/cover.ts`). **Endpoints.** Row 1 of [data-model 5.0](data-model-and-api.md#50-index-and-conventions): [`GET /api/merchants/{merchant_id}/cover`](data-model-and-api.md#get-apimerchantsmerchant_idcover--cover-card).
+**Frontend, mock.** The mock cover view is card 3.8 (`frontend/src/mock/endpoints/cover.ts`). **Endpoints.** Row 1 of [data-model 5.0](data-model-and-api.md#50-index-and-conventions): [`GET /api/merchants/{merchant_id}/cover`](data-model-and-api.md#get-apimerchantsmerchantidcover--cover-card).
 
 **Tests**
 
@@ -822,7 +823,7 @@ The tracker's lender step is card 3.10, and the console feed line and holiday ro
 | `backend/chhatri/replay/officer.py` | An officer can always close a DISPUTE with a note, also one that has no decision (today it is a 409) |
 | `backend/chhatri/conversation/messages.py` | `DISPUTE_NO_PAYOUT`, `DISPUTE_ALREADY_OPEN` (wording in the copy deck, checked by card 3.6) |
 
-**Frontend, mock.** The tracker model and screens are card 3.10, the mock `tracker.ts` is card 3.8. **Endpoints.** Row 2 of 5.0: [`GET /api/merchants/{merchant_id}/claims`](data-model-and-api.md#get-apimerchantsmerchant_idclaims--claims-and-the-tracker-steps).
+**Frontend, mock.** The tracker model and screens are card 3.10, the mock `tracker.ts` is card 3.8. **Endpoints.** Row 2 of 5.0: [`GET /api/merchants/{merchant_id}/claims`](data-model-and-api.md#get-apimerchantsmerchantidclaims--claim-tracker).
 
 **Tests**
 
@@ -832,14 +833,14 @@ The tracker's lender step is card 3.10, and the console feed line and holiday ro
 | same | `test_dispute_targets_a_declined_decision` | The case links the DECLINED decision and the answer uses its `REASON_<CHECK>` text |
 | same | `test_second_dispute_returns_the_open_case` | One open case per decision, `DISPUTE_ALREADY_OPEN` |
 | same | `test_dispute_never_changes_the_amount` | Confirm and reject both close the case with the decision and the payout unchanged |
-| same | `test_officer_closes_a_dispute_that_has_no_decision` | Replaces the BUILT `test_a_dispute_without_a_paid_claim_cannot_be_decided` |
+| same | `test_officer_closes_a_dispute_that_has_no_decision` | Replaced a baseline test of an older name |
 | `backend/tests/replay/test_view_claims.py` (new, small city) | `test_area_claim_has_five_steps_and_is_never_referred` | AC-17 and AC-18, on the engine's own output |
 | same | `test_referred_personal_claim_shows_the_case_and_clock` | AC-19: `Decided` current, case `C-2291`, `Paid` and `EDI holiday` pending |
 | same | `test_officer_approved_claim_supersedes_the_referred_one` | AC-20: one claim, `Approved by a claims officer` |
 | same | `test_declined_claim_skips_paid_and_edi` | AC-21 |
 | same | `test_dispute_item_carries_the_case_and_the_unchanged_amount` | AC-22 and AC-23 |
 | same | `test_edi_step_reads_the_lender_answer`, `test_no_loan_skips_the_edi_step`, `test_a_refusal_shows_no_reason_code_to_the_merchant` | AC-24 and AC-25 (after card 3.1) |
-| `backend/tests/api/test_claims_route.py` (new, fake app) | `test_claims_are_served_in_the_envelope`, `test_claims_unknown_merchant_is_404`, `test_claims_malformed_id_is_422` | The route and the clean errors |
+| `backend/tests/api/test_claims_route.py` (new, fake app) | `test_claims_are_served_as_a_list_with_its_meta`, `test_claims_unknown_merchant_is_404`, `test_claims_malformed_id_is_422` | The route and the clean errors |
 | `backend/tests/api/test_real_app.py` (slow, existing) | `test_anil_claim_after_the_storm_has_five_steps_and_1380`, `test_mismatch_slip_claim_is_referred_with_case_c_2291` | The golden figures on the committed artefacts: ₹1,380 and the five steps for Anil, the REFERRED claim and `C-2291` |
 
 **Done when** the tests pass, `make test-backend` and `make demo-check` stay green, and the tracker steps for AREA, PERSONAL and DISPUTE equal fs-04 section 9.5 on the real backend (checked by the contract test of 3.8). **Hidden behind** nothing (read-only route, bug fixes).
@@ -863,7 +864,7 @@ The tracker's lender step is card 3.10, and the console feed line and holiday ro
 
 The audit hash of every decision changes once, because the payload gains two fields. No test pins a literal decision hash (the determinism tests compare two runs), and the examples in data-model section 5.8 are refreshed with `CHHATRI_UPDATE_CONTRACT=1` (card 3.8).
 
-**Frontend, mock.** The receipt in the mock is card 3.8 (`receipt.ts`). The merchant screens are card 3.10 and the console chips are card 6.1. **Endpoints.** Row 3 of 5.0: [`GET /api/decisions/{decision_id}/receipt`](data-model-and-api.md#58-h2-h3-h13-h14-the-decision-receipt).
+**Frontend, mock.** The receipt in the mock is card 3.8 (`receipt.ts`). The merchant screens are card 3.10 and the console chips are card 6.1. **Endpoints.** Row 3 of 5.0: [`GET /api/decisions/{decision_id}/receipt`](data-model-and-api.md#58-h2-h3-h13-h14-decision-receipt).
 
 **Tests**
 
@@ -917,7 +918,7 @@ The audit hash of every decision changes once, because the payload gains two fie
 
 ### 3.7 N1 · The shell, routes and shared states
 
-**Owner** Omkar · **Wave** 1 · **Flag** `n1_miniapp` · **Spec** [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md) sections 4, 7 and 8, [ADR 0005](adr/0005-mini-app-inside-the-console.md), [design system 5.2](../03-design/design-system.md#52-mini-app-components-planned) · **Tasks** N1-T03, N1-T19
+**Owner** Omkar · **Wave** 1 · **Flag** `n1_miniapp` · **Spec** [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md) sections 4, 7 and 8, [ADR 0005](adr/0005-mini-app-inside-the-console.md), [design system 5.2](../03-design/design-system.md#52-mini-app-components-built) · **Tasks** N1-T03, N1-T19
 
 **Goal.** The merchant page shows a phone-sized app frame beside the WhatsApp phone, and `/merchant/:id/app` shows the same app full screen. Both render the same root, read the same live state and replay clock, and move by URL state. Nothing else on the console changes.
 
@@ -947,7 +948,7 @@ The audit hash of every decision changes once, because the payload gains two fie
 |---|---|---|
 | `frontend/src/miniapp/shell/AppFrame.test.tsx` | `renders the frame between the phone and the panel when n1_miniapp is on` | AC-01: `app-frame` is visible and `app-root` has the class `miniapp` |
 | `frontend/src/pages/Merchant.test.tsx` | `has no frame while n1_miniapp is off` | AC-02 for the page: today's two columns, and the mini-app chunk is not requested |
-| `frontend/src/miniapp/shell/StandaloneRoute.test.tsx` | `redirects to the merchant page while the flag is off`, `renders full viewport with three tabs and no console header` | AC-02 and AC-03 |
+| `frontend/src/App.miniapp.test.tsx` | `redirects to the merchant page while the flag is off`, `renders full viewport with three tabs and no console header` | AC-02 and AC-03 |
 | `frontend/src/miniapp/hooks/useMiniappUrl.test.ts` | `tab tap sets screen and Back restores it`, `an unknown screen shows home`, `keeps mock and presenter on every link`, `rejects a malformed decision id` | AC-04 and the URL rules of fs-04 section 4.3 |
 | `frontend/src/miniapp/shell/SharedStates.test.tsx` | `sets data-state for loading, empty, error, offline and ready`, `offline keeps the last data and disables network actions with a reason` | AC-38 and AC-39 |
 | `frontend/tests/e2e/miniapp-shell.spec.ts` (new, project `mock`) | `frame at 1280x720 and standalone at 390x844` | AC-01, AC-03, AC-04 end to end |
@@ -956,7 +957,7 @@ The audit hash of every decision changes once, because the payload gains two fie
 
 ### 3.8 N1 · The data layer, mock parity and the contract test
 
-**Owner** Omkar (client, parsers, mock) · Ujjwal (backend half of the contract test) · **Wave** 1 · **Flag** `n1_miniapp` (the mock handlers for the three read routes have none, like the routes) · **Spec** fs-04 section 6, [data-model section 6](data-model-and-api.md#6-mock-backend-parity) · **Tasks** O1.2, N1-T15, N1-T16, N1-T21
+**Owner** Omkar (client, parsers, mock) · Ujjwal (backend half of the contract test) · **Wave** 1 · **Flag** `n1_miniapp` (the mock handlers for the three read routes have none, like the routes) · **Spec** fs-04 section 6, [data-model section 6](data-model-and-api.md#6-mock-mode-parity-n7-static-demo-frontendsrcmock) · **Tasks** O1.2, N1-T15, N1-T16, N1-T21
 
 **Goal.** The mini-app reads typed, strictly parsed data from the real backend or from the in-browser mock, and a test proves the two answer the same way. A mock that drifts would show judges something the product does not do.
 
@@ -1098,7 +1099,7 @@ The audit hash of every decision changes once, because the payload gains two fie
 | `frontend/src/miniapp/hooks/nextBestAction.test.ts` | table-driven: one case per rule id, one per priority conflict | The rule order of fs-04 section 12, and AC-07, AC-08 |
 | same | `no action kind is an offer` | AC-37: a type-level check plus a run over every fixture |
 | `frontend/src/miniapp/screens/Help.test.tsx`, `Language.test.tsx` | `every screen in its ready state has an enabled next action`, `switching language changes the tabs, the root lang and the URL`, `Marathi is absent while the flag is off` | AC-32, AC-34, AC-36 |
-| `frontend/src/miniapp/copy/copy.test.ts` | `no mini-app string contains a promise stem outside the after-decision list` | The copy rules, mirroring card 3.6 on the frontend side |
+| `frontend/src/miniapp/copy/honestWording.test.ts` | `no mini-app string contains a promise stem outside the after-decision list` | The copy rules, mirroring card 3.6 on the frontend side |
 | `frontend/tests/e2e/miniapp-language.spec.ts` (new, project `mock`) | `Hindi to English and back` | AC-32 |
 
 **Done when** the tests pass, AC-32 to AC-41 hold on the mock profile, `make test-frontend` is green, and the [copy deck](../03-design/copy-deck.md) strings for sections 2, 3, 4, 5 and 7 are in `copy/hi.ts` and `copy/en.ts`, with the Hindi read by a native speaker (the build plan's open question 2 names the reader). **Hidden behind** `n1_miniapp`; Marathi stays behind `n8_marathi`.

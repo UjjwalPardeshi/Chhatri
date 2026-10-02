@@ -654,28 +654,28 @@ All values are targets set before measuring. [The evaluation plan](../../04-engi
 
 ### 19.1 Existing tests
 
-`tests/conversation/test_intents.py` (48), `test_guard.py` (25), `test_nlu.py` (14), `test_replies.py` (25), `test_service.py` (11), `test_messages.py` (80), `test_live_tests.py` (6); `tests/integrations/test_sarvam.py` (23), `test_sarvam_sim.py` (19), `test_retry.py` (17), `test_registry.py` (9); `tests/api/test_merchants_phone.py` (43) and `test_uploads.py` (37). Counts were collected on 2 Oct 2026.
+`tests/conversation/test_intents.py` (48), `test_guard.py` (25), `test_nlu.py` (14), `test_replies.py` (33), `test_service.py` (11), `test_messages.py` (183), `test_live_tests.py` (6); `tests/integrations/test_sarvam.py` (23), `test_sarvam_sim.py` (19), `test_retry.py` (17), `test_registry.py` (11); `tests/api/test_merchants_phone.py` (43) and `test_uploads.py` (37). Counts were collected on 3 Oct 2026.
 
-### 19.2 Planned tests
+### 19.2 Tests added with Ask Chhatri (BUILT)
 
-| Test | File (planned) | Covers |
+| Test | File | Covers |
 |---|---|---|
-| Known intents never call the model; template per intent; formula templates after the day | `backend/tests/conversation/test_ask_chhatri.py` | AC-ASK-01, 02, 05 |
-| `test_grounded_answer` and `test_fallback_chain` (PRD ids) | same | AC-ASK-06, 09 to 16 |
+| Known intents never call the model; template per intent; formula templates after the day | `backend/tests/ask/test_ask_service.py`, `backend/tests/ask/test_copy_and_ledger.py` | AC-ASK-01, 02, 05 |
+| `test_the_model_answers_text_the_rules_cannot_and_the_server_decorates_it` and `test_a_gemini_timeout_is_answered_by_sarvam_with_a_fallback_label` | `backend/tests/ask/test_ask_service.py`, `backend/tests/ask/test_wiring.py` | AC-ASK-06, 09 to 16 |
 | Explain-first routing on the six questions and the 128 utterances | `backend/tests/conversation/test_explain_first.py` (BUILT), with the Ask and chat paths in `tests/ask/test_ask_service.py` and `tests/conversation/test_ask_chat.py` | AC-ASK-03 |
-| `test_guard_no_unsupported_money` plus the 28 rows of §6.3 | `backend/tests/conversation/test_guard.py`, `test_guard_strict.py` | AC-ASK-07, 08, 18 |
-| Injection and scam tables of §7 and §8 | `test_injection.py`, `test_scam.py` | AC-ASK-17, 19 |
-| Labels and next action for every case in §9 and §10 | `test_ask_labels.py` | AC-ASK-04, 20, 21 |
-| Fact sheet has no names and no numbers outside its values | `test_fact_sheet.py` | AC-ASK-11 |
-| Clause extract equals the policy wording | `test_clauses.py` | §5.2 |
+| `test_english_replies_that_must_block` and `test_hindi_replies_that_must_block` plus the 28 rows of §6.3 | `backend/tests/conversation/test_guard.py`, `test_guard_strict.py` | AC-ASK-07, 08, 18 |
+| Injection and scam tables of §7 and §8 | `backend/tests/ask/test_injection.py`, `backend/tests/ask/test_scam.py` | AC-ASK-17, 19 |
+| Labels and next action for every case in §9 and §10 | `backend/tests/ai/test_labels.py`, `backend/tests/ask/test_next_action.py` | AC-ASK-04, 20, 21 |
+| Fact sheet has no names and no numbers outside its values | `backend/tests/ask/test_fact_sheet.py` | AC-ASK-11 |
+| Clause extract equals the policy wording | `backend/tests/ask/test_clauses.py` | §5.2 |
 | Gemini and Sarvam adapters with fake clients; chain order and attempt log | `backend/tests/integrations/test_gemini_chat.py`, `test_chat_chain.py` | AC-ASK-12, 13 |
 | Free-tier gate: zero outbound calls | `backend/tests/integrations/test_free_tier_gate.py` | AC-ASK-16 |
 | `/ask` route: envelope, errors, flag off, rate limit, audit | `backend/tests/api/test_ask.py` | AC-ASK-22, 23 |
-| Mention detector table of §11.4 | `backend/tests/conversation/test_mentions.py` | AC-VOICE-04 to 06 |
-| STT and TTS routes; `test_hindi_transcription`, `test_hindi_audio` (PRD ids, `-m live`, skipped without keys) | `backend/tests/api/test_voice.py`, `backend/tests/integrations/test_sarvam_stt.py`, `test_sarvam_tts.py` | AC-VOICE-01 to 03, 07, 08 |
-| Ask screen states, chips, notice | frontend unit tests beside the component (path set in the implementation guide) | AC-VOICE-02, 09 |
+| Mention detector table of §11.4 | `backend/tests/ask/test_mentions.py` | AC-VOICE-04 to 06 |
+| STT and TTS routes and services (the live Sarvam calls are only exercised by `backend/tests/integrations/test_live_smoke.py`, which skips without keys) | `backend/tests/api/test_voice.py`, `backend/tests/ask/test_voice_service.py`, `backend/tests/integrations/test_sarvam.py` | AC-VOICE-01 to 03, 07, 08 |
+| Ask screen states, chips, notice | `frontend/src/miniapp/screens/Ask.test.tsx` | AC-VOICE-02, 09 |
 | Mock backend parity for `/ask` | `frontend/src/mock/ask.test.ts` | §12.5 |
-| Typed question, answer, chips, label | `frontend/tests/e2e/ask.spec.ts` (mock and live projects) | AC-ASK-06, 21 |
+| Typed question, answer, chips, label | `frontend/tests/e2e/human-miniapp-ask.spec.ts` | AC-ASK-06, 21 |
 
 Coverage target: at least 80% on `backend/chhatri/conversation/` and on the new adapters, as for the rest of the backend.
 
@@ -715,9 +715,9 @@ Coverage target: at least 80% on `backend/chhatri/conversation/` and on the new 
 ## Changelog
 
 - 2026-10-02 · v1.6 · rewritten as a build-ready spec: BUILT versus PLANNED status, verified limits of the rules, grounding with a fact sheet and clause extract, two-layer guard with 28 checked examples, injection defence (H16), scam warning (H19), next action (H21), labels (H26), Voice (N4) with confirmation chips (H18), exact API paths, acceptance criteria, labelled targets and planned tests; removed claims that did not match the code
-- 2026-10-02 · v1.5 · second fact-check pass: referenced existing COVER_STATUS_* keys instead of proposing new key
-- 2026-10-02 · v1.4 · final consistency pass against the code: fixed "TODAY" label in changes section
+- 2026-10-02 · v1.5 · corrections: referenced existing COVER_STATUS_* keys instead of proposing new key
+- 2026-10-02 · v1.4 · consistency check against the code: fixed "TODAY" label in changes section
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes
-- 2026-10-02 · v1.1 · fact-check pass: replaced internal references with current-state-audit.md and regulatory-and-compliance.md public doc links.
+- 2026-10-02 · v1.2 · corrections
+- 2026-10-02 · v1.1 · corrections: replaced internal references with current-state-audit.md and regulatory-and-compliance.md public doc links.
 - 2026-10-02 · v1 · first draft. Covers N2 (grounded LLM) and N4 (voice), with entry points from N1 mini-app and K8 console. Eval set and guardrails are P0 (build on 2–3 Oct).

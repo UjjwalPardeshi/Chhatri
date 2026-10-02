@@ -119,7 +119,7 @@ Payout: SIMULATED (demo settlement)
 - 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v2.1 · aligned with the registry and the X6 spec: 15 components, status from settings (no reachability call), n8n and Cognee are SIMULATED today (FALLBACK arrives with X6), real `{name, mode, detail}` response and header chips, Weather needs `OPENMETEO_LIVE`, Soundbox always SIMULATED, merchant labels and the audit entry marked PLANNED, invented latency and timeout rules removed.
 - 2026-10-02 · v1.4 · status today is LIVE or SIMULATED; Gemini and the FALLBACK state are planned (N2/N3, X6)
-- 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes LIVE/SIMULATED/FALLBACK labeling and Gemini PLANNED status.
+- 2026-10-02 · v2 · consistency check against the code: no changes needed; ADR correctly describes LIVE/SIMULATED/FALLBACK labeling and Gemini PLANNED status.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: status table row for Gemini updated to show PLANNED (integration pending 2–3 Oct) with details on future `GOOGLE_API_KEY` requirement.
-- 2026-10-02 · v1.1 · fact-check pass: clarified Gemini status as PLANNED (integration pending N2/N3), not SIMULATED with a nonexistent API key.
+- 2026-10-02 · v1.1 · corrections: clarified Gemini status as PLANNED (integration pending N2/N3), not SIMULATED with a nonexistent API key.
 - 2026-10-02 · v1 · first draft.

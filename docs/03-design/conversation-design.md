@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1.4 · 2 Oct 2026 · Describes the conversation code that is built today and proposes new copy and flows. What was proposed for waves 1 to 4 is BUILT behind feature flags; new Hindi and Marathi lines still need a native review |
+| Status | Draft v1.5 · 3 Oct 2026 · Describes the conversation code that is built today and proposes new copy and flows. What was proposed for waves 1 to 4 is BUILT behind feature flags; new Hindi and Marathi lines still need a native review |
 | Owner | Omkar Kadam |
 | Audience | Engineers, designers, the native-speaker reviewer, support staff and anyone judging the bilingual flow |
 | Related | [Copy deck](copy-deck.md) · [Ask Chhatri](../02-product/feature-specs/fs-05-ask-chhatri.md) · [EDI holiday](../02-product/feature-specs/fs-03-edi-holiday.md) · [Merchant mini-app](../02-product/feature-specs/fs-04-merchant-mini-app.md) · [Hospital cash claim](../02-product/feature-specs/fs-02-hospital-cash-claim.md) · [Explanations, disputes and grievance](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) · [AI architecture and guardrails](../04-engineering/ai-architecture-and-guardrails.md) · [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) · [Implementation guide](../04-engineering/implementation-guide.md) · [Product requirements](../02-product/prd.md) · [Facts and sources](../01-strategy/facts-and-sources.md) |
@@ -11,7 +11,7 @@
 
 - Everything in this document is P0. It ships in waves 0 to 5 behind feature flags, and a feature that is not finished is hidden, never shown half-working. BUILT means the code does it today. PROPOSED means it is only in a spec or in the copy deck.
 - Chhatri speaks respectful Hindi (आप) with English beside it. Numbers are digits, one idea goes in each message, and nothing promises money or approval. Marathi is a draft for wave 4 and needs a native speaker's review.
-- Built today: 51 catalogue messages in Hindi and English (section 3.3), nine intents that rules classify and a chat model sees only for UNKNOWN (section 4), and a grounding guard that is tested but not yet called by any reply path (section 5).
+- Built: 152 catalogue messages in Hindi and English, of which 51 existed before 2 Oct (section 3.3 lists those 51), nine intents that rules classify and a chat model sees only for UNKNOWN (section 4), and a grounding guard that is tested but not yet called by any reply path (section 5).
 - Known dead ends are listed with live results in section 4.6. A thank-you and a bare OK outside a check-in end in the help line, coverage questions are UNKNOWN until Ask Chhatri (N2) ships, and Marathi is UNKNOWN until N8.
 - The lender decides the instalment holiday. The built INSTALMENT_PAUSED lines say "paused" and do not say who decided. Section 10.1 quotes them exactly and proposes lines that name the lender and cover a refusal and a missing answer.
 - New in this version: voice states for N4 and the H18 confirmation chips (7.2 and 7.4), the H19 scam warning (10.5), and the H21 next action with WhatsApp reply buttons (10.6).
@@ -90,7 +90,7 @@ The messages that the pitch deck names, quoted exactly from the catalogue.
 
 ### 3.3 Status of every message
 
-**BUILT messages.** All 51 catalogue keys, quoted from the code. A key with no Hindi line has only English. "Voiced" says whether the phone simulator turns the message into audio.
+**BUILT messages.** The 51 catalogue keys that existed before 2 Oct, quoted from the code (the catalogue has 152 keys now; the newer ones are in the copy deck). A key with no Hindi line has only English. "Voiced" says whether the phone simulator turns the message into audio.
 
 | Key | Status | Languages | Sent when | Voiced |
 |---|---|---|---|---|
@@ -405,7 +405,7 @@ Chhatri starts some messages and sends others as a reply to the merchant. The ta
 X8 is BUILT in wave 3, behind `x8_distress_guard` (`backend/chhatri/conversation/message_guard.py`), and has two parts. The rules and the tests are in [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) section 9.
 
 - **No offers in distress.** No loan, top-up or cross-sell message or card is sent while an alert covers the merchant's zone (valid now, or issued and starting within the 72 hour look-ahead), while a claim is being decided, while a case is open, while a referred decision waits for an officer, or while a grievance is open. No such offer exists in the product today, and the next-action list of section 10.6 has no offer kind, so the rule holds by construction.
-- **A limit on proactive messages.** At most `max_proactive_per_day` proactive messages for one merchant on one calendar day (IST). The spec proposes the value 3, as a setting to tune. Transactional messages are never limited or suppressed.
+- **A limit on proactive messages.** At most `max_proactive_per_day` proactive messages for one merchant on one calendar day (IST). The default is `DEFAULT_MAX_PROACTIVE_PER_DAY` in `message_guard.py`, a setting to tune. Transactional messages are never limited or suppressed.
 
 The spec sorts every catalogue key into one of three kinds, in a closed map that is checked in one place before the outbox sends. This is where the built keys fall:
 
@@ -425,7 +425,7 @@ None of this is built: no code limits messages today. When X8 lands, every new k
 - **Limits.** The recorder stops itself at 30 seconds (`MAX_RECORD_SECONDS`). The API refuses audio longer than 30 seconds or larger than 5 MB.
 - **SIMULATED.** Four ready-made voice notes, the voice chips `why`, `dispute`, `ill` and `cover`. The merchant taps a chip and the sentence is used as the transcript. The chips are the demo path, and the copy deck shows the SIMULATED note while they are used.
 - **Nothing heard.** An empty transcript gets VOICE_UNCLEAR, in Hindi and English, with a prompt to say it again or type it.
-- **Browser speech recognition** (the Web Speech API) is not built. The browser voice is used for speaking only.
+- **Browser speech recognition** (the Web Speech API) is BUILT behind `n4_voice` (`frontend/src/miniapp/components/voiceEngine.ts`), as the fallback after Sarvam; it needs the network and is labelled SIMULATED with provider `browser`.
 
 ### 7.2 Confirmation chips for amounts and dates (H18, wave 2)
 
@@ -505,12 +505,12 @@ When the system cannot settle a merchant's concern, a person looks at it.
 
 - **A dispute (BUILT).** DISPUTE_AMOUNT sends DISPUTE_ACK, "I'm sending this to our team. You'll hear back within 24 hours.", then CASE_CHIP, "Sent to a claims officer · case C-2291" (the first case id after a fresh load). The case has a due time 24 hours after it opens (`dispute_sla_hours` in `rules.yaml`). The officer sees the evidence and the merchant's own words.
 - **A referred claim (BUILT).** A personal claim that a SOFT check holds back gets a SLIP_TO_HUMAN line and the same chip.
-- **Talk to the team (PROPOSED, wave 2).** When Ask Chhatri cannot answer, the answer is ASK_HANDOFF and the next action is TALK_TO_TEAM. Until N5 ships, TALK_TO_TEAM opens the dispute button for a merchant who has a decision and is replaced by ASK_AGAIN for everyone else.
-- **Grievance ladder (PROPOSED, wave 3, N5).** Paytm dispute, the insurer's grievance officer, Bima Bharosa, the Ombudsman, the lender's grievance and Paytm support, each shown with its own clock only where a source exists ([copy deck section 13](copy-deck.md)).
+- **Talk to the team (BUILT behind `n2_ask_chhatri`).** When Ask Chhatri cannot answer, the answer is ASK_HANDOFF and the next action is TALK_TO_TEAM. With `n5_grievances` on, TALK_TO_TEAM has the complaints ladder as its destination (backend `next_action.py`); with it off it opens the dispute button for a merchant who has a decision and is replaced by ASK_AGAIN for everyone else.
+- **Grievance ladder (BUILT behind `n5_grievances`, N5).** Paytm dispute, the insurer's grievance officer, Bima Bharosa, the Ombudsman, the lender's grievance and Paytm support, each shown with its own clock only where a source exists ([copy deck section 13](copy-deck.md)).
 
 ## 10. Proposed new copy and change requests
 
-Everything here is PROPOSED unless a line says BUILT. The strings are in the [copy deck](copy-deck.md). This section says how they work and what changes in the code. Everything is P0 and ships in waves 0 to 5 behind feature flags.
+Everything here was PROPOSED on 2 Oct and is now BUILT behind its flag, unless a line says it is not built (the WhatsApp reply buttons and the Marathi catalogue). The strings are in the [copy deck](copy-deck.md). This section says how they work and what changes in the code. Everything is P0 and ships in waves 0 to 5 behind feature flags.
 
 ### 10.1 X4: the lender decides the instalment holiday (wave 1)
 
@@ -524,9 +524,9 @@ Everything here is PROPOSED unless a line says BUILT. The strings are in the [co
 | `INSTALMENT_PAUSED_TODAY` | आज की {instalment} की किस्त रोक दी गई है। | Today's {instalment} instalment is paused. | the pause is for today |
 | `INSTALMENT_PAUSED_ON` | {date_hi} की {instalment} की किस्त रोक दी गई है। | The {instalment} instalment due on {date_en} is paused. | the pause is for any other date |
 
-**PROPOSED.** Five messages and four reason phrases replace the three lines. A message is sent only after the lender answers, or after the time-out for a missing answer. The English and Hindi below are quoted from the copy deck, which also has the Marathi draft.
+**BUILT behind `x4_lender_request`.** Five messages and four reason phrases replace the three lines. A message is sent only after the lender answers, or after the time-out for a missing answer. The English and Hindi below are quoted from the copy deck, which also has the Marathi draft.
 
-| Key | English (PROPOSED) | Hindi (PROPOSED) | Sent when |
+| Key | English | Hindi | Sent when |
 |---|---|---|---|
 | `HOLIDAY_GRANTED` | Your lender has paused tomorrow's {instalment} instalment. It moves to the end of your loan with no penalty. | आपके लेंडर ने कल की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं। | the lender grants and the instalment is due tomorrow; replaces INSTALMENT_PAUSED |
 | `HOLIDAY_GRANTED_TODAY` | Your lender has paused today's {instalment} instalment. It moves to the end of your loan with no penalty. | आपके लेंडर ने आज की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं। | the lender grants and the instalment is due today; replaces INSTALMENT_PAUSED_TODAY |
@@ -559,7 +559,7 @@ flowchart TD
     F --> H
 ```
 
-**Behind a flag, in one commit.** With the X4 flag off, the built lines are sent as today. With it on, the HOLIDAY lines replace them (PROPOSED). The built text is asserted in many places, so the switch must change them together. The files that quote it today are `messages.py`, `backend/chhatri/api/demo/golden.py`, the backend tests (`test_messages.py`, `test_notifications.py`, `test_golden.py`, `test_area_flow.py`, `test_personal.py`, `test_live_tests.py`), `frontend/src/content/catalogue.ts`, `frontend/src/mock/area.ts` with `golden.test.ts`, `frontend/src/components/phone/whatHappened.ts` (a regular expression reads the instalment line) with its test, `frontend/tests/e2e/helpers.ts`, `scripts/tests/test_docs.py` and `docs/DEMO.md`. The demo script of 3 October uses the built lines, so DEMO.md changes in the same commit that turns the flag on.
+**Behind a flag, in one commit.** With the X4 flag off, the built lines are sent as today. With it on, the HOLIDAY lines replace them. The built text is asserted in many places, so the switch must change them together. The files that quote it today are `messages.py`, `backend/chhatri/api/demo/golden.py`, the backend tests (`test_messages.py`, `test_notifications.py`, `test_golden.py`, `test_area_flow.py`, `test_personal.py`, `test_live_tests.py`), `frontend/src/content/catalogue.ts`, `frontend/src/mock/area.ts` with `golden.test.ts`, `frontend/src/components/phone/whatHappened.ts` (a regular expression reads the instalment line) with its test, `frontend/tests/e2e/helpers.ts`, `scripts/tests/test_docs.py` and `docs/DEMO.md`. The demo script of 3 October uses the built lines, so DEMO.md changes in the same commit that turns the flag on.
 
 ### 10.2 Mini-app screens (N1) copy
 
@@ -667,7 +667,7 @@ Every screen and every answer ends with one clear next step. There is no dead en
 
 TALK_TO_TEAM needs a destination (section 10.3). A model-written answer while a silence check-in is open uses SEND_SLIP.
 
-**WhatsApp reply buttons (PROPOSED).** The payload builder and the inbound parser already support up to three reply buttons with titles of at most 20 characters, and a tapped title is replayed as text. No message sets buttons today. Real WhatsApp cannot open a screen from a button, so the buttons carry the next step as a question the rules already understand.
+**WhatsApp reply buttons (PROPOSED, not built).** The payload builder and the inbound parser already support up to three reply buttons with titles of at most 20 characters, and a tapped title is replayed as text. No message sets buttons today. Real WhatsApp cannot open a screen from a button, so the buttons carry the next step as a question the rules already understand.
 
 | After the message | Buttons (at most 3) | Note |
 |---|---|---|
@@ -704,7 +704,7 @@ Rules for a button:
 
 ## 11. Marathi (N8, wave 4)
 
-Marathi is the language of Maharashtra, where the demo merchants trade, and it is a draft for wave 4. It is not built, and it needs a native speaker's review before any line is shown.
+Marathi is the language of Maharashtra, where the demo merchants trade. The mini-app has a built draft (`frontend/src/miniapp/copy/mr.ts`, behind `n8_marathi`); the message catalogue has none. Everything in Marathi needs a native speaker's review before it is shown.
 
 **What is built.** The domain `Language` enum has `mr`. The catalogue has Hindi and English only (`LANGUAGES = ("hi", "en")`), `MONTHS_HI` and the weekday and formula builders have no Marathi, and the intent word lists have no Marathi words. A Marathi message is therefore almost always UNKNOWN and gets FALLBACK_HELP in Hindi and English. The one built exception in the samples below is the greeting नमस्कार.
 
@@ -762,7 +762,7 @@ Dates, numbers and merchant names are filled by the same code, so no new logic i
 
 ## 12. Sample dialogues by journey
 
-The lines are quoted from the catalogue with the demo facts of `docs/DEMO.md`. A line marked PROPOSED is not built. The amounts are the golden demo numbers and are illustrative.
+The lines are quoted from the catalogue with the demo facts of `docs/DEMO.md`. A line marked PROPOSED is not built (the WhatsApp reply buttons). The amounts are the golden demo numbers and are illustrative.
 
 ### 12.1 Area payout, "why this amount" and a dispute (BUILT)
 
@@ -822,7 +822,7 @@ Anil sends anil_admission_slip.png. The engine decides APPROVED ₹1,500 (½ × 
       English: Today's ₹600 instalment is paused.
 ```
 
-With N3 (PROPOSED) the merchant also sees the slip sheet between the slip and the decision: SLIP_READING while the photo is read, then the fields, three checklist lines and SLIP_PRECHECK_SHOW, "We have read your slip. Please check it. Is this right?", with the buttons "Yes, this is right" and "Send another photo". The wording is in [copy deck section 12](copy-deck.md).
+With `n3_slip_precheck` on the merchant also sees the slip sheet between the slip and the decision: SLIP_READING while the photo is read, then the fields, three checklist lines and SLIP_PRECHECK_SHOW, "We have read your slip. Please check it. Is this right?", with the buttons "Yes, this is right" and "Send another photo". The wording is in [copy deck section 12](copy-deck.md).
 
 ### 12.3 A slip with a different name (BUILT)
 
@@ -864,21 +864,21 @@ The quote is BLOCKED by alert A-20250818-01 (issued 17:30). New cover starts 25 
 
 The price is a prototype price from the backtest. Say so when quoting it.
 
-### 12.5 The lender decides the instalment holiday (PROPOSED)
+### 12.5 The lender decides the instalment holiday (BUILT behind `x4_lender_request`)
 
 ```text
 After the payout, Chhatri asks the lender. The lender decides.
 
-If the lender grants (PROPOSED HOLIDAY_GRANTED):
+If the lender grants (HOLIDAY_GRANTED):
     Hindi:   आपके लेंडर ने कल की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।
     English: Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty.
 
-If the lender refuses (PROPOSED HOLIDAY_REFUSED with HOLIDAY_REASON_NO_ALLOWANCE):
+If the lender refuses (HOLIDAY_REFUSED with HOLIDAY_REASON_NO_ALLOWANCE):
     Hindi:   आपका लेंडर कल की ₹600 की किस्त नहीं रोक सका: आपकी किस्त की छुट्टियों की सीमा पूरी हो चुकी है। वह हमेशा की तरह देय है। आपके भुगतान पर इसका कोई असर नहीं पड़ता।
     English: Your lender could not pause the ₹600 instalment due tomorrow: your holiday allowance is used up. It is due as usual. Your payout is not affected.
     Next step button: Ask the lender about this
 
-If the lender does not answer (PROPOSED HOLIDAY_NO_RESPONSE):
+If the lender does not answer (HOLIDAY_NO_RESPONSE):
     Hindi:   हम कल की ₹600 की किस्त के बारे में आपके लेंडर तक नहीं पहुँच सके, इसलिए वह हमेशा की तरह देय है। आपके भुगतान पर इसका कोई असर नहीं पड़ता।
     English: We could not reach your lender about the ₹600 instalment due tomorrow, so it is due as usual. Your payout is not affected.
 ```
@@ -904,16 +904,17 @@ When writing or changing a string:
 1. Should the built DISPUTE_ACK change its masculine `भेज रहा हूँ`? Changing it means the catalogue, `DEMO.md`, the tests and the copy deck together. Owner: Omkar Kadam.
 2. What does TALK_TO_TEAM open, and does a new case kind carry a general question? Needed before wave 2 ships Ask Chhatri. Owner: Ujjwal Pardeshi.
 3. What should a thank-you get? Today "thanks" and "OK thanks" end in FALLBACK_HELP. A short acknowledgement needs a key, a test and a decision on its wording. It is a reply, so the X8 limit does not apply to it. Owner: Omkar Kadam.
-4. Is 3 a day the right limit on proactive messages? The X8 spec proposes it as a setting to tune ([fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) section 9), and the earlier text of this document said one a day. Today the only proactive message is CHECKIN_SILENT, and no limit is built. Owner: Omkar Kadam.
+4. Is 3 a day the right limit on proactive messages? The X8 spec proposes it as a setting to tune ([fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) section 9), and the earlier text of this document said one a day. The only proactive message is CHECKIN_SILENT. The cap is BUILT behind `x8_distress_guard` (`max_proactive_per_day`). Owner: Omkar Kadam.
 5. Does a closed dispute need two answers, one for a confirmed payout and one for a rejected dispute? Today both read the same. Owner: Ujjwal Pardeshi.
 6. Voice first or text first on the Ask screen? The states of section 7.4 serve both, and the text box is always there. Owner: Omkar Kadam.
 7. Who reads the Marathi and the new Hindi? Needed before wave 4. Owner: Omkar Kadam.
 
 ## Changelog
 
+- 2026-10-03 · v1.5 · statuses brought up to the code: voice recognition, hand-off, grievance ladder, the HOLIDAY lines, the slip sheet and the X8 cap are BUILT behind flags; the catalogue has 152 keys; Marathi is a built draft in the mini-app only
 - 2026-10-02 · v1.5 · status lines match the build: the mini-app, Ask Chhatri, layer B and X8 are BUILT behind their flags
 - 2026-10-02 · v1.4 · adds the status of every message (BUILT or PROPOSED), the intent word lists and guard rules as they are in code, live-run examples and known dead ends, N4 voice states, H18 confirmation chips, H19 scam warning, H21 next action with WhatsApp reply buttons, and a lender-decides replacement for INSTALMENT_PAUSED; aligns the X8 offer rule, the message kinds and the daily limit with the EDI holiday spec; corrects the case id, the check-in facts and several stale claims
 - 2026-10-02 · v1.3 · second fact-check pass: clarified WhatsApp is SIMULATED today (no Cloud API keys)
-- 2026-10-02 · v1.2 · logic and truth audit fixes
+- 2026-10-02 · v1.2 · corrections after a second read against the code
 - 2026-10-02 · v1.1 · fact-check pass: removed an internal reference, expanded lender role explanation
 - 2026-10-02 · v1 · first draft, from SPEC §13, intents, guard, messages.py and INTEGRATIONS.md

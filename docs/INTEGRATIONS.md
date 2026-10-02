@@ -159,7 +159,7 @@ built by `chhatri.integrations.whatsapp_payloads.template_payload`.
 
   | Workflow | Steps |
   |---|---|
-  | `payout` | `execute_payout` → `credit_payout` → `notify_merchant` → `pause_instalment` |
+  | `payout` | `execute_payout` → `credit_payout` → `notify_merchant` → `request_holiday` |
   | `human-review` | `open_case` → `notify_officer` |
   | `follow-up` | `check_case_sla` → `notify_officer` |
 

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1.5 · 2 Oct 2026 |
+| Status | Draft v1.6 · 3 Oct 2026 |
 | Owner | Omkar Kadam |
 | Audience | Product, engineering, design, compliance, judges |
 | Related | [Personas and JTBD](personas-and-jtbd.md) · [User journeys](user-journeys.md) · [Facts and sources](../01-strategy/facts-and-sources.md) · [Metrics and impact](metrics-and-impact.md) · [SPEC.md](../SPEC.md) · [Build plan](../06-delivery/build-plan.md) · [Requirements traceability matrix](../01-strategy/requirements-traceability-matrix.md) · [Competitive landscape](../01-strategy/competitive-landscape.md) · [Risk register](../06-delivery/risk-register.md) |
@@ -11,8 +11,8 @@
 
 - **Problem:** Earlier merchant plans took 30–60 days per claim and needed multiple documents (A3). Paytm already processes a shop's payments on its devices (A1), so the sales signal exists, but a claim still starts with the merchant.
 - **Solution:** Chhatri starts the claim itself. It detects two loss events from sales data (an area drop during a weather alert, and a shop that has gone silent). The policy engine decides and pays with at most one document, and none for an area claim. After a payout Chhatri asks the merchant's lender to defer the next instalment, and the lender decides. In the prototype the sales, alerts, KYC, payout and lender are simulated and labelled.
-- **Scope:** 8 kept features (K1–K8, BUILT), 8 new features (N1–N8), 8 fixes (X1–X8) and 26 ideas from other teams (H1–H26). Everything not yet built is P0. We build it in six waves behind feature flags, and an unfinished feature is hidden, never shown half-working (section 3.3). The four stages of the track's health-claims example map to features in the [traceability matrix](../01-strategy/requirements-traceability-matrix.md).
-- **Success (targets, none measured yet):** every decision explanation can be reproduced from the numbers shown, no unsupported money figure in Ask Chhatri, no loan offers while an alert covers the zone or a claim or dispute is open, and the three live tests of the demo pass. Backend coverage is 99.7% today against an 80% gate.
+- **Scope:** 8 kept features (K1–K8), 8 new features (N1–N8), 8 fixes (X1–X8) and 26 ideas from other teams (H1–H26). All of it is P0 and all of it is BUILT: the new work was built in six waves behind feature flags, and a feature that is not rehearsed is hidden, never shown half-working (section 3.3). Not done, and human-only: rehearsals, the backup video, deploying the static demo, a native review of Marathi. The four stages of the track's health-claims example map to features in the [traceability matrix](../01-strategy/requirements-traceability-matrix.md).
+- **Success (targets, none measured yet):** every decision explanation can be reproduced from the numbers shown, no unsupported money figure in Ask Chhatri, no loan offers while an alert covers the zone or a claim or dispute is open, and the three live tests of the demo pass. Backend coverage was 99.7% at the 2 Oct baseline against an 80% gate; it is measured again in the final run.
 
 ---
 
@@ -29,11 +29,11 @@ Small shop-based merchants lose income to weather shocks, power cuts and illness
 ### 1.2 Goals
 
 1. **Cut time-to-money from weeks to the same day** (north star, see [Metrics and impact](metrics-and-impact.md)). Chhatri starts the claim itself from sales data. In the replay the credit lands 4 simulated minutes after the decision.
-2. **Lower claim barriers:** no document for an area income loss, one document (a hospital slip) for illness. The N3 pre-check (Wave 2) hands a bad photo back before a decision, and doubtful claims always reach a person.
-3. **Ask the lender for an EDI holiday on shock days:** after an approved claim, Chhatri requests that the next instalment moves to the end of the loan with no penalty. The lender decides under its own rule (X4, Wave 1).
+2. **Lower claim barriers:** no document for an area income loss, one document (a hospital slip) for illness. The N3 pre-check (`n3_slip_precheck`) hands a bad photo back before a decision, and doubtful claims always reach a person.
+3. **Ask the lender for an EDI holiday on shock days:** after an approved claim, Chhatri requests that the next instalment moves to the end of the loan with no penalty. The lender decides under its own rule (X4, `x4_lender_request`).
 4. **Explain every decision in Hindi and English, reproducibly from the numbers shown.** A merchant can ask "why" and dispute, and we aim to answer a dispute within 24 hours.
 5. **Span the track (insurance, lending, fintech) and the merchant journey:** understand, buy, track a claim, resolve a dispute, escalate a grievance.
-6. **Build on free tools only:** the Gemini API free tier and Sarvam free credits are the only accounts, and browser speech is a fallback. Tesseract is a later option and is not in the Wave 2 chain. Every integration is labelled LIVE or SIMULATED, and X6 (Wave 2) adds FALLBACK.
+6. **Build on free tools only:** the Gemini API free tier and Sarvam free credits are the only accounts, and browser speech is a fallback. Tesseract is a later option and is not in the reader chain. Every integration is labelled LIVE or SIMULATED, and X6 (`x6_provider_panel`) adds FALLBACK.
 
 ### 1.3 Non-goals
 
@@ -66,8 +66,8 @@ See [Personas and JTBD](personas-and-jtbd.md) for full details.
 
 | Word | Meaning |
 |---|---|
-| BUILT | In the code at commit 86575ea and tested. Sales, alerts, KYC, payouts, the lender, Soundbox, WhatsApp and the Paytm link are always SIMULATED and labelled |
-| PLANNED | Not written yet. Every PLANNED item is **P0** (team decision, 2 Oct 2026), so nothing ranks lower. The order of work is the **wave** |
+| BUILT | In the code and covered by tests. A feature behind a flag is off until `CHHATRI_FEATURES` and `VITE_FEATURES` name it. Sales, alerts, KYC, payouts, the lender, Soundbox, WhatsApp and the Paytm link are always SIMULATED and labelled. The AI paths are tested against fakes only: no key has been run |
+| Not done | Needs a person (deploy, video, rehearsal, a native reviewer) or a real key. Every item was **P0** (team decision, 2 Oct 2026). The order of work was the **wave** |
 | Wave | 0 setup · 1 demo spine · 2 live AI · 3 trust and rights · 4 judge wow · 5 ship. Section 3.3 has the goals and flags |
 | Owner | Omkar: mini-app, console, design, copy, pitch. Ujjwal: backend, engine, AI adapters, evals. "Both" means screens by Omkar and backend by Ujjwal |
 | Spec | The feature spec that holds the detail and the test plan |
@@ -86,50 +86,50 @@ See [Personas and JTBD](personas-and-jtbd.md) for full details.
 | K7 | Tamper-evident audit log | A hash chain. `GET /api/audit/verify` checks it | built | Ujjwal | BUILT | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
 | K8 | Claims-officer console and live map | Seven pages: overview, live map, claims, merchant phone, audit, backtest, policy | built | Omkar | BUILT | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
 | **New (N)** | | | | | | |
-| N1 | Merchant mini-app "Chhatri in Paytm for Business" | Phone-sized and Hindi-first, inside the console. Wave 1: home, coverage explainer, claim tracker, receipt, cover and help. Consent and grievance screens come with N5 and N6, Marathi with N8 | 1 | Omkar | PLANNED | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
-| N2 | Ask Chhatri grounded assistant | Text, Hindi and English. Answers coverage and claim questions from policy wording (clause citations) and the merchant's own decision facts | 2 | Ujjwal | PLANNED | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
-| N3 | Live slip reading with a pre-check | The reader chain (Gemini, then Sarvam) extracts slip fields. The pre-check shows what was read, and the merchant confirms before the checks run | 2 | Ujjwal | PLANNED | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
-| N4 | Real Hindi voice | Sarvam speech-to-text and text-to-speech when keyed, browser speech as a fallback | 2 | Ujjwal | PLANNED | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
-| N5 | Grievance ladder with response clocks | Insurer grievance officer, then IRDAI's Bima Bharosa portal, then the Insurance Ombudsman. A clock only where a source states one | 3 | Both | PLANNED | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
-| N6 | Consent centre | View, turn off and log purpose-specific consents (DPDP). "Erase this slip" (proposed label) | 3 | Both | PLANNED | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) |
-| N7 | Public static demo and backup video | A mock-mode build of the console. The repo owner deploys it to a free static host, so no address exists yet. A recorded backup video | 5 | Omkar (build, video), Ujjwal (deploy) | PLANNED | [fs-08 §9.7](feature-specs/fs-08-claims-officer-console.md), [build plan](../06-delivery/build-plan.md) |
-| N8 | Marathi (mini-app and Ask Chhatri) | A third language through the same message catalogue, after native review | 4 | Omkar | PLANNED | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-05](feature-specs/fs-05-ask-chhatri.md) |
+| N1 | Merchant mini-app "Chhatri in Paytm for Business" | Phone-sized and Hindi-first, inside the console: home, coverage explainer, claim tracker, receipt, cover and help. Consent and grievance screens come with N5 and N6, Marathi with N8 | 1 | Omkar | BUILT · `n1_miniapp` | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
+| N2 | Ask Chhatri grounded assistant | Text, Hindi and English. Answers coverage and claim questions from policy wording (clause citations) and the merchant's own decision facts | 2 | Ujjwal | BUILT · `n2_ask_chhatri` | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
+| N3 | Live slip reading with a pre-check | The reader chain (Gemini, then Sarvam) extracts slip fields. The pre-check shows what was read, and the merchant confirms before the checks run | 2 | Ujjwal | BUILT · `n3_slip_precheck` | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
+| N4 | Real Hindi voice | Sarvam speech-to-text and text-to-speech when keyed, browser speech as a fallback | 2 | Ujjwal | BUILT · `n4_voice` | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
+| N5 | Grievance ladder with response clocks | Insurer grievance officer, then IRDAI's Bima Bharosa portal, then the Insurance Ombudsman. A clock only where a source states one | 3 | Both | BUILT · `n5_grievances` | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
+| N6 | Consent centre | View, turn off and log purpose-specific consents (DPDP). "Erase this slip" (proposed label) | 3 | Both | BUILT · `n6_consents` | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) |
+| N7 | Public static demo and backup video | A mock-mode build of the console. The repo owner deploys it to a free static host, so no address exists yet. A recorded backup video | 5 | Omkar (build, video), Ujjwal (deploy) | BUILT (static build). Deploying it and the backup video are not done | [fs-08 §9.7](feature-specs/fs-08-claims-officer-console.md), [build plan](../06-delivery/build-plan.md) |
+| N8 | Marathi (mini-app and Ask Chhatri) | A third language through the same message catalogue, after native review | 4 | Omkar | BUILT as a draft, behind `n8_marathi` | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-05](feature-specs/fs-05-ask-chhatri.md) |
 | **Fixes (X)** | | | | | | |
-| X1 | Fix the 2 failing frontend tests | Cases panel and Overview live map | 0 | Ujjwal | PLANNED | [build plan](../06-delivery/build-plan.md) |
-| X2 | Validate the expected day at claim creation | Use the published value rounded to ₹10 and reject an unpublished one | 1 | Ujjwal | PLANNED | [fs-01](feature-specs/fs-01-area-auto-claim.md) |
-| X3 | Fail loudly when a zone is missing from the price table | Raise an error. Do not fall back to the ₹2 a day floor | 1 | Ujjwal | PLANNED | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) |
-| X4 | EDI-holiday request and guard | Chhatri requests, the simulated lender decides: flag on, loan active, not in arrears, allowance left. A refusal creates no pause. The wording says the lender decided | 1 | Ujjwal | PLANNED | [fs-03](feature-specs/fs-03-edi-holiday.md) |
-| X5 | A clean 404 for an unknown merchant | Return the standard `not_found` envelope, not an error trace | 1 | Ujjwal | PLANNED | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
-| X6 | Provider panel with LIVE, SIMULATED and FALLBACK | A panel with a status for each component, and a demo switch that forces fallback | 2 | Ujjwal | PLANNED | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
-| X7 | Honest-wording test | Fails if a template promises, shows a money figure that is not in the decision facts, or says "paid" before a payout record exists | 1 | Ujjwal | PLANNED | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
-| X8 | No loan offers during distress, and a message cap | No loan, top-up or cross-sell message while an alert covers the zone or a claim or dispute is open. A daily cap on proactive messages, with payment confirmations and replies exempt | 3 | Ujjwal | PLANNED | [fs-03](feature-specs/fs-03-edi-holiday.md) |
+| X1 | Fix the 2 failing frontend tests | Cases panel and Overview live map | 0 | Ujjwal | BUILT | [build plan](../06-delivery/build-plan.md) |
+| X2 | Validate the expected day at claim creation | Use the published value rounded to ₹10 and reject an unpublished one | 1 | Ujjwal | BUILT | [fs-01](feature-specs/fs-01-area-auto-claim.md) |
+| X3 | Fail loudly when a zone is missing from the price table | Raise an error. Do not fall back to the ₹2 a day floor | 1 | Ujjwal | BUILT | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) |
+| X4 | EDI-holiday request and guard | Chhatri requests, the simulated lender decides: flag on, loan active, not in arrears, allowance left. A refusal creates no pause. The wording says the lender decided | 1 | Ujjwal | BUILT · `x4_lender_request` | [fs-03](feature-specs/fs-03-edi-holiday.md) |
+| X5 | A clean 404 for an unknown merchant | Return the standard `not_found` envelope, not an error trace | 1 | Ujjwal | BUILT | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
+| X6 | Provider panel with LIVE, SIMULATED and FALLBACK | A panel with a status for each component, and a demo switch that forces fallback | 2 | Ujjwal | BUILT · `x6_provider_panel` | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
+| X7 | Honest-wording test | Fails if a template promises, shows a money figure that is not in the decision facts, or says "paid" before a payout record exists | 1 | Ujjwal | BUILT | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
+| X8 | No loan offers during distress, and a message cap | No loan, top-up or cross-sell message while an alert covers the zone or a claim or dispute is open. A daily cap on proactive messages, with payment confirmations and replies exempt | 3 | Ujjwal | BUILT · `x8_distress_guard` | [fs-03](feature-specs/fs-03-edi-holiday.md) |
 | **Ideas from other teams (H)** | Credits are in the [competitive landscape §4](../01-strategy/competitive-landscape.md#4-feature-harvest-what-we-learned-and-adopted) | | | | | |
-| H1 | Step-by-step tracker with state badges | N1 claim tracker: Detected → Checked → Decided → Paid → EDI holiday. Each step shows state, simulated time and a one-line reason, including the REFERRED and DISPUTE paths | 1 | Omkar | PLANNED | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
-| H2 | "Why this amount" with source badges | K5 card (BUILT) plus the N1 view: rule, numbers and source badges (sales index, alert, KYC, slip) | 1 | Omkar | K5 BUILT. N1 view PLANNED | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
-| H3 | Payout receipt | N1 receipt: decision id, rules version, formula, sources, audit hash prefix, grievance path. Printable | 1 | Omkar | PLANNED | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
-| H4 | Honest-wording test | X7 (same) | 1 | Ujjwal | PLANNED | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
-| H5 | The merchant confirms what was read | N3: the merchant confirms the fields before the checks run. A three-line checklist (photo readable, name on the slip, dates on the slip) with PASS or WARN and no number | 2 | Ujjwal | PLANNED | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
-| H6 | Zero-login public demo | N7 (same) | 5 | Omkar | PLANNED | [build plan](../06-delivery/build-plan.md) |
-| H7 | Glass-box provider panel with a fallback switch | X6 (same) | 2 | Ujjwal | PLANNED | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
-| H8 | Real operational counts | K8 ops strip of five numbers counted from the database. No projections | 4 | Omkar | PLANNED | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
-| H9 | No loan offers in distress; a frequency cap | X8 (same) | 3 | Ujjwal | PLANNED | [fs-03](feature-specs/fs-03-edi-holiday.md) |
+| H1 | Step-by-step tracker with state badges | N1 claim tracker: Detected → Checked → Decided → Paid → EDI holiday. Each step shows state, simulated time and a one-line reason, including the REFERRED and DISPUTE paths | 1 | Omkar | BUILT · `n1_miniapp` | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
+| H2 | "Why this amount" with source badges | K5 card (BUILT) plus the N1 view: rule, numbers and source badges (sales index, alert, KYC, slip) | 1 | Omkar | BUILT (K5 card; N1 view behind `n1_miniapp`) | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
+| H3 | Payout receipt | N1 receipt: decision id, rules version, formula, sources, audit hash prefix, grievance path. Printable | 1 | Omkar | BUILT | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
+| H4 | Honest-wording test | X7 (same) | 1 | Ujjwal | BUILT | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
+| H5 | The merchant confirms what was read | N3: the merchant confirms the fields before the checks run. A three-line checklist (photo readable, name on the slip, dates on the slip) with PASS or WARN and no number | 2 | Ujjwal | BUILT · `n3_slip_precheck` | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
+| H6 | Zero-login public demo | N7 (same) | 5 | Omkar | BUILT (static build). Not deployed | [build plan](../06-delivery/build-plan.md) |
+| H7 | Glass-box provider panel with a fallback switch | X6 (same) | 2 | Ujjwal | BUILT · `x6_provider_panel` | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
+| H8 | Real operational counts | K8 ops strip of five numbers counted from the database. No projections | 4 | Omkar | BUILT · `h8_ops_strip` | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
+| H9 | No loan offers in distress; a frequency cap | X8 (same) | 3 | Ujjwal | BUILT · `x8_distress_guard` | [fs-03](feature-specs/fs-03-edi-holiday.md) |
 | H10 | Deterministic core; the model has no authority over money | K4 (done). The AI builds the case, and code decides the money | built | Ujjwal | BUILT | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) |
-| H11 | Bilingual templates, not model translation | The Hindi and English catalogue (done). N8 adds Marathi | built, 4 | Omkar | BUILT (Hindi, English). PLANNED (Marathi) | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
-| H12 | Visible, measured test counts | README and pitch show measured counts and never round up. X1 clears the 2 failing tests first | 5 | Ujjwal | PLANNED | [build plan](../06-delivery/build-plan.md) |
-| H13 | Verified-by badges | Every rule, number and clause shown to a merchant or officer carries its source and time | 1 (console chips 4) | Both | PLANNED | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md), [fs-08](feature-specs/fs-08-claims-officer-console.md) |
-| H14 | Counterfactual in every explanation | What would have changed the outcome, produced by the engine re-running its own rule | 1 (console 4) | Both | PLANNED | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md), [fs-08](feature-specs/fs-08-claims-officer-console.md) |
-| H15 | Slip pre-check | Document class, slot checklist and a confidence gate ("ask, don't assume") | 2 | Ujjwal | PLANNED | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
-| H16 | Prompt-injection defence | Text from slips and chat is wrapped and never obeyed. Red-team tests | 2 | Ujjwal | PLANNED | [fs-05](feature-specs/fs-05-ask-chhatri.md), [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
-| H17 | Clause citations in answers | N2 cites C1 to C12 chips. Every number comes from engine facts. A guard blocks unsupported numbers and promises | 2 | Ujjwal | PLANNED | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
-| H18 | Voice confirmation chips | Amounts and dates are confirmed before they are used | 2 | Both | PLANNED | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
-| H19 | Scam-message warning | In chat: OTP requests, advance fees, "guaranteed claim", urgency, short links | 2 | Ujjwal | PLANNED | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
-| H20 | Jargon lens | Tap any insurance term for a plain explanation with an example | 1 | Omkar | PLANNED | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
-| H21 | Next-best-action bar | Every screen and every chat reply ends with a clear next step | 1 (chat replies 2) | Omkar | PLANNED | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-05](feature-specs/fs-05-ask-chhatri.md) |
-| H22 | Grievance ladder with response clocks and a respondent router | Who owns this complaint: Paytm, the insurer or the lender | 3 | Both | PLANNED | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
-| H23 | Consent activity log and "forget my slip" | What was used, for what and when. Erase a slip on request | 3 | Both | PLANNED | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) |
-| H24 | What-if panel for judges | Change the alert, the hourly indices or the shop count and watch the real trigger rule recompute. Read-only | 4 | Both | PLANNED | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
-| H25 | Published AI evaluation | Intent accuracy, the guard's red-team block rate and slip-field accuracy on synthetic labelled data. Shown only once measured | 3 | Ujjwal | PLANNED | [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) |
-| H26 | Mode, provider and reason on every AI reply | LIVE, SIMULATED or FALLBACK, the provider and the fallback reason | 2 | Ujjwal | PLANNED | [fs-05](feature-specs/fs-05-ask-chhatri.md), [fs-08](feature-specs/fs-08-claims-officer-console.md) |
+| H11 | Bilingual templates, not model translation | The Hindi and English catalogue (done). N8 adds Marathi | built, 4 | Omkar | BUILT (Hindi, English). Marathi is a draft behind `n8_marathi` | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
+| H12 | Visible, measured test counts | README and pitch show measured counts and never round up. X1 clears the 2 failing tests first | 5 | Ujjwal | Not done: measured counts are written after the final run | [build plan](../06-delivery/build-plan.md) |
+| H13 | Verified-by badges | Every rule, number and clause shown to a merchant or officer carries its source and time | 1 (console chips 4) | Both | BUILT | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md), [fs-08](feature-specs/fs-08-claims-officer-console.md) |
+| H14 | Counterfactual in every explanation | What would have changed the outcome, produced by the engine re-running its own rule | 1 (console 4) | Both | BUILT | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md), [fs-08](feature-specs/fs-08-claims-officer-console.md) |
+| H15 | Slip pre-check | Document class, slot checklist and a confidence gate ("ask, don't assume") | 2 | Ujjwal | BUILT · `n3_slip_precheck` | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
+| H16 | Prompt-injection defence | Text from slips and chat is wrapped and never obeyed. Red-team tests | 2 | Ujjwal | BUILT | [fs-05](feature-specs/fs-05-ask-chhatri.md), [fs-02](feature-specs/fs-02-hospital-cash-claim.md) |
+| H17 | Clause citations in answers | N2 cites C1 to C12 chips. Every number comes from engine facts. A guard blocks unsupported numbers and promises | 2 | Ujjwal | BUILT · `n2_ask_chhatri` | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
+| H18 | Voice confirmation chips | Amounts and dates are confirmed before they are used | 2 | Both | BUILT · `n4_voice` | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
+| H19 | Scam-message warning | In chat: OTP requests, advance fees, "guaranteed claim", urgency, short links | 2 | Ujjwal | BUILT · `n2_ask_chhatri` | [fs-05](feature-specs/fs-05-ask-chhatri.md) |
+| H20 | Jargon lens | Tap any insurance term for a plain explanation with an example | 1 | Omkar | BUILT · `n1_miniapp` | [fs-04](feature-specs/fs-04-merchant-mini-app.md) |
+| H21 | Next-best-action bar | Every screen and every chat reply ends with a clear next step | 1 (chat replies 2) | Omkar | BUILT · `n1_miniapp` | [fs-04](feature-specs/fs-04-merchant-mini-app.md), [fs-05](feature-specs/fs-05-ask-chhatri.md) |
+| H22 | Grievance ladder with response clocks and a respondent router | Who owns this complaint: Paytm, the insurer or the lender | 3 | Both | BUILT · `n5_grievances` | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) |
+| H23 | Consent activity log and "forget my slip" | What was used, for what and when. Erase a slip on request | 3 | Both | BUILT · `n6_consents` | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) |
+| H24 | What-if panel for judges | Change the alert, the hourly indices or the shop count and watch the real trigger rule recompute. Read-only | 4 | Both | BUILT · `h24_whatif` | [fs-08](feature-specs/fs-08-claims-officer-console.md) |
+| H25 | Published AI evaluation | Intent accuracy, the guard's red-team block rate and slip-field accuracy on synthetic labelled data. Shown only once measured | 3 | Ujjwal | BUILT (offline harness and page, behind `h25_evals`). No run is stored | [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) |
+| H26 | Mode, provider and reason on every AI reply | LIVE, SIMULATED or FALLBACK, the provider and the fallback reason | 2 | Ujjwal | BUILT | [fs-05](feature-specs/fs-05-ask-chhatri.md), [fs-08](feature-specs/fs-08-claims-officer-console.md) |
 
 ### 3.3 Waves and flags
 
@@ -186,7 +186,7 @@ Each requirement names its feature, status and wave. Acceptance values come from
 
 - *Acceptance criteria:*
   - Given: Anil sends `anil_admission_slip.png` (patient "Anil R. Jadhav", admitted 2025-08-20, KEM Hospital).
-  - When: the slip reader reads it. It is Sarvam Vision when `SARVAM_API_KEY` is set and a labelled simulator otherwise. Gemini is PLANNED for Wave 2.
+  - When: the slip reader reads it. It is Sarvam Vision when `SARVAM_API_KEY` is set and a labelled simulator otherwise. With `n3_slip_precheck` on, the Gemini reader heads the chain (tested against fakes only).
   - Then: it returns the name, the admission date, the hospital and a confidence of at least 0.80 for the sample slip.
 
 **FR-personal-003:** The name on the slip must match the KYC name with a score of 85 or more. This is a SOFT check.
@@ -210,9 +210,9 @@ Each requirement names its feature, status and wave. Acceptance values come from
   - When: the policy engine evaluates the claim.
   - Then: the outcome is REFERRED, ₹1,500 is computed and not paid, and case C-2291 opens (the first case after a fresh load). Anil gets "धन्यवाद। पर्ची पर नाम आपके KYC से मेल नहीं खा रहा, इसलिए हमारी टीम इसे देखेगी। 24 घंटे में जवाब मिलेगा।", as in DEMO.md. An officer then approves, which re-runs every HARD check and pays ₹1,500, or declines.
 
-### 4.3 EDI holiday (K3 BUILT as a pause; X4 PLANNED, Wave 1)
+### 4.3 EDI holiday (K3 BUILT as a pause; X4 BUILT behind `x4_lender_request`)
 
-Today the instalment step pauses the next instalment with no check, and the message reads as if Chhatri did it. The requirements below are the X4 design ([fs-03](feature-specs/fs-03-edi-holiday.md)).
+With the flag off the instalment step pauses the next instalment with no check, and the message reads as if Chhatri did it. The requirements below are the X4 behaviour with the flag on ([fs-03](feature-specs/fs-03-edi-holiday.md)).
 
 **FR-edi-001:** After a payout is credited, send the lender an EDI-holiday request that quotes the decision id.
 
@@ -233,7 +233,7 @@ Today the instalment step pauses the next instalment with no check, and the mess
 - *Acceptance criteria:*
   - Given: the lender granted at 17:05.
   - When: the message is posted.
-  - Then: Anil reads the lender-decides wording. Proposed wording from fs-03: "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty." A refusal reads, in proposed wording, that the lender could not pause it, gives the reason, says the instalment is due as usual and that the payout is not affected.
+  - Then: Anil reads the lender-decides wording: "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty." A refusal reads that the lender could not pause it, gives the reason, says the instalment is due as usual and that the payout is not affected (`HOLIDAY_REFUSED`).
 
 ### 4.4 Policy engine and payout authority (K4, BUILT)
 
@@ -253,7 +253,7 @@ Today the instalment step pauses the next instalment with no check, and the mess
 
 ### 4.5 Explanations and disputes (K5, BUILT)
 
-**FR-explain-001:** Answer "why this amount" with the formula, from a voice chip today. Free questions arrive with N2 (Wave 2).
+**FR-explain-001:** Answer "why this amount" with the formula, from a voice chip. Free questions come with N2 (`n2_ask_chhatri`).
 
 - *Acceptance criteria:*
   - Given: Anil's ₹1,380 payout.
@@ -283,9 +283,9 @@ Today the instalment step pauses the next instalment with no check, and the mess
   - When: the policy engine quotes the purchase.
   - Then: the outcome is BLOCKED, and the reply is "नया कवर वेटिंग पीरियड के बाद शुरू होता है — 25 अगस्त से। कल के अलर्ट पर यह लागू नहीं होगा।", as in DEMO.md. The link follows.
 
-### 4.7 Ask Chhatri grounded assistant (N2, PLANNED, Wave 2)
+### 4.7 Ask Chhatri grounded assistant (N2, BUILT behind `n2_ask_chhatri`)
 
-A guard for free-text replies is already BUILT (`conversation/guard.py`). N2 builds the answer path on it ([fs-05](feature-specs/fs-05-ask-chhatri.md)).
+A guard for free-text replies (`conversation/guard.py`) is the base. N2 builds the answer path on it ([fs-05](feature-specs/fs-05-ask-chhatri.md)).
 
 **FR-ask-001:** Answer coverage and claim questions in Hindi and English, grounded only in policy wording (C1 to C12) and the merchant's own records.
 
@@ -308,7 +308,7 @@ A guard for free-text replies is already BUILT (`conversation/guard.py`). N2 bui
   - When: the guard checks it.
   - Then: the output is rejected and the template is used.
 
-### 4.8 Live slip reading and pre-check (N3, PLANNED, Wave 2)
+### 4.8 Live slip reading and pre-check (N3, BUILT behind `n3_slip_precheck`)
 
 **FR-slip-001:** Read the slip, show the merchant what was read and a three-line checklist, and ask the merchant to confirm before the checks run. The pre-check never decides and never shows a name-against-KYC match.
 
@@ -324,7 +324,7 @@ A guard for free-text replies is already BUILT (`conversation/guard.py`). N2 bui
   - When: the pre-check gate runs.
   - Then: the merchant is asked to retake it, up to 3 photos per check-in (proposed limit), and then the claim goes to the team. A clear photo with confidence 0.92 passes the gate and waits for the merchant's confirmation.
 
-### 4.9 Real Hindi voice (N4, PLANNED, Wave 2)
+### 4.9 Real Hindi voice (N4, BUILT behind `n4_voice`)
 
 **FR-voice-001:** Speech to text: Sarvam when keyed, browser speech as a fallback.
 
@@ -340,7 +340,7 @@ A guard for free-text replies is already BUILT (`conversation/guard.py`). N2 bui
   - When: text to speech runs.
   - Then: it is spoken in Hindi and is audible on the demo laptop.
 
-### 4.10 Merchant mini-app (N1, PLANNED, Wave 1)
+### 4.10 Merchant mini-app (N1, BUILT behind `n1_miniapp`)
 
 **FR-mini-001:** Home answers "am I covered, what is happening, what next?"
 
@@ -356,7 +356,7 @@ A guard for free-text replies is already BUILT (`conversation/guard.py`). N2 bui
   - When: the explainer loads.
   - Then: it covers area income loss (an alert plus a sales drop), hospital cash (a silent day plus a slip), the caps (₹2,500 a day for area, ₹1,500 a day for hospital cash, ₹30,000 in any rolling 365 days), exclusions, the 7-day waiting period and the EDI holiday (a request the lender decides). Text follows policy clauses C1 to C12.
 
-**FR-mini-003:** Buy flow: the quote (OK or BLOCKED with the reason), the start date, and a payment link. With `n6_consents` on (Wave 3), three consent switches come first.
+**FR-mini-003:** Buy flow: the quote (OK or BLOCKED with the reason), the start date, and a payment link. With `n6_consents` on, three consent switches come first.
 
 - *Acceptance criteria:*
   - Given: the merchant taps "Get cover".
@@ -394,7 +394,7 @@ Every number here is a target. We measure it in rehearsal and report what we mea
 
 - **`make demo-check` passes 70 of 70** before the final.
 - **Reset:** reload the scenario (`POST /api/replay/load`). It is deterministic ([DEMO.md](../DEMO.md)).
-- **Fallbacks:** each AI component is labelled LIVE, SIMULATED or FALLBACK (X6, Wave 2). A failed provider hands over to the next: Gemini, Sarvam, then templates for N2, a person for N3, and tap chips for N4.
+- **Fallbacks:** each AI component is labelled LIVE, SIMULATED or FALLBACK (X6, `x6_provider_panel`). A failed provider hands over to the next: Gemini, Sarvam, then templates for N2, a person for N3, and tap chips for N4.
 - **Hide order:** an unfinished feature is hidden by its flag, in the order in [build plan §7](../06-delivery/build-plan.md#7-hide-order-if-time-runs-out).
 
 ### 5.3 Accessibility
@@ -406,7 +406,7 @@ Target: WCAG 2.2 AA for the mini-app ([design system](../03-design/design-system
 - **Keyboard:** every interactive element is reachable with Tab, Shift+Tab and Enter.
 - **Screen reader:** labels on dynamic content such as chat and the live-map hexagons.
 - **Motion:** animations respect `prefers-reduced-motion` (BUILT in the console CSS).
-- **Checks today:** the jsx-a11y lint rules run in `npm run lint`. There is no automated screen test yet.
+- **Checks:** the jsx-a11y lint rules run in `npm run lint`, `frontend/src/contrast.test.ts` computes the contrast of the console tokens, and an e2e test walks the tabs with the keyboard. There is no automated axe-style screen scan and no screen-reader review.
 
 ### 5.4 Security
 
@@ -421,14 +421,14 @@ See [SECURITY.md](../SECURITY.md) for the full list. In short:
 ### 5.5 Internationalisation
 
 - **BUILT:** Hindi (Devanagari) and English, from the message catalogue `backend/chhatri/conversation/messages.py`. It is the single source, and no model translates.
-- **PLANNED:** Marathi (Wave 4, N8) through the same catalogue, after native review.
+- **BUILT as a draft:** Marathi (N8, `n8_marathi`) for the mini-app text, until a native speaker reviews it. The backend catalogue messages have no Marathi and show in Hindi.
 - **Number format:** Indian rupees (₹) with grouping commas, for example ₹1,380.
-- **Voice:** Hindi through Sarvam when keyed (BUILT). N4 (Wave 2) adds browser speech as a fallback.
+- **Voice:** Hindi and English through Sarvam when keyed, with browser speech as a fallback (N4, `n4_voice`). There is no Marathi voice.
 
 ### 5.6 Observability and audit
 
 - **Audit log:** every payout, claim, case, dispute and officer decision is an `AuditEntry` in a hash chain. `GET /api/audit/verify` checks the chain.
-- **Ops strip (H8, PLANNED, Wave 4):** open cases by state, the oldest SLA clock, the share decided automatically and by a person, and today's payouts by zone, counted from the database.
+- **Ops strip (H8, BUILT behind `h8_ops_strip`):** open cases by state, the oldest SLA clock, the share decided automatically and by a person, and today's payouts by zone, counted from the database.
 - **Errors:** logged with merchant id, action and time on the server, and never shown to the merchant.
 - **SLA clocks:** dispute and grievance clocks are tracked per case and shown in the UI (N1 tracker, N5 ladder).
 
@@ -440,7 +440,7 @@ See [SECURITY.md](../SECURITY.md) for the full list. In short:
 
 - **Google AI Studio:** the Gemini API free tier (Flash models, rate-limited). Free-tier content may be used to improve Google products, so we send only synthetic demo data (A19, ADR 0009).
 - **Sarvam AI:** free starter credits (the amount is not published, so check before the final). Used for speech to text, text to speech, chat and Sarvam Vision. Without a key the adapters are labelled simulators.
-- **Tesseract OCR:** a later option for slip reading, with a Hindi model. It is not in the code and not in the Wave 2 chain.
+- **Tesseract OCR:** a later option for slip reading, with a Hindi model. It is not in the code and not in the reader chain.
 
 ### 6.2 Integrations (simulated and labelled)
 
@@ -454,11 +454,13 @@ See [SECURITY.md](../SECURITY.md) for the full list. In short:
 
 ## 7. Release plan
 
+All six waves are built in the code (3 Oct). Not done, and human-only: the backup video, deploying the static build, the rehearsals and the freeze. No checkpoint log is kept in the repository.
+
 There are no clock times here. The slot time and length are not announced, so the freeze, which is 90 minutes before our slot, is worked out when the slot is known ([build plan §8](../06-delivery/build-plan.md)).
 
 | Wave | What lands | Closes at |
 |---|---|---|
-| 0 setup | X1, the flag registry, the scoped Tailwind v4 and shadcn set-up, the key check for Gemini and Sarvam | CP0 |
+| 0 setup | X1, the flag registry, the scoped Tailwind v4 and shadcn set-up, the key check for Gemini and Sarvam. Built | CP0 |
 | 1 demo spine | N1 core (home, coverage explainer, claim tracker, receipt, cover), H1 to H3, H13, H14, H20, H21, X2, X3, X4, X5, X7 | CP1 |
 | 2 live AI | N3 with H15 and H16, N2 with H17 and H19, N4 with H18, X6 with H26 | CP2 |
 | 3 trust and rights | N5 with H22, N6 with H23, X8, the H25 evaluation harness | CP3 |
@@ -492,39 +494,39 @@ See [Metrics and impact](metrics-and-impact.md) for the full framework.
 
 ## 9. Traceability: FR to feature spec to test
 
-BUILT tests are files and functions that exist in the repository. PLANNED tests are described by the spec section that lists them, and their names are not final. The whole-statement view is the [requirements traceability matrix](../01-strategy/requirements-traceability-matrix.md).
+The tests are files and functions that exist in the repository. The whole-statement view is the [requirements traceability matrix](../01-strategy/requirements-traceability-matrix.md). A frontend file name without a folder is under `frontend/src/miniapp/screens/`.
 
-| FR ID | Feature spec | Tests, BUILT | Tests, PLANNED | Status |
-|---|---|---|---|---|
-| FR-area-001 | [fs-01](feature-specs/fs-01-area-auto-claim.md) (K1) | `backend/tests/detect/test_triggers.py`: `test_seventeen_hundred` | fs-01 §14.2 | BUILT |
-| FR-area-002 | [fs-01](feature-specs/fs-01-area-auto-claim.md) (K1) | `backend/tests/policy/test_amounts.py`: `test_area_deck_example_1380` | fs-01 §14.2 | BUILT |
-| FR-area-003 | [fs-01](feature-specs/fs-01-area-auto-claim.md) (K1) | `backend/tests/replay/test_area_flow.py`: `test_payouts_are_executed_at_17_00_and_credited_at_17_04` | fs-01 §14.2 | BUILT |
-| FR-personal-001 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/detect/test_silent.py`: `test_closed_shop_is_silent` | fs-02 §16 | BUILT |
-| FR-personal-002 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2, N3) | `backend/tests/integrations/test_sarvam_docai.py` | fs-02 §16 (Gemini reader, Wave 2) | BUILT (Sarvam reader). Gemini PLANNED |
-| FR-personal-003 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/policy/test_names.py`: `test_spec_pairs`, `test_initial_expands_to_full_score` | none needed | BUILT |
-| FR-personal-004 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/policy/test_amounts.py`: `test_personal_deck_example_1500` | none needed | BUILT |
-| FR-personal-005 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/policy/test_engine.py`: `test_personal_name_mismatch_referred_with_amount_and_explanation`<br>`backend/tests/conversation/test_live_tests.py`: `test_human_slip_with_a_different_name_is_referred_and_paid_only_after_the_officer` | none needed | BUILT |
-| FR-edi-001 | [fs-03](feature-specs/fs-03-edi-holiday.md) (K3, X4) | `backend/tests/ledger/test_instalments.py`: `test_pauses_tomorrows_instalment` (the pause only) | fs-03 §15 | K3 BUILT as a pause. Request PLANNED · Wave 1 |
-| FR-edi-002 | [fs-03](feature-specs/fs-03-edi-holiday.md) (X4) | none | fs-03 §15 (simulated lender) | PLANNED · Wave 1 |
-| FR-edi-003 | [fs-03](feature-specs/fs-03-edi-holiday.md) (X4) | `backend/tests/conversation/test_notifications.py`: `test_instalment_wording_follows_the_date` (today's wording) | fs-03 §15 | PLANNED · Wave 1 |
-| FR-policy-001 | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) (K4) | `backend/tests/policy/test_engine.py`: `test_engine_is_deterministic`, `test_payout_authority_table` | fs-09 §17 | BUILT |
-| FR-policy-002 | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) (K4, K5) | `backend/tests/policy/test_explain.py`: `test_formulas_equal_spec_literals_character_for_character` | fs-09 §17 (X7) | BUILT. Honest-wording scan PLANNED · Wave 1 |
-| FR-explain-001 | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) (K5) | `backend/tests/conversation/test_live_tests.py`: `test_explained_why_then_dispute_opens_c2291`<br>`backend/tests/conversation/test_replies.py`: `test_why_after_a_personal_payout_shows_the_formula` | fs-05 §19 (free questions) | BUILT. Free questions PLANNED · Wave 2 |
-| FR-explain-002 | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) (K5) | `backend/tests/cases/test_service.py`: `test_first_case_is_c2291_with_sla`<br>`backend/tests/replay/test_dispute_cover.py`: `test_explained_numbers_then_a_dispute_case_c_2291` | fs-06 §15 | BUILT |
-| FR-cover-001 | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) (K6) | `backend/tests/ledger/test_premiums.py`: `test_mark_paid_creates_waiting_cover` | fs-07 §15 (X3) | BUILT |
-| FR-cover-002 | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) (K6) | `backend/tests/policy/test_cover.py`: `test_ramesh_blocked_by_red_alert`, `test_alert_valid_now_blocks` | fs-07 §15 | BUILT |
-| FR-ask-001 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N2) | none | fs-05 §19 | PLANNED · Wave 2 |
-| FR-ask-002 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N2) | none | fs-05 §19 | PLANNED · Wave 2 |
-| FR-ask-003 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N2) | `backend/tests/conversation/test_guard.py`: `test_ungrounded_numbers_fail`, `test_money_or_approval_promises_fail` (the BUILT guard) | fs-05 §19 | Guard BUILT. N2 path PLANNED · Wave 2 |
-| FR-slip-001 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (N3) | none | fs-02 §16 | PLANNED · Wave 2 |
-| FR-slip-002 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (N3) | `backend/tests/conversation/test_slip_flow.py`: `test_reader_failure_goes_to_a_human` (the BUILT path) | fs-02 §16 | PLANNED · Wave 2 |
-| FR-voice-001 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N4) | none | fs-05 §19 | PLANNED · Wave 2 |
-| FR-voice-002 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N4) | none | fs-05 §19 | PLANNED · Wave 2 |
-| FR-mini-001 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | none | fs-04 §19 | PLANNED · Wave 1 |
-| FR-mini-002 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | none | fs-04 §19 | PLANNED · Wave 1 |
-| FR-mini-003 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | none | fs-04 §19, fs-07 §15 | PLANNED · Wave 1 (consent switches Wave 3) |
-| FR-mini-004 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | `frontend/src/components/phone/whatHappened.test.tsx` (today's "What happened" strip) | fs-04 §19 | PLANNED · Wave 1 |
-| FR-mini-005 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | none | fs-04 §19, fs-06 §15 | PLANNED · Wave 1 (ladder Wave 3) |
+| FR ID | Feature spec | Tests | Status |
+|---|---|---|---|
+| FR-area-001 | [fs-01](feature-specs/fs-01-area-auto-claim.md) (K1) | `backend/tests/detect/test_triggers.py`: `test_seventeen_hundred` | BUILT |
+| FR-area-002 | [fs-01](feature-specs/fs-01-area-auto-claim.md) (K1) | `backend/tests/policy/test_amounts.py`: `test_area_deck_example_1380` | BUILT |
+| FR-area-003 | [fs-01](feature-specs/fs-01-area-auto-claim.md) (K1) | `backend/tests/replay/test_area_flow.py`: `test_payouts_are_executed_at_17_00_and_credited_at_17_04` | BUILT |
+| FR-personal-001 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/detect/test_silent.py`: `test_closed_shop_is_silent` | BUILT |
+| FR-personal-002 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2, N3) | `backend/tests/integrations/test_sarvam_docai.py`<br>`backend/tests/integrations/test_slip_chain.py`, `test_gemini_vision.py` | BUILT (Sarvam reader; the Gemini reader is tested against fakes only) |
+| FR-personal-003 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/policy/test_names.py`: `test_spec_pairs`, `test_initial_expands_to_full_score` | BUILT |
+| FR-personal-004 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/policy/test_amounts.py`: `test_personal_deck_example_1500` | BUILT |
+| FR-personal-005 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (K2) | `backend/tests/policy/test_engine.py`: `test_personal_name_mismatch_referred_with_amount_and_explanation`<br>`backend/tests/conversation/test_live_tests.py`: `test_human_slip_with_a_different_name_is_referred_and_paid_only_after_the_officer` | BUILT |
+| FR-edi-001 | [fs-03](feature-specs/fs-03-edi-holiday.md) (K3, X4) | `backend/tests/ledger/test_instalments.py`: `test_pauses_tomorrows_instalment` (the pause)<br>`backend/tests/integrations/test_lender.py` (the request) | K3 BUILT as a pause. The request is BUILT behind `x4_lender_request` |
+| FR-edi-002 | [fs-03](feature-specs/fs-03-edi-holiday.md) (X4) | `backend/tests/integrations/test_lender.py`<br>`frontend/src/mock/lender.test.ts` | BUILT behind `x4_lender_request` |
+| FR-edi-003 | [fs-03](feature-specs/fs-03-edi-holiday.md) (X4) | `backend/tests/conversation/test_notifications.py`: `test_instalment_wording_follows_the_date`<br>`frontend/tests/e2e/human-miniapp-lender.spec.ts` | BUILT behind `x4_lender_request` |
+| FR-policy-001 | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) (K4) | `backend/tests/policy/test_engine.py`: `test_engine_is_deterministic`, `test_payout_authority_table` | BUILT |
+| FR-policy-002 | [fs-09](feature-specs/fs-09-policy-engine-and-audit.md) (K4, K5) | `backend/tests/policy/test_explain.py`: `test_formulas_equal_spec_literals_character_for_character`<br>`backend/tests/conversation/test_honest_wording.py` (X7) | BUILT |
+| FR-explain-001 | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) (K5) | `backend/tests/conversation/test_live_tests.py`: `test_explained_why_then_dispute_opens_c2291`<br>`backend/tests/conversation/test_replies.py`: `test_why_after_a_personal_payout_shows_the_formula`<br>`backend/tests/ask/test_ask_service.py` (free questions) | BUILT. Free questions behind `n2_ask_chhatri` |
+| FR-explain-002 | [fs-06](feature-specs/fs-06-explanations-disputes-and-grievance.md) (K5) | `backend/tests/cases/test_service.py`: `test_first_case_is_c2291_with_sla`<br>`backend/tests/replay/test_dispute_cover.py`: `test_explained_numbers_then_a_dispute_case_c_2291` | BUILT |
+| FR-cover-001 | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) (K6) | `backend/tests/ledger/test_premiums.py`: `test_mark_paid_creates_waiting_cover` | BUILT |
+| FR-cover-002 | [fs-07](feature-specs/fs-07-cover-purchase-and-consent.md) (K6) | `backend/tests/policy/test_cover.py`: `test_ramesh_blocked_by_red_alert`, `test_alert_valid_now_blocks` | BUILT |
+| FR-ask-001 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N2) | `backend/tests/ask/test_ask_service.py`, `backend/tests/ask/test_clauses.py`<br>`Ask.test.tsx` | BUILT behind `n2_ask_chhatri` |
+| FR-ask-002 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N2) | `backend/tests/ask/test_fact_sheet.py`, `backend/tests/ask/test_injection.py`, `backend/tests/ask/test_scam.py` | BUILT behind `n2_ask_chhatri` |
+| FR-ask-003 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N2) | `backend/tests/conversation/test_guard.py`: `test_ungrounded_numbers_fail`, `test_money_or_approval_promises_fail`<br>`backend/tests/conversation/test_guard_strict.py` | BUILT |
+| FR-slip-001 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (N3) | `backend/tests/replay/test_slip_precheck.py`, `backend/tests/api/test_slip_precheck_api.py`<br>`SlipPrecheck.test.tsx` | BUILT behind `n3_slip_precheck` |
+| FR-slip-002 | [fs-02](feature-specs/fs-02-hospital-cash-claim.md) (N3) | `backend/tests/conversation/test_slip_flow.py`: `test_reader_failure_goes_to_a_human`<br>`backend/tests/precheck/test_untrusted_slip_text.py` | BUILT |
+| FR-voice-001 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N4) | `backend/tests/ask/test_voice_service.py`, `backend/tests/api/test_voice.py` | BUILT behind `n4_voice` |
+| FR-voice-002 | [fs-05](feature-specs/fs-05-ask-chhatri.md) (N4) | `backend/tests/ask/test_mentions.py`<br>`frontend/src/miniapp/components/voiceMentions.test.ts`<br>`frontend/tests/e2e/human-miniapp-voice.spec.ts` | BUILT behind `n4_voice` |
+| FR-mini-001 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | `Home.test.tsx`<br>`backend/tests/api/test_cover_route.py` | BUILT behind `n1_miniapp` |
+| FR-mini-002 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | `Coverage.test.tsx`<br>`frontend/src/miniapp/components/JargonSheet.test.tsx` | BUILT behind `n1_miniapp` |
+| FR-mini-003 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | `Buy.test.tsx`<br>`backend/tests/api/test_consent_gates.py` (consent switches) | BUILT behind `n1_miniapp` (consent switches behind `n6_consents`) |
+| FR-mini-004 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | `ClaimDetail.test.tsx`<br>`backend/tests/replay/test_view_claims.py`<br>`frontend/src/components/phone/whatHappened.test.tsx` (the console strip) | BUILT behind `n1_miniapp` |
+| FR-mini-005 | [fs-04](feature-specs/fs-04-merchant-mini-app.md) (N1) | `Help.test.tsx`<br>`Grievances.test.tsx`<br>`backend/tests/api/test_grievances.py` | BUILT behind `n1_miniapp` (ladder behind `n5_grievances`) |
 
 ---
 
@@ -550,6 +552,7 @@ BUILT tests are files and functions that exist in the repository. PLANNED tests 
 
 ## Changelog
 
+- 2026-10-03 · v1.6 · statuses brought up to the code: every N, X and H item is BUILT behind its flag (N7 and H6 not deployed, H12 not done, Marathi a draft); the traceability table lists real tests; a Marathi voice is not built
 - 2026-10-02 · v1.5 · scope table now has a legend, build waves and specs, with every item P0, and rows for H13 to H26; fixed the hospital-cash rules (a failed SOFT check or an unsure read is REFERRED, a failed HARD check is DECLINED, the real name scores, the 11:20 outreach), the EDI requirements (X4 design, with today's unconditional pause stated), the cover rules (BLOCKED means an alert valid now or starting within 72 hours), the slip pre-check checklist, the area acceptance values and the mini-app tracker times; removed unsourced numbers and claims (segment size, repudiation rate for merchant plans, "all endpoints rate-limited", a reset flag, the Open-Meteo live call, Tesseract in the chain, N10); release plan is by wave with no clock times; section 9 links the real specs and names real tests; open questions refreshed
 - 2026-10-02 · v1.4 · second fact-check pass: remove invented latency and rate-limit numbers, remove demo slot times and confirmed freeze times
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned

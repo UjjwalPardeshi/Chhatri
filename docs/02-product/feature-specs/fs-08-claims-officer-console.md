@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.5 · K8 BUILT (commit 86575ea): seven pages, officer queue, audit, backtest, read-only policy · X6 and H26 labels BUILT, wave 2 · H8, H24, presenter mode, projector polish and the moment card BUILT, wave 4 (behind `h8_ops_strip`, `h24_whatif`, `console_polish`) |
+| Status | v1.6 · K8 BUILT (commit 86575ea): seven pages, officer queue, audit, backtest, read-only policy · X6 and H26 labels BUILT, wave 2 · H8, H24, presenter mode, projector polish and the moment card BUILT, wave 4 (behind `h8_ops_strip`, `h24_whatif`, `console_polish`) |
 | Owner | Omkar Kadam (console), Ujjwal Pardeshi (backend routes and engine) |
 | Date | 2 Oct 2026 |
 | Audience | Console and backend engineers, designers, the person presenting |
@@ -84,17 +84,16 @@ Credits, by project name only (links in [Competitive landscape](../../01-strateg
 
 The legend text "Pays below 50% for 3 h, with alert" and the sparkline rule read a constant (`INDEX_FLOOR_PCT` in `lib/colour.ts`), not `GET /api/policy`. Section 13.2 fixes that.
 
-### 4.3 Flags (names proposed)
+### 4.3 Flags
 
 | Flag | Gates | Wave |
 |---|---|---|
 | `x6_provider_panel` | FALLBACK tone, rows, switch, `POST /api/integrations/{component}/fallback` | 2 |
 | `h8_ops_strip` | The strip and `GET /api/ops/summary` | 4 |
 | `h24_whatif` | The what-if drawer and `POST /api/whatif/area` | 4 |
-| `presenter_mode` | The toggle, the keys, the type step-up | 4 |
-| `moment_card` | The trigger-to-payout card | 4 |
+| `console_polish` | The presenter-mode toggle, its keys and the type step-up, and the trigger-to-payout moment card (earlier drafts named these `presenter_mode` and `moment_card`) | 4 |
 
-The [implementation guide](../../04-engineering/implementation-guide.md) owns the mechanism (wave 0). Off means absent from the UI, and the endpoint answers 404 `not_found`. The presenter can see the flags that are on (12.2).
+The [implementation guide](../../04-engineering/implementation-guide.md) owns the mechanism. Off means absent from the UI, and the endpoint answers 404 `not_found`. The presenter can see the flags that are on (12.2).
 
 ## 5. Flows and states
 
@@ -206,7 +205,7 @@ Header: wordmark, seven page links (Claims shows the open-case count), a "Connec
 
 ### 8.1 DISPUTE labels (wave 4)
 
-For a DISPUTE case the two buttons read "Confirm payout" and "Reject dispute" (proposed), with one line above them: "The amount cannot change. Confirming keeps the payout. Rejecting closes the dispute. The merchant is told the result either way." The routes stay `/approve` and `/decline`. The default resolution lines stay as built. The merchant hears the same answer for both (a known gap, fs-06 section 10).
+For a DISPUTE case the two buttons read "Confirm payout" and "Reject dispute", with one line above them: "The amount cannot change. Confirming keeps the payout. Rejecting closes the dispute. The merchant is told the result either way." The routes stay `/approve` and `/decline`. The default resolution lines stay as built. The merchant hears the same answer for both (a known gap, fs-06 section 10).
 
 ### 8.2 Source chips, H13 (wave 4, data from wave 1)
 
@@ -241,9 +240,9 @@ Forcing sets mode FALLBACK with reason `FORCED` and sends the next call down the
 | Component | Forced: what answers | `provider` | Wave |
 |---|---|---|---|
 | `sarvam_chat` | The next link of the Ask Chhatri chain, else a catalogue template (fs-05) | `template` or the next provider | 2 |
-| `gemini_chat` (proposed name, fs-05 section 10.4) | Sarvam chat if live, else a template | as above | 2 |
+| `gemini_chat` (fs-05 section 10.4) | Sarvam chat if live, else a template | as above | 2 |
 | `sarvam_vision` | The simulated slip reader. It reads the data embedded in the sample slips. Any other photo comes back at confidence 0.3, below the 0.80 gate, so the claim goes to a human | `simulated` | 2 |
-| `gemini_vision` (proposed name) | The next reader link | as above | 2 |
+| `gemini_vision` | The next reader link | as above | 2 |
 | `sarvam_stt` | Browser speech recognition (N4), else the mic is hidden | `browser` | 2 |
 | `sarvam_tts` | Browser speech synthesis, labelled | `browser` | 2 |
 | `lender` | No answer. Every holiday request ends `NO_RESPONSE` (fs-03) | `simulated` | 2 |
@@ -708,7 +707,7 @@ The console collects no analytics. Resolution time and the share of disputes can
 
 ## 19. Build plan
 
-Everything is P0. Waves are the team plan: 0 setup, 1 demo spine, 2 live AI, 3 trust and rights, 4 judge wow, 5 ship. Owners: Ujjwal (backend, engine), Omkar (console, copy).
+Everything is P0. Waves are the team plan: 0 setup, 1 demo spine, 2 live AI, 3 trust and rights, 4 judge wow, 5 ship. Owners: Ujjwal (backend, engine), Omkar (console, copy). Status on 3 Oct 2026: every row is BUILT except the two rehearsals of the last row, which need a person.
 
 | ID | Task | Owner | Wave |
 |---|---|---|---|
@@ -730,7 +729,7 @@ Everything is P0. Waves are the team plan: 0 setup, 1 demo spine, 2 live AI, 3 t
 | Polish | Tokens-only test, off-scale fixes, `--faint` text, contrast test, policy-driven legend, overflow e2e, Backtest caveat | Omkar | 4 |
 | Moment | `MomentCard` and tests | Omkar | 4 |
 | Mock | Fix the Z3 and Z12 totals and the 123 count (section 15) | Omkar | 4 |
-| Docs | SPEC §19 rows, `test_route_table.py` (the table and its count of 39), data-model sections 4.1, 5.6, 5.7 | Ujjwal | with each route |
+| Docs | SPEC §19 rows, `test_route_table.py` (the table and its count of 57 routes), data-model sections 4.1, 5.6, 5.7 | Ujjwal | with each route |
 | Ship | Screenshot set, `make demo-check`, two rehearsals with presenter mode on, freeze 90 minutes before the slot | both | 5 |
 
 ## 20. Test plan
@@ -790,6 +789,7 @@ Open the console, confirm the badges, force the lender, play the storm with pres
 
 ## Changelog
 
+- 2026-10-03 · v1.6 · flag names match the registry (`console_polish`), the dispute labels and the Gemini component names are no longer marked proposed
 - 2026-10-02 · v1.5 · status lines match the build: case panel changes, presenter mode, projector polish and the moment card BUILT behind their flags
 - 2026-10-02 · v1.4 · rewritten as a build-ready console spec: policy page confirmed read-only and the editor dropped; real files, routes, queue order, colour ramp and tests replace invented ones; X6 provider panel with FALLBACK, switch contract and H26 labels; H8 ops strip with exact metric definitions and JSON; H24 what-if panel with `POST /api/whatif/area`; presenter mode; projector polish against the type scale; trigger-to-payout moment card; DISPUTE labels; P1 labels replaced by build waves
 - 2026-10-02 · v1.3 · second fact-check pass

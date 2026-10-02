@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v3 · re-baselined on the afternoon of 2 Oct 2026. Wave 0 has started in the working tree and has not passed a checkpoint. Nothing else in N1–N8, X1–X8 or H13–H26 is built yet |
+| Status | v4 · 3 Oct 2026 · all six waves are built in the code, each feature behind its flag. Still open, and only a person can do them: the rehearsals, the backup video, deploying the static demo and the native review of Marathi. The plan below is kept as written on 2 Oct, with its status marked in section 0 |
 | Owner | Omkar Kadam (mini-app, console, design, copy, pitch) · Ujjwal Pardeshi (backend, engine, AI adapters, evals) |
 | Audience | The two of us, and anyone tracking progress |
 | Related | [Risk register](risk-register.md) · [Demo runbook](demo-runbook.md) · [On-site checklist](on-site-checklist.md) · [Final deck and video script](final-deck-and-video-script.md) · [PRD](../02-product/prd.md) · [Implementation guide](../04-engineering/implementation-guide.md) · [Data model and API](../04-engineering/data-model-and-api.md) · [Testing and quality strategy](../04-engineering/testing-and-quality-strategy.md) · [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) · [Current-state audit](../01-strategy/current-state-audit.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) |
@@ -12,30 +12,43 @@
 - **Everything is P0** (team decision, 2 Oct): N1–N8, X1–X8, H1–H26 and a console polish for the projector. We do not cut scope. We build in six waves, with two tracks in parallel, and close each wave at a checkpoint with written pass criteria.
 - **Unfinished work is hidden, never shown half-working.** Every new feature sits behind a flag that starts off. If time runs out we hide features in a fixed order ([section 7](#7-hide-order-if-time-runs-out)). That is a hide order, not a cut list.
 - **Waves:** 0 setup · 1 demo spine · 2 live AI · 3 trust and rights · 4 judge wow · 5 ship.
-- **Wave 0 has started.** The working tree already holds a flag registry (14 flags, all off), `make check-keys` and the Tailwind and shadcn scaffold for the mini-app. None of it is committed or has passed a checkpoint. CP0 reviews it, runs the suites and commits it.
+- **Where it stands (3 Oct):** all six waves are built in the code. What is left is rehearsal, the backup video, deploying the static demo, a native review of Marathi and a trial of the AI keys. Section 0 is the status table.
 - **Two tracks.** Omkar builds the mini-app and the console on the in-browser mock. Ujjwal builds the routes, the engine changes and the AI adapters. The JSON contracts in the feature specs let both start at once, and they meet at a contract test in Wave 1.
 - **Critical path:** the X4 wording change, then the cover, claims and receipt routes, then the mini-app on live data (Wave 1), then the Gemini and Sarvam chain with labels (Wave 2), then everything that shows an AI label. The mock keeps the screens moving while the routes land.
 - **The freeze is 90 minutes before our slot, and the slot time is not announced.** This plan has no clock times. Work out the freeze the moment the slot is known ([section 8](#8-pace-the-freeze-and-the-order-of-the-day)).
 - **The honesty floor is never hidden:** the LIVE, SIMULATED and FALLBACK labels, the honest-wording test and the disclosure line.
 
-## 1. Where we start
+## 0. Status on 3 Oct 2026
 
-| Area | BUILT today (commit 86575ea) | PLANNED in this plan |
+Checked against the code. "Built" means the code and its tests exist and the flag turns it on. The checkpoint log of section 5 was not kept as a file, so no checkpoint is recorded as passed here; the full suites are run once on the current tree and the result is in the facts page.
+
+| Wave | Status | Evidence |
+|---|---|---|
+| 0 setup | Built: X1 (the frontend suite passes), the 14-flag registry, `make check-keys`, the Tailwind and shadcn setup scoped to the mini-app, the static fallback | `frontend/src/features.ts`, `backend/chhatri/features.py`, `scripts/check_keys.py`, `frontend/src/miniapp/miniappCss.test.ts` |
+| 1 demo spine | Built: N1 core (S1 to S9), cover, claims and receipt routes, X4 behind `x4_lender_request`, X2, X3, X5, X7, H13, H14 | `frontend/src/miniapp/screens/`, `backend/tests/api/test_receipt.py`, `backend/tests/integrations/test_lender.py`, `backend/tests/conversation/test_honest_wording.py` |
+| 2 live AI | Built: N3, N2, N4, X6 and the H26 labels. Tested against fakes only: no Gemini or Sarvam key has been run | `backend/tests/ask/`, `backend/tests/precheck/`, `backend/tests/ai/`, `backend/tests/integrations/test_fallback_switch.py` |
+| 3 trust and rights | Built: N5, N6, X8, and the H25 harness with its `/evals` page. No evaluation run is stored | `backend/tests/api/test_grievances.py`, `backend/tests/api/test_consents.py`, `backend/tests/conversation/test_message_guard.py`, `backend/tests/evals/` |
+| 4 judge wow | Built: what-if, ops strip, presenter mode, the moment card and the Marathi draft. Marathi has no native sign-off, so its flag stays off until one is recorded | `backend/tests/replay/test_whatif.py`, `backend/tests/api/test_ops_summary.py`, `frontend/src/components/panel/WhatIf.test.tsx`, `frontend/src/miniapp/copy/mr.test.ts` |
+| 5 ship | Built: the static build (`npm run build -- --mode mock`, `npm run preview`) and its deep-link fallback. Not done (human-only): the backup video, deploying the static copy, two rehearsals, the freeze | `frontend/tests/e2e/static-build.spec.ts` |
+
+## 1. Where we started (2 Oct, commit 86575ea)
+
+| Area | BUILT at the start (commit 86575ea) | Planned then, built since (section 0) |
 |---|---|---|
 | Features | K1–K8: area auto-claim, hospital-cash claim, EDI holiday (an unconditional pause today), deterministic policy engine (`rules.yaml` pilot-0.1), explanations and disputes, cover purchase with the waiting period, hash-chained audit, claims-officer console | N1–N8, X1–X8, H1–H9 and H12–H26. H10 and H11 (Hindi and English) are built |
-| Backend | FastAPI and SQLite, 39 route handlers in 12 routers | The new routes in [section 3](#3-waves-and-tracks) |
+| Backend | FastAPI and SQLite, 39 route handlers in 12 routers | The new routes in [section 3](#3-waves-and-tracks) (the route table now holds 57) |
 | Frontend | React 19, Vite 8, TypeScript console with plain CSS tokens, an in-browser mock backend (`npm run dev:mock`), a WhatsApp-style phone simulator | The merchant mini-app with Tailwind v4 and shadcn/ui, scoped under `.miniapp`. The console keeps its plain CSS |
 | AI | Sarvam adapters (STT, TTS, chat, vision), LIVE when `SARVAM_API_KEY` is set, labelled simulators otherwise. Intents come from word lists, and the chat model sees just the text the lists cannot classify (UNKNOWN) | Gemini free tier at the head of the chain, then Sarvam, then templates (N2) or a person (N3). Browser speech. The FALLBACK status arrives with X6 |
 | Always SIMULATED | Sales, alerts, KYC, payouts, the lender, Soundbox, WhatsApp, the Paytm link | Unchanged |
 
-**Baseline every checkpoint must hold or improve** (commit 86575ea): backend 1,711 fast and 36 slow tests at 99.7% coverage; frontend 262 of 264 (X1 fixes the other 2); infra 118; `make demo-check` 70 of 70; Playwright e2e 21. New tests raise these counts, so a checkpoint reads "no failing test and no drop in coverage", not a fixed total.
+**Baseline every checkpoint had to hold or improve** (commit 86575ea): backend 1,711 fast and 36 slow tests at 99.7% coverage; frontend 262 of 264 (X1 fixed the other 2); infra 118; `make demo-check` 70 of 70; Playwright e2e 21. New tests raise these counts, so a checkpoint reads "no failing test and no drop in coverage", not a fixed total.
 
-**Started in the working tree on 2 Oct, not committed and not yet checked at a checkpoint:**
+**Started in the working tree on 2 Oct, and finished since:**
 
 - **The flag registry.** `frontend/src/features.ts` and `backend/chhatri/features.py` list the same 14 flag names ([section 6](#6-feature-flags)). The backend reads `CHHATRI_FEATURES`, the console reads `VITE_FEATURES`, an unset list means every flag is off, and a flagged route that is off answers 404 `not_found`.
 - **`make check-keys`** (a new target, `scripts/check_keys.py`). It reports `SARVAM_API_KEY` and `GOOGLE_API_KEY` as SET or NOT SET without printing them. With a Google key it lists the Gemini models that key can call, through the free model-list call, and makes no generation call.
 - **The mini-app scaffold.** Tailwind v4 through `@tailwindcss/vite` (the 2 Oct registry check shows it lists Vite 8 as a peer, and `@tailwindcss/postcss` stays the fallback), `frontend/components.json`, shadcn files under `frontend/src/miniapp/ui/`, `MiniappRoot` and `miniapp.css`.
-- **A longer frontend test timeout** (`vitest.config.ts`, `src/test/setup.ts`). It may fix X1. That is unconfirmed until every frontend test passes.
+- **A longer frontend test timeout** (`vitest.config.ts`, `src/test/setup.ts`). It was part of X1. The frontend suite now passes.
 
 ## 2. Ground rules
 
@@ -65,7 +78,7 @@ Task ids come from the feature specs, which hold the detail and the acceptance c
 
 | ID | Task | Owner | Needs | Done when |
 |---|---|---|---|---|
-| X1 | Fix the 2 failing frontend tests (Cases panel, Overview live map). A longer test timeout is in the working tree | Ujjwal | none | `make test-frontend` passes with no failing test (the baseline was 262 of 264) |
+| X1 | Fix the 2 failing frontend tests (Cases panel, Overview live map). A longer test timeout is in the working tree. DONE: the suite passes | Ujjwal | none | `make test-frontend` passes with no failing test (the baseline was 262 of 264) |
 | Flags | The flag mechanism (N1-T02, fs-07 N6-T10). STARTED: the registry is in the working tree. Left to do: review it, get its tests green, commit it, and settle which flag names the specs use ([section 6](#6-feature-flags)) | Omkar (console), Ujjwal (backend) | the [implementation guide](../04-engineering/implementation-guide.md) | AC-02 of [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md) passes. With `CHHATRI_FEATURES` and `VITE_FEATURES` unset, every flag is off, flagged routes answer 404 `not_found`, and the console and the golden flows behave as at commit 86575ea. The backend logs the flags that are on at start-up. The console shows them once X6 lands ([fs-08 section 12.1](../02-product/feature-specs/fs-08-claims-officer-console.md)) |
 | N1-T01 | Tailwind v4 and shadcn/ui scoped to the mini-app ([fs-04 section 5](../02-product/feature-specs/fs-04-merchant-mini-app.md)). STARTED. Left to do: check it against AC-05 and AC-06, add every shadcn and 21st.dev component the mini-app needs now, and commit them, so no registry call is needed on 3 Oct | Omkar | none | AC-05 and AC-06 pass: the console tests are unchanged and the build output has no Preflight rule outside `.miniapp` |
 | N1-T03 | `AppFrame` skeleton and the standalone route, behind `n1_miniapp` | Omkar | N1-T01, Flags | AC-01, AC-03, AC-04 |
@@ -268,7 +281,7 @@ Slot time T: [not announced]  Freeze (T minus 90 min): ______
 
 ## 6. Feature flags
 
-The flag names come from the registry in the working tree (`frontend/src/features.ts` and `backend/chhatri/features.py`, which hold the same 14 names). Some differ from names the feature specs propose, and the table says where. The [implementation guide](../04-engineering/implementation-guide.md) owns the mechanism and the final list, and wins where a name differs.
+The flag names come from the registry in the code (`frontend/src/features.ts` and `backend/chhatri/features.py`, which hold the same 14 names). Some differ from names the feature specs propose, and the table says where. The [implementation guide](../04-engineering/implementation-guide.md) owns the mechanism and the final list, and wins where a name differs.
 
 **How a flag is set.** The backend reads `CHHATRI_FEATURES` and the console reads `VITE_FEATURES`. Each is a comma or space separated list of names, and the two lists must be identical. `make dev` takes the backend list from `.env` or the shell and the console list from the shell or `frontend/.env.local`. A mock or static build takes it from the shell or `frontend/.env.mock.local` when it is built. `make up` passes `CHHATRI_FEATURES` to both. A flag changes when the backend restarts or the console is rebuilt, and at no other time, so the demo flag set is chosen before the demo and never changed during it. A name that is not a flag is ignored and logged once at start-up. A flag that is off hides the feature and makes its endpoints answer 404 `not_found`.
 
@@ -379,9 +392,10 @@ A tired mistake in Wave 1 costs more than a hidden feature in Wave 4. Both of us
 
 ## Changelog
 
+- 2026-10-03 · v4 · added section 0 with the status of every wave against the code; the 2 Oct baseline and the working-tree notes are labelled as history
 - 2026-10-02 · v3 · re-baselined from the afternoon of 2 Oct, with the flag names and mechanism taken from the registry in the working tree (14 flags, `CHHATRI_FEATURES` and `VITE_FEATURES`), the Wave 0 pieces already started (registry, `make check-keys`, mini-app scaffold, test timeout) shown as started and unchecked, and the key check rewritten around `make check-keys`: six waves with two parallel tracks, task ids from the feature specs, a dependency graph replacing the clock-time gantt, checkpoints CP0 to CP5 with pass criteria, the feature-flag table, the hide order and veto rule, and a freeze rule with no clock times. Removed the hour-by-hour tables and the old priority labels. Fixed the key check (there is no Gemini row until Wave 2), the Tesseract fallback (not in the Wave 2 chain), the old N1 dependency on X4 (the mini-app builds on the mock), the scenario count (four scenarios and three live tests), and the commit rules (own name, no pushes)
 - 2026-10-02 · v2 · final consistency pass against the code: retitled section 7 to clarify pre-work (29 Sep–1 Oct) vs planned for 2–3 Oct; changed "before 2 Oct" build claims to "planned for 2 Oct" (N1–N8, X1–X8 are PLANNED not built); fixed browser Web Speech API fallback language from en-IN to hi-IN and added network connection requirement; changed the assumed demo slot times to planning targets (to re-baseline on-site); replaced the older repository wording with "public".
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes: adjusted the schedule to show X3 and X4 one after the other, and added a dependency note on X4 (superseded in v3).
+- 2026-10-02 · v1.2 · corrections after a second read against the code: adjusted the schedule to show X3 and X4 one after the other, and added a dependency note on X4 (superseded in v3).
 - 2026-10-02 · v1.1 · fact-check pass: fixed X4 description to avoid incorrect outcome names, pointed to public docs (DEMO.md, SPEC.md, policy-wording-and-cis.md) instead.
 - 2026-10-02 · v1 · initial draft: hourly schedule, tasks, critical path, integration checkpoints, cuts, risks.

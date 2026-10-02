@@ -19,7 +19,7 @@ With n8n LIVE the replay clock holds at 17:00 for about 30 to 60 seconds of real
 
 | Workflow | Steps (offset) | Payload |
 |---|---|---|
-| `payout` | `execute_payout` +0, `credit_payout` +4, `notify_merchant` +4, `pause_instalment` +5 | `{decision_id, merchant_id}` |
+| `payout` | `execute_payout` +0, `credit_payout` +4, `notify_merchant` +4, `request_holiday` +5 | `{decision_id, merchant_id}` |
 | `human-review` | `open_case` +0, `notify_officer` +0 | `{case_id, merchant_id}` |
 | `follow-up` | `check_case_sla` +24 h, `notify_officer` +24 h | `{case_id}` |
 
@@ -51,7 +51,7 @@ A run id is `{workflow}:{decision_id or case_id}`, so there is one run per subje
    | The start call times out (30 s) | Not handed over, because n8n may still be running the workflow and a second run could notify twice. Audited as `workflow.start_failed` and shown in the feed. The claims around it continue. |
    | A step fails, in either engine | The scheduler logs it, audits `workflow.step_failed`, adds a feed item and runs the next job. The replay continues. No step is retried automatically. |
    | A start repeats | Ignored (`accepted` is false, "already started"). |
-7. **X4 renames one step.** `pause_instalment` becomes `request_holiday` ([fs-03](../../02-product/feature-specs/fs-03-edi-holiday.md), ADR 0006). The offset stays +5, so the timeline does not move. Both engines and the generated JSON change in one commit.
+7. **X4 renamed one step.** `pause_instalment` became `request_holiday` ([fs-03](../../02-product/feature-specs/fs-03-edi-holiday.md), ADR 0006). The offset stays +5, so the timeline does not move. Both engines and the generated JSON change in one commit.
 8. **X6 can switch n8n off at the panel.** While n8n is LIVE, the provider panel can force the next workflow runs to the in-process runner (`simulated`, the `n8n` row in fs-08 section 9).
 
 ## Alternatives considered
@@ -94,7 +94,7 @@ A run id is `{workflow}:{decision_id or case_id}`, so there is one run per subje
 
 ## Follow-ups
 
-- Wave 1: rename `pause_instalment` to `request_holiday` with X4, and run `make n8n-workflows` and `make test-infra`.
+- Done (wave 1): `pause_instalment` was renamed `request_holiday` with X4, and `make n8n-workflows` and `make test-infra` pass.
 - Wave 2: the `n8n` row of the provider panel (X6).
 - Before the final: rehearse both modes on the demo laptop, note the real hold in the [demo runbook](../../06-delivery/demo-runbook.md) and decide.
 - Keep the ADR index row for 0008, the free-tier page and SPEC §14.5 in line with this ADR. SPEC §14.5 describes a Wait node in `follow-up`, and the generated workflows have no Wait nodes.
@@ -108,5 +108,5 @@ A run id is `{workflow}:{decision_id or case_id}`, so there is one run per subje
 ## Changelog
 
 - 2026-10-02 · v3 · rewritten against the code: both engines BUILT with one timeline; stage default in-process (`make dev`, or `make up` with `CHHATRI_STACK_N8N_URL=`) and the n8n badge SIMULATED unless `N8N_BASE_URL` is set; the `engine.py` snippet, the four workflows that do not exist, the retry logic and the "n8n batches payouts" explanation removed (the hold is the cost of 312 sequential runs, measured on a development machine); failure-handling table, real file paths and tests added; X4 step rename and the X6 `n8n` row noted; SPEC and architecture references corrected
-- 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes in-process workflows as demo default with n8n as production path.
+- 2026-10-02 · v2 · consistency check against the code: no changes needed; ADR correctly describes in-process workflows as demo default with n8n as production path.
 - 2026-10-02 · v1 · first draft.

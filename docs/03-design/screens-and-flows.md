@@ -26,7 +26,7 @@
 
 | Term | Meaning |
 |---|---|
-| BUILT, PLANNED | BUILT is in the code at commit 86575ea (2 Oct 2026). PLANNED is not written yet. A PLANNED part says its wave |
+| BUILT, PLANNED | BUILT is in the code. A part behind a flag shows only when the flag is on. PLANNED is not written. On 3 Oct 2026 every part of this document is BUILT; the screenshots were taken at commit 86575ea |
 | Waves | W0 setup, W1 demo spine, W2 live AI, W3 trust and rights, W4 judge wow, W5 ship. Everything here is P0 |
 | Ids | Feature ids (K, N, X, H) are the ones of the [PRD](../02-product/prd.md). Mini-app screens S1 to S11 are those of fs-04 and fs-07. Test ids are in the feature specs and are not repeated |
 | Six states | Loading (skeleton shaped like the final layout), empty (nothing to show, with the next step), error (a request failed, with Retry), offline (last data stays, network actions disabled with a reason), SIMULATED (the data or action comes from a simulated source, with a badge) and FALLBACK (a backup stepped in, from X6, with a badge and one reason line) |
@@ -139,7 +139,7 @@ Nothing here can be edited. The payout authority table, the 14 checks with sever
 | Error | `ErrorState` (title "Could not load this", the reason, "Try again") and `InlineError` (dismissible), both announced as alerts. The header chip reads "Integrations unavailable" if its call fails |
 | Offline | `StaleNote` ("Showing the last data received · can't reach the server right now.") over the stale content, and the "Connecting…" or "Reconnecting…" pill |
 | SIMULATED | Always on: the header chip, the footer line, the "Mock data" badge in mock mode, "SOUNDBOX · SIMULATED" on the device card |
-| FALLBACK | Not built. X6 adds it in W2 (section 9.1) |
+| FALLBACK | BUILT behind `x6_provider_panel` (section 9.1) |
 
 ### 2.10 Review notes on the console
 
@@ -517,7 +517,7 @@ Layouts are for the 354 px screen. The states of each screen are those of fs-04 
 - **Buttons.** The body holds `tracker.btn.receipt` and `tracker.btn.wrong`. fs-04 also lists `tracker.btn.why` in the body, and the next-step bar already holds that link (`see_why`, button `nba.see_why.btn`), so it is drawn once (open question 9).
 - **"This is wrong"** shows on a paid claim with no open question. In W1 it sends the dispute phrase through the chat route and shows `DISPUTE_ACK` in a toast. From W3 it opens the complaint form (N5).
 - **The lender.** The step never says Chhatri paused the instalment. A refusal reads as "not available" with no reason code in fs-04. The copy deck also keeps a plain-words reason line (`TRACK_EDI_REFUSED_WHY`) that it shows if its open question 9 is settled that way.
-- **Words.** Step names, states and reasons are the keys `tracker.step.*`, `tracker.state.*` and the `TRACK_*` lines of the copy deck (section 3), which are proposed catalogue lines. The copy deck says the holiday step is shown for a merchant with a loan and not otherwise. fs-04 shows it as skipped with "No loan on file". The layout works with either (open question 1).
+- **Words.** Step names, states and reasons are the keys `tracker.step.*`, `tracker.state.*` and the `TRACK_*` lines of the copy deck (section 3), which are catalogue lines in the code. The copy deck says the holiday step is shown for a merchant with a loan and not otherwise. fs-04 shows it as skipped with "No loan on file". The layout works with either (open question 1).
 - **Next step.** `wait_for_officer`, `see_why`, `back_to_claims`.
 
 | State | What shows |
@@ -1980,6 +1980,7 @@ Settled since v1.2: the placement of the mini-app (a third column and a standalo
 
 ## Changelog
 
+- 2026-10-03 · v1.4 · legend and the FALLBACK row brought up to the code; the strings marked proposed are wording of small states whose exact text the code may differ from
 - 2026-10-02 · v1.4 · status lines match the build: every screen and console part BUILT behind its flag; the static demo banner and the demo clock sheet of section 8 are built (open question 5 settled)
 - 2026-10-02 · v1.3 · rewritten as a build-ready screens document: the seven console pages as built (commit 86575ea) and the mini-app as the 354 px screen in a 372 px frame with three tabs (S1 to S11, Ask and voice, the slip sheet, complaints, consent and the standalone route), every screen with its layout, components and six states; error screens for a blurry slip, a wrong document, a name that does not match and a blocked camera; the six console changes (provider panel, ops strip, what-if drawer, presenter mode, `/evals`, the moment card) placed against the measured 1280×720 budget; the claim state machine with REFERRED and DISPUTE; responsive rules; copy keys checked against `messages.py` and the copy deck. Journey ids corrected, invented zone names, the emoji and the teal demo colour removed, the old priority labels replaced by build waves
 - 2026-10-02 · v1.2 · second fact-check pass: removed invented STT latency estimate, clarified Gemini/Tesseract as planned (N2/N3), fixed EMI vs EDI terminology

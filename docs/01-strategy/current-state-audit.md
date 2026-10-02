@@ -2,13 +2,14 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
+| Status | Draft v1.7 · 3 Oct 2026 · a snapshot of commit 86575ea; section 9 says where each issue stands in the current code |
 | Owner | Omkar Kadam |
 | Audience | The team, and judges reading the repo |
 | Related | [Facts and sources](facts-and-sources.md) · [Build plan](../06-delivery/build-plan.md) · [Executive summary](../00-executive-summary.md) |
 
 ## TL;DR
 
+- **This page is a snapshot.** Sections 1 to 8 describe commit 86575ea (2 Oct 2026, 11:00 IST), before the fixes and the new features. Section 9 gives the status of every issue (I-1 to I-17) in the current code. The numbers in the bullets below are the numbers of that commit.
 - Backend: 1,711 fast and 36 slow tests pass with 99.7% coverage. `make demo-check` passes 70/70 integration checks.
 - Frontend: 262 of 264 unit tests pass. Two fail: the Cases panel and Overview live map (fixes X1 planned).
 - Integrations are honestly labelled LIVE or SIMULATED (`GET /api/integrations` and the console header); every component defaults to a labelled simulator when its keys are unset.
@@ -133,17 +134,41 @@ The fixes (X1–X8) are on the critical path for the final demo. The order below
 
 The fixes above are cross-referenced in [build-plan.md](../06-delivery/build-plan.md) with task IDs, owners and hourly slots.
 
+## 9. Where each issue stands today (3 Oct 2026)
+
+Checked against the code of the main branch. "Built" means the code and its tests exist; a feature behind a flag is off until `CHHATRI_FEATURES` and `VITE_FEATURES` name it.
+
+| Issue | Today | Evidence |
+|---|---|---|
+| I-1 Journey incomplete | Built, behind flags: the mini-app with cover, explainer, buy, tracker, receipt, help, complaints and consent screens | `frontend/src/miniapp/screens/`; `GET /api/merchants/{id}/cover`, `/claims`, `/grievances`, `/consents` |
+| I-2 Almost no live AI | Partly closed. Ask Chhatri, the slip pre-check and voice run a provider chain (Gemini, then Sarvam, then templates or a person) with a label on every reply. The chain is tested against fakes only: no key has been run, so no live answer has been seen | `backend/chhatri/ask/`, `backend/chhatri/precheck/`, `backend/tests/ai/` |
+| I-3 Circular calibration | Reframed in the docs as specification validation. The calibration itself is unchanged | [Executive summary §7](../00-executive-summary.md), [Q&A](../06-delivery/pitch-and-judge-qa.md) |
+| I-4 Z7 41% vs 37% | Unchanged and stated as errata | [Executive summary §9](../00-executive-summary.md) |
+| I-5 Area Income Signal | Unchanged: our own roadmap idea, said so | [Executive summary §9](../00-executive-summary.md) |
+| I-6 SEWA timeline | Unchanged: weeks, not days (A9) | [Facts and sources](facts-and-sources.md) |
+| I-7 and I-13 Instalment pause looks unilateral | Fixed behind `x4_lender_request`: a request the simulated lender decides, a guard for no loan, arrears or no holiday left, and wording that says the lender decides. With the flag off the pause is still unconditional | `backend/tests/integrations/test_lender.py`, `frontend/src/mock/lender.test.ts` |
+| I-8 Regulatory story missing | Closed by [regulatory and compliance](../05-business/regulatory-and-compliance.md) | the file |
+| I-9 Accelerated clock | Unchanged and stated: 6 simulated minutes per real second | [DEMO.md](../DEMO.md) |
+| I-10 Over-engineering and the KeyError | The unknown-merchant KeyError is fixed (X5): a clean 404 on every merchant route | `backend/tests/api/test_unknown_merchant.py` |
+| I-11 Two failing frontend tests | Fixed (X1): the frontend suite passes | `npm run test` |
+| I-12 Silent ₹2 fallback and an unchecked expected day | Fixed (X2, X3): a claim with an unrounded expected day is rejected, and a zone missing from the premium table fails loudly | `backend/tests/domain/test_claim_model.py`, `backend/tests/ledger/test_premium_table.py` |
+| I-14 Sarvam components go live together | Fixed (X6) behind `x6_provider_panel`: a FALLBACK state and a force switch per component | `backend/tests/integrations/test_fallback_switch.py` |
+| I-15 Copy honesty not tested | Fixed (X7): an honest-wording test over the catalogue and the mini-app copy | `backend/tests/conversation/test_honest_wording.py`, `frontend/src/miniapp/copy/honestWording.test.ts` |
+| I-16 No distress guard | Fixed (X8) behind `x8_distress_guard`: offers are held while an alert or an open claim exists, and proactive messages are capped per day | `backend/tests/conversation/test_message_guard.py` |
+| I-17 One author | Unchanged in the history of the prototype (76 commits under one name); the later commits carry the second name | `git log` |
+
 ## Open questions
 
-1. Which two frontend unit tests are failing, and what is the root cause? Owner: Ujjwal Pardeshi.
+1. Which two frontend unit tests were failing at 86575ea? Answered: they are fixed (X1) and the suite passes. Closed.
 2. What is the exact behaviour expected for an EDI holiday if the lender's loan is in arrears or the deferral limit is reached? Owner: Omkar Kadam (clarify with lender partner).
-3. After X1–X8 are merged, refresh facts-and-sources.md §4 (e.g., "264/264 frontend tests pass", measured test counts). Owner: Ujjwal Pardeshi.
+3. Facts-and-sources §4 carries the counts of the snapshot; the current counts are written after the final run. Owner: Ujjwal Pardeshi.
 
 ## Changelog
 
+- 2026-10-03 · v1.7 · marked as a snapshot of commit 86575ea; added section 9 with the status of every issue in the current code
 - 2026-10-02 · v1.6 · priorities updated: everything is P0, built in waves behind feature flags
 - 2026-10-02 · v1.5 · badges are LIVE or SIMULATED (FALLBACK only after X6); catalogue has 51 entries; DEMO.md references fixed
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes
-- 2026-10-02 · v1.1 · fact-check pass: removed private note references; reframed critical gaps descriptively; clarified fix IDs ownership
+- 2026-10-02 · v1.2 · corrections after a second read against the code
+- 2026-10-02 · v1.1 · fact-check pass: reframed critical gaps descriptively; clarified fix IDs ownership
 - 2026-10-02 · v1 · first draft, from a read of commit 86575ea and a review of the docs.

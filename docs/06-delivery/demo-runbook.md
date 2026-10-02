@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1.6 · 2 Oct 2026 · the golden path is BUILT. The new beats (N1–N6 and the H-items) are BUILT behind their flags (Waves 0 to 5, 2 Oct), and each is used when it has passed rehearsal, and not before |
+| Status | v1.7 · 3 Oct 2026 · the golden path is BUILT. The new beats (N1–N6 and the H-items) are BUILT behind their flags (Waves 0 to 5, 2 Oct), and each is used when it has passed rehearsal, and not before |
 | Owner | Omkar Kadam (script) with Ujjwal Pardeshi (operator) |
 | Audience | The team, on-site demo logistics, backup operator |
 | Related | [docs/DEMO.md](../DEMO.md) (the golden script and numbers) · [Final deck and video script](final-deck-and-video-script.md) (the slide windows) · [On-site checklist](on-site-checklist.md) · [Build plan](build-plan.md) · [Risk register](risk-register.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) · [Feature specs](../02-product/feature-specs) |
@@ -13,7 +13,7 @@
 - **Presenter:** Omkar Kadam narrates and makes no clicks. **Operator:** Ujjwal Pardeshi makes every click and speaks when the demo stalls, and at no other time.
 - **The slot time and length are not announced.** Two cuts are ready: 3 minutes and 7 minutes. Their windows are the slide windows of the [deck script](final-deck-and-video-script.md), so the slides and the clicks share one clock. Freeze the code 90 minutes before our slot.
 - **The golden path is [DEMO.md](../DEMO.md):** BUILT, with every number asserted by tests. The new beats (tracker, trust receipt, slip pre-check, Ask Chhatri with citations, voice, what-if, grievance, consent, provider panel) are BUILT behind flags and green in the mock end-to-end suite with every flag on; none has been rehearsed yet. A beat is used when its flag is on and it passed 3 of 3 rehearsal runs on the demo laptop inside its time budget. Otherwise the beat uses its fallback (section 4), which is the golden path.
-- **Badges:** the header shows LIVE or SIMULATED for each component, and FALLBACK once X6 lands. With our keys, at most the Sarvam components can be LIVE, and Gemini once Wave 2 lands. WhatsApp, the Paytm link, sales, alerts, KYC, payouts and the lender are SIMULATED. Never call anything live that the screen shows as SIMULATED or FALLBACK.
+- **Badges:** the header shows LIVE or SIMULATED for each component, and FALLBACK with `x6_provider_panel` on. We have not run a key, so nothing is shown LIVE until a person sets one and the check call succeeds; at most the Sarvam and Gemini components can then be LIVE. WhatsApp, the Paytm link, sales, alerts, KYC, payouts and the lender are SIMULATED. Never call anything live that the screen shows as SIMULATED or FALLBACK.
 - **If something breaks:** the backup controls in DEMO.md, then the fallback of that beat, then the static copy, then the backup video (section 6). The failure tree for five symptoms is in the [on-site checklist](on-site-checklist.md#4-the-failure-decision-tree).
 
 ## 1. Pre-demo setup (T−30 minutes)
@@ -35,7 +35,7 @@ T is the start of our slot. It is not announced. The code freeze is T−90, and 
    ```bash
    backend/.venv/bin/python backend/scripts/demo_check.py --url http://localhost:8000
    ```
-   It must print `PASS: 70 passed, 0 failed, 0 skipped`. It reloads scenarios, so never run it during the talk. `make demo-check` runs the same checks in a separate in-process app with live integrations off. It is safe in a second terminal, and it proves nothing about Gemini or Sarvam.
+   It must print `PASS: 70 passed, 0 failed, 0 skipped`. It reloads scenarios, so never run it during the talk. `make demo-check` runs the same checks in a separate in-process app with live integrations off and `CHHATRI_FEATURES=x4_lender_request`. It must not be run with `n3_slip_precheck` or `n6_consents` on, because the scripted photo and purchase steps stop there by design (29 and 13 checks fail respectively); a running backend given to `--url` needs the same flag set. It is safe in a second terminal, and it proves nothing about Gemini or Sarvam.
 5. **Preflight:** `curl -s localhost:8000/api/preflight`. Every item must have `"ok": true`.
 6. **Check the AI on the venue network** (when keys are set). Run `cd backend && . .venv/bin/activate && python scripts/live_smoke.py` (no `--send`). Then make one Ask, one slip read and one speech call through the console. Compare their latency with the log of CP2 ([build plan](build-plan.md#5-checkpoints)). If a call fails or is slow, decide before the slot: keep the key and let the badges show FALLBACK, or remove the key and restart so every badge reads SIMULATED. The disclosure (section 3) names what the badges show.
 
@@ -183,12 +183,12 @@ These are what a merchant would type or say. The wording of the answers comes fr
 
 ## 5. LIVE badge rules
 
-1. **Today (BUILT)** `GET /api/integrations` reports 15 components as LIVE or SIMULATED, and the header shows the same.
+1. **Today (BUILT)** `GET /api/integrations` reports 15 components as LIVE or SIMULATED (17 with `x6_provider_panel` on, which adds the two Gemini components), and the header shows the same.
    - Sarvam speech-to-text, text-to-speech, chat and vision are LIVE when `SARVAM_API_KEY` is set. Otherwise labelled simulators run: canned transcripts, and a slip simulator that reads data embedded in the sample slips. A voice chip falls back to the canned transcript when speech-to-text fails.
    - WhatsApp needs four WhatsApp Cloud API variables, and the Paytm link needs `PAYTM_MCP_URL` or `PAYTM_MID` and `PAYTM_KEY_SECRET`. We have neither, so both are SIMULATED and the link is `https://paytm.me/sim-…`.
    - Sales, the alert feed, KYC, the payout rail, the lender and the Soundbox are always simulated.
 2. **Wave 2 (BUILT, behind its flags)** the Gemini free tier heads the chain for Ask Chhatri and slip reading, then Sarvam, then templates (Ask) or a person (slip). A component is LIVE when its key is set and the check call on the demo laptop succeeded.
-3. **X6 (BUILT, `x6_provider_panel`)** a FALLBACK state, a provider panel, a "forced" chip and a switch per component appear. Forcing takes effect on the next call and needs no reload. It is process-wide, and **Clear all** or a restart removes it. A SIMULATED component has no live adapter to force off, so a component can be forced while it is LIVE, and not otherwise (the lender is the exception). Until X6 lands there is no FALLBACK badge.
+3. **X6 (BUILT, `x6_provider_panel`)** a FALLBACK state, a provider panel, a "forced" chip and a switch per component appear. Forcing takes effect on the next call and needs no reload. It is process-wide, and **Clear all** or a restart removes it. A SIMULATED component has no live adapter to force off, so a component can be forced while it is LIVE, and not otherwise (the lender is the exception). With `x6_provider_panel` off there is no FALLBACK badge.
 4. **Browser speech (BUILT, N4, `n4_voice`)** needs no key. Chrome sends the audio to a remote service, so it needs the network. Test hi-IN on the demo laptop. Its label is SIMULATED with provider `browser`.
 5. **Free-tier data.** Synthetic data, and nothing else, goes to a free-tier AI service. Nobody speaks personal details into the microphone or photographs a real document during the demo. The notice on the initial recording says the same.
 6. **The rule that matters:** never call a component live in the pitch or Q&A if the screen showed it as SIMULATED or FALLBACK.
@@ -199,7 +199,7 @@ Work down the list and stop at the step that keeps the judges' eyes on the produ
 
 1. **A UI control misbehaves:** use the backup `curl` controls in [DEMO.md](../DEMO.md) (load, seek, play, pause, step, voice-demo, photo). Cost: about 10 s (estimate).
 2. **A new beat fails or looks wrong:** use the fallback of that beat (section 4). Say: "Let me show the same step on the tested path." Never change a flag during the talk. Note the beat for the hide decision.
-3. **An AI reply is slow, wrong or has no label:** flip the component to FALLBACK in the provider panel (once X6 has landed) and try once more. The reply is then a template, the simulated reader or a person, and you say so. A reply with no label is not used: skip that beat.
+3. **An AI reply is slow, wrong or has no label:** flip the component to FALLBACK in the provider panel (`x6_provider_panel` on) and try once more. The reply is then a template, the simulated reader or a person, and you say so. A reply with no label is not used: skip that beat.
 4. **Numbers differ from DEMO.md:** reload the scenario; loads are deterministic. If they still differ, stop the live demo and go to step 6.
 5. **The phone shows nothing after the slip or the approval:** the clock is paused, and money arrives 4 simulated minutes later. Press Play, or step 5 minutes.
 6. **The live demo cannot continue:** use the backup machine (a second laptop with the frozen build) if there is one. If not, open the static copy on the same laptop: `cd frontend && npm run preview` serves the mock build, and the console shows its "Mock data" badge. Say: "This is the same console on its built-in mock data." A public address for the static copy exists when the repo owner has deployed it, and not otherwise ([build plan](build-plan.md), N7).
@@ -255,7 +255,7 @@ Keep these tabs open, in this order: `/` (overview), `/live` (map), `/merchant/S
 | Speak an amount | Ask screen, mic | A chip with the amount to confirm | Type it |
 | See a complaint or the consent screens | Help → Complaints, or My data and consent | The ladder and the consent log | Say they are in the app and show the spec |
 | See what happens when the lender does not answer | Provider panel: force `lender`. Load monsoon, seek 17:03, Play through 17:05 | The holiday request ends with no answer. The payout is untouched | Say it in words |
-| See Marathi | S9 Language, if `n8_marathi` is on and signed off | The app switches | Say Marathi is planned and show Hindi |
+| See Marathi | S9 Language, if `n8_marathi` is on and signed off | The app switches | Say Marathi is a draft that waits for a native speaker's review, and show Hindi |
 | See a measured number | `/evals`, if on | Numbers from a stored run, with n, and nothing else | Do not quote a number |
 
 Do not hand the microphone or the camera to a visitor to use with real data. The notice and the free-tier data rule exist for this.
@@ -272,10 +272,11 @@ Do not hand the microphone or the camera to a visitor to use with real data. The
 
 ## Changelog
 
+- 2026-10-03 · v1.7 · audit against the code: X6 and Wave 2 wording no longer says "lands"; the component count is 15 (17 with the provider panel on); Marathi is a draft, not planned
 - 2026-10-02 · v1.6 · new beats added with a flag, a pass rule, a time budget and a fallback each (tracker, receipt, what-if, Ask with citations, voice, slip pre-check, grievance, consent, provider panel); the 3-minute and 7-minute cuts now use the slide windows of the deck script; the seek moves to 14:00 and 14:30 (DEMO.md seeks 13:30); disclosure matches DEMO.md; added time checks, a drop order, the demo card, the judge's turn and the instalment wording without X4; corrected the contingency ladder for flags and the provider panel
 - 2026-10-02 · v1.5 · rewritten against DEMO.md: no invented slot time, 7-minute order follows the golden script, dispute never changes the amount, BLOCKED wording, live/simulated disclosure matches our keys
 - 2026-10-02 · v1.4 · provider status wording for N2 and N3
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes
+- 2026-10-02 · v1.2 · corrections after a second read against the code
 - 2026-10-02 · v1.1 · fact-check pass: verified all numbers match docs/DEMO.md and docs/SPEC.md; outcomes (EXPLAINED, HUMAN, BLOCKED) used correctly.
 - 2026-10-02 · v1 · initial draft. Covers pre-demo setup, timing for 3-min and 7-min cuts, new features (N1–N4) placement, LIVE badge rules, fallback ladder, rehearsal log.

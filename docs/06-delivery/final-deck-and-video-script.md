@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 · A slide that shows a planned feature is used only if that feature is on at the freeze; otherwise the built-today version is used |
+| Status | Draft v1.1 · 3 Oct 2026 · A slide that shows a flagged feature is used only if that flag is on at the freeze; otherwise the version without it is used |
 | Owner | Omkar Kadam (slides, words, video) with Ujjwal Pardeshi (operator, recording) |
 | Audience | The presenter, the operator and whoever records the backup video |
 | Related | [Demo runbook](demo-runbook.md) (the clicks) · [DEMO.md](../DEMO.md) (the golden script and numbers) · [Pitch and judge Q&A](pitch-and-judge-qa.md) · [On-site checklist](on-site-checklist.md) · [Build plan](build-plan.md) · [Copy deck](../03-design/copy-deck.md) · [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) · [Business model](../05-business/business-model-and-unit-economics.md) · [Facts and sources](../01-strategy/facts-and-sources.md) · [Competitive landscape](../01-strategy/competitive-landscape.md) |
@@ -11,7 +11,7 @@
 
 - **14 slides.** Slides 1 to 12 are the talk; slides 13 and 14 stay in the back for questions. The 7-minute cut uses slides 1 to 12. The 3-minute cut uses slides 1, 3, 4, 8 and 12.
 - **The story, in this order:** the merchant's problem, the claim starting itself, the four stages of the claims journey (understand coverage, submit a document, track, resolve queries), trust (source badges, counterfactual, audit chain), AI with honest labels, the business model with the honest price, honest limits, the ask.
-- **Everything on a slide is BUILT today, or is shown only if its feature flag is on at the freeze.** Every slide that depends on planned work has a built-today version (section 4). A half-working screen is never shown.
+- **Everything on a slide is BUILT today, or is shown only if its feature flag is on at the freeze.** Every slide that depends on a flagged feature has a version without it (section 4). A half-working screen is never shown.
 - **Words:** the key lines from [pitch and judge Q&A](pitch-and-judge-qa.md) section 4 are delivered word for word. No partner is claimed. WhatsApp and the Paytm link are SIMULATED. No AI accuracy number is quoted unless the evaluation page shows it.
 - **The backup video** is about 2 minutes: 10 shots with narration (section 5). It plays only if the live demo and the static demo (N7) both fail.
 - **The round-1 deck has claims the prototype does not support** (WhatsApp and the Paytm link live, "a few rupees a day", Marathi on the phone). Section 6 lists the corrections to carry into the final deck.
@@ -19,7 +19,7 @@
 ## 1. Ground rules
 
 1. **One honest story.** The deck says what runs as code, what is simulated and what is not measured. The same sentences appear on the slide, in the notes and in the Q&A.
-2. **Status words.** BUILT (in the code at commit 86575ea), PLANNED with a build wave (0 to 5, [build plan](build-plan.md)), SIMULATED (a labelled simulator), LIVE (a real service answered, shown by a header badge).
+2. **Status words.** BUILT (in the code, behind a flag that is off by default; see the [build plan](build-plan.md)), SIMULATED (a labelled simulator), LIVE (a real service answered, shown by a header badge).
 3. **Two versions of a slide when it depends on new work.** "If shipped" is used only when the flag is on and the feature passed the rehearsal on the demo laptop. Otherwise use "Built today". The decision is made once, at the freeze, and written in the rehearsal log ([runbook](demo-runbook.md) section 8).
 4. **Never on a slide:** a claim that an insurer or lender has agreed to anything; a URL for the static demo or the video before it exists (the repo owner must deploy it); an AI accuracy figure that the `/evals` page does not show; the word live for anything that shows SIMULATED; "open source" (the repository is public, with no licence yet); a rival team member's name; a fixed freeze clock time or a slot time.
 5. **Anil and Ramesh are synthetic personas** in a simulated replay. The slides say so.
@@ -50,7 +50,7 @@ The slot time and length are not announced. Both cuts are ready. Rehearse to lan
 | 12 | The ask | Slide | 6:40–7:00 | 20 |
 | 13, 14 | Backup slides for questions | Slide | after 7:00 | none |
 
-**If the cut runs late, drop in this order:** (1) the Zone 9 line and the Z7 panel click on slide 3; (2) the dispute on slide 4; (3) the officer's approval on slide 6, showing only the referred evidence; (4) slide 7 down to one sentence; (5) slide 9 down to one sentence. Never drop slide 11 or slide 12.
+**If the cut runs late, drop in this order:** the Zone 9 line and the Z7 panel click on slide 3; the dispute on slide 4; the officer's approval on slide 6, showing only the referred evidence; slide 7 down to one sentence; (5) slide 9 down to one sentence. Never drop slide 11 or slide 12.
 
 ### 2.2 Three-minute cut (180 seconds)
 
@@ -111,7 +111,7 @@ The 30 to 60 days is what the case study reports for Paytm's earlier merchant pl
 **Speaker notes**
 > "The track asks for four stages of a claims journey: understand the cover, submit documents, track the claim, resolve queries. We will walk all four, starting with a claim nobody files."
 
-**Depends on:** N1 and H20 (wave 1), N3 and H15 (wave 2), N5 (wave 3). **If hidden:** use the built column for that row.
+**Depends on:** N1 and H20, N3 and H15, N5. **If hidden:** use the built column for that row.
 
 ### Slide 3 · The claim starts itself
 
@@ -141,7 +141,7 @@ Say "37%", never the round-1 deck's 41%. The clock label reads simulated; the "f
 
 **Operator:** [runbook](demo-runbook.md) section 3, with one change for timing. Seek to 14:00 (14:30 in the 3-minute cut) before the cue, press Play on the cue, pause at about 17:06, click **Z7**, point at the Zone 9 panel. Keep "Slow near payout" on. If the replay is late, the Overview's "Watch the storm replay" launcher loads the monsoon at 16:57 and pauses at 17:06.
 
-**If hidden:** the projector polish and the moment card (wave 4) are extras. Show the console as it is.
+**If hidden:** the projector polish and the moment card are extras. Show the console as it is.
 
 ### Slide 4 · Anil's money, and why
 
@@ -197,7 +197,7 @@ If the vision badge reads SIMULATED, say "the slip reader", never "the AI model 
 
 **Operator:** load **illness**, seek 11:15, Play to the 11:20 check-in, pause, tap **ill**, send the sample slip, then Play (or step 5 minutes) for the credit at +4 minutes and the instalment step at +5. The Overview's "Play the illness claim" launcher (BUILT) loads **illness**, seeks 11:20 and opens Anil's phone with the **ill** chip highlighted, in one click. Rehearse whichever you use.
 
-**Depends on:** N1 coverage explainer and H20 (wave 1), N3 pre-check and H15 (wave 2), N4 voice (wave 2). **If hidden:** the built phone, chips and sample slip. Skip the microphone.
+**Depends on:** N1 coverage explainer and H20, N3 pre-check and H15, N4 voice. **If hidden:** the built phone, chips and sample slip. Skip the microphone.
 
 ### Slide 6 · Track it, resolve it
 
@@ -219,7 +219,7 @@ If shipped, add: "In the app Anil follows the same claim step by step, with the 
 
 **Operator:** load **illness_mismatch**, seek 11:15, Play to 11:20, pause, tap **ill**, send the mismatch slip. Open `/claims`, case C-2291, tap **Approve**, step 5 minutes. The Overview's "Review the slip mismatch" launcher (BUILT) loads **illness_mismatch**, seeks 11:20, sends the voice reply and the mismatch slip, and opens `/claims`, which shortens this.
 
-**Depends on:** N1 tracker (wave 1), N2 (wave 2), N5 and H22 (wave 3). **If hidden:** the built chips and the console.
+**Depends on:** N1 tracker, N2, N5 and H22. **If hidden:** the built chips and the console.
 
 ### Slide 7 · Every number shows where it came from
 
@@ -236,7 +236,7 @@ If shipped, add: "In the app Anil follows the same claim step by step, with the 
 - The Z7 panel rows: "Alert · Red alert from 14:00", "Sales · 37% of expected for 3 hours", "Cover · 46 of 46 prepaid", "Paid · 17:04, with the settlement", "Total · ₹58,900 · instalments paused"
 - "Why Zone 9 got nothing: its sales fell to 61% on a day with no weather alert. That's a slow day, not a loss event, so Chhatri doesn't pay."
 
-**Visual:** the trust receipt (capture after wave 1), or the Z7 panel and the Zone 9 panel from `/live`.
+**Visual:** the trust receipt (capture with the flag on), or the Z7 panel and the Zone 9 panel from `/live`.
 
 **Speaker notes, if shipped**
 > "Every number on this card says where it came from: the rules version, the sales index, the alert, KYC. Every explanation says what would have changed the outcome, and the engine writes that line, not a language model. Zone 9 got nothing because there was no alert. With an alert and three hours below half, it would have paid."
@@ -244,7 +244,7 @@ If shipped, add: "In the app Anil follows the same claim step by step, with the 
 **Speaker notes, built today**
 > "Every number on this panel says what it is: the alert, the sales, the cover, the payment. And Zone 9 says why it got nothing: no alert, so a slow day, not a loss event."
 
-**Depends on:** H13, H14 and the receipt endpoint (wave 1). **If hidden:** the built version.
+**Depends on:** H13, H14 and the receipt endpoint. **If hidden:** the built version.
 
 ### Slide 8 · Code decides the money
 
@@ -307,7 +307,7 @@ Ramesh's link shows ₹424.80 for 30 days (₹14.16 a day, from the backtest; pr
 
 If the provider panel shipped, add: "and, if a backup stepped in, why." If the evaluation page shipped and has a stored run, read the figures off the screen with their n. Never quote a number from the [AI evaluation plan](../04-engineering/ai-evaluation-plan.md): it is a plan, and nothing in it has been measured.
 
-**Depends on:** N2, N3, N4, X6, H26 (wave 2); H25 and `/evals` (wave 3). **If hidden:** the built version.
+**Depends on:** N2, N3, N4, X6, H26; H25 and `/evals`. **If hidden:** the built version.
 
 ### Slide 10 · The business model and the honest price
 
@@ -417,29 +417,29 @@ FINPATH and FinPath AI are two different projects: say the names exactly.
 
 Decide each row once, at the freeze, and write it in the rehearsal log.
 
-| Slide | Depends on (wave) | If it is not on at the freeze |
+| Slide | Depends on | If it is not on at the freeze |
 |---|---|---|
 | 1 | Nothing new | Not applicable |
-| 2 | N1 and H20 (1), N3 and H15 (2), N5 (3) | Use the built column in the stage table |
-| 3 | K1 (built). Projector polish and the moment card (4) are extras | The console as it is |
-| 4 | K1, K5 (built). N1 receipt and tracker (1). X4 wording (1) | `/merchant/S-0142`, and the built "is paused" line spoken as in slide 4 |
-| 5 | N1 explainer (1). N3 pre-check, N4 voice (2) | The built phone, the chips and the sample slip. Skip the microphone |
-| 6 | N1 tracker (1). N2 (2). N5 and H22 (3) | The built chips and `/claims` |
-| 7 | H13, H14 and the receipt endpoint (1) | The Z7 panel and the Zone 9 sentence |
+| 2 | N1 and H20, N3 and H15, N5 | Use the built column in the stage table |
+| 3 | K1 (built). Projector polish and the moment card are extras | The console as it is |
+| 4 | K1, K5 (built). N1 receipt and tracker. X4 wording | `/merchant/S-0142`, and the built "is paused" line spoken as in slide 4 |
+| 5 | N1 explainer. N3 pre-check, N4 voice | The built phone, the chips and the sample slip. Skip the microphone |
+| 6 | N1 tracker. N2. N5 and H22 | The built chips and `/claims` |
+| 7 | H13, H14 and the receipt endpoint | The Z7 panel and the Zone 9 sentence |
 | 8 | K4, K6, K7 (built) | Not applicable |
-| 9 | N2, N3, N4, X6, H26 (2). H25 (3) | The built text: Sarvam only, LIVE only with the key |
+| 9 | N2, N3, N4, X6, H26. H25 | The built text: Sarvam only, LIVE only with the key |
 | 10 to 12 | Nothing new | Not applicable |
-| 13 | X6 provider panel (2), for the Gemini clause | Drop the Gemini clause |
+| 13 | X6 provider panel, for the Gemini clause | Drop the Gemini clause |
 | 14 | Nothing new | Not applicable |
 
-The static demo (N7, wave 5) is built from the same console in mock mode. It needs the repo owner to deploy it. Until it is deployed and the link works, no slide or note carries a URL for it.
+The static demo (N7) is built from the same console in mock mode. It needs the repo owner to deploy it. Until it is deployed and the link works, no slide or note carries a URL for it.
 
 ## 5. Backup video script (about 2 minutes)
 
 **When it plays:** only if the live demo and the static demo both fail ([runbook](demo-runbook.md) section 6). It is a recording of the real prototype in replay, not an animation.
 
 **How to record**
-- Record in wave 5, from the build that will be frozen, on the demo laptop, with the in-process workflow runner. `make demo-check` must pass first. The mock-mode build gives the same numbers and can be used instead.
+- Record from the build that will be frozen, on the demo laptop, with the in-process workflow runner. `make demo-check` must pass first. The mock-mode build gives the same numbers and can be used instead.
 - Browser at 1280×720, zoom 100%, full-screen window. Click **Enable sound** first so the Soundbox plays. Keep the footer line ("Sales, alerts, KYC, payouts, lender and Soundbox are simulated") in frame in every console shot.
 - Record the screen and the narration separately. A free screen recorder and a phone voice memo are enough. Mix in any free editor.
 - Burn in English captions from the narration column, because the room may be loud. The Hindi lines are on screen in the product.
@@ -464,7 +464,7 @@ The static demo (N7, wave 5) is built from the same console in mock mode. It nee
 
 ## 6. Corrections to carry from the round-1 deck
 
-The round-1 deck ([PDF in the repository root](../../Chhatri%20%C2%B7%20Build%20for%20India%20AI%20Hackathon%20%C2%B7%20Track%202.pdf)) was written before the audit. Do not copy these into the final deck.
+The round-1 deck ([PDF in the repository root](../../Chhatri%20%C2%B7%20Build%20for%20India%20AI%20Hackathon%20%C2%B7%20Track%202.pdf)) was written before the prototype was checked against the code. Do not copy these into the final deck.
 
 | Round-1 deck | Say instead |
 |---|---|
@@ -473,7 +473,7 @@ The round-1 deck ([PDF in the repository root](../../Chhatri%20%C2%B7%20Build%20
 | Slide 13: "Premium paid with a real Paytm link (staging)" as a goal for 3 October | Drop it. The link is `https://paytm.me/sim-…`, labelled SIMULATED |
 | Slide 12: "How it's priced: a few rupees a day" | The price is open. The prototype gives ₹6.93 to ₹38.82 a day on simulated sales |
 | Slide 12: "Data for Pi: a live area income index" | Drop it. It is a roadmap idea, not a Paytm product |
-| Slide 1: phone header "Hindi, Marathi, English" | "Hindi, English" until Marathi (N8, wave 4) ships |
+| Slide 1: phone header "Hindi, Marathi, English" | "Hindi, English" unless the Marathi flag is on (text only, no Marathi voice) |
 | Slide 4: "6 · Learn: every payout, dispute and review sharpens the triggers" | Officers see similar past cases, and the backtest reports trigger health. Nothing retrains the triggers |
 | Slide 9: "Premium paid through the Paytm MCP server (staging)" and "n8n workflows" | The link is simulated on stage, and the in-process workflow runner is used, so the n8n badge reads SIMULATED |
 | Slide 4: "AI reads the slip; name matches KYC; dates match the silent days" | "The slip reader" unless the vision badge reads LIVE |
@@ -497,3 +497,4 @@ The round-1 deck ([PDF in the repository root](../../Chhatri%20%C2%B7%20Build%20
 ## Changelog
 
 - 2026-10-02 · v1 · first version: 14-slide outline with on-slide text, visuals, notes and timing for the 7-minute and 3-minute cuts; dependencies and fallbacks; a backup video script of about 2 minutes; corrections to carry from the round-1 deck
+- 2026-10-03 · v1.1 · statuses brought in line with the code: features built behind flags, wave labels removed, Marathi is text only, no live AI key run

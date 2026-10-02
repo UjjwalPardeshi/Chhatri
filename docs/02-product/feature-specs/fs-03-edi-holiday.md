@@ -30,14 +30,14 @@ This matches the RBI (Digital Lending) Directions, 2025 (A25), which leave a def
 
 | What | Status | Where | Change |
 |---|---|---|---|
-| Instalment step after a payout | BUILT | `ledger/instalments.py` (`InstalmentService.pause_next`), workflow `payout` step `pause_instalment` at +5 minutes (`workflows/definitions.py`) | Becomes `request_holiday` (X4) |
+| Instalment step after a payout | BUILT | `ledger/instalments.py` (`InstalmentService.pause_next`, `request_holiday`), workflow `payout` step `request_holiday` (called `pause_instalment` at the baseline) at +5 minutes (`workflows/definitions.py`) | With `x4_lender_request` on it asks the lender (X4); with it off it is the unconditional pause |
 | What it does today | BUILT | Pauses the instalment due on event date + 1 day. Returns nothing if the merchant has no loan or that instalment is already paused. Writes an `InstalmentPause` and the audit entry `instalment.pause` (lender "Simulated lender (NBFC partner)", moved to end of tenure, penalty 0) | Adds preconditions and a lender answer |
 | Loan record | BUILT | `domain/models.py` (`Loan`): id, merchant, lender name, daily instalment, outstanding amount. No status, arrears or allowance | Unchanged. The lender keeps its own records (section 7.2) |
 | Merchant message | BUILT | `INSTALMENT_PAUSED`, `INSTALMENT_PAUSED_TODAY`, `INSTALMENT_PAUSED_ON` in `conversation/messages.py`; chosen in `conversation/notifications.py` | Replaced by lender-decides wording (section 8) |
-| Lender component status | BUILT | `lender`, always SIMULATED, "Simulated lender (NBFC partner)" (`integrations/statuses.py`) | Becomes a real simulated adapter |
+| Lender component status | BUILT | `lender`, always SIMULATED, "Simulated lender (NBFC partner)" (`integrations/statuses.py`) | Backed by the simulated adapter below; the presenter can force "no response" (X6) |
 | Simulated lender adapter | BUILT, wave 1 | new `integrations/lender.py`, a `Lender` port in `integrations/base.py` | Section 7 |
 | Request and decision records, ids `HR-` | BUILT, wave 1 | `domain/models.py`, `ids.py`, `ledger/instalments.py` | Section 7.5 |
-| Console and tracker rows | PLANNED, wave 1 and 4 | fs-08, fs-04 | Section 8.3 |
+| Console and tracker rows | BUILT | `frontend/src/components/claims/HolidayRow.tsx` (console), the lender-answer step of the claim tracker in the mini-app | Section 8.3 |
 | X8 message guard | BUILT, wave 3 | `conversation/message_guard.py`, `conversation/outbox.py` | Section 9 |
 
 ## 3. User stories and jobs to be done
@@ -79,7 +79,7 @@ sequenceDiagram
   participant L as Simulated lender
   participant M as Merchant
   Note over WF: 17:00 decision, 17:04 credit
-  WF->>Svc: step pause_instalment at 17:05
+  WF->>Svc: step request_holiday at 17:05
   Svc->>Svc: check guards G1 to G4
   Svc->>L: holiday request with loan, instalment date and payout proof
   L->>L: apply L1 to L4 on its own records
@@ -357,9 +357,9 @@ All P0. Owners: Ujjwal (backend), Omkar (copy, UI, docs).
 - `backend/tests/replay/test_golden.py`: `test_illness_pays_1500_and_pauses_thursdays_instalment`, `test_decisions_17_00_credits_17_04_pauses_17_05_and_the_kpis`.
 - `backend/tests/cases/test_demo_flows.py`: `test_monsoon_anil_paid_1380_at_1704_and_instalment_paused_at_1705`.
 
-These change with section 8.4. The pause assertions stay, and the message assertions move to the new wording.
+These changed with section 8.4: the pause assertions stayed, and the message assertions moved to the lender-decides wording.
 
-### New tests (PLANNED)
+### New tests (BUILT)
 
 | Test | File | What it checks |
 |---|---|---|
@@ -373,7 +373,7 @@ These change with section 8.4. The pause assertions stay, and the message assert
 | `test_kpi_counts_grants_only` | `backend/tests/replay/test_area_flow.py` | 123 stays 123 with the default lender. |
 | `test_holiday_messages_render_and_name_the_lender` | `backend/tests/conversation/test_messages.py` | New keys render and mention "lender". |
 | `test_honest_wording_covers_holiday_keys` | X7 test | No "Chhatri paused" and no promise. |
-| `test_offer_suppressed_during_alert_or_open_case` and `test_proactive_cap` | `backend/tests/conversation/test_outbox.py` | X8 rules with a fake `OFFER` key. |
+| `test_offer_suppressed_for_each_distress_reason` and `test_proactive_cap_is_per_ist_calendar_day` | `backend/tests/conversation/test_message_guard.py` | X8 rules with a fake `OFFER` key. |
 | Mock parity | `frontend/src/mock/routes.test.ts` | Static demo serves request and answer. |
 
 ### Regression checks
@@ -398,7 +398,7 @@ make demo-check     # every scenario through the HTTP API
 ## Changelog
 
 - 2026-10-02 · v1.4 · lender-decides wording throughout; X4 made build-ready (preconditions, lender rule, request and response JSON, failure handling, refusal wording, tests); removed line-number references and pseudocode for code that does not exist; timing corrected (request 17:05, 5 minutes after the decision); X8 specified; coordinated change list for the pinned strings; build waves replace dates
-- 2026-10-02 · v1.3 · final consistency pass against the code
-- 2026-10-02 · v1.2 · logic and truth audit fixes
-- 2026-10-02 · v1.1 · fact-check pass
+- 2026-10-02 · v1.3 · consistency check against the code
+- 2026-10-02 · v1.2 · corrections
+- 2026-10-02 · v1.1 · corrections
 - 2026-10-02 · v1 · First draft; K3 reframing from instalment pause to lender-approved EDI holiday. X4 rule guard, X8 cross-sell suppression, and proposed merchant copy added.

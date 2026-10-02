@@ -25,12 +25,12 @@
 
 ### 1.2 Status today
 
-BUILT means in the code at commit 86575ea, with counts collected on 2 Oct 2026.
+The table below is the baseline at commit 86575ea (counts collected on 3 Oct 2026 for files that still exist).
 
 | What exists | Where | What it shows | What it does not show |
 |---|---|---|---|
 | Intent regression tests | `backend/tests/conversation/test_intents.py`, 48 test cases over 128 labelled utterances | The rules keep the intents their authors chose | Accuracy. The word lists were written beside the tests, so the pass rate is 100% by construction |
-| Guard tests | `backend/tests/conversation/test_guard.py`, 25 tests | `grounded()` behaves as written | Behaviour on model text. No flow calls it yet |
+| Guard tests | `backend/tests/conversation/test_guard.py`, 25 tests | `grounded()` behaves as written | Behaviour on model text. Alone it is only layer A; `guard_strict.py` (layer B) calls it for the Ask path, and `tests/conversation/test_guard_strict.py` (38 tests) covers the pair |
 | Simulated slip reader tests | `backend/tests/integrations/test_sarvam_sim.py`, 19 tests | The simulator returns the answer key embedded in a sample slip | Reading accuracy. It reads its own key |
 | Doc-ai adapter tests | `backend/tests/integrations/test_sarvam_docai.py`, 22 tests, fake client | Parsing, polling, the confidence rule, timeouts | The accuracy of the live service |
 | Slip image tests | `backend/tests/sim/test_slips.py` (6), `backend/tests/backtest/test_slips.py` (5) | Clean, blurred, other-name and late-admission slips render and are read back by the simulator | Anything about a live reader |
@@ -45,7 +45,7 @@ Built since (working tree of 2 Oct 2026, evening):
 | S4 slip generator | `chhatri/evals/slipgen.py`, `python -m chhatri.evals --make-slips backend/var/evals/slips` | BUILT (AC-EVAL-08). The S4 scorer needs a live reader |
 | Red-team slips | `tests/fixtures/slips/redteam.jsonl`, `tests/conversation/test_slip_injection.py` | BUILT (task N3.13, as reads; staged photographs not made) |
 | Held-out leak scan | `tests/evals/test_held_out_leak.py` | BUILT (AC-EVAL-17) |
-| Route and page | `GET /api/evals/summary` (`api/routers/evals.py`), `frontend/src/pages/Evals.tsx`, mock `endpoints/evals.ts` | BUILT, flag `h25_evals` |
+| Route and page | `GET /api/evals/summary` (`api/routers/evals.py`), `frontend/src/pages/Evals.tsx`, mock `frontend/src/mock/endpoints/evals.ts` | BUILT, flag `h25_evals` |
 | Live suites S2 part B, S3, S4, S5; `--replay`; grading sheet; `redteam.jsonl`, `ask.jsonl`, `voice.jsonl` and recordings | | Not built. They need keys, quota, team recordings and two graders (H25.4 to H25.6, H25.10) |
 
 No number in this document is a result, and no run is stored.
@@ -335,15 +335,15 @@ Exit status: 0 when the run completed (whether or not a target was missed), 1 wh
 
 | Path | Holds |
 |---|---|
-| `backend/chhatri/evals/` | The package: `__main__.py`, `run.py`, `stats.py` (intervals, percentiles), `summary.py`, `cache.py`, `suites/` (one module per suite), `slipgen/` |
-| `backend/tests/fixtures/evals/` | Hand-written sets: `intents.jsonl`, `guard.jsonl`, `redteam.jsonl`, `ask.jsonl`, `voice.jsonl`, `slips_manifest.jsonl`, `voice/` |
-| `backend/tests/fixtures/slips/` | Red-team and distractor slips and the staged photographs (task N3.13) |
-| `backend/var/evals/slips/` | Generated slip images, from the seed. Ignored by git |
-| `backend/artifacts/evals/summary.json` | What the API serves |
-| `backend/artifacts/evals/<suite>.jsonl` | One line per item: input id, provider label, raw outcome, score |
-| `backend/artifacts/evals/replies/` | Raw provider replies keyed by provider, model and input hash, for `--replay` |
-| `backend/artifacts/evals/grading/` | Exported and scored grading sheets |
-| `backend/artifacts/evals/report.md` | A readable report of the last run |
+| `backend/chhatri/evals/` | The package: `__main__.py`, `run.py`, `stats.py` (intervals, percentiles), `summary.py`, `metrics.py`, `fixtures.py`, `slipgen.py`, `suites/` (BUILT: `intent.py`, `guard.py`, `chain.py`; the other suites are not built) |
+| `backend/tests/fixtures/evals/` | Hand-written sets. BUILT: `intents.jsonl`, `guard.jsonl`. Not built (they need keys and graders): `redteam.jsonl`, `ask.jsonl`, `voice.jsonl`, `slips_manifest.jsonl`, `voice/` |
+| `backend/tests/fixtures/slips/` | BUILT: `redteam.jsonl`. Not built: distractor slips and the staged photographs (task N3.13) |
+| `backend/var/evals/slips/` | Generated slip images, from the seed (`--make-slips`). Ignored by git; the folder exists only after a run |
+| `backend/artifacts/evals/summary.json` | What the API serves. Written by `make evals`; no run is committed, so the folder does not exist in the repository and the page reads NOT MEASURED |
+| `backend/artifacts/evals/<suite>.jsonl` | BUILT: one line per scored item. Written by `make evals` next to `summary.json` |
+| `backend/artifacts/evals/replies/` | Not built (it belongs to `--replay`, which is not built) |
+| `backend/artifacts/evals/grading/` | Not built (grading sheets belong to the live Ask suite) |
+| `backend/artifacts/evals/report.md` | Not built; the `/evals` page is the readable report |
 
 Every fixture row and image is synthetic and carries `"synthetic": true` or the sample stamp. The harness package counts toward the 80% backend coverage gate.
 
@@ -454,4 +454,5 @@ A flag may go on with a missed target. The page then shows the miss, and the pit
 ## Changelog
 
 - 2026-10-02 · v1.1 · status synced with the code: the offline harness, S1 part A, S2 part A, S6, the slip generator, the leak scan, the route and the page are BUILT; the live suites, `--replay` and the grading sheet are not; flag name `h25_evals`
+- 2026-10-03 · v1.2 · fact-checked against the code: file lists match `backend/chhatri/evals/`, the guard line no longer says no flow calls it, unbuilt files are labelled.
 - 2026-10-02 · v1 · first version. Defines H25: six suites (intent routing, guard red-team, Ask end to end, slip reading and the gate, voice, chains and labels) with sets, scoring, metrics and sourced or proposed targets; reporting rules (k of n, Wilson interval, held-out items, no accuracy from simulated providers); the planned `python -m chhatri.evals` harness, files, `GET /api/evals/summary` and the `/evals` page with a NOT MEASURED state; gates for the demo build, limits, acceptance criteria and tasks. Nothing has been measured

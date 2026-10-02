@@ -2,264 +2,120 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
+| Status | v2 · 3 Oct 2026 · counts measured on 3 Oct 2026 (section 1); every feature is BUILT and has tests |
 | Owner | Ujjwal Pardeshi |
 | Audience | Technical: developers, QA, CI/CD · Non-technical: team, judges |
-| Related | [Current-state audit](../01-strategy/current-state-audit.md) · [System architecture](system-architecture.md) · [Data model and API](data-model-and-api.md) |
+| Related | [Current-state audit](../01-strategy/current-state-audit.md) · [System architecture](system-architecture.md) · [Data model and API](data-model-and-api.md) · [Implementation guide](implementation-guide.md) · [AI evaluation plan](ai-evaluation-plan.md) |
 
 ## TL;DR
 
-- The failing-first test list for every feature is in the [implementation guide](implementation-guide.md); AI quality (intent accuracy, guard red-team, slip extraction) is measured as set out in the [AI evaluation plan](ai-evaluation-plan.md).
+- **Measured on 3 Oct 2026:** backend 3,221 fast tests (98.85 % line coverage of `chhatri/`) and 63 slow tests; infra 164 tests (99.44 % coverage of `scripts/`); frontend 1,340 unit tests in 135 files; `make demo-check` 70 of 70; 134 Playwright tests listed in 26 spec files (counted, not run for this page).
+- **Quality gates:** CI runs lint, the fast backend suite with coverage of at least 80 %, the frontend typecheck, lint, tests and build, the infra checks and the n8n self-test on every push to main and every pull request. `make test-slow`, `make demo-check` and `make e2e` are local gates that CI does not run.
+- **Every feature has tests:** N1 to N8, X1 to X8 and H-items are mapped to their test files in section 3. Failing-first test lists per card are in the [implementation guide](implementation-guide.md).
+- **AI quality is not measured.** The offline evaluation harness (H25) is BUILT and `make evals` runs it, but no run is committed, so the `/evals` page reads NOT MEASURED. The live suites need keys and graders and are not built ([AI evaluation plan](ai-evaluation-plan.md)).
+- **Demo rehearsal:** `make demo-check` validates the golden numbers offline. It runs with `CHHATRI_FEATURES=x4_lender_request`, the one flag the scripted flow expects; with `n3_slip_precheck` or `n6_consents` also on, the scripted photo and purchase steps stop by design (section 5).
+- **Freeze policy:** code freeze 90 minutes before the demo; the final rehearsal passes demo-check and the manual checklist.
 
-- **Test pyramid:** Backend 1,711 fast + 36 slow (99.7% coverage); frontend 262 of 264 (X1 fix planned); infra 118; demo-check 70 of 70.
-- **Quality gates:** CI passes lint + fast tests + coverage ≥80% on every push; slow tests and demo-check on PR merge.
-- **New work (P0):** Every feature (N1–N4, N7, X1–X8, H1–H6) has a test; K1–K5 and K8 have integration tests; ask-chhatri and slip reading have eval sets.
-- **AI evaluation:** Grounded-answer rate ≥95%, zero unsupported money figures (enforced by guard); slip extraction confidence ≥0.80; intent detection ≥95%.
-- **Demo rehearsal:** `make demo-check` validates all golden numbers; a manual checklist covers live-key setup and on-stage preflight.
-- **Freeze policy:** Code freeze 90 minutes before demos; final rehearsal passes demo-check + manual checklist.
+## 1. Test suites and counts (measured 3 Oct 2026)
 
-## 1. Current test suites and counts (measured 2 Oct 2026)
+Counts come from one run of each command on 3 Oct 2026 (`make test-backend`, `make test-slow`, `make test-infra`, `npx vitest run --maxWorkers=2`), plus `make demo-check` and `playwright test --list`.
 
-### Backend: 1,747 tests, 99.7% coverage
+| Suite | Command | Result on 3 Oct 2026 |
+|---|---|---|
+| Backend, fast | `make test-backend` (`pytest -m "not slow"`, coverage gate 80 %) | 3,221 passed, 63 deselected; line coverage 98.85 % |
+| Backend, slow | `make test-slow` (`pytest -m slow`) | 63 passed |
+| Infra | `make test-infra` (workflow JSON check, then `pytest scripts/tests`, coverage gate 90 %) | 164 passed; coverage 99.44 % |
+| Frontend unit | `npm run test` (Vitest) | 1,340 passed in 135 files; coverage not measured (`npm run test:coverage` exists and was not run) |
+| Demo rehearsal | `make demo-check` | 70 of 70 checks pass |
+| Playwright e2e | `make e2e` (live project) or `npm run test:e2e:mock` | 134 tests in 26 spec files, counted with `playwright test --list --project=mock`; not run for this page |
 
-**Fast tests (pytest -m "not slow"):** 1,711 tests
-- `backend/tests/forecast/`: 156 (features, training, model, calibrate, predictions)
-- `backend/tests/detect/`: 89 (area index, trigger logic, integration with model)
-- `backend/tests/policy/`: 187 (rule engine, payout calculations, caps, waiting period)
-- `backend/tests/cases/`: 124 (case creation, claim tracking, state machine)
-- `backend/tests/conversation/`: 168 (message catalogue, intents, prompts, guards)
-- `backend/tests/integrations/`: 142 (mock AI providers, stubs, fallbacks)
-- `backend/tests/api/`: 203 (request/response envelope, auth, error handling)
-- `backend/tests/audit/`: 97 (audit log, hash-chain integrity, verification)
-- `backend/tests/store/`: 156 (database CRUD, transactions, constraints)
-- `backend/tests/ledger/`: 89 (settlement ledger, EDI holiday logic)
-- `backend/tests/workflows/`: 134 (n8n integration, in-process runner, task scheduling)
-- `backend/tests/pipeline/`: 112 (data pipeline, calibration, model build)
-- `backend/tests/sim/`: 154 (simulator, rainfall, merchant generation, determinism)
-- `backend/tests/replay/`: 0 (replay logic tested via demo-check; no unit tests)
-- Other: 0
+### Backend fast tests by folder (3,221)
 
-**Slow tests (pytest -m slow):** 36 tests
-- `backend/tests/backtest/`: 18 (full backtest, metric computation, per-zone validation)
-- `backend/tests/forecast/`: 9 (full training pipeline, model persistence, manifests)
-- `backend/tests/api/`: 9 (golden-doc routes, SPEC contracts)
+`api` 718 · `conversation` 514 · `integrations` 378 · `replay` 294 · `policy` 188 · `ask` 162 · `pipeline` 133 · `forecast` 115 · `sim` 103 · `detect` 88 · `ai` 84 · `backtest` 78 · `ledger` 61 · `precheck` 53 · `evals` 48 · `consent` 43 · `workflows` 37 · `cases` 37 · `audit` 29 · files directly under `tests/` 27 · `store` 23 · `domain` 8.
 
-**Coverage:** 99.7% (COVERAGE_CORE=sysmon, Python 3.12's low-overhead tracer)
-- One file uncovered: a legacy error class (3 lines in `forecast/errors.py`), never raised in tests.
+### Backend slow tests by folder (63)
 
-### Frontend: 262 of 264 tests pass
+`api` 22 · files directly under `tests/` 18 (golden numbers, demo flows) · `replay` 17 · `forecast` 2 · `backtest` 2 · `sim` 1 · `pipeline` 1. They read the committed artefacts and never rebuild them.
 
-**Test count:** 262 unit tests (Vitest), 21 e2e (Playwright)
+### Infra (164)
 
-**Failures (X1):** 2 frontend tests fail
-- **Cases panel:** Mock state mismatch in the case-status update path
-- **Overview live map:** Hex-map animation timing on first render
+`scripts/tests/`: workflow generation and the self-test harness, compose and Dockerfile checks, env setup, the nginx proxy, the Makefile, the flag lockstep between `features.py` and `features.ts`, and the key checker.
 
-**Coverage:** Estimated 87% (Vitest `--coverage`); exact metric in `npm run test` output.
+### Demo-check (70)
 
-**E2E:** 21 Playwright tests cover
-- Console login, case view, alert replay, payout display
-- Mini-app (N1) flows: cover card, claim tracker, ask-chhatri, grievance
-- Message catalogue and language switching
-- Dark mode, responsive layout
-
-### Infra: 118 tests
-
-- `scripts/tests/`: 118 tests (n8n workflow generation, docker-compose validation, env setup, Makefile targets)
-- Coverage: 90%+ (enforced by CI)
-
-### Demo-check: 70 golden-number validations
-
-**Tool:** `backend/scripts/demo_check.py` (SPEC §13.6, §17.2, §22, §23)
-
-**Scenarios tested:**
-1. **monsoon** (Tue 19 Aug 2025, 08:00–20:00 IST): Alert A-20250818-01 fires, Z7 triggers at 17:00, Anil paid ₹1,380, total ₹58,900, EDI holiday at 17:05
-2. **illness** (Wed–Thu 20–21 Aug): Shop silent, check-in at 11:20, slip read, name matches, ₹1,500 paid, EDI holiday at +5 min
-3. **illness_mismatch** (same slip, different name): REFERRED case C-2291, officer taps Approve, ₹1,500 paid
-4. **buy_cover** (Mon 18 Aug 18:00): Ramesh (S-0907, Z3) tries to buy during red alert, BLOCKED, new cover 25 Aug
-
-**Live tests (through the API, deterministic):**
-5. **EXPLAINED:** merchant asks "मुझे इतने ही पैसे क्यों मिले?"; Ask Chhatri cites clause and shows decision facts
-6. **HUMAN:** doubtful slip (low confidence) goes to REFERRED, officer reviews, decides
-7. **BLOCKED:** merchant tries to buy during alert; request rejected; new cover delayed
-
-**Validations per scenario:** 8–11 assertions (path, decision id, payout amount, reason, next step, timestamp accuracy), 70 total pass/fail.
-
-**Invocation:** `make demo-check` (no external API keys needed; uses committed artifacts).
+`backend/scripts/demo_check.py` (SPEC §13.6, §17.2, §22, §23) runs the four scenarios (`monsoon`, `illness`, `illness_mismatch`, `buy_cover`) and the three live tests (EXPLAINED, HUMAN, BLOCKED) through the HTTP API and compares what the console would show with the constants in `backend/chhatri/api/demo/golden.py`. It needs no keys; it uses the committed artefacts with every live integration switched off.
 
 ## 2. Quality gates and CI pipeline
 
 ### Local gates (developer responsibility)
 
 Before committing:
-- `make lint` (ruff check + format) — must pass
-- `make test-backend` (1,711 fast tests, coverage ≥80%) — must pass
-- `make test-frontend` (Vitest + typecheck + lint) — must pass
-- Manual: `npm run test:e2e` (optional, slow)
+- `make lint` (ruff check and format check for the backend and `scripts/`) must pass.
+- `make test-backend` (fast tests, coverage at least 80 %) must pass.
+- `make test-frontend` (typecheck, lint, Vitest) must pass.
+- `make test-infra` when anything under `scripts/`, `n8n/`, the Makefile, compose or nginx changed.
+- Before a demo: `make test-slow` and `make demo-check`.
 
-### CI gates (.github/workflows/ci.yml)
+### CI gates (`.github/workflows/ci.yml`, on every push to main and every pull request)
 
-**On every push to main:**
+1. **Backend:** `ruff check .`, `ruff format --check .`, then `pytest -m "not slow" --cov=chhatri --cov-fail-under=80`.
+2. **Frontend:** `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`.
+3. **Infra:** ruff on `scripts/`, `scripts/n8n_workflows.py --check` (the generated JSON matches `WORKFLOWS`), `pytest scripts/tests --cov=scripts --cov-fail-under=90`, then `scripts/n8n_selftest.py --start-container` against the pinned n8n image.
 
-1. **Lint:**
-   - Ruff (backend + scripts): `ruff check . && ruff format --check .`
-   - Frontend: `npm run lint`
-   - Exit code 1 if any issue found
+CI never builds artefacts and does not run `make test-slow`, `make demo-check` or `make e2e`. A failing job blocks the merge.
 
-2. **Backend fast tests + coverage:**
-   - `pytest -m "not slow" --cov=chhatri --cov-fail-under=80` (1,711 tests)
-   - Fails if coverage drops below 80%
+## 3. Where each feature is tested
 
-3. **Frontend tests + build:**
-   - Typecheck: `npm run typecheck`
-   - Lint: `npm run lint`
-   - Unit tests: `npm run test`
-   - Build: `npm run build`
+Backend paths are under `backend/tests/`, frontend paths under `frontend/`.
 
-4. **Infra validation:**
-   - n8n workflows: `scripts/n8n_workflows.py --check` (Makefile reflects WORKFLOWS)
-   - Infra tests: `pytest scripts/tests --cov=scripts --cov-fail-under=90`
+| Feature | Backend | Frontend and end to end |
+|---|---|---|
+| N1 mini-app: cover card, claim tracker, receipt, buy | `api/test_cover_route.py`, `api/test_claims_route.py`, `api/test_receipt.py`, `policy/test_cover_status.py`, `replay/test_view_cover.py`, `replay/test_view_claims.py`, `replay/test_view_receipt.py` | `src/miniapp/screens/*.test.tsx`, `src/mock/endpoints/*.test.ts`; e2e `miniapp-*.spec.ts`, `human-miniapp-cover.spec.ts`, `human-miniapp-screens.spec.ts` |
+| N2 Ask Chhatri | `ask/`, `api/test_ask.py`, `api/test_ask_real.py`, `conversation/test_guard.py`, `conversation/test_guard_strict.py`, `conversation/test_ask_chat.py`, `conversation/test_explain_first.py`, `integrations/test_gemini_chat.py`, `integrations/test_chat_chain.py`, `integrations/test_free_tier_gate.py` | `src/miniapp/screens/Ask.test.tsx`, `src/mock/ask.test.ts`; e2e `human-miniapp-ask.spec.ts` |
+| N3 slip pre-check | `precheck/`, `replay/test_slip_precheck.py`, `api/test_slip_precheck_api.py`, `conversation/test_slip_flow.py`, `conversation/test_slip_injection.py`, `integrations/test_gemini_vision.py`, `integrations/test_slip_chain.py` | `src/miniapp/screens/SlipPrecheck.test.tsx`, `src/components/phone/PrecheckActions.test.ts`, `src/mock/precheck.test.ts`; e2e `human-miniapp-slip.spec.ts` |
+| N4 voice | `api/test_voice.py`, `ask/test_voice_service.py`, `ask/test_mentions.py`, `integrations/test_sarvam.py`, `integrations/test_sarvam_sim.py` | `src/miniapp/components/voiceMentions.test.ts`; e2e `human-miniapp-voice.spec.ts` |
+| N5 grievance ladder | `cases/test_ladder.py`, `api/test_grievances.py` | `src/miniapp/screens/Grievances.test.tsx`, `grievanceModel.test.ts`; e2e `human-miniapp-grievance.spec.ts`, `miniapp-dispute.spec.ts` |
+| N6 consent centre, activity, forget my slip | `api/test_consents.py`, `api/test_consent_gates.py`, `consent/test_notice_and_activity.py` | `src/miniapp/screens/Consents.test.tsx`; e2e `human-miniapp-consents.spec.ts` |
+| N7 static demo | none | `src/mock/*.test.ts`; e2e `static-build.spec.ts` (runs when `STATIC_DIR` names a mock build) |
+| N8 Marathi | none | `src/miniapp/copy/mr.test.ts`, `src/miniapp/screens/Language.test.tsx`; the text still needs a native speaker's review |
+| X1 frontend tests | none | the whole Vitest suite |
+| X2 to X3 published expected day, zone price | `domain/test_claim_model.py`, `policy/test_amounts.py`, `ledger/test_premium_table.py` | none |
+| X4 lender decides the EDI holiday | `integrations/test_lender.py`, `ledger/test_instalments.py`, `replay/test_area_flow.py` | `src/mock/lender.test.ts`; e2e `human-miniapp-lender.spec.ts` |
+| X5 unknown merchant | `api/test_unknown_merchant.py` | none |
+| X6 provider panel and fallback switch | `api/test_fallback_route.py`, `integrations/test_fallback_switch.py`, `integrations/test_registry_gemini.py` | `src/components/layout/providerPanel.test.tsx` |
+| X7 honest wording | `conversation/test_honest_wording.py` | `src/miniapp/copy/honestWording.test.ts` |
+| X8 no offers in distress, daily cap | `conversation/test_message_guard.py`, `conversation/test_outbox.py` | none |
+| H8 ops strip, H24 what-if | `api/test_ops_summary.py`, `api/test_whatif_route.py`, `replay/test_whatif.py`, `replay/test_whatif_vectors.py` | `src/components/layout/OpsStrip.test.tsx`, `src/mock/endpoints/whatif.test.ts` |
+| H25 offline evaluation harness | `evals/`, `api/test_evals.py` | `src/pages/Evals.test.tsx` |
+| Feature flags | `test_features.py`, `api/test_feature_flags.py`, `api/test_feature_routes.py` | `src/features.test.ts`; `scripts/tests/test_feature_flags.py` keeps the two flag lists identical |
+| Core: detection, policy engine, audit, ledger, workflows, replay, golden numbers | `detect/`, `policy/`, `audit/`, `ledger/`, `workflows/`, `replay/`, `test_golden_numbers.py`, `test_demo_flows.py` | e2e `demo.spec.ts`, `smoke.spec.ts`, `screens.spec.ts` |
 
-5. **n8n self-test:**
-   - Spin up the pinned n8n image, run the workflows against a stub backend
+### Not built
 
-**On PR merge to main:**
-- `make test-slow` runs (36 slow tests: backtest, golden-doc validation)
-- `make demo-check` runs (70 checks, all must pass)
-
-**Failure actions:**
-- PR is blocked until all gates pass
-- Blocking issues are surfaced in the PR (CI status, links to logs)
-- Any failure in slow tests or demo-check requires manual investigation
-
-## 3. Test pyramid for new work (P0, 2–3 Oct)
-
-### N1: Merchant mini-app
-
-| Feature | Test type | Count | Where | Status |
-|---|---|---|---|---|
-| Cover card (home screen) | Unit + integration | 12 | `backend/tests/api/` + `frontend/` | PLANNED |
-| Coverage explainer (accordion) | Unit + e2e | 6 | `frontend/` + `playwright` | PLANNED |
-| Consent and buy (payment link) | Unit + mock payment | 8 | `backend/tests/integrations/` | PLANNED |
-| Claim tracker (step states) | Unit + e2e | 10 | `frontend/` + `playwright` | PLANNED |
-| Help and grievance (ladder, SLA clocks) | Unit + e2e | 8 | `frontend/` + `playwright` | PLANNED |
-
-### N2: Ask Chhatri (grounded assistant, Gemini PLANNED)
-
-| Component | Test type | Count | Where | Status |
-|---|---|---|---|---|
-| Grounded-answer eval | AI eval (Sarvam LIVE, Gemini PLANNED) | 50–100 queries | `backend/tests/conversation/eval/` | LIVE (Sarvam); PLANNED (Gemini) |
-| Intent detection (fallback) | Unit | 24 | `backend/tests/conversation/` | LIVE |
-| Provider chain fallback | Unit + mock | 9 | `backend/tests/integrations/` | LIVE (Sarvam); PLANNED (Gemini) |
-| Money-figure guard | Unit + integration | 6 | `backend/tests/conversation/` | LIVE |
-| Clause citations | Unit | 12 | `backend/tests/conversation/` | PLANNED |
-
-### N3: Live slip reading + pre-check (Gemini PLANNED, Tesseract PLANNED, Sarvam LIVE)
-
-| Component | Test type | Count | Where | Status |
-|---|---|---|---|---|
-| Slip extraction (eval set) | AI eval + unit | 40 queries | `backend/tests/integrations/` | LIVE (Sarvam); PLANNED (Gemini) |
-| Pre-check readiness (UI) | Unit + e2e | 10 | `frontend/` + `playwright` | PLANNED |
-| Confidence gate (≥0.80) | Unit | 6 | `backend/tests/integrations/` | LIVE (Sarvam); PLANNED (Gemini) |
-| Fallback to Tesseract | Unit | 4 | `backend/tests/integrations/` | PLANNED (P0, Wave 2) |
-
-### N4: Real Hindi voice (Saaras + Bulbul)
-
-| Component | Test type | Count | Where | Status |
-|---|---|---|---|---|
-| STT fallback chain | Unit + mock | 8 | `backend/tests/integrations/` | LIVE |
-| TTS fallback chain | Unit + mock | 8 | `backend/tests/integrations/` | LIVE |
-| Browser Web Speech API (demo laptop) | Manual + e2e | 1 checklist | `docs/06-delivery/demo-runbook.md` | PLANNED |
-
-### N7: Static demo + backup video
-
-| Component | Test type | Count | Where | Status |
-|---|---|---|---|---|
-| Mock-mode console (`npm run dev:mock`) | Integration + e2e | 8 | `playwright` | PLANNED |
-| Static build (GitHub Pages) | Build + manual | 1 checklist | Build pipeline | PLANNED |
-| Recorded walkthrough | Manual validation | 1 checklist | `docs/06-delivery/demo-runbook.md` | PLANNED |
-
-### Fixes (X1–X8)
-
-| Fix | Test | Owner | Status |
-|---|---|---|---|
-| X1: Cases panel + live map frontend tests | Mock state fix + retest | Ujjwal | PLANNED |
-| X2: Published expected-day validation | Unit: expected_day ≥ merchant level | Ujjwal | PLANNED |
-| X3: Zone missing from premium table | Unit: fail loudly (not silent 0) | Ujjwal | PLANNED |
-| X4: EDI holiday guard (active, not in arrears, lender policy) | Integration: loan state check | Ujjwal | PLANNED |
-| X5: Off-script merchant → 404 not KeyError | Unit + integration | Ujjwal | PLANNED |
-| X6: Per-component Sarvam toggles + provider panel | Unit: force-fallback behavior | Ujjwal | PLANNED |
-| X7: Honest-wording test | Test: exclude absolute words (such as "always"), no unsupported figures, no premature "paid" | Omkar | PLANNED |
-| X8: No-offer rule (EDI/claim scope) + daily cap | Test: alert/claim blocks loan offers; 5/day limit on proactive | Omkar | PLANNED |
-
-### Keep in scope
-
-- Every P0 feature has a unit test (backend) or Vitest test (frontend).
-- Every critical path (area claim, hospital-cash claim, EDI holiday request) has an integration test.
-- AI components (ask-chhatri, slip reading, intent detection) have eval sets and guardrails.
-- Demo scenarios are validated by `demo-check` (70 checks).
-
-### Tested in their waves (everything is P0)
-
-- N5 (grievance ladder) clock and routing tests: Wave 3 (implementation guide §5.1)
-- N6 (consent centre) withdrawal, activity log and forget-my-slip tests: Wave 3 (implementation guide §5.2)
-- N8 (Marathi) copy and language-switch tests: Wave 4 (implementation guide §6.7); the Marathi text itself still needs a native speaker's review
-- Performance and load testing (roadmap: after real-merchant pilot)
+- Tesseract OCR as a slip fallback, and the live evaluation suites (S2 part B, S3, S4, S5; see the [AI evaluation plan](ai-evaluation-plan.md)).
+- Performance and load testing (a roadmap item for after a real-merchant pilot).
 
 ## 4. AI evaluation
 
-### Ask Chhatri: Grounded-answer eval set (Gemini PLANNED, Sarvam LIVE)
+The offline harness (H25) is BUILT: `make evals` runs the intent, guard and chain suites with fakes and no network, and writes `backend/artifacts/evals/summary.json`. No run is committed, so the `/evals` page shows NOT MEASURED, and no accuracy figure for any model exists. The sets that need keys or human grading (`ask.jsonl`, `voice.jsonl`, the staged slip photographs) are not built. The targets below are targets, not results.
 
-**Purpose:** Verify that Ask Chhatri cites the policy wording and decision facts, never fabricates money figures, and hands off to a human when uncertain.
+### Ask Chhatri: grounded-answer set (not built)
 
-**Eval set:** 50–100 merchant questions in Hindi and English
-- Coverage examples: "am I covered for a slow day?", "why was my claim rejected?", "can I change my premium?", "what happens if I stop paying?"
+**Purpose:** verify that answers cite the policy wording and decision facts, never invent a money figure, and hand off to a person when unsure.
 
-**Scoring:**
-- PASS Grounded: answer cites a policy clause (C1–C12) with ID or a decision fact from the merchant's record
-- FAIL Hallucinated: answer mentions a money figure not in the decision facts or uses absolute words (always, never)
-- PASS Handoff: answer says "I'm not sure; let me connect you to an officer" (acceptable, not an error)
+**Target:** at least 95 % grounded answers, with zero unsupported money figures. The guard (`backend/chhatri/conversation/guard.py` and `guard_strict.py`) enforces the figures rule on every reply whatever the evaluation says, and `backend/tests/conversation/test_guard_strict.py` pins it.
 
-**Target:** ≥95% grounded answers (zero hallucinated money figures, enforced by the `check_money_figure` guard in `backend/chhatri/conversation/guards.py`)
+**Provider chain:** Gemini, then Sarvam chat, then a template, then a hand-off (BUILT; tested against fakes only).
 
-**Provider chain (PLANNED order):** Gemini Flash free (PLANNED) → Sarvam chat (LIVE if key set) → templates → handoff
-**Current behavior:** Word-list intent classifier → Sarvam chat (if LIVE) → templates → handoff
+### Slip extraction (not built as a measured set)
 
-**Run:** `make test-slow` includes the eval set; `npm run test:eval-ask-chhatri` (separate target, optional)
+**Purpose:** show that the readers (Gemini vision, Sarvam document reading) fill the five fields with a measurable confidence gate of 0.80.
 
-### Slip extraction: Confidence and extraction eval set (Sarvam LIVE, Gemini PLANNED, Tesseract PLANNED)
+**What exists:** the gate and the chain are unit-tested against fakes (`integrations/test_gemini_vision.py`, `integrations/test_slip_chain.py`, `integrations/test_sarvam_docai.py`). The simulated reader reads the answer key embedded in the sample image, so any accuracy figure from it would be meaningless.
 
-**Purpose:** Validate that Sarvam Vision (live when `SARVAM_API_KEY` is set), Gemini Vision (PLANNED), or fallback Tesseract (PLANNED) extracts hospital slip fields (patient name, admission/discharge dates, hospital) with measurable confidence.
+### Intent detection
 
-**Eval set:** 40 sample slip images
-- Real-world examples: hospital letterheads, different fonts, some blurry or cropped
-- Simulated examples: PNGs with JSON embedded (used in demo)
-
-**Scoring:**
-- PASS Extractable: patient name, dates, hospital detected with confidence ≥0.80
-- WARN Low confidence: detected but <0.80 (recommend retake to merchant or REFERRED)
-- FAIL Unreadable: field missing or confidence 0 (REFERRED)
-
-**Target:** ≥90% of slips reach "extractable" or "low confidence" (avoids hard failures); ≥50% "extractable" on the first try.
-
-**Current providers:** Sarvam Vision (if `SARVAM_API_KEY` set) or simulation. Tesseract OCR fallback and Gemini Vision are PLANNED (N3, P0, Wave 2).
-
-**Run:** `make test-slow` includes slip extraction checks; slips tested against `backend/chhatri/integrations/sarvam_*.py` (for Sarvam) and planned Tesseract integration.
-
-### Intent detection fallback (Word-list primary, LLM PLANNED)
-
-**Purpose:** The word-list classifier (`backend/chhatri/conversation/intents.py`, `lexicon.py`) is the primary intent path; the Sarvam chat model (live when `SARVAM_API_KEY` is set) is a fallback only for UNKNOWN text.
-
-**Eval set:** 100 merchant utterances in Hindi and English, labeled with true intent (BUY, CLAIM_STATUS, DISPUTE, COVERAGE, GRIEVANCE, HELP, UNKNOWN)
-
-**Scoring:**
-- PASS Correct: predicted intent matches true intent
-- FAIL Incorrect: mismatch
-- FAIL LLM-only: the LLM was invoked (word-list failed)
-
-**Target:** ≥95% correct on the word-list classifier; <5% LLM invocation rate (word-list coverage)
-
-**Run:** `pytest backend/tests/conversation/test_intents.py` (unit); the LLM eval is in `make test-slow` and only runs with keys.
+The word-list classifier (`backend/chhatri/conversation/intents.py`, `lexicon.py`) is the intent path; with `n2_ask_chhatri` on no model chooses an intent. `backend/tests/conversation/test_intents.py` (48 cases) is regression testing: the word lists were written beside the cases, so they pass by construction. `chhatri.evals` holds a labelled `intents.jsonl` split into development and held-out items.
 
 ## 5. Demo rehearsal checks
 
@@ -273,40 +129,23 @@ Before committing:
 
 **Usage:**
 ```bash
-make demo-check                           # local, no backend needed
-make demo-check --url http://localhost:8000  # against running backend
+make demo-check                                                                 # in process, no backend needed
+backend/.venv/bin/python backend/scripts/demo_check.py --url http://localhost:8000   # against a running backend
 ```
+
+**Flags.** In process, `make demo-check` runs with `CHHATRI_FEATURES=x4_lender_request` (`DEMO_FEATURES` in `backend/chhatri/api/demo/local.py`), on top of any flag you name in the environment. The golden strings pin the lender-decides wording of X4. The scripted flow stops by design when `n3_slip_precheck` is on (the photo then needs the pre-check confirm) or `n6_consents` is on (a purchase needs the consent ticks, and a photo needs a slip consent), so the check does not turn those on. Against a running backend (`--url`), that backend must run with the same flags: `GET /api/health` must list `"features": ["x4_lender_request"]`.
 
 **Exit code:** 0 (all pass), 1 (any fail), 2 (bad args)
 
-**Example output:**
+**Example output (a few rows):**
 ```
-Scenario: monsoon
-  PASS Alert A-20250818-01 fires at 17:00
-  PASS Z7 drops to 37% (46 shops)
-  PASS Anil S-0142 paid ₹1,380 (formula: 0.5 × 4380 × 63%)
-  PASS EDI holiday requested at 17:05
-  PASS Z7 total: ₹58,900
-[70 total: 70 pass, 0 fail]
+PASS    buy_cover         audit chain valid           True
+PASS: 70 passed, 0 failed, 0 skipped
 ```
 
-### Extend demo_check.py for new endpoints
+### Adding a check for a new endpoint
 
-For every new endpoint (N1 cover card, N2 ask-chhatri, etc.), add a check:
-
-```python
-# backend/scripts/demo_check.py
-checks.append(CheckRow(
-    scenario="monsoon",
-    endpoint="GET /api/merchants/S-0142/cover",
-    expected_status=200,
-    assertions={
-        "status": "covered",
-        "zone": "Z7",
-        "waiting_period_days": 0,  # 7-day wait is over by monsoon day
-    },
-))
-```
+Checks are built in `backend/chhatri/api/demo/` (`flows.py` observes, `golden.py` holds the expected values, `compare` pairs them into `CheckRow`s). Add the observed value in `flows.py`, the expected value in `golden.py`, and keep the figures asserted by `backend/tests/api/test_demo_report.py` and `backend/tests/test_demo_flows.py` in step.
 
 ## 6. Manual on-stage test script
 
@@ -315,42 +154,42 @@ checks.append(CheckRow(
 ### Preflight (all keys loaded, integrations live if chosen)
 
 - [ ] Backend and console are running (`make dev` or via docker)
-- [ ] Gemini free-tier key is set (env var `GOOGLE_API_KEY`)
+- [ ] Gemini key and model id are set (`GOOGLE_API_KEY`, `GEMINI_MODEL`; `make check-keys` lists the models), or Gemini is meant to be SIMULATED
 - [ ] Sarvam key is set (env var `SARVAM_API_KEY`)
 - [ ] WhatsApp test number is provisioned (5+ test recipients configured)
-- [ ] Browser is on the demo laptop; Web Speech API is enabled in browser settings
+- [ ] Browser is on the demo laptop; browser speech recognition works in this browser (optional: the voice chips work without it)
 - [ ] Network: WiFi or ethernet is stable; no VPN or proxy blocking APIs
 
-### Smoke tests (each ~30 seconds)
+### Smoke tests (each about 30 seconds; the steps and exact strings are in [DEMO.md](../DEMO.md))
 
-1. **Console login:** Tap `Officer Demo` (demo mode); console loads with hex map visible
-2. **Replay control:** Tap play; clock advances; alert banner appears (red for Z3, Z7, Z12)
-3. **Anil's payout:** At 17:00, tap Z7 → Anil S-0142 → payout card shows ₹1,380 (6 taps)
-4. **Soundbox:** Swipe to Soundbox tab; speaker icon plays a chime (Web Speech fallback OK)
-5. **Mini-app:** Tap the mini-app icon (phone screen); home screen shows "Cover active", "₹4,380 today"
-6. **Ask Chhatri:** Tap the chat bubble; type "मुझे इतने ही पैसे क्यों मिले?" (why this much?); get a grounded answer citing the decision
-7. **Slip reading:** Drag a sample slip image into the upload zone; extracted fields appear with confidence bars
-8. **Grievance:** Open Anil's claim case; tap "Dispute"; a grievance opens on the ladder with a clock
+1. **Console:** open `/live` at 1280×720; the header badges read what you configured (everything SIMULATED unless a key is set) and the map shows the wards.
+2. **Replay control:** pick `monsoon`, seek 13:30, press Play; the clock advances and the red alert `A-20250818-01` is in the feed.
+3. **Anil's payout:** at 17:04 the KPI tiles read 3 zones, 312 shops, 4 min; Z7's panel reads `₹58,900`; Anil's pin reads `₹1,380 paid · 17:04`.
+4. **Soundbox and phone:** on `/merchant/S-0142` the phone shows the payout card and the Soundbox line (browser speech is fine).
+5. **Mini-app (flag `n1_miniapp`):** the frame beside the phone shows the cover card and the claim tracker with the five steps.
+6. **Ask Chhatri (flag `n2_ask_chhatri`):** ask "मुझे इतने ही पैसे क्यों मिले?"; the answer cites a clause and shows Anil's own numbers.
+7. **Slip pre-check (flag `n3_slip_precheck`):** upload the sample slip; the read fields appear and you confirm or retake.
+8. **Grievance (flag `n5_grievances`):** on Anil's claim open a dispute; a ladder with its clock appears.
 
 ### For the 3-minute cut
 
-- [ ] Steps 1–6 above, < 3 min
-- [ ] Final slide: "The AI builds the case; code decides the money" + LIVE/SIMULATED badges
+- [ ] Steps 1 to 6 above, in under 3 minutes
+- [ ] Closing line: "The AI builds the case; code decides the money", with the LIVE and SIMULATED badges in view
 
 ### For the 7-minute cut
 
 - [ ] All 8 steps above
-- [ ] Cases panel: tap "Open cases" → list shows C-2291 (mismatch) and current claims
-- [ ] Audit page: tap "Audit" → hash-chain integrity verified
-- [ ] Backtest: tap "Report" → report.md renders with zone-by-zone tables
-- [ ] Policy page: tap "Rules" → rules.yaml (pilot-0.1) visible with timestamps
+- [ ] `/claims`: case `C-2291` (the `illness_mismatch` run) is listed
+- [ ] `/audit`: Verify chain reads valid
+- [ ] `/backtest`: the report tables render
+- [ ] `/policy`: the rules (`pilot-0.1`) and the authority table render
 
 ### Fallback actions
 
-- **Slip reading fails (Sarvam timeout):** Tesseract fallback delivers fields within 5 seconds, or hand-edit the JSON in the sample image
-- **Ask Chhatri hangs (Gemini rate limit):** Switch to templates or a pre-recorded answer
+- **Slip reading fails (provider timeout):** the chain falls to the next link, then to the simulated reader or a hand-off to the team (REFERRED); or force the component to its fallback in the provider panel
+- **Ask Chhatri hangs (Gemini rate limit):** the chain falls to Sarvam and then a template; or force the component to its fallback in the provider panel
 - **Mini-app does not load:** Show a screenshot on the second screen
-- **Web Speech fails:** Tap to send message instead of voice
+- **Browser speech fails:** use the voice chips or type the message
 
 ## 7. Definition of done
 
@@ -361,7 +200,7 @@ A feature is **done** when:
 - [ ] Integration tests pass (critical paths, mocks OK)
 - [ ] AI evals pass (eval set score ≥95% or guardrail enforced)
 - [ ] Frontend e2e passes (Playwright, desktop and mobile viewports)
-- [ ] `make demo-check` passes (all 70 golden numbers match)
+- [ ] `make demo-check` passes (all 70 checks match)
 - [ ] Manual on-stage test script passes (preflight + smoke tests)
 - [ ] Docs are updated (API docs, message catalogue changelog, SPEC / DEMO.md if copy changed)
 - [ ] Commit message follows conventional format (feat, fix, refactor, etc.)
@@ -388,19 +227,18 @@ A feature is **done** when:
 
 **Free-tier AI constraint:** Free-tier Gemini content may be used by Google to improve products. Send only demo data, never real customer slips or merchant records.
 
-**Persistent test data:** Committed sample slips in `backend/assets/test-slips/`, sample merchants in `backend/sim/merchants.json`, sample rainfall in `backend/sim/rainfall.json`. All deterministic and version-controlled.
+**Persistent test data:** Committed sample slips in `backend/data/slips/`, the pilot shops in `backend/data/zones.json` (generated at seed 20251019), and cached Open-Meteo rainfall in `backend/data/weather/`. All deterministic and version-controlled.
 
 ## 10. Coverage targets
 
-| Layer | Target | Current | Status |
+| Layer | Target | Measured 3 Oct 2026 | Status |
 |---|---|---|---|
-| Backend (fast + slow) | 80% | 99.7% | PASS Exceeds |
-| Backend (new code) | 80% | TBD (will measure after X1–X8) | PLANNED |
-| Frontend | 80% | ~87% | PASS Exceeds |
-| Infra | 90% | 90% | PASS Meets |
-| Slow tests | N/A | 36 / 36 pass | PASS |
-| Demo-check | N/A | 70 / 70 pass | PASS |
-| AI evals | ≥95% | TBD (will measure after N2, N3 live) | LIVE |
+| Backend (fast suite, `chhatri/`) | 80 % | 98.85 % | Gate passes |
+| Infra (`scripts/`) | 90 % | 99.44 % | Gate passes |
+| Frontend | no gate | not measured (`npm run test:coverage` was not run) | not measured |
+| Slow tests | all pass | 63 of 63 | Pass |
+| Demo-check | all pass | 70 of 70 | Pass |
+| AI evals | at least 95 % grounded (targets in the evaluation plan) | not measured | NOT MEASURED |
 
 ## Open questions
 
@@ -411,6 +249,7 @@ A feature is **done** when:
 
 ## Changelog
 
+- 2026-10-03 · v2 · rewritten from measured counts (backend 3,221 fast and 63 slow, infra 164, frontend 1,340, demo-check 70) with the feature-to-test map in section 3, the CI description matched to `ci.yml`, PLANNED rows removed, and the demo-check flag set explained
 - 2026-10-02 · v1.4 · linked per-feature test lists (implementation guide) and the AI evaluation plan
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: N2 and N3 section headers updated with provider statuses (Gemini PLANNED, Sarvam LIVE, Tesseract PLANNED); test status table rows clarified to show current (LIVE Sarvam) and planned (Gemini) eval paths; grounded-answer eval and slip extraction evals marked with provider availability; intent detection section clarified.
-- 2026-10-02 · v1 · first draft, from the team's test audit and the definition-of-done checklist.
+- 2026-10-02 · v1 · first draft, from the test results and the definition-of-done checklist.

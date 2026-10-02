@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | v1 · 2 Oct 2026 · for use on 3 Oct. Items that need a Wave 2 or later feature say so; those features are BUILT behind flags and still need their rehearsal |
+| Status | v1.1 · 3 Oct 2026 · for use on 3 Oct. The new features are BUILT behind flags and still need their rehearsal |
 | Owner | Ujjwal Pardeshi (machine and stack) with Omkar Kadam (room, slides, words) |
 | Audience | The two of us, and a backup operator |
 | Related | [Demo runbook](demo-runbook.md) · [Build plan](build-plan.md) · [Risk register](risk-register.md) · [DEMO.md](../DEMO.md) · [Final deck and video script](final-deck-and-video-script.md) · [Free-tier stack and setup](../04-engineering/free-tier-stack-and-setup.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) |
@@ -58,7 +58,7 @@ The console, the backend and the replay run on the laptop. The AI calls, the map
 
 - [ ] `.env` exists (`make env` creates it) and holds `SARVAM_API_KEY` and `GOOGLE_API_KEY`. `git status` shows `.env` untracked, and `git check-ignore -v .env` names the rule that ignores it.
 - [ ] `make check-keys` shows both keys SET and lists a Gemini model that accepts images. It never prints a key and uses no quota.
-- [ ] `cd backend && . .venv/bin/activate && python scripts/live_smoke.py` passes for Sarvam. Do not use `--send`. The Gemini check is added with Wave 2.
+- [ ] `cd backend && . .venv/bin/activate && python scripts/live_smoke.py` passes for Sarvam. Do not use `--send`. With `GOOGLE_API_KEY` set it also lists the Gemini models that key can call.
 - [ ] The Sarvam credit balance and the Google AI Studio quota are written on the card.
 - [ ] Decide now: keep the keys, and let the badges show FALLBACK if a call fails, or remove them and restart so every badge reads SIMULATED. The disclosure names what the badges show.
 

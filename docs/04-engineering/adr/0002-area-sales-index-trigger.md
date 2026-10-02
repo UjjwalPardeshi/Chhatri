@@ -118,6 +118,6 @@ What the backtest does show is that the rule pays when its conditions hold and n
 
 - 2026-10-02 · status synced with the working tree at the end of the build: the PLANNED parts named here are BUILT behind their flags
 - 2026-10-02 · v3 · circular calibration spelled out (scripted demo day, simulator-defined real drops, perfect-forecast alerts, same-simulator bound, mixed-cause headline); conformal bound described as the 2.5% rank, not P10; alert is any RAIN or CIVIC level; index over covered scheduled-open shops; sales and alerts are simulated (only the rainfall is the real Open-Meteo record); the "do not publish thresholds" mitigation is removed; real file paths and test names
-- 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes the area sales index trigger and its backtest validation.
-- 2026-10-02 · v1.1 · fact-check pass: clarified that sales data is simulated for demo; reframed backtest results as specification validation; disclosed circular calibration openly; noted post-launch model retraining with production data.
+- 2026-10-02 · v2 · consistency check against the code: no changes needed; ADR correctly describes the area sales index trigger and its backtest validation.
+- 2026-10-02 · v1.1 · corrections: clarified that sales data is simulated for demo; reframed backtest results as specification validation; disclosed circular calibration openly; noted post-launch model retraining with production data.
 - 2026-10-02 · v1 · first draft.

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1.6 · 2 Oct 2026 |
+| Status | Draft v1.7 · 3 Oct 2026 |
 | Owner | Omkar Kadam |
 | Audience | Judges, mentors, teammates |
 | Related | [Problem statement analysis](01-strategy/problem-statement-analysis.md) · [Facts and sources](01-strategy/facts-and-sources.md) · [Product vision](02-product/vision-and-positioning.md) · [Regulatory and compliance](05-business/regulatory-and-compliance.md) · [Metrics and impact](02-product/metrics-and-impact.md) · [Build plan](06-delivery/build-plan.md) · [Final deck and video script](06-delivery/final-deck-and-video-script.md) |
@@ -11,10 +11,10 @@
 
 - **The problem:** on a day of heavy rain a small merchant's sales can halve, yet the daily loan instalment is still cut from that evening's settlement. Earlier Paytm merchant plans took 30–60 days per claim and several documents (A3).
 - **The solution:** Chhatri, income cover where the claim starts itself. Paytm sees the loss in the shops' own sales, pays the same evening with no forms, explains the amount in Hindi and asks the lender to pause the next instalment.
-- **The proof today:** a working prototype (76 commits, 29 Sep–1 Oct 2026) with 1,747 backend tests at 99.7% coverage, 70 of 70 demo checks, a hash-chained audit log, and a backtest on real rainfall with simulated sales. The backtest is specification validation, not market proof.
+- **The proof today:** a working prototype (76 commits, 29 Sep–1 Oct 2026, then the merchant app and the AI, rights and judge features on 2 Oct) with 3,284 backend tests collected, 70 of 70 demo checks at the 2 Oct baseline, a hash-chained audit log, and a backtest on real rainfall with simulated sales. The backtest is specification validation, not market proof.
 - **The business:** a partner general insurer underwrites, Paytm Insurance Broking distributes, and Paytm's sales data, settlement rail and Soundbox carry the journey. No insurer or lender has agreed to anything yet. We ask for a pilot after the hackathon.
-- **The scope:** everything on our list is must-ship (P0): the merchant mini-app, Ask Chhatri, slip reading, voice, the grievance ladder, the consent centre, the static demo and Marathi (N1–N8), the fixes X1–X8 and the ideas H1–H26. It is built in six waves behind feature flags, so a feature that is not finished and rehearsed at the freeze is hidden, never shown half-working (section 5).
-- **What is real:** the policy engine, forecast model, audit chain and consoles run as code. AI is live only where a key is set and the header badge says LIVE. Sales, alerts, WhatsApp, the Paytm link, KYC, payouts, the lender and the Soundbox are simulated and labelled.
+- **The scope:** everything on our list was must-ship (P0): the merchant mini-app, Ask Chhatri, slip reading, voice, the grievance ladder, the consent centre, the static demo and Marathi (N1–N8), the fixes X1–X8 and the ideas H1–H26. All of it is now built, each behind a feature flag, so a feature that is not rehearsed at the freeze is hidden, never shown half-working (section 5). Not done, and only a person can do it: rehearsals, the backup video, deploying the static demo, and a native speaker's review of Marathi.
+- **What is real:** the policy engine, forecast model, audit chain and consoles run as code. AI is live only where a key is set and the header badge says LIVE; the Gemini and Sarvam paths are tested against fakes only, and no key has been run. Sales, alerts, WhatsApp, the Paytm link, KYC, payouts, the lender and the Soundbox are simulated and labelled.
 
 ## 1. The problem, through one merchant
 
@@ -65,16 +65,16 @@ graph TD
 
 | Stage | Chhatri realises it as | Track requirement |
 |---|---|---|
-| Understand coverage | Cover card and explainer in the merchant mini-app: what is covered, examples, caps and exclusions, with a tap-for-meaning jargon lens (N1 with H20, wave 1, planned) | "Understanding policy coverage" |
-| Submit documents | Area claims: no documents at all. Hospital cash: one slip photo, with a readiness checklist before it is sent (N3 with H15, wave 2, planned) | "Submitting documents" |
-| Track claims | Claim tracker: Detected → Checked → Decided → Paid → EDI holiday, each with its reason and next step, including the referred and dispute paths (N1, wave 1, planned) | "Tracking claims" |
-| Resolve queries | Built today: "why this amount" answered from the decision's own numbers in Hindi and English, and disputes sent to a claims officer with a 24-hour SLA. Planned: Ask Chhatri (N2, wave 2) for free questions, grounded in the policy and the decision, and a grievance ladder with response clocks (N5, wave 3) | "Resolving customer queries" |
+| Understand coverage | Cover card and explainer in the merchant mini-app: what is covered, examples, caps and exclusions, with a tap-for-meaning jargon lens (N1 with H20, built behind `n1_miniapp`) | "Understanding policy coverage" |
+| Submit documents | Area claims: no documents at all. Hospital cash: one slip photo, with a readiness checklist before it is sent (N3 with H15, built behind `n3_slip_precheck`) | "Submitting documents" |
+| Track claims | Claim tracker: Detected → Checked → Decided → Paid → EDI holiday, each with its reason and next step, including the referred and dispute paths (N1, built behind `n1_miniapp`) | "Tracking claims" |
+| Resolve queries | "Why this amount" answered from the decision's own numbers in Hindi and English, and disputes sent to a claims officer with a 24-hour SLA. Built behind flags: Ask Chhatri (N2) for free questions, grounded in the policy and the decision, and a grievance ladder with response clocks (N5) | "Resolving customer queries" |
 
 Among the Track-2 projects we could find in public repos, we found none that pays a claim automatically from the merchant's own sales and links the payout to the loan instalment. We may have missed some; see the [competitive landscape](01-strategy/competitive-landscape.md).
 
-## 5. What exists today vs what we build
+## 5. What is built
 
-**Existing (K-series): built at commit 86575ea, running on simulated inputs.**
+**Existing (K-series): built before 2 Oct (commit 86575ea), running on simulated inputs.**
 
 | Feature | Code path | Status | Owner |
 |---|---|---|---|
@@ -87,52 +87,52 @@ Among the Track-2 projects we could find in public repos, we found none that pay
 | K7 Hash-chained audit log | `backend/chhatri/audit/log.py`, `GET /api/audit/verify` | Built | Ujjwal Pardeshi |
 | K8 Claims-officer console | `frontend/src/pages/`, `backend/chhatri/api/routers/` | Built | Ujjwal Pardeshi |
 
-**New (N-series): all P0, planned, built in waves behind feature flags.** A wave is shown only if its features are finished and rehearsed at the freeze.
+**New (N-series): all P0, all built on 2 Oct, each behind a feature flag.** A flag is off until `CHHATRI_FEATURES` (backend) and `VITE_FEATURES` (console build) name it, so a feature that is not rehearsed at the freeze is simply left off. Built means the code and its tests exist. None of the AI paths has been run with a key.
 
-| Feature | What it is | Wave | Owner | Link |
+| Feature | What it is | Flag | Owner | Link |
 |---|---|---|---|---|
-| N1 Merchant mini-app | "Chhatri in Paytm for Business": cover card, coverage explainer with a jargon lens, buy, claim tracker (including the referred and dispute paths), trust receipt, help and grievance. Tailwind CSS v4 and shadcn/ui, scoped to the mini-app only | 1 (core) | Omkar Kadam | [fs-04](02-product/feature-specs/fs-04-merchant-mini-app.md) |
-| N2 Ask Chhatri | Grounded assistant in text and voice. Gemini free tier first, then Sarvam chat, then fixed templates. Says only amounts that are in the decision, cites policy clauses and warns about scam messages | 2 | Ujjwal Pardeshi | [fs-05](02-product/feature-specs/fs-05-ask-chhatri.md) |
-| N3 Live slip reading | Gemini free tier first, then Sarvam Vision. If neither can read the slip, a person decides. A pre-check asks for a retake when the photo is unclear, and the merchant confirms what was read before the checks run | 2 | Ujjwal Pardeshi | [fs-02](02-product/feature-specs/fs-02-hospital-cash-claim.md) |
-| N4 Real Hindi voice | Sarvam speech-to-text and text-to-speech (the adapters exist), then the browser's Web Speech API, then tap-to-send chips. Voice confirmation chips for amounts and dates | 2 | Ujjwal Pardeshi | [fs-05](02-product/feature-specs/fs-05-ask-chhatri.md) |
-| N5 Grievance ladder | Insurer GRO → Bima Bharosa → Insurance Ombudsman, with response clocks and a router that says who owns the complaint | 3 | Omkar Kadam | [fs-06](02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) |
-| N6 Consent centre | View and withdraw consents, an activity log and "forget my slip"; health data minimised and masked | 3 | Omkar Kadam | [fs-07](02-product/feature-specs/fs-07-cover-purchase-and-consent.md) |
-| N7 Public static demo | The console in mock mode as a static site, plus a backup video of about 2 minutes. The repo owner has to deploy it on a free static host, so no public address exists yet | 5 | Ujjwal Pardeshi | [free-tier stack](04-engineering/free-tier-stack-and-setup.md) |
-| N8 Marathi | Mini-app and Ask Chhatri in Marathi for Mumbai merchants | 4 | Omkar Kadam | [conversation design](03-design/conversation-design.md) |
+| N1 Merchant mini-app | "Chhatri in Paytm for Business": cover card, coverage explainer with a jargon lens, buy, claim tracker (including the referred and dispute paths), trust receipt, help and language. Tailwind CSS v4 and shadcn/ui, scoped to the mini-app only | `n1_miniapp` | Omkar Kadam | [fs-04](02-product/feature-specs/fs-04-merchant-mini-app.md) |
+| N2 Ask Chhatri | Grounded assistant in text and voice. Gemini free tier first, then Sarvam chat, then fixed templates. Says only amounts that are in the decision, cites policy clauses and warns about scam messages. Tested against fakes only | `n2_ask_chhatri` | Ujjwal Pardeshi | [fs-05](02-product/feature-specs/fs-05-ask-chhatri.md) |
+| N3 Slip reading with a pre-check | Gemini free tier first, then Sarvam Vision. If neither can read the slip, a person decides. A pre-check asks for a retake when the photo is unclear, and the merchant confirms what was read before the checks run | `n3_slip_precheck` | Ujjwal Pardeshi | [fs-02](02-product/feature-specs/fs-02-hospital-cash-claim.md) |
+| N4 Hindi and English voice | Sarvam speech-to-text and text-to-speech, then the browser's Web Speech API, then tap-to-send chips. Voice confirmation chips for amounts and dates. There is no Marathi voice | `n4_voice` | Ujjwal Pardeshi | [fs-05](02-product/feature-specs/fs-05-ask-chhatri.md) |
+| N5 Grievance ladder | Our claims officer, then insurer grievance officer, Bima Bharosa and the Insurance Ombudsman, with response clocks and a router that says who owns the complaint. The steps outside Chhatri are self-reported by the merchant | `n5_grievances` | Omkar Kadam | [fs-06](02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) |
+| N6 Consent centre | View and withdraw consents, an activity log and "forget my slip"; health data minimised and masked | `n6_consents` | Omkar Kadam | [fs-07](02-product/feature-specs/fs-07-cover-purchase-and-consent.md) |
+| N7 Static demo | The console in mock mode as a static build with a permanent SIMULATED banner (`npm run build`, `npm run preview`). The static build is done. The repo owner has to deploy it on a free static host, so no public address exists yet, and the backup video of about 2 minutes is not recorded | none | Ujjwal Pardeshi | [free-tier stack](04-engineering/free-tier-stack-and-setup.md) |
+| N8 Marathi | The mini-app text in Marathi for Mumbai merchants. A draft: it needs a native speaker's review. Text only | `n8_marathi` | Omkar Kadam | [conversation design](03-design/conversation-design.md) |
 
-**Fixes (X-series): all P0, with their waves.** X1 fix the 2 failing frontend tests (wave 0) · X2 validate the published expected day at claim creation (1) · X3 fail loudly when a zone is missing from the premium table (1) · X4 EDI-holiday guard (active loan, not in arrears, holiday left) and lender-decides wording (1) · X5 off-script merchant → clean 404, not a KeyError (1) · X6 provider panel showing LIVE, SIMULATED or FALLBACK, with a demo fallback switch (2) · X7 honest-wording test over the message catalogue (1) · X8 no loan or cross-sell offers during an alert or an open claim, and a message cap (3).
+**Fixes (X-series): all built.** X1 the 2 failing frontend tests, fixed · X2 validate the published expected day at claim creation · X3 fail loudly when a zone is missing from the premium table · X4 EDI-holiday guard (active loan, not in arrears, holiday left) and lender-decides wording (`x4_lender_request`) · X5 off-script merchant gets a clean 404, not a KeyError · X6 provider panel showing LIVE, SIMULATED or FALLBACK, with a demo fallback switch (`x6_provider_panel`) · X7 honest-wording test over the message catalogue · X8 no loan or cross-sell offers during an alert or an open claim, and a message cap (`x8_distress_guard`).
 
-**Ideas adopted from other projects (H13–H26): all P0, all planned.** Project names only; the repositories are in the [competitive landscape](01-strategy/competitive-landscape.md). H1–H12 are the earlier ideas in the [product requirements](02-product/prd.md); H10 and the Hindi and English part of H11 are built, and the rest are planned in the same waves.
+**Ideas adopted from other projects (H13–H26): all built.** Project names only; the repositories are in the [competitive landscape](01-strategy/competitive-landscape.md). H1–H12 are the earlier ideas in the [product requirements](02-product/prd.md); all are built except H12 (measured test counts in the README), which is written after the final run, and H6, whose static build exists but is not deployed.
 
-| ID | Idea | Credit | Wave |
+| ID | Idea | Credit | Status |
 |---|---|---|---|
-| H13 | Source badges: every rule, number and clause shown to a merchant or officer says where it came from, and when | Praman | 1 |
-| H14 | A counterfactual in every explanation: what would have changed the outcome, written by the engine, not a model | One-Tap Credit; Claim Advocate | 1 |
-| H15 | Slip pre-check: document type, a checklist, "ask, don't assume" below the confidence gate, the merchant confirms what was read | Praman; FinPath AI; FINPATH | 2 |
-| H16 | Defence against instructions hidden in slips and chat, with red-team tests | Claim Advocate | 2 |
-| H17 | Ask Chhatri cites policy clauses; every number comes from the engine's facts | Praman; One-Tap Credit; Soundbox Saathi | 2 |
-| H18 | Voice confirmation chips for amounts and dates | Sahaj | 2 |
-| H19 | Scam-message warning in chat | FINPATH | 2 |
-| H20 | Jargon lens: tap an insurance term for a plain explanation | Sahaj; AeroFin AI | 1 |
-| H21 | Next-step bar: no screen or reply is a dead end | Sahaj | 1 (chat replies 2) |
-| H22 | Grievance ladder with response clocks and a respondent router | Praman | 3 |
-| H23 | Consent activity log and "forget my slip" | Sahaj; FINPATH | 3 |
-| H24 | What-if panel for judges: change rain or sales and watch the engine recompute (read-only) | Resolve OS; FinPath AI | 4 |
-| H25 | Published AI evaluation; a number is shown only once it is measured | Sahaj; Resolve OS | 3 |
-| H26 | Every AI reply carries its mode (LIVE, SIMULATED or FALLBACK), provider and fallback reason | Rakshak; Soundbox Saathi | 2 |
+| H13 | Source badges: every rule, number and clause shown to a merchant or officer says where it came from, and when | Praman | Built |
+| H14 | A counterfactual in every explanation: what would have changed the outcome, written by the engine, not a model | One-Tap Credit; Claim Advocate | Built |
+| H15 | Slip pre-check: document type, a checklist, "ask, don't assume" below the confidence gate, the merchant confirms what was read | Praman; FinPath AI; FINPATH | Built · `n3_slip_precheck` |
+| H16 | Defence against instructions hidden in slips and chat, with red-team tests | Claim Advocate | Built |
+| H17 | Ask Chhatri cites policy clauses; every number comes from the engine's facts | Praman; One-Tap Credit; Soundbox Saathi | Built · `n2_ask_chhatri` |
+| H18 | Voice confirmation chips for amounts and dates | Sahaj | Built · `n4_voice` |
+| H19 | Scam-message warning in chat | FINPATH | Built · `n2_ask_chhatri` |
+| H20 | Jargon lens: tap an insurance term for a plain explanation | Sahaj; AeroFin AI | Built · `n1_miniapp` |
+| H21 | Next-step bar: no screen or reply is a dead end | Sahaj | Built · `n1_miniapp` (chat replies `n2_ask_chhatri`) |
+| H22 | Grievance ladder with response clocks and a respondent router | Praman | Built · `n5_grievances` |
+| H23 | Consent activity log and "forget my slip" | Sahaj; FINPATH | Built · `n6_consents` |
+| H24 | What-if panel for judges: change rain or sales and watch the engine recompute (read-only) | Resolve OS; FinPath AI | Built · `h24_whatif` |
+| H25 | Published AI evaluation; a number is shown only once it is measured | Sahaj; Resolve OS | The offline harness and the `/evals` page are built · `h25_evals`; no run is stored, so no number is shown |
+| H26 | Every AI reply carries its mode (LIVE, SIMULATED or FALLBACK), provider and fallback reason | Rakshak; Soundbox Saathi | Built |
 
 FINPATH and FinPath AI are two different projects.
 
-**The build waves.** Details are in the [build plan](06-delivery/build-plan.md) and the [implementation guide](04-engineering/implementation-guide.md).
+**The build waves.** Details are in the [build plan](06-delivery/build-plan.md) and the [implementation guide](04-engineering/implementation-guide.md). All six waves have landed in the code; what is left is rehearsal and the human-only items.
 
-| Wave | What lands |
+| Wave | What landed |
 |---|---|
 | 0 · setup | X1, feature flags, the mini-app's Tailwind and shadcn setup, a key check for Gemini and Sarvam |
 | 1 · demo spine | N1 core (home, coverage explainer, claim tracker, trust receipt), the receipt, cover and claims endpoints, X4, X7, X2, X3, X5 |
 | 2 · live AI | N3, N2, N4, and X6 with the FALLBACK state |
 | 3 · trust and rights | N5, N6, X8, the AI evaluation page |
 | 4 · judge-facing polish | Console projector polish and the trigger-to-payout moment, the what-if panel, presenter mode, the operations strip, N8 |
-| 5 · ship | N7 static build and backup video, a full test run, `make demo-check`, two rehearsals, and the code freeze 90 minutes before the slot |
+| 5 · ship | The N7 static build is done. Not done (human-only): the backup video, a full test run on the demo laptop, two rehearsals, and the code freeze 90 minutes before the slot |
 
 ## 6. Why Paytm
 
@@ -145,9 +145,9 @@ FINPATH and FinPath AI are two different projects.
 ## 7. Proof
 
 ### Engineering
-- **Backend:** 1,747 tests (1,711 fast, 36 slow), 99.7% coverage.
-- **Frontend:** 262 of 264 tests pass; fix X1 covers the other 2. **Infra:** 118 of 118. **End to end:** 21 Playwright tests.
-- **Demo-check:** 70 of 70 checks pass, running every demo scenario through the HTTP API.
+- **Backend:** 3,284 tests collected (3,221 fast, 63 slow). At the 2 Oct baseline (commit 86575ea) there were 1,747 (1,711 fast, 36 slow) at 99.7% coverage; the coverage of the larger suite is measured in the final run.
+- **Frontend and infra:** the frontend unit suite passes (X1 fixed the 2 failing tests of the baseline); the infra checks number 164 (118 at the baseline). **End to end:** 134 Playwright tests in 26 files for the mock project (21 at the baseline).
+- **Demo-check:** 70 of 70 checks passed at the baseline, running every demo scenario through the HTTP API. Run `make demo-check` again at the freeze.
 - **Deterministic replays:** every scenario load gives the same ids and amounts ([DEMO.md](DEMO.md)).
 
 ### Hash-chained audit log
@@ -172,7 +172,7 @@ See [business model and unit economics](05-business/business-model-and-unit-econ
 2. **"Area Income Signal" is our own roadmap idea**, not a Paytm product. We found no public source for one.
 3. **Sales, alerts, KYC, payouts, the lender, WhatsApp and the Paytm link are simulated.** The backtest validates the rules against simulated sales driven by real rainfall, not against real merchants.
 4. **The replay clock is accelerated:** 6 simulated minutes per real second. "Four minutes from trigger to money" is simulated time; in the product, the credit rides the evening settlement.
-5. **The prototype was pre-built** between 29 Sep and 1 Oct 2026 (76 commits). The organisers confirmed pre-built work is allowed. Everything since is built in waves behind flags and shows in the git log with its date and author; a feature that is not finished at the freeze is hidden.
+5. **The prototype was pre-built** between 29 Sep and 1 Oct 2026 (76 commits). The organisers confirmed pre-built work is allowed. Everything since (2 Oct) is built in waves behind flags and shows in the git log with its date and author; a feature that is not rehearsed at the freeze is hidden.
 6. **The repository is public but has no licence file yet**, so we call it public, not open source.
 7. **Hospital-cash claims are not yet in the price.** The backtest prices area claims only.
 8. **No insurer or lender has agreed to anything**, and we have no talks to report. A partner will be approached after the hackathon.
@@ -206,9 +206,9 @@ Then choose by role:
 
 | Document | What it covers |
 |---|---|
-| [Implementation guide](04-engineering/implementation-guide.md) | The engineering guide for building the P0 work in waves |
-| [AI evaluation plan](04-engineering/ai-evaluation-plan.md) | How AI quality will be measured (H25). Nothing is measured yet; a number reaches the evaluation page only from a stored run |
-| [Copy deck](03-design/copy-deck.md) | Every new merchant-facing string, in English, Hindi and Marathi. New strings are proposed, and Marathi is a draft |
+| [Implementation guide](04-engineering/implementation-guide.md) | The engineering guide for the P0 work, built in waves |
+| [AI evaluation plan](04-engineering/ai-evaluation-plan.md) | How AI quality is measured (H25). The offline harness is built and nothing is measured yet; a number reaches the evaluation page only from a stored run |
+| [Copy deck](03-design/copy-deck.md) | Every new merchant-facing string, in English, Hindi and Marathi. Marathi is a draft |
 | [On-site checklist](06-delivery/on-site-checklist.md) | The checklist for the final day |
 | [Final deck and video script](06-delivery/final-deck-and-video-script.md) | The slides for the 7-minute and 3-minute cuts, and the backup video script |
 | [Rival teardown appendix](01-strategy/rival-teardown-appendix.md) | One row per public repository we read, and a note on the closest projects |
@@ -226,9 +226,10 @@ For the demo and final-day decisions, see the [demo runbook](06-delivery/demo-ru
 
 ## Changelog
 
+- 2026-10-03 · v1.7 · section 5 rewritten against the code: N1–N8, X1–X8 and H13–H26 are built behind flags (N7 not deployed, the evaluation page shows no run), proof counts updated, human-only items listed; voice is Hindi and English, Marathi is text only
 - 2026-10-02 · v1.6 · scope is everything P0, built in waves 0 to 5 behind feature flags; N-series and X-series show waves, not priorities; H13–H26 table with credits; links to the seven new docs; earlier plans took 30–60 days; positioning line and K3 say the lender decides; backtest split and the N7 note added; "only one" wording removed; errata extended
 - 2026-10-02 · v1.5 · final fact-check: persona labelled synthetic, K1 paid per shop, prices from the artefact, open questions restored, pilot steps aligned with the go-to-market plan
 - 2026-10-02 · v1.4 · N3 slip-reading provider wording
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.1 · fact-check pass: K1 trigger criteria clarified in a mermaid flowchart; removed private note reference; replaced ASCII box diagram
+- 2026-10-02 · v1.1 · fact-check pass: K1 trigger criteria clarified in a mermaid flowchart; replaced ASCII box diagram
 - 2026-10-02 · v1 · first draft for judges, mentors and teammates

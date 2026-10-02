@@ -322,10 +322,10 @@ recorded_at: datetime             # wall clock, excluded from hash (replay repro
 
 ### 2.1 In-memory SQLite per scenario load (SPEC §3)
 
-When a scenario loads (`GET /api/replay/load?scenario=monsoon`):
+When a scenario loads (`POST /api/replay/load` with `{"scenario": "monsoon"}`):
 
-1. A new SQLite database is created in memory: `{CHHATRI_VAR_DIR}/{scenario_name}.db`.
-2. Schema is initialized: zones, merchants, covers, loans, alerts, claims, decisions, payouts, cases, messages, audit log.
+1. A new, empty store is created in memory (`Store(city)` in `backend/chhatri/replay/state.py`), with fresh ids and a fresh audit log; nothing is written to disk.
+2. The tables are created: zones, merchants, covers, loans, alerts, claims, decisions, payouts, cases, messages, audit log.
 3. Fixture data is inserted: 1,821 merchants, 24 zones, 2–3 alerts for the scenario.
 4. Every subsequent query in that session reads/writes this database.
 5. On scenario unload or server shutdown, the database is closed (data is lost unless you export it).
@@ -530,7 +530,7 @@ Every failure leaves the API in the envelope of 4.2. The `code` is the default n
 | `upstream_error` | 502 | The payment link service or the weather service failed |
 | `unavailable` | 503 | The service is still starting, a scenario could not be loaded (see `/api/preflight`), or WhatsApp is not live in the loaded runtime |
 
-The mock backend still answers with upper-case codes (`NOT_FOUND`, `VALIDATION_ERROR`) and a 400 for a body that is not JSON. Wave 1 moves it to the codes above (section 6.1).
+The mock backend answers with the same lower-case codes, and a body that is not JSON is a 422 with `fields.body` there too (section 6.1 lists what it once lacked).
 
 Codes that the section 5 routes add, all on HTTP 409:
 
@@ -571,7 +571,7 @@ Everything here is P0 (team decision, 2 Oct 2026). The work runs in waves behind
 | 17 | GET `/api/ops/summary` | H8 | 4 | `h8_ops_strip` | none | none | fs-08 |
 | 18 | POST `/api/whatif/area` | H24 | 4 | `h24_whatif` | `whatif` (new) | none | fs-08, fs-09 |
 
-When all 18 land, the route table has 57 handlers and `SPEC_ROUTES` in `backend/tests/api/test_route_table.py` lists them (the guide, Wave 0, says how). Changes to existing endpoints, which add no route, are in section 5.12.
+With all 18, the route table has 57 handlers and `SPEC_ROUTES` in `backend/tests/api/test_route_table.py` lists them (the guide, Wave 0, says how). Changes to existing endpoints, which add no route, are in section 5.12.
 
 **Conventions that apply to every endpoint below**
 
@@ -1781,7 +1781,7 @@ The 39 routes that existed before section 5 keep their paths, methods and auth. 
 | Endpoint | Change | Feature | Wave |
 |---|---|---|---|
 | GET `/api/health` | New field `features`: the sorted names of the flags that are on in the backend (an empty list by default), so the presenter can compare it with the console's list before a demo. The `Health` schema in `api/schemas/service.py`, the TypeScript type and the mock change together | flags | 0 |
-| GET `/api/merchants/{merchant_id}` | `cover.premium_per_day_label` shows the zone price for pilot covers (today the ₹2 minimum: Anil reads ₹2 where Z7 is ₹18.62; the alternative is to hide the per-day price on Home, fs-04 open question 3). New `holiday_requests[]` with every request and the lender's answer. The detail lists payouts and decisions today and no pauses | fix, X4 | 1 |
+| GET `/api/merchants/{merchant_id}` | `cover.premium_per_day_label` shows the zone price for pilot covers (BUILT: Anil reads ₹18.62, the Z7 price). New `holiday_requests[]` with every request and the lender's answer (BUILT; empty until a holiday is requested) | fix, X4 | 1 |
 | GET `/api/state` | `kpis.instalments_paused` counts granted holidays only (123 stays 123 with the default simulated lender) | X4 | 1 |
 | POST `/api/cases/{case_id}/approve`, `/decline` | A closed dispute tells the merchant what the officer decided (the payout stands, or the dispute was rejected) instead of always sending OFFICER_DECLINED. Status codes and shapes do not change. New catalogue keys are proposed in fs-06 section 10 | fix | 1 |
 | POST `/api/merchants/{merchant_id}/messages` | With `n2_ask_chhatri` on, UNKNOWN text goes through the Ask service and the reply's `meta` carries `mode`, `provider`, `model`, `fallback_reason`, `clauses`, `next_action` and `scam_warning`. Known intents behave exactly as today. With `n6_consents` on, a photo sent without an ACTIVE slip consent gets SLIP_CONSENT_NEEDED and nothing is read | N2, N6 | 2, 3 |
@@ -1823,11 +1823,11 @@ Every endpoint of section 5 has an entry in the in-browser mock backend, so the 
 | The sample slips read other values: name score 41 against 28 for the mismatch slip, the blurry slip at 0.41 with a document type against 0.22 with none, the mismatch slip at 0.93 against 0.94. The mock also writes the patient name into the `slip.read` audit entry, which the backend never does | `personal.ts` | Align to the answer keys of the sample PNGs (fs-02 task N3.12) | 2 |
 | `GET /api/integrations` has no `meta` and lists 15 rows without the X6 fields | `routes.ts`, `fixtures.ts` | Add `meta` and the extended rows (5.6) | 2 |
 
-Status at the end of the build (2 Oct 2026, evening): the premium and Paytm entries, the lower-case codes, the zone prices, the Z3 and Z12 totals with the 123 count, and the 17 integration rows are in the mock and pinned by its tests and the contract test (6.3). The sample slip values are fs-02 task N3.12, owned by the mock.
+Status at the end of the build (2 Oct 2026, evening): the premium and Paytm entries, the lower-case codes, the zone prices, the Z3 and Z12 totals with the 123 count, and the 17 integration rows are in the mock and pinned by its tests and the contract test (6.3). The sample slip values of the chat path are still not aligned (task N3.12, open): `frontend/src/mock/personal.ts` reads the mismatch slip with a name score of 41 and confidence 0.93, and the blurry slip at 0.41, where the backend gives 28, 0.94 and 0.22. The pre-check mock already uses 0.22 for the unreadable slip. No golden number depends on these values.
 
 ### 6.2 Mock entries for the section 5 endpoints
 
-Each feature gets its own small module in `frontend/src/mock/endpoints/`, so `routes.ts` stays short. Each module exports a list of routes that `routes.ts` spreads into `ROUTES`. Every handler checks its feature flag first and answers 404 `not_found` when it is off, like the backend. Per-scenario state (pre-checks, grievances, consents) lives in `MockRuntime`, so a scenario load clears it, as in the backend. Every AI-backed answer from the mock carries provider `mock`, mode `SIMULATED` and reason `MOCK_BACKEND`.
+Each feature gets its own small module in `frontend/src/mock/endpoints/`, so `routes.ts` stays short (the Ask, voice and pre-check mocks sit beside `routes.ts` in `frontend/src/mock/`, and the fallback switch is `setFallback` in `routes.ts`). Each module exports a list of routes that `routes.ts` spreads into `ROUTES`. Every handler checks its feature flag first and answers 404 `not_found` when it is off, like the backend. Per-scenario state (pre-checks, grievances, consents) lives in `MockRuntime`, so a scenario load clears it, as in the backend. Every AI-backed answer from the mock carries provider `mock`, mode `SIMULATED` and reason `MOCK_BACKEND`.
 
 | # | Endpoint | Module | What the mock returns |
 |---|---|---|---|
@@ -1835,11 +1835,11 @@ Each feature gets its own small module in `frontend/src/mock/endpoints/`, so `ro
 | 2 | GET claims | `tracker.ts` | One item per mock claim and per dispute, with the five steps built from the mock decisions, payouts, lender requests (with `x4_lender_request`: GRANTED, REFUSED, NO_RESPONSE as the backend says them), instalment pauses and cases by the same rules as the backend (an AREA item is never REFERRED, a DISPUTE item has no steps). After X4 the EDI step reads the mock lender's answer |
 | 3 | GET receipt | `receipt.ts` | The receipt of a mock decision with checks and Source objects. The three golden decisions (the monsoon payout D-000142, the approved illness claim, the referred mismatch claim) carry counterfactuals recorded from the backend, which the mini-app shows with the same footer as any other. Other decisions carry none |
 | 4 | POST ask | `ask.ts` | The nine intents answered by the mock conversation, and a few recorded model answers for the sample questions of fs-05 section 13.3. Anything else is FALLBACK_HELP. A line "recorded sample" is part of the answer (fs-05 section 12.5) |
-| 5 | POST slip-precheck | `precheck.ts` | With `n6_consents` on, the slip gate first: no ACTIVE slip consent and no `consent: true` with the notice in force is 409 `consent_required`; an OK given with the photo is recorded as SLIP_UPLOAD. Then the three sample slips, read with values equal to the backend's answer keys, then the same status table, checklist and retake counter (a TypeScript port of the table in 5.3). A photo that is not a sample reads as unreadable, as in the simulated reader |
-| 6 | POST precheck confirm | `precheck.ts` | Files the claim through the existing mock path (`inboundPhoto`), and returns `claim_id`, `decision_id`, `outcome`, `case_id` and `messages` |
-| 7 | POST voice/stt | `voice.ts` | For `source: "browser"` it parses the transcript with a TypeScript port of the fixed amount and date lookup. For an audio upload it returns the recorded transcript of the four voice-demo keys. The port and the backend parser both read one shared vectors file |
-| 8 | POST voice/tts | `voice.ts` | `audio_url: null`, provider `browser`, so the client speaks the text |
-| 9 | POST integrations fallback | `switch.ts` | Only `lender` can be forced, and a forced lender ends every mock holiday request as `NO_RESPONSE`. Any other component answers 409 with "static demo: nothing live to force". The route checks the mock officer token and is always in demo mode |
+| 5 | POST slip-precheck | `precheckRoutes.ts` and `precheck.ts` (in `frontend/src/mock/`) | With `n6_consents` on, the slip gate first: no ACTIVE slip consent and no `consent: true` with the notice in force is 409 `consent_required`; an OK given with the photo is recorded as SLIP_UPLOAD. Then the three sample slips, read with values equal to the backend's answer keys, then the same status table, checklist and retake counter (a TypeScript port of the table in 5.3). A photo that is not a sample reads as unreadable, as in the simulated reader |
+| 6 | POST precheck confirm | `precheckRoutes.ts` and `precheck.ts` (in `frontend/src/mock/`) | Files the claim through the existing mock path (`inboundPhoto`), and returns `claim_id`, `decision_id`, `outcome`, `case_id` and `messages` |
+| 7 | POST voice/stt | `ask.ts` (in `frontend/src/mock/`) | For `source: "browser"` it parses the transcript with a TypeScript port of the fixed amount and date lookup. For an audio upload it returns the recorded transcript of the four voice-demo keys. The port and the backend parser both read one shared vectors file |
+| 8 | POST voice/tts | `ask.ts` (in `frontend/src/mock/`) | `audio_url: null`, provider `browser`, so the client speaks the text |
+| 9 | POST integrations fallback | `routes.ts` (`setFallback`) | Only `lender` can be forced, and a forced lender ends every mock holiday request as `NO_RESPONSE`. Any other component answers 409 with "static demo: nothing live to force". The route checks the mock officer token and is always in demo mode |
 | 10, 11 | GET and POST grievances | `grievances.ts` | The router table, the ladder and its clocks from the mock clock, kept in `MockRuntime`. `OPEN` on `PAYOUT_AMOUNT` opens the mock DISPUTE case through the path chat already uses. Nothing is sent to an insurer, and the screen says so |
 | 12 to 15 | GET consents, POST withdraw, GET activity, POST forget | `consents.ts` | Three SEEDED consents for every covered mock merchant at scenario load. A withdrawal changes the record and the effect the mock can show (a cancelled cover, SLIP_CONSENT_NEEDED in the photo path), with the same 409 codes. The activity log is built from the mock audit with the fixed map of 5.5. An erase clears the mock slip fields and the mock media link |
 | 16 | GET evals/summary | `evals.ts` | The committed result file when one exists, else the `NOT_MEASURED` shape. It never invents a number |
@@ -1883,21 +1883,21 @@ A mock that drifts from the backend would show the judges something the product 
 
 ### 8.1 Rate limiting
 
-- **Global:** 100 requests per second per IP (burst), then 429 Too Many Requests.
-- **Streams:** max 32 open SSE connections; 429 if exceeded; Retry-After: 5 s.
-- **Implementation:** `RateLimiter` class in `backend/chhatri/api/security.py`.
+- **Per route group:** an in-memory sliding window of 60 seconds per client and group, then 429 `rate_limited` with a `Retry-After` header. The groups and their limits per minute are `webhooks` 60, `uploads` 20, `messages` 60 and `whatif` 300 (`RATE_LIMITS` in `backend/chhatri/api/security.py`). Routes outside a group are not limited.
+- **Streams:** at most 32 open SSE connections (`MAX_STREAMS` in `backend/chhatri/api/sse.py`); a 33rd gets 429 with `Retry-After: 5`.
+- **Implementation:** `RateLimiter` in `backend/chhatri/api/security.py`, applied through the `rate_limit(group)` dependency in `backend/chhatri/api/deps.py`.
 
 ### 8.2 Upload limits
 
-- **Slip photos:** 6 MB max per file (POST `/api/media/slip`).
-- **Voice notes:** 10 MB max per file (POST `/api/phone/voice-note`).
-- **413 Payload Too Large** if exceeded.
+- **Slip photos:** 5 MB at most, JPEG, PNG or WebP by magic bytes, and Pillow must be able to open the file (`POST /api/merchants/{id}/photo`, `POST /api/merchants/{id}/slip-precheck`).
+- **Voice notes:** 5 MB and 30 seconds at most; OGG/Opus, WebM, MP3, WAV or M4A by magic bytes (`POST /api/merchants/{id}/voice`, `POST /api/voice/stt`).
+- **413 Payload Too Large** if a size limit is exceeded. The limits are `MAX_IMAGE_BYTES`, `MAX_AUDIO_BYTES` and `MAX_AUDIO_SECONDS` in `backend/chhatri/api/uploads.py`.
 
 ### 8.3 Query limits
 
-- **Merchant search (`q`):** 64 characters max.
-- **List offset:** must be ≥0.
-- **List limit:** 1–500 (default 50); 422 if outside range.
+- **Merchant search (`q`):** 64 characters at most.
+- **List offset:** must be at least 0.
+- **List limit:** 1 to 500, default 50 for merchants (cases default to 100); a message list takes 1 to 1,000, default 200; 422 outside the range.
 
 ## Open questions
 
@@ -1910,8 +1910,8 @@ A mock that drifts from the backend would show the judges something the product 
 - 2026-10-02 · v1.7 · status synced with the working tree: every section 5 endpoint BUILT (57 route handlers, the 18 new rows added to 4.1), PLANNED wording removed, receipt example clause `C4` as the engine writes it, `checks[].erased` set after an erase, the what-if Z9 baseline carries `ZONE_NO_TRIGGER`, the gate rows of `/api/preflight`, mock gap status in 6.1, strict mirror schemas for the pre-check, grievance and consent routes in `chhatri/api/schemas/rights.py` (every 2xx body of those route tests is validated), and the case `evidence.precheck` lines and erased `evidence.slip`
 - 2026-10-02 · v1.6 · section 5 rewritten as the single registry of the 18 planned endpoints, in one house format: index with flag, wave, rate group and auth, shared conventions (AI label fields, error codes, audit, idempotency), and request, response and error tables for each, with real values from the running API where a value exists today; paths and shapes aligned to the feature specs (fs-02, fs-04 to fs-09), including the pre-check statuses, the three consent purposes, the fallback body `force`, the ops and what-if shapes; a section on the changes to existing endpoints; section 4.3 now lists the real error codes; section 6 now describes the real mock (`ROUTES` in `frontend/src/mock/routes.ts`) and what each planned endpoint returns there; TL;DR corrected (39 routes, limits)
 - 2026-10-02 · v1.5 · route table auth corrected (replay and case reads need no token; WhatsApp POST is signature-checked); one media route; example payloads made consistent: rupee labels match paise (₹1,380, ₹28,620, ₹58,900), cover fields match the Cover model, case kinds match the enum; route count 39
-- 2026-10-02 · v1.4 · second fact-check pass: corrected endpoint paths (/api/geo/zones, /api/geo/hexes, /api/state); removed non-existent endpoints (/api/alerts, /api/phone/*, /api/decisions list, /api/replay/scenarios, /api/replay/speed); corrected Case enums (AREA_REVIEW not GRIEVANCE, status values); clarified N1–N8 as PLANNED not live; fixed premium endpoint from POST /quote to POST /link; updated route count to 37; removed fallback switch from existing API table.
+- 2026-10-02 · v1.4 · corrections: corrected endpoint paths (/api/geo/zones, /api/geo/hexes, /api/state); removed non-existent endpoints (/api/alerts, /api/phone/*, /api/decisions list, /api/replay/scenarios, /api/replay/speed); corrected Case enums (AREA_REVIEW not GRIEVANCE, status values); clarified N1–N8 as PLANNED not live; fixed premium endpoint from POST /quote to POST /link; updated route count to 37; removed fallback switch from existing API table.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: N2 Ask Chhatri example response reframed as "when Gemini integration ships"; current behavior note added for Sarvam/template fallback; N2 and N3 section headers updated to show PLANNED statuses (Gemini, Tesseract); provider field examples clarified.
-- 2026-10-02 · v1.2 · logic and truth audit fixes
-- 2026-10-02 · v1.1 · fact-check pass: removed references to a private planning note, added mermaid tag to erDiagram
-- 2026-10-02 · v1 · first draft from API code audit.
+- 2026-10-02 · v1.2 · corrections
+- 2026-10-02 · v1.1 · corrections: added mermaid tag to erDiagram
+- 2026-10-02 · v1 · first draft from the API code.

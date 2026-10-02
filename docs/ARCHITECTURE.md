@@ -110,7 +110,7 @@ decision time:
 
 | Workflow | Steps (offset) | Payload |
 |---|---|---|
-| `payout` | `execute_payout` +0, `credit_payout` +4, `notify_merchant` +4, `pause_instalment` +5 | `{decision_id, merchant_id}` |
+| `payout` | `execute_payout` +0, `credit_payout` +4, `notify_merchant` +4, `request_holiday` +5 | `{decision_id, merchant_id}` |
 | `human-review` | `open_case` +0, `notify_officer` +0 | `{case_id, merchant_id}` |
 | `follow-up` | `check_case_sla` +1440, `notify_officer` +1440 | `{case_id}` |
 
@@ -147,7 +147,10 @@ decision time:
     decision exists, is APPROVED and has not been executed.
   - `credit_payout`: the payout becomes CREDITED.
   - `notify_merchant`: the WhatsApp intro, payout card and Soundbox announcement.
-  - `pause_instalment`: `InstalmentService.pause_next(event_date + 1 day)` and the pause message.
+  - `request_holiday` (was `pause_instalment`): with the flag `x4_lender_request` on (the stage set-up), Chhatri asks the
+    lender once (`InstalmentService.request_holiday`), the lender answers by its own rules L1 to L4
+    (`integrations/lender.py`), only a grant pauses `event_date + 1 day`, and the merchant is told what the lender
+    answered. With the flag off it is the unconditional `pause_next` and the pause message, as at commit 86575ea.
 
 ## 6. Audit log (SPEC §11)
 
@@ -169,7 +172,9 @@ so a replay reproduces the same chain. `GET /api/audit/verify` recomputes the ch
   `zone`, `hexes`, `alert`, `trigger`, `decision`, `payout`, `instalment`, `message`, `soundbox`, `case`,
   `audit` and `kpis`. The client resumes with `Last-Event-ID`.
 - Console routes (SPEC §20): `/` overview homepage, `/live` live map, `/claims` officer queue,
-  `/merchant/:id` phone, `/audit`, `/backtest` and `/policy`. Fonts are self-hosted, so it works offline.
+  `/merchant/:id` phone, `/audit`, `/backtest` and `/policy`, plus `/evals` with flag `h25_evals`. The merchant mini-app
+  (flag `n1_miniapp`, ADR 0005) is a third column beside the phone simulator on `/merchant/:id` and a standalone page at `/merchant/:id/app`. Fonts are
+  self-hosted, so it works offline.
 
 ## 8. Deployment topology (SPEC §23)
 
@@ -203,4 +208,5 @@ make up:      browser -> frontend (nginx :8080) --/api, /webhooks--> backend :80
 - `make e2e` runs Playwright against running servers.
 - `make test-infra` and `make n8n-selftest` cover the infrastructure: generated workflows, compose,
   Makefile, env, nginx, entrypoint, and a real n8n run.
-- CI (`.github/workflows/ci.yml`) runs all of the above except the artefact-dependent targets.
+- CI (`.github/workflows/ci.yml`) runs lint, the fast backend suite with coverage, the frontend typecheck, lint, test and
+  build, the infra checks and the n8n self-test. It does not run `make test-slow`, `make demo-check` or `make e2e`.

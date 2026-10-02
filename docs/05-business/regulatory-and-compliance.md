@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v2.1 · 2 Oct 2026 |
+| Status | Draft v2.2 · 3 Oct 2026 |
 | Owner | Omkar Kadam |
 | Audience | Insurer partners, lender partners, compliance counsel, regulators |
 | Related | [Facts and sources](../01-strategy/facts-and-sources.md) · [Policy wording](../02-product/policy-wording-and-cis.md) · [Business model](business-model-and-unit-economics.md) · [Go-to-market and pilot plan](go-to-market-and-pilot-plan.md) |
@@ -14,9 +14,9 @@
 - **Core framework:** s.64VB (cash before cover), parametric product filing, zero-document area claims, one-document hospital-cash claims with human review for doubt, 24-hour dispute SLA.
 - **Lending:** RBI (Digital Lending) Directions 2025 (A25) apply. EDI holidays are the lender's decision, requested by Chhatri. The lender defers the instalment to the loan's end; or alternatively, the insurer funds it from the payout.
 - **Data protection:** DPDP Act and Rules 2025 (A22) apply. Substantive obligations begin 14 May 2027. Design now for purpose-specific, withdrawable consent.
-- **AI governance:** Map the design to RBI FREE-AI's 7 sutras (A23). LLM never decides money; human review for doubtful cases; everything audited. The AI evaluation sets are PLANNED (H25, Wave 3) and nothing is measured yet.
+- **AI governance:** Map the design to RBI FREE-AI's 7 sutras (A23). LLM never decides money; human review for doubtful cases; everything audited. The AI evaluation harness is BUILT behind a flag (H25) and nothing is measured yet.
 - **Messaging:** WhatsApp Business API (A18) — opt-in required, templates outside the 24-hour window. WhatsApp is SIMULATED in the prototype.
-- **Status words:** BUILT means in the code today. PLANNED means not written yet, with its build wave. Consent centre, grievance ladder, Ask Chhatri and slip deletion are PLANNED.
+- **Status words:** BUILT means in the code today. Every feature named here is BUILT behind a feature flag that is off by default, and AI paths are tested against fakes only (no live key has been run). Anything still not written is marked NOT BUILT.
 
 ---
 
@@ -43,7 +43,7 @@ The prototype is built to demonstrate the architecture. No position in this docu
 - Establishes grievance redressal and claims processes (see section 4).
 
 **Distributor:** Paytm Insurance Broking Pvt Ltd (A4, IRDAI broker licence renewed to 16 Feb 2029) distributes the product:
-- Would sell cover to merchants through the Paytm for Business app (the mini-app is PLANNED, N1). Today cover is bought through a payment link in the chat.
+- Would sell cover to merchants through the Paytm for Business app (the mini-app is BUILT behind a flag, N1). Today cover is bought through a payment link in the chat.
 - Handles the simulated payment link in the demo (see docs/SPEC.md §0.1). The team has no Paytm keys.
 - Collects standing consent for daily settlement deductions (the premium) from merchants.
 
@@ -51,7 +51,7 @@ The prototype is built to demonstrate the architecture. No position in this docu
 - Provides merchant data (sales, KYC, settlement account).
 - Provides the settlement rail (daily deduction for premium; payout credit with the settlement).
 - Operates the Soundbox (transaction log).
-- Would host the merchant mini-app and Ask Chhatri (both PLANNED).
+- Would host the merchant mini-app and Ask Chhatri (both BUILT behind flags).
 - Does not approve or modify claim decisions.
 
 ---
@@ -128,16 +128,16 @@ Policy rules are stored in `backend/chhatri/policy/rules.yaml` (version pilot-0.
 
 **Payout:** Automatic. No documents from the merchant. Amount = 50% × expected day × drop %, capped at ₹2,500. In the prototype the simulated rail credits it 4 minutes after the decision.
 
-**Explanation (BUILT, K5):** The merchant sees the formula: expected day amount (₹), drop % (from the area index), the half-of-the-loss rule and the cap when it applies. Showing the source of each number (H13) and a reference to clause C2 are PLANNED (N1, H17). The explanation is reproducible from the numbers shown (see docs/SPEC.md §4.3).
+**Explanation (BUILT, K5):** The merchant sees the formula: expected day amount (₹), drop % (from the area index), the half-of-the-loss rule and the cap when it applies. Showing the source of each number (H13) and a reference to clause C2 are BUILT behind flags (N1, H17). The explanation is reproducible from the numbers shown (see docs/SPEC.md §4.3).
 
 ### 3.6 Claims: one-document hospital-cash claims with human review for doubt
 
 **Trigger:** A silent day: a completed day with no sales in the shop's business hours, still none by 11:00 the next morning (the shop is not on its weekly off and its zone had no area event).
 
 **Process:**
-1. Chhatri sends a check-in message at 11:20 (BUILT, in Hindi and English): "Your shop has been closed since yesterday. Is everything okay?" A voice version (Sarvam TTS and STT, browser speech as a fallback) is PLANNED (N4). The merchant replies by voice note or tap.
+1. Chhatri sends a check-in message at 11:20 (BUILT, in Hindi and English): "Your shop has been closed since yesterday. Is everything okay?" A voice version (Sarvam TTS and STT, browser speech as a fallback) is BUILT behind `n4_voice` (N4). The merchant replies by voice note or tap.
 2. Merchant sends a photo of a hospital document (admission slip, discharge summary, prescription or bill).
-3. Chhatri extracts the patient name, admission and discharge dates, hospital name (Sarvam Vision today, live only with a key and otherwise the simulated reader; Gemini vision is PLANNED, N3).
+3. Chhatri extracts the patient name, admission and discharge dates, hospital name (Sarvam Vision today, live only with a key and otherwise the simulated reader; Gemini vision is BUILT behind `n3_slip_precheck` and tested against fakes only, N3).
 4. The policy engine runs the checks:
    - SOFT checks: does the extracted name match the KYC name at ≥ 85? Do the slip dates cover the silent day(s)? Is the slip readable (confidence ≥ 0.80)? Is the claim for 3 days or fewer?
    - HARD checks: cover in force, premium prepaid, silence verified from sales, not already paid, annual limit.
@@ -149,7 +149,7 @@ Policy rules are stored in `backend/chhatri/policy/rules.yaml` (version pilot-0.
 
 **SLA:** We tell the merchant to expect an answer within 24 hours. IRDAI's Master Circular (A24) sets 1 hour for cashless requests and 3 hours for discharge authorisation in health insurance. Chhatri is an income cover, not a health policy, so A24 may not apply. If it did, the 24-hour target would be slower than the rule. This is a question for counsel.
 
-**Explanation:** The decision shows the reason and the checks that passed or failed. A link to clause C3 and an extracted-fields screen for the merchant are PLANNED (H17, N3).
+**Explanation:** The decision shows the reason and the checks that passed or failed. A link to clause C3 and an extracted-fields screen for the merchant are BUILT behind flags (H17, N3).
 
 ---
 
@@ -160,7 +160,7 @@ Policy rules are stored in `backend/chhatri/policy/rules.yaml` (version pilot-0.
 **Trigger:** A merchant disagrees with a payout amount (BUILT: "My loss was bigger" in the chat). A dispute of a decline is not built.
 
 **Process:**
-1. Merchant tells Chhatri in the chat. A "Dispute" button in the claims tracker is PLANNED (N1, H1).
+1. Merchant tells Chhatri in the chat. A "Dispute" button in the claims tracker is BUILT behind the mini-app flag (N1, H1).
 2. Chhatri replies "Okay, I'm sending this to our team. You'll hear back within 24 hours." and shows "Sent to a claims officer · case C-2291" (case number as an example).
 3. A case of kind DISPUTE is opened with a due time 24 hours later.
 
@@ -181,7 +181,7 @@ If a merchant is unhappy with Chhatri's dispute resolution, the grievance ladder
 
 3. **Insurance Ombudsman:** If the complaint is still unresolved or the merchant disagrees with IRDAI's direction, they can approach the Insurance Ombudsman (free to the policyholder, under the Insurance Ombudsman Rules, 2017). The Ombudsman can award compensation up to the amount specified in their rules (check current limits with counsel).
 
-**Chhatri's role:** Chhatri will show this ladder, with response clocks and a router for who owns the complaint (Paytm, the insurer or the lender), in the merchant mini-app (PLANNED, N5 and H22, Wave 3; feature spec fs-06). Chhatri will log every escalation and decision.
+**Chhatri's role:** Chhatri shows this ladder, with response clocks only where a source states one and a router for who owns the complaint (Paytm, the insurer or the lender), in the merchant mini-app (BUILT behind `n5_grievances`; feature spec fs-06). Chhatri logs every escalation and decision.
 
 ---
 
@@ -215,7 +215,7 @@ The insurer and lender will agree on the model during the pilot.
 ### 5.3 Code implementation and audit
 
 - **Today (BUILT):** `backend/chhatri/ledger/instalments.py`, method `pause_next()`, pauses the next instalment 5 minutes after the decision. It has no lender check and no lender answer: the simulated lender always grants. The message "Tomorrow's ₹600 instalment is paused." reads as if Chhatri did it. The audit entry is `instalment.pause`.
-- **PLANNED (X4, Wave 1):** the step becomes a request to a simulated lender that applies the four conditions above. A refusal creates no pause, and the payout is never touched. The audit entries become `instalment.holiday_request` and `instalment.holiday_decision` with a reason code. In production, the lender's API provides the decision.
+- **BUILT behind the x4 flag (X4):** the step becomes a request to a simulated lender that applies the four conditions above. A refusal creates no pause, and the payout is never touched. The audit entries become `instalment.holiday_request` and `instalment.holiday_decision` with a reason code. In production, the lender's API provides the decision.
 
 ---
 
@@ -230,7 +230,7 @@ The DPDP Rules, 2025 were notified on 13 Nov 2025 (published 14 Nov) under the D
 
 **Chhatri's timeline:** Chhatri is being designed now (Oct 2026) with the May 2027 substantive obligations in mind, to limit rework at go-live. Counsel must confirm the detail.
 
-**Status today:** The consent centre, the consent activity log and slip deletion are PLANNED (N6 and H23, Wave 3). Today the original slip image is kept in memory so an officer can see it, with no deletion path. Everything in sections 6.2 to 6.5 describes the design to build, not what the code does.
+**Status today:** The consent centre, the consent activity log and slip deletion are BUILT behind `n6_consents` (N6 and H23); with the flag off there is no consent centre and no deletion path. The original slip image is kept in memory so an officer can see it. Sections 6.2 to 6.5 describe the design; check each against fs-07 before relying on a detail.
 
 ### 6.2 Purpose-specific, withdrawable consent
 
@@ -266,7 +266,7 @@ The DPDP Rules, 2025 were notified on 13 Nov 2025 (published 14 Nov) under the D
 - Location data beyond the zone.
 
 **Masking:**
-- In the consent centre (PLANNED, N6, feature spec fs-07), the merchant can view their slip data. Patient names would be masked, for example "P**** J****", to prevent unintended data exposure.
+- In the consent centre (BUILT behind `n6_consents`, feature spec fs-07), the merchant can view their slip data. Patient names are masked, for example "P**** J****", to prevent unintended data exposure.
 - In reports shared with the insurer, merchant names are replaced with merchant IDs.
 
 ### 6.4 Children
@@ -275,8 +275,8 @@ Chhatri is only for merchants (adults, age ≥ 18). No data is collected on chil
 
 ### 6.5 Notices and requests
 
-**Initial notice (at cover purchase, PLANNED):**
-Chhatri will show a data notice in the mini-app:
+**Initial notice (at cover purchase, BUILT in the mini-app buy flow):**
+Chhatri shows a data notice in the mini-app buy flow:
 - What data is collected (sales, Soundbox, hospital slips).
 - Why (claims and premium calculation).
 - How long it is kept (7 years for claims disputes; slip data deleted 30 days after claim closure).
@@ -299,28 +299,28 @@ RBI released the FREE-AI committee report on 13 Aug 2025. It is advisory (not ye
 | Sutra | Meaning | Chhatri's design |
 |---|---|---|
 | **Trust** | AI systems must be trustworthy and auditable. | (1) Policy engine is pure code (no LLM); (2) Audit log is hash-chained; (3) `GET /api/audit/verify` lets an auditor with API access recompute the chain. |
-| **People First** | AI must respect human autonomy and protect vulnerable groups. | (1) A merchant can dispute a payout amount (BUILT); (2) A human reviews doubtful hospital-cash claims (REFERRED); (3) Premium is deducted from settlement only under standing consent, and only when the day's collections cover it; (4) No loan offers or cross-sell during distress (X8, PLANNED, Wave 3). |
+| **People First** | AI must respect human autonomy and protect vulnerable groups. | (1) A merchant can dispute a payout amount (BUILT); (2) A human reviews doubtful hospital-cash claims (REFERRED); (3) Premium is deducted from settlement only under standing consent, and only when the day's collections cover it; (4) No loan offers or cross-sell during distress (X8, BUILT behind `x8_distress_guard`). |
 | **Innovation** | AI can improve financial inclusion and efficiency. | (1) In the prototype the payout is credited 4 minutes after the decision (a simulated rail; earlier plans took 30–60 days, A3); (2) The area trigger uses the zone's shops' own sales; (3) Hospital-cash reads one photo (Sarvam today when keyed; Gemini PLANNED). |
 | **Fairness** | AI decisions must not discriminate. All eligible merchants are paid the same formula. | (1) Formula is identical for all merchants in the same zone; (2) Name-match threshold (85) is uniform; (3) Dispute SLA (24 hours) is uniform; (4) The backtest shows basis risk (not all losses are caught, and some payouts have no real drop), on simulated sales; (5) Exclusions are clear (e.g. a HEATWAVE alert does not trigger cover). |
 | **Accountability** | Developers and institutions must take responsibility. | (1) Chhatri logs every decision and its reasoning; (2) Insurer (not Paytm) is accountable for underwriting; (3) Paytm (distributor) and insurer (underwriter) are both liable under insurance law (to be confirmed by counsel). (4) Tests: backend 1,711 fast and 36 slow tests at 99.7% coverage, frontend 262 of 264 passing (X1 fixes the other 2), measured on 2 Oct. The AI parts are not measured yet (H25). |
 | **Explainability** | Merchants must understand why a decision was made. | (1) Every decision shows the formula: expected day, drop %, cap when it applies, and final amount (BUILT, K5); (2) Every check result is shown to the officer (e.g. "Name match: 100, passes the threshold of 85"); (3) Ask Chhatri answers coverage questions grounded in clauses C1–C12 (PLANNED, N2, Wave 2); (4) No black-box numbers. |
-| **Resilience** | Systems must fail gracefully and recover. | (1) A fallback chain for AI providers (Gemini, then Sarvam, then templates or a person) is PLANNED (ADR 0003, Wave 2); today it is Sarvam, else the simulators; (2) Browser speech as a fallback is PLANNED (N4); (3) BUILT: the in-process workflow runner needs no network (n8n is optional). |
+| **Resilience** | Systems must fail gracefully and recover. | (1) A fallback chain for AI providers (Gemini, then Sarvam, then templates or a person) is BUILT (ADR 0003) and tested against fakes only; with no keys it is the simulators and templates; (2) Browser speech as a fallback is BUILT behind `n4_voice` (N4); (3) BUILT: the in-process workflow runner needs no network (n8n is optional). |
 
 ### 7.2 LLM authority
 
 **Principle (docs/SPEC.md §0.2):** "The AI builds the case; code decides the money."
 
 **Implementation:**
-- **Ask Chhatri (N2, PLANNED, Wave 2):** An LLM (Gemini or Sarvam) will answer coverage and claims questions. But:
+- **Ask Chhatri (N2, BUILT behind `n2_ask_chhatri`; tested against fakes only):** An LLM (Gemini or Sarvam) answers coverage and claims questions. But:
   - The answer is grounded only in the policy wording (clauses C1–C12) and the merchant's own decision facts (from the decision table).
-  - The LLM is guarded (design in docs/SPEC.md §13.3; the guard is PLANNED with N2 and H17): no digit that is not in the decision facts; no promises of money.
+  - The LLM is guarded (design in docs/SPEC.md §13.3; the guard is BUILT with N2 and H17): no digit that is not in the decision facts; no promises of money.
   - Any money figure shown to the merchant must have a corresponding check in the decision record.
   - If the LLM cannot find a grounded answer, it says "I don't know; let me connect you to a person."
   - Today the chat model sees only text the word-list classifier cannot place (UNKNOWN), and the merchant's money messages are templates filled from decision facts.
-- **Slip reading (N3):** Sarvam Vision (BUILT, live only with a key; otherwise the simulated reader) extracts patient name, admission/discharge dates and hospital. Gemini Vision is PLANNED. But:
-  - The slip reader's confidence is shown to the officer today. The merchant-facing pre-check (extracted fields, retake, confirm) is PLANNED (N3, H5, H15).
+- **Slip reading (N3):** Sarvam Vision (BUILT, live only with a key; otherwise the simulated reader) extracts patient name, admission/discharge dates and hospital. Gemini Vision is BUILT behind a flag and tested against fakes only. But:
+  - The slip reader's confidence is shown to the officer today. The merchant-facing pre-check (extracted fields, retake, confirm) is BUILT behind flags (N3, H5, H15).
   - Below the confidence gate (0.80), the case is referred to a human (BUILT).
-  - The merchant will be able to see the extracted fields and retake the photo if it is unclear (PLANNED).
+  - The merchant will be able to see the extracted fields and retake the photo if it is unclear (BUILT behind a flag).
 
 **No LLM payout authority:** The policy engine (`backend/chhatri/policy/engine.py`) is the only code that can produce an APPROVED decision. The LLM has no authority over money.
 
@@ -333,9 +333,9 @@ Humans are involved in:
 
 ### 7.4 Evals and guardrails
 
-**AI evaluation (H25, PLANNED, Wave 3).** The [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) defines six suites: intent routing, the guard against unsupported figures and promises, end-to-end Ask answers, slip reading with the confidence gate, voice, and the labels and fallback behaviour of every chain. Nothing has been measured. The console page `/evals` will read NOT MEASURED until a stored run exists. A target such as "at least 95% factual accuracy for Ask Chhatri" is a target, not a result.
+**AI evaluation (H25, BUILT behind `h25_evals`).** The [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) defines six suites: intent routing, the guard against unsupported figures and promises, end-to-end Ask answers, slip reading with the confidence gate, voice, and the labels and fallback behaviour of every chain. Nothing has been measured. The console page `/evals` reads NOT MEASURED until a stored run exists. A target such as "at least 95% factual accuracy for Ask Chhatri" is a target, not a result.
 
-**Guard tests (X7, PLANNED, Wave 1):** A test suite will enforce honest wording:
+**Guard tests (X7, BUILT):** A test suite enforces honest wording:
 - Merchant-facing templates are rejected if they use absolute language ("guaranteed", "100%", "always").
 - No payout amount is shown unless it is in the decision facts.
 - No "paid" message appears before a payout record exists.
@@ -356,11 +356,11 @@ Humans are involved in:
   - "Hi [name], a heavy-rain alert is issued for your zone."
   - "[name], your claim of ₹1,380 has been approved and credited with today's settlement."
 
-**Chhatri's approach:** Merchant-facing copy is in `backend/chhatri/conversation/messages.py`. Money messages are templates filled from the decision facts (no free-generation; see docs/SPEC.md §4.1). Opt-in capture and opt-out are proposed and belong with the consent centre (PLANNED, N6).
+**Chhatri's approach:** Merchant-facing copy is in `backend/chhatri/conversation/messages.py`. Money messages are templates filled from the decision facts (no free-generation; see docs/SPEC.md §4.1). Opt-in capture and opt-out are proposed and belong with the consent centre (N6, BUILT; opt-in capture for WhatsApp is not built).
 
 ### 8.2 In-app messaging
 
-Claims decisions, disputes, EDI holidays and grievance updates will be shown in the merchant mini-app (N1, PLANNED) in Hindi and English. Today they appear in the chat (the phone simulator). WhatsApp would be the secondary channel (opt-in backup).
+Claims decisions, disputes, EDI holidays and grievance updates will be shown in the merchant mini-app (N1, BUILT behind a flag) in Hindi and English, and in the chat (the phone simulator). WhatsApp would be the secondary channel (opt-in backup).
 
 ---
 
@@ -375,17 +375,17 @@ This table summarizes the regulatory requirements and Chhatri's design responses
 | 3 | Parametric product must be filed with IRDAI. | IRDAI guidelines | Insurer files via standard process or regulatory sandbox. Chhatri provides rules, logic and backtest evidence. | Planned (post-hackathon) | Omkar Kadam | docs/01-strategy/current-state-audit.md; docs/02-product/feature-specs/fs-01-area-auto-claim.md |
 | 4 | Area claims processed transparently with a formula. | General best practice (transparency) | Formula shown to merchant: expected day × drop % × 0.5, capped at ₹2,500. All numbers are in the decision and audit log. | BUILT (K5) | Ujjwal Pardeshi | backend/chhatri/policy/explain.py; docs/02-product/prd.md |
 | 5 | Health-claim timelines (1 hour for cashless, 3 hours for discharge authorisation). | IRDAI Master Circular (A24), for health insurance | Chhatri's decision: automatic if checks pass; human review (REFERRED) with a 24-hour target. That is slower than A24, which is written for health insurance and may not apply to an income cover. Counsel to confirm. | BUILT (decision and review); applicability to confirm | Ujjwal Pardeshi | backend/chhatri/policy/engine.py; docs/SPEC.md §9 |
-| 6 | Grievance ladder: GRO → Bima Bharosa → Ombudsman. | Insurance Ombudsman Rules 2017 | Chhatri will show the ladder in the mini-app. Insurer GRO is the entry point. | PLANNED (N5, H22, Wave 3) | Omkar Kadam | docs/02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md |
+| 6 | Grievance ladder: GRO → Bima Bharosa → Ombudsman. | Insurance Ombudsman Rules 2017 | Chhatri shows the ladder in the mini-app. Insurer GRO is the entry point. | BUILT behind `n5_grievances` (N5, H22) | Omkar Kadam | docs/02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md |
 | 7 | Dispute response within a stated time. | Chhatri's own target (no IRDAI rule cited here) | 24-hour target for a dispute response. Each case has a due time (opened + 24 hours) and records whether it closed in time. | BUILT | Ujjwal Pardeshi | backend/chhatri/cases/service.py; policy-wording-and-cis.md C9 |
-| 8 | Lending: EDI holiday is the lender's decision, not Chhatri's. | RBI Digital Lending Directions 2025 (A25) | Chhatri requests; lender decides via pre-agreed rule (X4: active loan, not in arrears, holiday allowance, flag enabled). Lender decision is logged and audited. Today the simulated lender always grants with no check. | PLANNED (X4, Wave 1) | Omkar Kadam | docs/02-product/feature-specs/fs-03-edi-holiday.md; backend/chhatri/ledger/instalments.py |
+| 8 | Lending: EDI holiday is the lender's decision, not Chhatri's. | RBI Digital Lending Directions 2025 (A25) | Chhatri requests; lender decides via pre-agreed rule (X4: active loan, not in arrears, holiday allowance, flag enabled). Lender decision is logged and audited. With the x4 flag off the simulated lender grants with no check. | BUILT behind the x4 flag (X4) | Omkar Kadam | docs/02-product/feature-specs/fs-03-edi-holiday.md; backend/chhatri/ledger/instalments.py |
 | 9 | No unilateral loan restructuring without board approval. | RBI Digital Lending Directions 2025 (A25) | EDI holiday is the lender's board-approved policy. Chhatri initiates the request; lender executes. All merchants are treated equally. | Design | Omkar Kadam | docs/02-product/feature-specs/fs-03-edi-holiday.md |
-| 10 | Purpose-specific consent for data use. | DPDP Act 2023, DPDP Rules 2025 (A22) | Sales data: purpose "claims and premium"; withdrawable. Slip data: purpose "claim verification"; deleted after closure. Both collected in the mini-app with explicit consent. | PLANNED (N6 consent centre, H23, Wave 3) | Omkar Kadam | docs/02-product/feature-specs/fs-07-cover-purchase-and-consent.md; policy-wording-and-cis.md C11 |
+| 10 | Purpose-specific consent for data use. | DPDP Act 2023, DPDP Rules 2025 (A22) | Sales data: purpose "claims and premium"; withdrawable. Slip data: purpose "claim verification"; deleted after closure. Both collected in the mini-app with explicit consent. | BUILT behind `n6_consents` (N6, H23) | Omkar Kadam | docs/02-product/feature-specs/fs-07-cover-purchase-and-consent.md; policy-wording-and-cis.md C11 |
 | 11 | Data minimisation; no unnecessary PII collection. | DPDP Act 2023 (A22) | Chhatri collects only: merchant ID, phone, KYC name, sales, Soundbox, hospital slip (name, dates, hospital). No personal email, home address, dependant data or detailed health records. | Design | Omkar Kadam | docs/04-engineering/data-model-and-api.md |
 | 12 | No data on children; no automated decisions affecting children. | DPDP Act 2023 (A22) | Cover is for merchants (age ≥ 18) only. No data on children collected. Merchant's own coverage is limited by policy (e.g. hospital claims only for the merchant, not dependants). | Design | Omkar Kadam | policy-wording-and-cis.md (scope) |
 | 13 | DPDP compliance timeline and phased obligations. | DPDP Rules 2025 (A22) | Timeline: 14 May 2027 for substantive obligations. Chhatri is designed with the May 2027 requirements in mind (to confirm with counsel). | Design | Omkar Kadam | Section 6 (DPDP Act applicability and timeline); docs/02-product/feature-specs/fs-07-cover-purchase-and-consent.md |
-| 14 | AI governance: LLM does not decide money. | RBI FREE-AI report (A23) | Policy engine is pure code; LLM (Ask Chhatri) is a grounded assistant only. Human review for doubtful cases. Audit log records all decisions. | BUILT (engine, review, audit); Ask Chhatri PLANNED (N2, Wave 2) | Ujjwal Pardeshi | docs/04-engineering/ai-architecture-and-guardrails.md; docs/02-product/feature-specs/fs-09-policy-engine-and-audit.md |
-| 15 | AI: Trust, People First, Innovation, Fairness, Accountability, Explainability, Resilience. | RBI FREE-AI report (A23) | Mapped in section 7.1 above. The audit log is in place. The evaluations (H25) and the fallback chain (ADR 0003) are PLANNED. | Design | Omkar Kadam | docs/04-engineering/ai-architecture-and-guardrails.md; docs/04-engineering/ai-evaluation-plan.md; Section 7 (AI governance) |
-| 16 | Opt-in for WhatsApp messaging; approval of templates. | WhatsApp Business API (A18) | The message catalogue is in backend/chhatri/conversation/messages.py. Outside the 24-hour window only approved templates may be sent. Opt-in capture is PLANNED with the consent centre (N6). The team has no WhatsApp keys, so WhatsApp is SIMULATED. | BUILT (catalogue and adapter); opt-in PLANNED | Ujjwal Pardeshi | docs/SPEC.md §16 |
+| 14 | AI governance: LLM does not decide money. | RBI FREE-AI report (A23) | Policy engine is pure code; LLM (Ask Chhatri) is a grounded assistant only. Human review for doubtful cases. Audit log records all decisions. | BUILT (engine, review, audit); Ask Chhatri BUILT behind `n2_ask_chhatri` (N2), tested against fakes only | Ujjwal Pardeshi | docs/04-engineering/ai-architecture-and-guardrails.md; docs/02-product/feature-specs/fs-09-policy-engine-and-audit.md |
+| 15 | AI: Trust, People First, Innovation, Fairness, Accountability, Explainability, Resilience. | RBI FREE-AI report (A23) | Mapped in section 7.1 above. The audit log is in place. The evaluations (H25) and the fallback chain (ADR 0003) are BUILT (H25 behind `h25_evals`; ADR 0003 chain tested against fakes). Nothing is measured. | Design | Omkar Kadam | docs/04-engineering/ai-architecture-and-guardrails.md; docs/04-engineering/ai-evaluation-plan.md; Section 7 (AI governance) |
+| 16 | Opt-in for WhatsApp messaging; approval of templates. | WhatsApp Business API (A18) | The message catalogue is in backend/chhatri/conversation/messages.py. Outside the 24-hour window only approved templates may be sent. Opt-in capture for WhatsApp is not built. The team has no WhatsApp keys, so WhatsApp is SIMULATED. | BUILT (catalogue and adapter); opt-in NOT BUILT | Ujjwal Pardeshi | docs/SPEC.md §16 |
 | 17 | Audit trail: every decision is logged and tamper-evident. | General best practice; DPDP (breach reporting requires audit trail). | Hash-chained audit log in SQLite. `GET /api/audit/verify` recomputes hashes. Wall-clock times are excluded from the hash (only simulated time). | BUILT | Ujjwal Pardeshi | docs/04-engineering/system-architecture.md; backend/chhatri/audit/log.py |
 | 18 | No hardcoded secrets; secret management. | General best practice | All secrets from environment (`.env`). `make env` generates random keys. `.env.example` lists the keys but has no values. Demo mode generates a demo token if none is set. | BUILT | Ujjwal Pardeshi | docs/SECURITY.md; backend/chhatri/config.py |
 | 19 | Rate limiting and fraud prevention. | General best practice | In-memory sliding window (60 s): webhooks 60/min, uploads 20/min, phone messages 60/min. Type validation by magic bytes (images, audio). File size limits (5 MB images, 5 MB and 30 s audio). | BUILT | Ujjwal Pardeshi | docs/SECURITY.md |
@@ -423,9 +423,10 @@ This table summarizes the regulatory requirements and Chhatri's design responses
 
 ## Changelog
 
+- 2026-10-03 · v2.2 · feature statuses changed from PLANNED to BUILT behind flags where the code has them; AI paths tested against fakes only; WhatsApp opt-in capture is not built
 - 2026-10-02 · v2.1 · fixed against the code: name, dates and slip confidence are SOFT checks (REFERRED, with WAIVED_BY_OFFICER), HARD failures DECLINE; the annual limit is a rolling 365 days; disputes never change an amount and close the case; today's EDI pause has no lender check (X4 PLANNED) and the lender-decides wording is proposed; any RAIN or CIVIC alert triggers (not Red only); rules table gains the 4-minute payout and 5-minute pause delays and points to rules.yaml for the full set; unbuilt items (mini-app, consent centre, grievance ladder, Ask Chhatri, evals, slip deletion, Gemini) marked PLANNED; WhatsApp and the Paytm link marked SIMULATED; the AI evaluation is linked and NOT MEASURED; the A24 comparison corrected.
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; all regulatory positions correctly use future tense for partnerships and future obligations.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes.
+- 2026-10-02 · v1.2 · corrections after a second read against the code.
 - 2026-10-02 · v1.1 · fact-check pass.
 - 2026-10-02 · v1 · first draft, covering roles, insurance positions, claims mechanics, lending, DPDP, AI governance, messaging, compliance checklist and open questions.
