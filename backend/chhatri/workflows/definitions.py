@@ -5,11 +5,11 @@ Offsets are simulated minutes from the workflow start (the decision time):
 | workflow       | steps (offset)                                                                   |
 |----------------|----------------------------------------------------------------------------------|
 | `payout`       | execute_payout +0, credit_payout +rail delay (4), notify_merchant +4,             |
-|                | pause_instalment +instalment pause delay (5)                                     |
+|                | request_holiday +instalment pause delay (5)                                      |
 | `human-review` | open_case +0, notify_officer +0                                                  |
 | `follow-up`    | check_case_sla +dispute SLA (24 h), notify_officer +24 h                          |
 
-So the monsoon demo reads: decisions 17:00, credits + WhatsApp + Soundbox 17:04, pauses 17:05. The
+So the monsoon demo reads: decisions 17:00, credits + WhatsApp + Soundbox 17:04, the holiday request 17:05. The
 in-process runner and the n8n callbacks both schedule every step at start + offset on the simulated
 scheduler, so the replay timeline is identical in both modes. n8n never decides anything.
 """
@@ -32,7 +32,7 @@ FOLLOW_UP = "follow-up"
 EXECUTE_PAYOUT = "execute_payout"
 CREDIT_PAYOUT = "credit_payout"
 NOTIFY_MERCHANT = "notify_merchant"
-PAUSE_INSTALMENT = "pause_instalment"
+REQUEST_HOLIDAY = "request_holiday"  # X4: asks the lender to pause the instalment (was pause_instalment)
 OPEN_CASE = "open_case"
 NOTIFY_OFFICER = "notify_officer"
 CHECK_CASE_SLA = "check_case_sla"
@@ -93,7 +93,7 @@ def build_workflows(rules: PolicyRules) -> Mapping[str, tuple[StepSpec, ...]]:
                 StepSpec(EXECUTE_PAYOUT, 0),
                 StepSpec(CREDIT_PAYOUT, rail),
                 StepSpec(NOTIFY_MERCHANT, rail),
-                StepSpec(PAUSE_INSTALMENT, rules.instalment_pause_delay_minutes),
+                StepSpec(REQUEST_HOLIDAY, rules.instalment_pause_delay_minutes),
             ),
             HUMAN_REVIEW: (StepSpec(OPEN_CASE, 0), StepSpec(NOTIFY_OFFICER, 0)),
             FOLLOW_UP: (StepSpec(CHECK_CASE_SLA, sla), StepSpec(NOTIFY_OFFICER, sla)),

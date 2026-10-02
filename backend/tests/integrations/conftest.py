@@ -42,6 +42,16 @@ class SleepRecorder:
         self.delays.append(delay)
 
 
+AMBIENT_AI_ENV = ("GOOGLE_API_KEY", "GEMINI_MODEL", "GEMINI_VISION_MODEL", "CHHATRI_DATA_IS_SYNTHETIC")
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_ai_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A key or a gate flag exported in the developer's shell must never reach `Settings(_env_file=None)` here."""
+    for name in AMBIENT_AI_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def anil() -> Merchant:
     return ANIL

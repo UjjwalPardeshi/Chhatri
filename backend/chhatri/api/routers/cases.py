@@ -72,7 +72,8 @@ async def _decide(
         raise ApiError(409, f"case {case_id} cannot be decided in its current state") from exc
     logger.info("case %s %s by %s", case_id, "approved" if approve else "declined", officer_id)
     case = _case_or_404(runtime, case_id)
-    return ok({"decision": views.decision_view(decision), "case": views.case_view(runtime, case)})
+    shown = views.decision_view(decision) if decision is not None else None
+    return ok({"decision": shown, "case": views.case_view(runtime, case)})
 
 
 @router.post("/{case_id}/approve")

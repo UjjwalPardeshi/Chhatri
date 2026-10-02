@@ -92,7 +92,6 @@ def test_area_annual_limit_declines() -> None:
         ({"claim": b.area_claim(trigger_id="E-Z3-20250819")}, "names trigger"),
         ({"claim": b.area_claim(drop=60)}, "drop_pct"),
         ({"trigger": b.trigger(drop_pct=50)}, "100 − index_pct"),
-        ({"claim": b.area_claim(expected=437_512)}, "published"),
         ({"cover": b.cover("S-0907")}, "belongs to"),
         ({"paid_last_365_days_paise": -1}, "non-negative"),
     ],

@@ -4,12 +4,16 @@
   (§13.5 "If no payout today: FALLBACK_HELP"). EXPLAIN_AREA says "half", so a share other than 50 %
   uses the §9.6 formula (EXPLAIN_AREA_FORMULA); a personal payout uses EXPLAIN_PERSONAL (formula).
 - DISPUTE_AMOUNT → ``open_dispute`` → DISPUTE_ACK → CASE_CHIP (deck test EXPLAINED: the numbers were
-  shown and a human review is opened; the first case after a load is C-2291).
+  shown and a human review is opened; the first case after a load is C-2291). When no decision has settled a
+  claim there is nothing to dispute: DISPUTE_NO_PAYOUT and no case. A second dispute for the same decision gets
+  DISPUTE_ALREADY_OPEN and the chip of the case that is still open (K5).
 - REPORT_ILLNESS → ASK_SLIP while a silence check-in is open, else ILLNESS_NO_SILENCE.
 - BUY_COVER → ``quote_cover`` → COVER_BLOCKED (when blocked) + COVER_LINK; when no link could be
   created (logged) COVER_LINK_UNAVAILABLE instead of the link (deck test BLOCKED).
-- COVER_STATUS → the merchant's cover (active / starts on / premium unpaid); without a current cover
-  it is a purchase question and follows BUY_COVER.
+- COVER_STATUS → the merchant's cover from its derived status (K6): COVER_STATUS_STARTS while WAITING,
+  COVER_STATUS_UNPAID when the premium is due, else COVER_STATUS_ACTIVE; without a current cover it is a
+  purchase question and follows BUY_COVER. BUY_COVER says COVER_BLOCKED_NOW when the blocking alert is already
+  in force, COVER_BLOCKED when it starts later.
 - AFFIRM / DENY answer the silence check-in ("सब ठीक है?") while it is open; GREETING, UNKNOWN and
   an AFFIRM/DENY with no open check-in → FALLBACK_HELP.
 """
@@ -23,18 +27,18 @@ from types import MappingProxyType
 from typing import Final
 
 from chhatri.clock import IST
+from chhatri.conversation.cover_text import NO_LIVE_COVER, cover_status_line
 from chhatri.conversation.intents import Intent
 from chhatri.conversation.messages import date_en, date_hi, render
 from chhatri.conversation.outbox import Outbox, Outgoing
 from chhatri.conversation.ports import ClaimsPort, ConversationStore
-from chhatri.domain.enums import CoverQuoteOutcome, CoverStatus, MessageKind
-from chhatri.domain.models import Explanation, Merchant, Message
+from chhatri.domain.enums import CoverQuoteOutcome, MessageKind
+from chhatri.domain.models import Case, Explanation, Merchant, Message
 from chhatri.money import format_inr
 
 logger = logging.getLogger(__name__)
 
 HALF_SHARE_PCT: Final = 50
-NOT_YET_STARTED: Final = frozenset({CoverStatus.WAITING, CoverStatus.PENDING_PAYMENT})
 
 Handler = Callable[[Merchant, str], Awaitable[tuple[Message, ...]]]
 
@@ -107,9 +111,22 @@ class Replies:
         return await self.send(merchant, explanation_message(decision.explanation))
 
     async def _dispute(self, merchant: Merchant, text: str) -> tuple[Message, ...]:
-        case = await self._claims.open_dispute(merchant.id, text)
+        outcome = await self._claims.open_dispute(merchant.id, text)
+        case = outcome.case
+        if case is None:
+            return await self.send(merchant, Outgoing.text("DISPUTE_NO_PAYOUT"))
         if case.merchant_id != merchant.id:
             raise ValueError(f"dispute case {case.id} belongs to {case.merchant_id}, not {merchant.id}")
+        return await self.dispute_opened(merchant, case, already_open=outcome.already_open)
+
+    async def dispute_opened(
+        self, merchant: Merchant, case: Case, *, already_open: bool
+    ) -> tuple[Message, ...]:
+        """DISPUTE_ACK (or DISPUTE_ALREADY_OPEN) and the case chip: the answer to a dispute, from chat or the app (N5)."""
+        if already_open:
+            return await self.send(
+                merchant, Outgoing.text("DISPUTE_ALREADY_OPEN", case_id=case.id), case_chip(case.id)
+            )
         return await self.send(merchant, Outgoing.text("DISPUTE_ACK"), case_chip(case.id))
 
     async def _illness(self, merchant: Merchant, text: str) -> tuple[Message, ...]:
@@ -133,9 +150,8 @@ class Replies:
         outgoing: list[Outgoing] = []
         if quote.outcome is CoverQuoteOutcome.BLOCKED:
             starts = quote.starts_on
-            outgoing.append(
-                Outgoing.text("COVER_BLOCKED", starts_on_hi=date_hi(starts), starts_on_en=date_en(starts))
-            )
+            key = "COVER_BLOCKED_NOW" if quote.blocking_alert_in_force else "COVER_BLOCKED"
+            outgoing.append(Outgoing.text(key, starts_on_hi=date_hi(starts), starts_on_en=date_en(starts)))
         if payment is not None and payment.link_url:
             outgoing.append(
                 Outgoing.text(
@@ -151,18 +167,8 @@ class Replies:
         return await self.send(merchant, *outgoing)
 
     async def _cover_status(self, merchant: Merchant, text: str) -> tuple[Message, ...]:
-        cover = self._store.cover(merchant.id)
         today = self._outbox.now().astimezone(IST).date()
-        if cover is None or cover.status not in NOT_YET_STARTED | {CoverStatus.ACTIVE}:
+        key, facts = cover_status_line(self._store.cover(merchant.id), today)
+        if key == NO_LIVE_COVER:
             return await self._buy_cover(merchant, text)
-        if cover.status in NOT_YET_STARTED or cover.starts_on > today:
-            starts = cover.starts_on
-            reply = Outgoing.text(
-                "COVER_STATUS_STARTS", starts_on_hi=date_hi(starts), starts_on_en=date_en(starts)
-            )
-        elif cover.prepaid_through is None or cover.prepaid_through < today:
-            reply = Outgoing.text("COVER_STATUS_UNPAID")
-        else:
-            paid = cover.prepaid_through
-            reply = Outgoing.text("COVER_STATUS_ACTIVE", prepaid_hi=date_hi(paid), prepaid_en=date_en(paid))
-        return await self.send(merchant, reply)
+        return await self.send(merchant, Outgoing.text(key, **facts))

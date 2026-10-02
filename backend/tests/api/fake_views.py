@@ -133,6 +133,159 @@ def merchant_detail(rt: Any, merchant_id: str) -> dict[str, Any]:
         "expected_today_label": "₹4,380",
         "payouts": payouts,
         "decisions": decisions,
+        "holiday_requests": [],
+    }
+
+
+def cover_view(rt: Any, merchant_id: str) -> dict[str, Any]:
+    """The cover card of Anil at 17:05 of the monsoon (data-model 5.1), whoever asks."""
+    return {
+        "merchant_id": merchant_id,
+        "cover_id": "CV-0142",
+        "status": "ACTIVE",
+        "status_text_hi": "आपका कवर चालू है। प्रीमियम 22 अगस्त तक जमा है।",
+        "status_text_en": "Your cover is active. Premium is paid through 22 August.",
+        "zone_id": "Z7",
+        "zone_name": "Parel · Lalbaug",
+        "purchased_at": "2025-03-10T11:00:00+05:30",
+        "starts_on": "2025-03-17",
+        "prepaid_through": "2025-08-22",
+        "waiting_period_days": 7,
+        "premium_per_day_paise": 1862,
+        "premium_per_day_label": "₹18.62",
+        "premium_due": False,
+        "annual_limit_paise": 3_000_000,
+        "annual_limit_label": "₹30,000",
+        "amount_claimed_paise": 138_000,
+        "amount_claimed_label": "₹1,380",
+        "amount_remaining_paise": 2_862_000,
+        "amount_remaining_label": "₹28,620",
+        "alert_active": True,
+        "alert_id": "A-20250818-01",
+    }
+
+
+def claims_view(rt: Any, merchant_id: str) -> list[dict[str, Any]]:
+    """Anil's tracker at 17:12 of the monsoon: his dispute above the paid area claim (data-model 5.1)."""
+    if merchant_id != "S-0142":
+        return []
+    steps = [
+        ("Detected", None, "2025-08-19T17:00:00+05:30", "Your area's sales fell 63% during the alert."),
+        ("Checked", None, "2025-08-19T17:00:00+05:30", "All 9 checks passed."),
+        ("Decided", "APPROVED", "2025-08-19T17:00:00+05:30", "How your payout was worked out: ½ × ₹4,380 × 63% = ₹1,380"),
+        ("Paid", None, "2025-08-19T17:04:00+05:30", "Credited with today's settlement"),
+        ("EDI holiday", "GRANTED", "2025-08-19T17:05:00+05:30", "Tomorrow's ₹600 instalment is paused."),
+    ]  # fmt: skip
+    paid = {
+        "claim_id": "CL-000142",
+        "disputed_claim_id": None,
+        "kind": "AREA",
+        "claim_at": "2025-08-19T17:00:00+05:30",
+        "zone_id": "Z7",
+        "trigger_id": "E-Z7-20250819",
+        "decision_id": "D-000142",
+        "outcome": "APPROVED",
+        "amount_paise": 138_000,
+        "amount_label": "₹1,380",
+        "steps": [
+            {
+                "name": name,
+                "status": "completed",
+                "result": result,
+                "at": at,
+                "reason_hi": None,
+                "reason_en": reason,
+                "reason_code": None,
+            }
+            for name, result, at, reason in steps
+        ],
+        "case_id": None,
+        "case_status": None,
+        "due_by": None,
+        "resolution": None,
+    }
+    dispute = {
+        **paid,
+        "claim_id": None,
+        "disputed_claim_id": "CL-000142",
+        "kind": "DISPUTE",
+        "claim_at": "2025-08-19T17:12:00+05:30",
+        "trigger_id": None,
+        "steps": [],
+        "case_id": "C-2291",
+        "case_status": "OPEN",
+        "due_by": "2025-08-20T17:12:00+05:30",
+    }
+    return [dispute, paid]
+
+
+def receipt_view(rt: Any, decision_id: str) -> dict[str, Any]:
+    """The receipt of Anil's area payout, small (data-model 5.8); an unknown decision is a KeyError like the store's."""
+    decision = rt.store.decision(decision_id)
+    source = {
+        "kind": "ALERT",
+        "label": "IMD-style nowcast · simulated",
+        "ref": "alert:A-20250818-01",
+        "as_of": "2025-08-18T17:30:00+05:30",
+        "origin": "SIMULATED",
+        "clause": "C2",
+    }
+    return {
+        "decision": {
+            "id": decision.id,
+            "claim_id": decision.claim_id,
+            "merchant_id": decision.merchant_id,
+            "outcome": "APPROVED",
+            "amount_paise": 138_000,
+            "amount_label": "₹1,380",
+            "rules_version": "pilot-0.1",
+            "decided_at": "2025-08-19T17:00:00+05:30",
+            "decided_by": "policy-engine",
+            "supersedes": None,
+            "referral_reason": None,
+        },
+        "explanation": {
+            "formula_en": "½ × ₹4,380 × 63% = ₹1,380",
+            "formula_hi": "₹4,380 का 63% = ₹2,759.40; उसका आधा = ₹1,380",
+            "clause": "C4",
+            "facts": [
+                {
+                    "key": "expected_day",
+                    "label_en": "Your usual Tuesday",
+                    "value": "₹4,380",
+                    "sources": [source],
+                }
+            ],
+        },
+        "checks": [
+            {
+                "code": "ALERT_ACTIVE",
+                "severity": "HARD",
+                "status": "PASS",
+                "label_en": "Alert active for the whole window",
+                "detail_en": "Red rain alert covers the whole window.",
+                "observed": "A-20250818-01",
+                "required": "Alert for Z7",
+                "clause": "C2",
+                "erased": False,
+                "sources": [source],
+            }
+        ],
+        "counterfactuals": [],
+        "payout": {
+            "id": "P-000001",
+            "status": "CREDITED",
+            "amount_label": "₹1,380",
+            "credited_at": "2025-08-19T17:04:00+05:30",
+        },
+        "edi": None,
+        "case": None,
+        "audit": {"seq": 146, "hash_short": "d62a99db02d8", "verify_path": "/api/audit/verify"},
+        "grievance": {
+            "dispute_allowed": True,
+            "ladder": ["PAYTM_DISPUTE", "INSURER_GRO", "BIMA_BHAROSA", "OMBUDSMAN"],
+            "first_step_hours": 24,
+        },
     }
 
 
@@ -155,6 +308,9 @@ FAKES = {
     "case_view": case_view,
     "merchant_summary": merchant_summary,
     "merchant_detail": merchant_detail,
+    "cover_view": cover_view,
+    "claims_view": claims_view,
+    "receipt_view": receipt_view,
     "policy_view": policy_view,
     "integrations_view": integrations_view,
 }

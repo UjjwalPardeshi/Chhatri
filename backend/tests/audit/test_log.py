@@ -243,3 +243,41 @@ def test_append_failure_is_logged_and_raised(caplog: pytest.LogCaptureFixture) -
         add(log, 1)
     assert "audit append failed at seq 2" in caplog.text
     assert log.head_hash() == head
+
+
+def test_latest_finds_the_newest_entry_of_an_action_about_a_subject_at_or_before_a_time() -> None:
+    """The claim tracker reads when a shop was checked in on (K5): the newest `silence.detected` before the claim."""
+    log = AuditLog()
+
+    def detected(subject: str, at: datetime) -> int:
+        entry = log.append(
+            at=at,
+            actor="model",
+            action="silence.detected",
+            subject_type="merchant",
+            subject_id=subject,
+            data={},
+        )
+        return entry.seq
+
+    first, other, second = (
+        detected("S-0142", ist(2025, 8, 20, 11, 20)),
+        detected("S-0907", AT),
+        detected("S-0142", ist(2025, 8, 21, 11, 20)),
+    )
+    add(log)
+    found = log.latest(action="silence.detected", subject_id="S-0142", at_or_before=ist(2025, 8, 21, 11, 21))
+    assert found is not None and found.seq == second
+    earlier = log.latest(
+        action="silence.detected", subject_id="S-0142", at_or_before=ist(2025, 8, 21, 11, 19)
+    )
+    assert earlier is not None and earlier.seq == first
+    assert (
+        log.latest(action="silence.detected", subject_id="S-0142", at_or_before=ist(2025, 8, 20, 11, 0))
+        is None
+    )
+    assert log.latest(action="silence.detected", subject_id="S-0001", at_or_before=ist(2025, 9, 1)) is None
+    assert log.latest(action="trigger.fired", subject_id="S-0142", at_or_before=ist(2025, 9, 1)) is None
+    assert other not in {first, second}
+    with pytest.raises(ValueError, match="aware"):
+        log.latest(action="silence.detected", subject_id="S-0142", at_or_before=datetime(2025, 8, 21, 11, 21))

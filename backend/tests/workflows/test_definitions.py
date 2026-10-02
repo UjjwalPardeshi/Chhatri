@@ -30,7 +30,7 @@ def test_workflows_are_populated_at_import() -> None:
         ("execute_payout", 0),
         ("credit_payout", 4),
         ("notify_merchant", 4),
-        ("pause_instalment", 5),
+        ("request_holiday", 5),
     ]
     assert offsets("human-review") == [("open_case", 0), ("notify_officer", 0)]
     assert offsets("follow-up") == [("check_case_sla", 1440), ("notify_officer", 1440)]
@@ -46,7 +46,7 @@ def test_build_workflows_follows_the_rules() -> None:
         ("execute_payout", 0),
         ("credit_payout", 7),
         ("notify_merchant", 7),
-        ("pause_instalment", 9),
+        ("request_holiday", 9),
     ]
     assert built["follow-up"][0].delay_minutes_from_start == 120
     assert build_workflows(default_rules()) == WORKFLOWS

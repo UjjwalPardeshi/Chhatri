@@ -9,9 +9,10 @@ import pytest
 
 from chhatri.clock import ist
 from chhatri.conversation.messages import CATALOGUE
+from chhatri.conversation.ports import DisputeOutcome
 from chhatri.conversation.replies import explanation_message
 from chhatri.domain.enums import CoverStatus, MessageKind
-from chhatri.domain.models import Case, Explanation
+from chhatri.domain.models import Explanation
 from chhatri.sim.city import ANIL, RAMESH
 from chhatri.sim.slips import render_slip
 from tests.conversation.conftest import SILENT_DAY, World, make_world, z7_trigger
@@ -76,15 +77,31 @@ def test_explanation_for_a_share_other_than_half_uses_the_formula() -> None:
     assert explanation_message(_explanation(50, None)).key == "EXPLAIN_PERSONAL"
 
 
-async def test_dispute_without_a_payout_still_opens_a_case(world: World) -> None:
+async def test_dispute_without_a_decision_opens_no_case(world: World) -> None:
+    """K5: with nothing decided there is nothing to dispute; the reply says so and no case or chip is made."""
     replies = await world.service.handle_text(RAMESH.id, "paise bahut kam mile, galat hai")
-    assert [m.kind for m in replies] == [MessageKind.TEXT, MessageKind.TEXT, MessageKind.CASE_CHIP]
-    assert world.store.case("C-2291").merchant_id == RAMESH.id
+    assert [m.kind for m in replies] == [MessageKind.TEXT, MessageKind.TEXT]
+    assert replies[-1].text_en == (
+        "Our team looked at your question. No payout has been made on your account yet, "
+        "so there is no amount to change. Your claim tracker shows why."
+    )
+    assert world.store.cases() == ()
+
+
+async def test_a_second_dispute_for_the_same_decision_points_at_the_open_case(world: World) -> None:
+    world.claims.pay(world.claims.decide_area(ANIL, z7_trigger()))
+    first = await world.service.handle_text(ANIL.id, "मेरा नुकसान ज़्यादा हुआ।")
+    assert [m.kind for m in first] == [MessageKind.TEXT, MessageKind.TEXT, MessageKind.CASE_CHIP]
+    again = await world.service.handle_text(ANIL.id, "My loss was bigger than that.")
+    assert [m.kind for m in again] == [MessageKind.TEXT, MessageKind.TEXT, MessageKind.CASE_CHIP]
+    assert again[1].text_en == "Your question is already with our team. See case C-2291."
+    assert again[1].text_hi == "आपका सवाल पहले से हमारी टीम के पास है। केस C-2291 देखिए।"
+    assert again[2].meta["case_id"] == "C-2291" and len(world.store.cases()) == 1
 
 
 async def test_dispute_case_for_another_merchant_is_rejected(world: World) -> None:
-    async def wrong_case(merchant_id: str, text: str) -> Case:
-        return world.claims.cases.open(
+    async def wrong_case(merchant_id: str, text: str) -> DisputeOutcome:
+        case = world.claims.cases.open(
             kind="DISPUTE",
             merchant_id=RAMESH.id,
             at=world.clock.now(),
@@ -92,10 +109,16 @@ async def test_dispute_case_for_another_merchant_is_rejected(world: World) -> No
             summary_hi=None,
             evidence={},
         )
+        return DisputeOutcome(case=case)
 
     world.claims.open_dispute = wrong_case  # type: ignore[method-assign]
     with pytest.raises(ValueError, match="belongs to S-0907"):
         await world.service.handle_text(ANIL.id, "My loss was bigger than that.")
+
+
+def test_an_already_open_dispute_names_its_case() -> None:
+    with pytest.raises(ValueError, match="names its case"):
+        DisputeOutcome(case=None, already_open=True)
 
 
 @pytest.mark.parametrize(
@@ -209,3 +232,48 @@ async def test_cover_status_without_a_current_cover_is_a_purchase(status: CoverS
         world.store.put_cover(cover.model_copy(update={"status": status}))
     replies = await _texts(world, merchant.id, "do I have cover?")
     assert replies[-1][1].startswith("To buy cover for later")
+
+
+STATUS_ACTIVE_EN = "Your cover is active. Premium is paid through 22 August."
+STATUS_UNPAID_EN = "Your cover is active, but the premium for the coming days hasn't been paid yet."
+
+
+@pytest.mark.parametrize(
+    ("update", "expected_en"),
+    [
+        ({"status": CoverStatus.WAITING, "starts_on": date(2025, 8, 15)}, STATUS_ACTIVE_EN),
+        ({"status": CoverStatus.WAITING, "starts_on": date(2025, 8, 19)}, STATUS_ACTIVE_EN),
+        (
+            {
+                "status": CoverStatus.WAITING,
+                "starts_on": date(2025, 8, 15),
+                "prepaid_through": date(2025, 8, 1),
+            },
+            STATUS_UNPAID_EN,
+        ),
+        ({"status": CoverStatus.ACTIVE, "starts_on": date(2025, 8, 20)}, "Your cover starts on 20 August."),
+        ({"status": CoverStatus.WAITING, "starts_on": date(2025, 8, 20)}, "Your cover starts on 20 August."),
+    ],
+)
+async def test_cover_status_follows_the_derived_status(world: World, update: dict, expected_en: str) -> None:
+    """K6: the reply reads the status derived from the stored one and today, so WAITING turns ACTIVE on its day."""
+    cover = world.store.cover(ANIL.id)
+    assert cover is not None
+    world.store.put_cover(cover.model_copy(update=update))
+    assert (await _texts(world, ANIL.id, "Is my cover active?"))[0][1] == expected_en
+
+
+async def test_buy_cover_picks_the_blocked_now_line() -> None:
+    """K6-T06: an alert already in force gets "the alert that is in force now", a later one "tomorrow's alert"."""
+    now = make_world(start=ist(2025, 8, 19, 15, 0))
+    replies = await _texts(now, RAMESH.id, "Cover me today, there is a red alert.")
+    assert replies[0] == (
+        "नया कवर वेटिंग पीरियड के बाद शुरू होता है — 26 अगस्त से। यह अभी चल रहे अलर्ट पर लागू नहीं होगा।",
+        "New cover starts after the waiting period — from 26 August. "
+        "It won't apply to the alert that is in force now.",
+    )
+    later = make_world(start=ist(2025, 8, 18, 18, 10))
+    replies = await _texts(later, RAMESH.id, "Cover me today, there is a red alert.")
+    assert replies[0][1] == (
+        "New cover starts after the waiting period — from 25 August. It won't apply to tomorrow's alert."
+    )

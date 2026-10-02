@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Final, Protocol, runtime_checkable
 
-from chhatri.domain.enums import IntegrationMode, Language
+from chhatri.domain.enums import HolidayReason, HolidayStatus, IntegrationMode, Language
 from chhatri.domain.models import Merchant, SlipExtraction
 
 
@@ -228,3 +228,66 @@ class Announcement:
 @runtime_checkable
 class Soundbox(Protocol):
     async def announce(self, merchant_id: str, text: str, amount_paise: int) -> Announcement: ...
+
+
+# ---------------------------------------------------------------- lender (EDI holiday, X4)
+
+LENDER_BASIS: Final = "Pre-agreed rule: one instalment holiday after a credited Chhatri payout"
+MOVED_TO_END_OF_TENURE: Final = "END_OF_TENURE"
+
+
+@dataclass(frozen=True, slots=True)
+class LenderRequest:
+    """What Chhatri tells the lender (fs-03 section 7.3).
+
+    Only the fields the lender needs: no claim kind, no reason for the claim, no slip data and no amount of
+    the payout, so a hospital-cash payout is never revealed. ``request_id`` doubles as the idempotency key.
+    """
+
+    request_id: str
+    merchant_id: str
+    loan_id: str
+    decision_id: str
+    payout_id: str
+    payout_credited_at: datetime
+    instalment_date: date
+    instalment_paise: int
+    requested_at: datetime
+    basis: str = LENDER_BASIS
+
+
+@dataclass(frozen=True, slots=True)
+class LenderAnswer:
+    """The lender's answer: it grants (and moves the instalment, penalty 0) or refuses with a reason code."""
+
+    request_id: str
+    loan_id: str
+    decision: HolidayStatus
+    reason_code: HolidayReason | None
+    moved_to: str | None
+    penalty_paise: int
+    decided_at: datetime
+    lender: str
+
+    def __post_init__(self) -> None:
+        granted = self.decision is HolidayStatus.GRANTED
+        if self.decision not in (HolidayStatus.GRANTED, HolidayStatus.REFUSED):
+            raise ValueError(f"a lender answers GRANTED or REFUSED, not {self.decision}")
+        if granted and (self.reason_code is not None or self.moved_to != MOVED_TO_END_OF_TENURE):
+            raise ValueError("a grant has no reason code and moves the instalment to the end of the tenure")
+        if not granted and (self.reason_code is None or self.moved_to is not None):
+            raise ValueError("a refusal carries a reason code and moves nothing")
+
+
+class LenderNoResponse(IntegrationError):
+    """The lender gave no answer (forced to FALLBACK, or it did not reply in time). Never read as a grant."""
+
+    def __init__(self, safe_message: str = "no answer from the lender") -> None:
+        super().__init__("lender", safe_message)
+
+
+@runtime_checkable
+class Lender(Protocol):
+    """The port to the loan partner. One attempt per request id; raises `IntegrationError` when it cannot answer."""
+
+    async def request_holiday(self, request: LenderRequest) -> LenderAnswer: ...

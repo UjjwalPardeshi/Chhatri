@@ -3,7 +3,9 @@
 `DemoNumbers` holds the few free numbers of the story; `expectations` spells out every string,
 time and count the flows observe, built from those numbers with the same formats the product uses
 (``format_inr``, SPEC §9.6 formulas, §13.4 templates). `GOLDEN` are the SPEC §17.2 numbers the full
-artefacts must reproduce. The small test city is not calibrated, so its tests build `DemoNumbers`
+artefacts must reproduce. The instalment lines are the lender-decides set (X4, copy deck §3.3): the demo flag
+set includes ``x4_lender_request`` (`chhatri.api.demo.local.DEMO_FEATURES`), and the default simulated lender
+grants, so the storm still pauses every instalment and the numbers do not move. The small test city is not calibrated, so its tests build `DemoNumbers`
 from their own run and check every other string, time and count against it.
 """
 
@@ -23,7 +25,7 @@ ALERT_ID: Final = "A-20250818-01"  # SPEC §17.2
 FIRST_CASE: Final = "C-2291"  # SPEC §3, §12
 TRIGGER_TIME: Final = "17:00"
 CREDIT_TIME: Final = "17:04"  # B1: +payout_rail_delay_minutes
-PAUSE_TIME: Final = "17:05"  # B1: +instalment_pause_delay_minutes
+PAUSE_TIME: Final = "17:05"  # B1: +instalment_pause_delay_minutes; X4: the lender is asked, and grants, now
 CLAIM_TIME: Final = "11:21"  # the personal flows answer the 11:20 check-in a minute later
 CLAIM_CREDIT_TIME: Final = "11:25"
 CLAIM_PAUSE_TIME: Final = "11:26"  # B1: +instalment_pause_delay_minutes
@@ -134,8 +136,8 @@ def _monsoon_anil(n: DemoNumbers) -> Expected:
             f"{paid} received on Paytm, from Chhatri",
         ],
         "Anil instalment message": [
-            f"कल की {instalment} की किस्त रोक दी गई है।",
-            f"Tomorrow's {instalment} instalment is paused.",
+            f"आपके लेंडर ने कल की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+            f"Your lender has paused tomorrow's {instalment} instalment. It moves to the end of your loan with no penalty.",
         ],
         "Anil instalment paused": [f"{PAUSE_TIME} · {MONSOON_NEXT_DAY} · {instalment}"],
         "EXPLAINED why reply": [
@@ -171,7 +173,10 @@ def _illness(n: DemoNumbers) -> Expected:
         "slip decision": f"APPROVED · {paid} · {CLAIM_TIME}",
         "paid payout": f"{paid} · CREDITED {CLAIM_CREDIT_TIME}",
         "paid message": f"Anil ji, your claim is approved. {paid} credited with today's settlement.",
-        "instalment message": f"Today's {format_inr(n.instalment_paise)} instalment is paused.",
+        "instalment message": (
+            f"Your lender has paused today's {format_inr(n.instalment_paise)} instalment. "
+            "It moves to the end of your loan with no penalty."
+        ),
         "instalment paused": [f"{CLAIM_PAUSE_TIME} · {ILLNESS_DAY} · {format_inr(n.instalment_paise)}"],
         "loan": format_inr(n.instalment_paise),
         "audit chain valid": True,

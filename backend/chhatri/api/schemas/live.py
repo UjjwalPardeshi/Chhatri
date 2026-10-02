@@ -49,6 +49,8 @@ IntegrationName = Literal[
     "payout_rail",
     "lender",
     "kyc",
+    "gemini_chat",
+    "gemini_vision",
 ]
 ScenarioName = Literal["monsoon", "illness", "illness_mismatch", "buy_cover"]
 ZoneStatusName = Literal["normal", "watch", "triggered", "slow_day", "no_data"]
@@ -74,10 +76,24 @@ ZONE_ID_PATTERN = r"^Z\d{1,2}$"
 PERCENT_MAX = 1000  # indices may exceed 100 % on a good day; this only guards against garbage
 
 
+class LastCall(Schema):
+    at: IstTimestamp
+    outcome: str
+    ms: int | None = Field(default=None, ge=0)
+
+
 class IntegrationStatus(Schema):
+    """A component row. The X6 fields (`provider` onwards) are present only while flag `x6_provider_panel` is on."""
+
     name: IntegrationName
-    mode: Literal["LIVE", "SIMULATED"]
+    mode: Literal["LIVE", "SIMULATED", "FALLBACK"]
     detail: str
+    provider: str | None = None
+    model: str | None = None
+    fallback_reason: str | None = None
+    switchable: bool = False
+    forced: bool = False
+    last_call: LastCall | None = None
 
 
 class ClockState(Schema):

@@ -13,10 +13,11 @@ from datetime import date, datetime
 from typing import Final
 
 from chhatri.clock import IST
-from chhatri.domain.enums import CheckCode, CheckStatus, CoverStatus
+from chhatri.domain.enums import CheckCode, CheckStatus
 from chhatri.domain.models import Alert, AreaTrigger, CheckResult, Cover, SlipExtraction
 from chhatri.money import format_inr
 from chhatri.policy.catalogue import MEDICAL_DOCUMENT_TYPES, spec
+from chhatri.policy.cover import EffectiveStatus, effective_status
 from chhatri.policy.names import is_latin_name, name_match_score, normalise_name
 from chhatri.policy.rules import PolicyRules
 
@@ -55,16 +56,21 @@ def result(code: CheckCode, status: CheckStatus, detail_en: str, observed: str, 
 
 
 def cover_in_force(cover: Cover | None, event_date: date) -> CheckResult:
-    """COVER_IN_FORCE: cover exists, starts_on ≤ event_date, status ACTIVE."""
+    """COVER_IN_FORCE: a cover exists and its derived status on the event date is ACTIVE (K6, fs-07 section 5.3).
+
+    The status is derived from the stored one and `starts_on`, so a cover bought for the 25th that is stored as
+    WAITING still passes for a claim on or after the 25th.
+    """
     code, required = CheckCode.COVER_IN_FORCE, f"Active cover starting on or before {fmt_date(event_date)}"
     if cover is None:
         return result(code, FAIL, "This shop has no Chhatri cover.", "No cover", required)
-    observed = f"{cover.status.value.title()} cover from {fmt_date(cover.starts_on)}"
-    if cover.status is not CoverStatus.ACTIVE:
-        detail = f"Cover status is {cover.status.value}, not ACTIVE."
-        return result(code, FAIL, detail, observed, required)
-    if cover.starts_on > event_date:
+    status = effective_status(cover, event_date)
+    observed = f"{status.value.title()} cover from {fmt_date(cover.starts_on)}"
+    if status is EffectiveStatus.WAITING:
         detail = f"Cover starts on {fmt_date(cover.starts_on)}, after {fmt_date(event_date)}."
+        return result(code, FAIL, detail, observed, required)
+    if status is not EffectiveStatus.ACTIVE:
+        detail = f"Cover status is {status.value}, not ACTIVE."
         return result(code, FAIL, detail, observed, required)
     detail = f"Cover active since {fmt_date(cover.starts_on)}."
     return result(code, PASS, detail, observed, required)

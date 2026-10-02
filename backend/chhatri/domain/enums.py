@@ -93,6 +93,24 @@ class PayoutStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class HolidayStatus(StrEnum):
+    """Where an EDI holiday request stands (X4, fs-03 section 7.5). Only a grant creates a pause."""
+
+    REQUESTED = "REQUESTED"
+    GRANTED = "GRANTED"
+    REFUSED = "REFUSED"
+    NO_RESPONSE = "NO_RESPONSE"
+
+
+class HolidayReason(StrEnum):
+    """Why the lender refused, in the order it checks (fs-03 section 7.2): L4, L1, L2, L3."""
+
+    FLAG_OFF = "FLAG_OFF"
+    NOT_ACTIVE = "NOT_ACTIVE"
+    IN_ARREARS = "IN_ARREARS"
+    NO_ALLOWANCE = "NO_ALLOWANCE"
+
+
 class PremiumMethod(StrEnum):
     SETTLEMENT_DEDUCTION = "SETTLEMENT_DEDUCTION"
     PAYMENT_LINK = "PAYMENT_LINK"
@@ -143,3 +161,41 @@ class MessageKind(StrEnum):
 class IntegrationMode(StrEnum):
     LIVE = "LIVE"
     SIMULATED = "SIMULATED"
+    FALLBACK = "FALLBACK"  # a configured live adapter is forced off (X6); a simulator or template answers
+
+
+class SourceKind(StrEnum):
+    """What a Source points at (H13, fs-09 section 8.3)."""
+
+    RULES = "RULES"
+    CLAUSE = "CLAUSE"
+    ALERT = "ALERT"
+    SALES_INDEX = "SALES_INDEX"
+    FORECAST = "FORECAST"
+    ZONE_BOUND = "ZONE_BOUND"
+    COVER = "COVER"
+    PREMIUM = "PREMIUM"
+    KYC = "KYC"
+    SLIP = "SLIP"
+    SALES_DAY = "SALES_DAY"
+    PAYOUT_HISTORY = "PAYOUT_HISTORY"
+    LENDER = "LENDER"
+
+
+class SourceOrigin(StrEnum):
+    """Where the underlying record comes from; the chip always shows SIMULATED (fs-09 section 8.2)."""
+
+    LIVE = "LIVE"
+    SIMULATED = "SIMULATED"
+    FALLBACK = "FALLBACK"  # a configured live adapter is forced off (X6); a simulator or template answers
+    CONFIG = "CONFIG"
+
+
+class CounterfactualKind(StrEnum):
+    """What a counterfactual says (H14, fs-09 section 9.1)."""
+
+    FLIP_FROM_DECLINED = "FLIP_FROM_DECLINED"
+    FLIP_FROM_REFERRED = "FLIP_FROM_REFERRED"
+    AMOUNT_SENSITIVITY = "AMOUNT_SENSITIVITY"
+    ZONE_NO_TRIGGER = "ZONE_NO_TRIGGER"
+    EXPLAIN_ONLY = "EXPLAIN_ONLY"

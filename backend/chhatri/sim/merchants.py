@@ -9,6 +9,7 @@ inside the ward by construction of the grid (§5.2).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -63,17 +64,31 @@ def phone_for(number: int) -> str:
     return f"{PHONE_PREFIX}{number:05d}"
 
 
-def cover_for(number: int, purchased: date, hour: int, rules: PolicyRules) -> Cover:
-    """ACTIVE cover, waiting period from the rules, prepaid through `PREPAID_THROUGH` (SPEC §5.5)."""
+def cover_for(
+    number: int, purchased: date, hour: int, rules: PolicyRules, premium_per_day_paise: int | None = None
+) -> Cover:
+    """ACTIVE cover, waiting period from the rules, prepaid through `PREPAID_THROUGH` (SPEC §5.5).
+
+    The price per day is the minimum of the rules unless the caller knows the zone's price (K6-T04).
+    """
     return Cover(
         id=f"CV-{number:04d}",
         merchant_id=merchant_id(number),
         purchased_at=at(purchased, hour),
         starts_on=purchased + timedelta(days=rules.cover.waiting_period_days),
-        premium_per_day_paise=rupees(rules.premium.min_per_day_rupees),
+        premium_per_day_paise=premium_per_day_paise or rupees(rules.premium.min_per_day_rupees),
         prepaid_through=PREPAID_THROUGH,
         status=CoverStatus.ACTIVE,
     )
+
+
+def at_zone_price(cover: Cover, zone_id: str, premiums: Mapping[str, int]) -> Cover:
+    """The cover at its zone's daily price (K6-T04: Anil in Z7 pays ₹18.62, not the ₹2 minimum).
+
+    A zone with no entry keeps the price the cover has; the loader of the table names such zones (X3).
+    """
+    price = premiums.get(zone_id)
+    return cover if price is None else cover.model_copy(update={"premium_per_day_paise": price})
 
 
 def loan_for(number: int, daily_paise: int, remaining_days: int) -> Loan:

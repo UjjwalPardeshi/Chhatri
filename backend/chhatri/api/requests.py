@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictBool
 
 from chhatri.api.schemas import ScenarioName, WorkflowName, WorkflowStep
+from chhatri.api.schemas.live import PERCENT_MAX
 
 __all__ = [
     "LoadRequest",
@@ -22,6 +23,8 @@ __all__ = [
     "TextMessageRequest",
     "VoiceDemoKey",
     "VoiceDemoRequest",
+    "WhatIfOverrides",
+    "WhatIfRequest",
     "WorkflowCallbackRequest",
 ]
 
@@ -32,6 +35,9 @@ MAX_TEXT_CHARS: Final = 1000
 MAX_NOTE_CHARS: Final = 500
 MAX_ID_CHARS: Final = 128
 MERCHANT_ID_PATTERN: Final = r"^S-\d{4}$"
+ZONE_ID_PATTERN: Final = r"^Z\d{1,2}$"
+MAX_WINDOW_HOURS: Final = 12  # `area.consecutive_hours` is at most 12 (policy rules)
+MAX_SHOPS_IN_INDEX: Final = 100_000  # a guard against garbage, like PERCENT_MAX
 HHMM_PATTERN: Final = r"^([01]\d|2[0-3]):[0-5]\d$"
 SAMPLE_PATTERN: Final = r"^[a-z0-9_]{1,64}\.png$"
 VoiceDemoKey = Literal["why", "dispute", "ill", "cover"]
@@ -90,9 +96,14 @@ class OfficerNoteRequest(_Body):
 
 
 class PremiumLinkRequest(_Body):
-    """POST /api/premium/link ``{merchant_id}``."""
+    """POST /api/premium/link ``{merchant_id, consents?, notice_version?}``; the last two matter only with `n6_consents`."""
 
     merchant_id: str = Field(pattern=MERCHANT_ID_PATTERN)
+    consents: (
+        tuple[Literal["SALES_DATA_FOR_CLAIM", "SLIP_DATA_FOR_HOSPITAL_CLAIM", "SETTLEMENT_DEDUCTION"], ...]
+        | None
+    ) = Field(default=None, max_length=3)
+    notice_version: str | None = Field(default=None, max_length=32)
 
 
 class WorkflowCallbackRequest(_Body):
@@ -102,3 +113,23 @@ class WorkflowCallbackRequest(_Body):
     workflow: WorkflowName
     step: WorkflowStep
     payload: dict[str, Any]
+
+
+class WhatIfOverrides(_Body):
+    """The inputs a judge changes in the what-if drawer (fs-08 section 11.1); a missing key keeps the real value."""
+
+    alert: Literal["NONE", "RAIN", "CIVIC", "HEATWAVE"] | None = None
+    hourly_index_pct: list[Annotated[int, Field(strict=True, ge=0, le=PERCENT_MAX)]] | None = Field(
+        default=None, min_length=1, max_length=MAX_WINDOW_HOURS
+    )
+    shops_in_index: Annotated[int, Field(strict=True, ge=0, le=MAX_SHOPS_IN_INDEX)] | None = None
+    already_triggered_today: StrictBool | None = None
+
+
+class WhatIfRequest(_Body):
+    """POST /api/whatif/area ``{zone_id, at?, overrides?, example_merchant_id?}``; read-only (H24)."""
+
+    zone_id: str = Field(pattern=ZONE_ID_PATTERN)
+    at: AwareDatetime | None = None
+    overrides: WhatIfOverrides = Field(default_factory=WhatIfOverrides)
+    example_merchant_id: str | None = Field(default=None, pattern=MERCHANT_ID_PATTERN)

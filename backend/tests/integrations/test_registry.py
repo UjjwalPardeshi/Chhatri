@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 from chhatri.clock import ist
 from chhatri.config import DATA_DIR, Settings
-from chhatri.domain.enums import IntegrationMode
+from chhatri.domain.enums import HolidayStatus, IntegrationMode
+from chhatri.domain.models import Loan
 from chhatri.integrations import registry
+from chhatri.integrations.base import LenderRequest
+from chhatri.integrations.free_tier import GATE_CLOSED_DETAIL
+from chhatri.integrations.lender import SimulatedLender
 from chhatri.integrations.memory import SimulatedMemoryGraph
 from chhatri.integrations.memory_cognee import CogneeMemoryGraph
 from chhatri.integrations.n8n import N8nWorkflowEngine
@@ -43,6 +49,11 @@ SECRETS = (
 )
 
 
+def live_of(adapter: Any) -> Any:
+    """The live adapter behind an X6 wrapper (`integrations/switched.py`); anything else is returned as is."""
+    return getattr(adapter, "live", adapter)
+
+
 def offline() -> Settings:
     return Settings(_env_file=None, chhatri_internal_secret="internal-SECRET")  # type: ignore[call-arg]
 
@@ -61,6 +72,7 @@ def everything_live() -> Settings:
         chhatri_internal_secret="internal-SECRET",
         cognee_enabled=True,
         openmeteo_live=True,
+        chhatri_data_is_synthetic=True,  # ADR 0009: free-tier AI links run only on a synthetic deployment
     )
 
 
@@ -90,15 +102,56 @@ def test_offline_build_is_fully_simulated() -> None:
     assert all(s.detail for s in built.statuses)
 
 
+async def test_the_lender_is_always_simulated_and_answers_from_the_loan_book_it_is_given() -> None:
+    """X4: `Integrations.lender` is the simulated lender, with the city's loans as its own records."""
+    anil_loan = Loan(
+        id="LN-0142",
+        merchant_id="S-0142",
+        lender_name="Simulated lender (NBFC partner)",
+        daily_instalment_paise=60_000,
+        outstanding_paise=3_600_000,
+    )
+    built = registry.build_integrations(
+        offline(),
+        scheduler=FakeScheduler(ist(2025, 8, 19, 8, 0)),
+        step_handlers=RecordingHandlers(),
+        data_dir=DATA_DIR,
+        env={},
+        loans={"S-0142": anil_loan},
+    )
+    assert isinstance(built.lender, SimulatedLender)
+    assert modes(built)["lender"] is IntegrationMode.SIMULATED
+    request = LenderRequest(
+        request_id="HR-000001",
+        merchant_id="S-0142",
+        loan_id="LN-0142",
+        decision_id="D-000142",
+        payout_id="P-000142",
+        payout_credited_at=ist(2025, 8, 19, 17, 4),
+        instalment_date=date(2025, 8, 20),
+        instalment_paise=60_000,
+        requested_at=ist(2025, 8, 19, 17, 5),
+    )
+    assert (await built.lender.request_holiday(request)).decision is HolidayStatus.GRANTED
+    unknown = build(offline())  # no loan book: the lender holds no records, so nothing is in its scheme
+    assert (await unknown.lender.request_holiday(request)).decision is HolidayStatus.REFUSED
+
+
 def test_everything_live(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "load_cognee", lambda: SimpleNamespace(name="cognee"))
     built = build(everything_live(), env={"LLM_API_KEY": "llm"})
     mode = modes(built)
     assert {n for n, m in mode.items() if m is IntegrationMode.SIMULATED} == ALWAYS
-    assert isinstance(built.stt, LiveSarvamSTT) and isinstance(built.tts, LiveSarvamTTS)
-    assert isinstance(built.chat, LiveSarvamChat) and isinstance(built.slips, LiveSarvamSlipReader)
-    assert isinstance(built.channel, LiveWhatsAppChannel) and isinstance(built.payments, McpPaytmLinks)
-    assert isinstance(built.workflows, N8nWorkflowEngine) and isinstance(built.memory, CogneeMemoryGraph)
+    assert isinstance(live_of(built.stt), LiveSarvamSTT) and isinstance(live_of(built.tts), LiveSarvamTTS)
+    assert isinstance(live_of(built.chat), LiveSarvamChat) and isinstance(
+        live_of(built.slips), LiveSarvamSlipReader
+    )
+    assert isinstance(live_of(built.channel), LiveWhatsAppChannel) and isinstance(
+        live_of(built.payments), McpPaytmLinks
+    )
+    assert isinstance(live_of(built.workflows), N8nWorkflowEngine) and isinstance(
+        built.memory, CogneeMemoryGraph
+    )
     assert isinstance(built.weather, LiveOpenMeteo)
     details = " ".join(s.detail for s in built.statuses)
     assert not any(secret in details for secret in SECRETS)
@@ -122,7 +175,9 @@ def test_paytm_rest_mode_and_cognee_reasons(monkeypatch: pytest.MonkeyPatch) -> 
     )
     monkeypatch.setattr(registry, "load_cognee", lambda: None)
     built = build(settings)
-    assert isinstance(built.payments, RestPaytmLinks) and modes(built)["paytm"] is IntegrationMode.LIVE
+    assert (
+        isinstance(live_of(built.payments), RestPaytmLinks) and modes(built)["paytm"] is IntegrationMode.LIVE
+    )
     assert "staging" in {s.name: s.detail for s in built.statuses}["paytm"]
     memory = {s.name: s for s in built.statuses}["memory"]
     assert memory.mode is IntegrationMode.SIMULATED and "not installed" in memory.detail
@@ -168,8 +223,10 @@ def test_demo_utterances_exported() -> None:
 def test_live_whatsapp_state_survives_scenario_reloads() -> None:
     """SPEC §14.2: the 24 h window and message-id idempotency are real WhatsApp state, not scenario state."""
     first, second = build(everything_live()), build(everything_live())
-    assert isinstance(first.channel, LiveWhatsAppChannel) and isinstance(second.channel, LiveWhatsAppChannel)
-    assert first.channel.gate is second.channel.gate is registry.LIVE_WHATSAPP_GATE
+    assert isinstance(live_of(first.channel), LiveWhatsAppChannel) and isinstance(
+        live_of(second.channel), LiveWhatsAppChannel
+    )
+    assert live_of(first.channel).gate is live_of(second.channel).gate is registry.LIVE_WHATSAPP_GATE
     event = TextEvent("wamid.reload-test", ist(2025, 8, 19, 17, 0), "919812345678", "hi")
     assert first.channel.accept_inbound(event) is True
     assert second.channel.accept_inbound(event) is False
@@ -182,4 +239,27 @@ def test_live_whatsapp_state_survives_scenario_reloads() -> None:
         env={},
         whatsapp_gate=own,
     )
-    assert isinstance(isolated.channel, LiveWhatsAppChannel) and isolated.channel.gate is own
+    assert (
+        isinstance(live_of(isolated.channel), LiveWhatsAppChannel) and live_of(isolated.channel).gate is own
+    )
+
+
+def test_a_closed_data_gate_keeps_every_free_tier_ai_component_simulated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR 0009: with keys set but CHHATRI_DATA_IS_SYNTHETIC false, the WhatsApp-style flows (voice notes, intents,
+    photos, the Soundbox voice) and Cognee make zero free-tier calls, and the rows say why."""
+    monkeypatch.setattr(registry, "load_cognee", lambda: SimpleNamespace(name="cognee"))
+    closed = everything_live().model_copy(update={"chhatri_data_is_synthetic": False})
+    built = build(closed, env={"LLM_API_KEY": "llm"})
+    gated = {"sarvam_stt", "sarvam_tts", "sarvam_chat", "sarvam_vision", "memory"}
+    rows = {s.name: s for s in built.statuses}
+    assert all(rows[name].mode is IntegrationMode.SIMULATED for name in gated)
+    assert all(GATE_CLOSED_DETAIL in rows[name].detail for name in gated)
+    assert isinstance(built.stt, SimulatedSTT) and isinstance(built.tts, SimulatedTTS)
+    assert built.chat is None and isinstance(built.slips, SimulatedSlipReader)
+    assert isinstance(built.memory, SimulatedMemoryGraph)
+    assert "voiced by Sarvam" not in rows["soundbox"].detail
+    assert (
+        modes(built)["whatsapp"] is IntegrationMode.LIVE
+    )  # not a free-tier AI service: the gate leaves it alone

@@ -19,6 +19,7 @@ from chhatri.api.schemas import (
     PolicyView,
     PremiumLinkResult,
 )
+from chhatri.domain.enums import CaseStatus
 from tests.api.fakes import FakeAppState
 from tests.api.helpers import data_of, error_of, list_of
 
@@ -66,6 +67,27 @@ async def test_officer_approves_in_one_tap(
 async def test_officer_declines_without_a_note(client: AsyncClient, officer: dict[str, str]) -> None:
     result = data_of(await client.post("/api/cases/C-2291/decline", headers=officer), OfficerActionResult)
     assert (result.decision.outcome, result.case.status) == ("DECLINED", "DECLINED")
+
+
+async def test_officer_closes_a_dispute_that_names_no_decision(
+    client: AsyncClient,
+    officer: dict[str, str],
+    fake_state: FakeAppState,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """K5: the orchestrator returns None for it, so the result has a null decision and the closed case."""
+    runtime = fake_state.runtime
+
+    async def close_with_no_decision(case_id: str, *, approve: bool, officer_id: str, note: str) -> None:
+        case = runtime.store.case(case_id)
+        resolved = {"status": CaseStatus.CLOSED, "resolution": note, "resolved_by": officer_id}
+        runtime.store.replace_case(case.model_copy(update=resolved | {"resolved_at": runtime.clock.now()}))
+
+    monkeypatch.setattr(runtime.orchestrator, "officer_decide", close_with_no_decision)
+    response = await client.post("/api/cases/C-2291/approve", json={"note": "no payout yet"}, headers=officer)
+    result = data_of(response, OfficerActionResult)
+    assert result.decision is None
+    assert (result.case.status, result.case.resolution) == ("CLOSED", "no payout yet")
 
 
 async def test_officer_action_errors(client: AsyncClient, officer: dict[str, str]) -> None:

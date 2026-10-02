@@ -27,8 +27,9 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, Final
 
 from chhatri.clock import IST
+from chhatri.conversation.ports import DisputeOutcome
 from chhatri.domain.enums import DecisionOutcome, PremiumStatus
-from chhatri.domain.models import Case, CoverQuote, Decision, PremiumPayment, SlipExtraction
+from chhatri.domain.models import CoverQuote, Decision, PremiumPayment, SlipExtraction
 from chhatri.integrations.base import IntegrationError
 from chhatri.money import format_inr
 from chhatri.policy.cover import evaluate_cover_purchase
@@ -72,6 +73,9 @@ class Orchestrator:
         """At load: audit the load, initial zone states, alerts already issued, first KPIs."""
         rt = self._link.rt
         scenario = rt.scenario
+        forced = (
+            rt.integrations.switch.forced
+        )  # X6: only a non-empty set is recorded, so golden audit hashes do not move
         rt.audit.append(
             at=scenario.start,
             actor=SYSTEM_ACTOR,
@@ -84,6 +88,7 @@ class Orchestrator:
                 "end": scenario.end.isoformat(),
                 "seed": rt.static.settings.chhatri_seed,
                 "rules_version": rt.static.rules.version,
+                **({"forced_components": list(forced)} if forced else {}),
             },
         )
         self._area.initial_board(scenario.start)
@@ -147,8 +152,13 @@ class Orchestrator:
             raise ValueError(f"case {case.id} is not for merchant {payload['merchant_id']}")
         return case.opened_at
 
-    async def officer_decide(self, case_id: str, *, approve: bool, officer_id: str, note: str) -> Decision:
-        """One-tap officer decision (SPEC §9.4); ValueError unless the case is OPEN."""
+    async def officer_decide(
+        self, case_id: str, *, approve: bool, officer_id: str, note: str
+    ) -> Decision | None:
+        """One-tap officer decision (SPEC §9.4); ValueError unless the case is OPEN.
+
+        None only for a dispute that named no decision: the case is closed and there is nothing to return (K5).
+        """
         decision = await self._officer.decide(case_id, approve=approve, officer_id=officer_id, note=note)
         await self._drain()
         return decision
@@ -184,11 +194,11 @@ class Orchestrator:
         await self._drain()
         return decision
 
-    async def open_dispute(self, merchant_id: str, text: str) -> Case:
-        """ClaimsPort: a DISPUTE case for a human (SPEC §13.5)."""
-        case = await self._cases.open_dispute(merchant_id, text)
+    async def open_dispute(self, merchant_id: str, text: str) -> DisputeOutcome:
+        """ClaimsPort: a DISPUTE case for a human (SPEC §13.5), unless there is nothing to dispute (K5)."""
+        outcome = await self._cases.open_dispute(merchant_id, text)
         await self._drain()
-        return case
+        return outcome
 
     async def quote_cover(self, merchant_id: str) -> tuple[CoverQuote, PremiumPayment | None]:
         """ClaimsPort: quote cover and create the premium link (SPEC §9.5, §14.3).

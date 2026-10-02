@@ -16,6 +16,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Final
 
 from chhatri.conversation.messages import bilingual, name_facts
@@ -26,12 +28,35 @@ from chhatri.conversation.replies import case_chip
 from chhatri.domain.enums import DecisionOutcome
 from chhatri.domain.models import Decision, Merchant, Message, SlipExtraction
 from chhatri.integrations.base import IntegrationError, SlipReader
+from chhatri.precheck.chat import chat_outgoing
+from chhatri.precheck.clean import UncleanableImage
+from chhatri.precheck.service import PrecheckConflict, SlipPrecheckService
 from chhatri.store.protocols import AuditSink
 
 logger = logging.getLogger(__name__)
 
 READ_FAILED_SOURCE: Final = "read-failed"
 SLIP_FIELDS: Final = ("patient_name", "admission_date", "discharge_date", "hospital_name", "document_type")
+
+
+@dataclass(frozen=True, slots=True)
+class FiledSlip:
+    """A slip filed as a personal claim: the engine's decision and what the merchant was told."""
+
+    decision: Decision
+    messages: tuple[Message, ...]
+
+
+PrecheckResolver = Callable[[], SlipPrecheckService | None]
+"""None while `n3_slip_precheck` is off: the photo is read and decided in one step, exactly as before."""
+
+
+def _no_precheck() -> SlipPrecheckService | None:
+    return None
+
+
+def _everyone_agreed(merchant_id: str) -> bool:
+    return True  # `n6_consents` off: the slip gate passes
 
 
 class SlipFlow:
@@ -45,7 +70,11 @@ class SlipFlow:
         store: ConversationStore,
         reader: SlipReader,
         audit: AuditSink,
+        precheck: PrecheckResolver = _no_precheck,
+        slip_consent: Callable[[str], bool] = _everyone_agreed,
     ) -> None:
+        self._precheck = precheck
+        self._slip_consent = slip_consent
         self._outbox = outbox
         self._claims = claims
         self._store = store
@@ -55,15 +84,36 @@ class SlipFlow:
     async def reply(self, merchant: Merchant, image: bytes, mime: str, media_id: str) -> tuple[Message, ...]:
         if self._claims.open_silence(merchant.id) is None:
             return (await self._outbox.send(merchant, Outgoing.text("PHOTO_NOT_NEEDED")),)
+        if not self._slip_consent(merchant.id):  # N6: nothing is read, and the check-in stays open
+            return (await self._outbox.send(merchant, Outgoing.text("SLIP_CONSENT_NEEDED")),)
+        service = self._precheck()
+        if service is not None:
+            return await self._show_precheck(service, merchant, image, mime)
         slip = await self._read(merchant, image, mime, media_id)
+        return (await self.file(merchant, slip, media_id)).messages
+
+    async def file(self, merchant: Merchant, slip: SlipExtraction, media_id: str) -> FiledSlip:
+        """Decide a personal claim for `slip` and tell the merchant (the pre-check's confirm calls this too)."""
         decision = await self._claims.submit_personal_claim(merchant.id, slip, media_id)
         if decision.merchant_id != merchant.id:
             raise ValueError(f"decision {decision.id} is for {decision.merchant_id}, not {merchant.id}")
         if decision.outcome is DecisionOutcome.APPROVED:
-            return ()
+            return FiledSlip(decision, ())
         if decision.outcome is DecisionOutcome.REFERRED:
-            return await self._referred(merchant, decision)
-        return (await self._declined(merchant, decision),)
+            return FiledSlip(decision, await self._referred(merchant, decision))
+        return FiledSlip(decision, (await self._declined(merchant, decision),))
+
+    async def _show_precheck(
+        self, service: SlipPrecheckService, merchant: Merchant, image: bytes, mime: str
+    ) -> tuple[Message, ...]:
+        """Flag on: read the photo and show it. Nothing is decided until the merchant confirms (fs-02 8.3)."""
+        try:
+            pc = await service.precheck(merchant.id, image, mime)
+        except PrecheckConflict:
+            return (await self._outbox.send(merchant, Outgoing.text("SLIP_PHOTO_LIMIT")),)
+        except UncleanableImage:
+            return (await self._outbox.send(merchant, Outgoing.text("SLIP_RETAKE_CLEAR")),)
+        return (await self._outbox.send(merchant, chat_outgoing(pc, minimum=service.minimum)),)
 
     async def _read(self, merchant: Merchant, image: bytes, mime: str, media_id: str) -> SlipExtraction:
         try:

@@ -8,12 +8,25 @@ satisfied structurally by the real classes (SPEC §24.4 passes ``store: Store`` 
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from typing import Protocol, runtime_checkable
 
 from chhatri.domain.enums import CaseStatus
 from chhatri.domain.models import Case, Cover, CoverQuote, Decision, Merchant, PremiumPayment, SlipExtraction
 from chhatri.store.protocols import MessageLog
+
+
+@dataclass(frozen=True, slots=True)
+class DisputeOutcome:
+    """What "my loss was bigger" led to (K5): a new case, the case still open for that decision, or no case at all."""
+
+    case: Case | None  # None: no decision has settled a claim yet, so there is nothing to dispute
+    already_open: bool = False
+
+    def __post_init__(self) -> None:
+        if self.already_open and self.case is None:
+            raise ValueError("an already open dispute names its case")
 
 
 @runtime_checkable
@@ -24,8 +37,11 @@ class ClaimsPort(Protocol):
         """Build the personal claim from the slip, decide it; for REFERRED open the review case."""
         ...
 
-    async def open_dispute(self, merchant_id: str, text: str) -> Case:
-        """Open a DISPUTE case for the merchant's latest payout (SPEC §12)."""
+    async def open_dispute(self, merchant_id: str, text: str) -> DisputeOutcome:
+        """Open a DISPUTE case for the merchant's latest settled decision (SPEC §12, K5).
+
+        No decision yet: no case. A case already open for the same decision is returned, not duplicated.
+        """
         ...
 
     async def quote_cover(self, merchant_id: str) -> tuple[CoverQuote, PremiumPayment | None]:

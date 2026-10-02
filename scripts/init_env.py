@@ -4,7 +4,8 @@
 Copies `.env.example` line by line and fills every *empty* `KEY=` whose key is in GENERATED_KEYS
 (`CHHATRI_INTERNAL_SECRET`, `N8N_ENCRYPTION_KEY`) with a random URL-safe token. The file is written
 with mode 0600. An existing `.env` is never overwritten: it is only checked, and the command fails when
-`CHHATRI_INTERNAL_SECRET` is missing or empty there (docker compose and n8n need it). Stdlib only, so it
+`CHHATRI_INTERNAL_SECRET` is missing or empty there (docker compose and n8n need it), and warns when
+`CHHATRI_DATA_IS_SYNTHETIC` is not true (ADR 0009: the free-tier AI gate stays closed). Stdlib only, so it
 runs before `make setup`. Secrets are never printed.
 """
 
@@ -23,6 +24,9 @@ from typing import Final
 REPO_ROOT: Final = Path(__file__).resolve().parent.parent
 GENERATED_KEYS: Final = ("CHHATRI_INTERNAL_SECRET", "N8N_ENCRYPTION_KEY")
 REQUIRED_KEY: Final = "CHHATRI_INTERNAL_SECRET"
+SYNTHETIC_KEY: Final = (
+    "CHHATRI_DATA_IS_SYNTHETIC"  # ADR 0009: unset closes the free-tier AI gate (safe, but no AI)
+)
 TOKEN_BYTES: Final = 32
 FILE_MODE: Final = 0o600
 ASSIGNMENT: Final = re.compile(r"^(?P<key>[A-Z][A-Z0-9_]*)=(?P<value>.*)$")
@@ -60,6 +64,14 @@ def check_existing(target: Path) -> int:
             REQUIRED_KEY,
         )
         return 1
+    if values.get(SYNTHETIC_KEY, "").strip().lower() != "true":
+        logger.warning(
+            "%s has no %s=true, so the free-tier AI gate stays closed and Gemini and Sarvam are never called "
+            "(ADR 0009). Add %s=true if this deployment's data is synthetic",
+            target,
+            SYNTHETIC_KEY,
+            SYNTHETIC_KEY,
+        )
     logger.info("%s already exists; left unchanged", target)
     return 0
 

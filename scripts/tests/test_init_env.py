@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import stat
 from pathlib import Path
+
+import pytest
 
 import init_env
 
@@ -56,3 +59,19 @@ def test_example_without_secret_line_writes_nothing(tmp_path: Path) -> None:
 def test_unwritable_target_is_reported(tmp_path: Path, repo_root: Path) -> None:
     target = tmp_path / "missing-dir" / ".env"
     assert init_env.main(["--example", str(repo_root / ".env.example"), "--target", str(target)]) == 1
+
+
+def test_existing_env_without_the_synthetic_declaration_warns_and_passes(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """ADR 0009: a closed data gate is safe (it fails closed), so it is a warning that says how to open it."""
+    target = tmp_path / ".env"
+    target.write_text("CHHATRI_INTERNAL_SECRET=abc\n", encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="init_env"):
+        assert init_env.main(["--target", str(target)]) == 0
+    assert "CHHATRI_DATA_IS_SYNTHETIC=true" in caplog.text
+    caplog.clear()
+    target.write_text("CHHATRI_INTERNAL_SECRET=abc\nCHHATRI_DATA_IS_SYNTHETIC=true\n", encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="init_env"):
+        assert init_env.main(["--target", str(target)]) == 0
+    assert "CHHATRI_DATA_IS_SYNTHETIC" not in caplog.text

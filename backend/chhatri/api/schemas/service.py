@@ -34,7 +34,7 @@ WorkflowName = Literal["payout", "human-review", "follow-up"]
 WorkflowStep = Literal[
     "execute_payout",
     "credit_payout",
-    "pause_instalment",
+    "request_holiday",
     "notify_merchant",
     "open_case",
     "notify_officer",
@@ -121,9 +121,12 @@ class PremiumLinkResult(Schema):
 
 
 class OfficerActionResult(Schema):
-    """POST /api/cases/{id}/approve|decline: the officer's decision and the resolved case (SPEC §12)."""
+    """POST /api/cases/{id}/approve|decline: the officer's decision and the resolved case (SPEC §12).
 
-    decision: Decision
+    ``decision`` is null only for a dispute that named no decision, which the officer closes with a note (K5).
+    """
+
+    decision: Decision | None
     case: Case
 
 

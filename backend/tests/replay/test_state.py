@@ -64,6 +64,9 @@ async def test_a_load_builds_a_fresh_runtime_paused_at_the_scenario_start(static
     assert rows["scenario"]["ok"] and rows["clock"]["ok"] and rows["audit"]["ok"]
     assert rows["clock"]["detail"] == "2025-08-19 08:00 simulated, paused"
     assert all(row["ok"] for name, row in rows.items() if name.startswith("integration:"))
+    # X6 (data-model 5.6): the preflight lists all 17 components, the Gemini rows included
+    assert sum(name.startswith("integration:") for name in rows) == 17
+    assert rows["integration:gemini_chat"]["detail"].startswith("SIMULATED")
     await state.shutdown()
     with pytest.raises(RuntimeError):
         _ = state.runtime

@@ -10,12 +10,26 @@ out, written in the same voice:
   ``SLIP_TO_HUMAN`` frame ("धन्यवाद। …, इसलिए हमारी टीम इसे देखेगी। 24 घंटे में जवाब मिलेगा।").
 - ``INSTALMENT_PAUSED_TODAY`` / ``_ON`` — a personal claim for Wednesday pauses Thursday's instalment
   and is paid on Thursday (§17.2), so "tomorrow's" would be false; the date decides the wording.
+- ``HOLIDAY_GRANTED`` / ``_TODAY`` / ``_ON``, ``HOLIDAY_REFUSED``, ``HOLIDAY_NO_RESPONSE`` and the four
+  ``HOLIDAY_REASON_*`` fragments (X4, fs-03 §8, copy deck §3.3): the lender decides the EDI holiday, so every
+  line names the lender and none says Chhatri paused. They are sent only after the lender's answer (or its
+  silence) and serve the flag-on path; the three ``INSTALMENT_PAUSED*`` keys above serve the flag-off path
+  until the freeze decision removes them. The dated variants take ``date_hi``/``date_en`` (granted) and
+  ``when_hi``/``when_en`` (refused, no answer: "tomorrow", "today" or "on 25 August").
 - ``EXPLAIN_PERSONAL`` / ``EXPLAIN_AREA_FORMULA`` — §13.5 WHY_AMOUNT "(or personal equivalent)",
   filled with the §9.6 formula strings, which reproduce the amount from the shown numbers (§4.3).
 - ``PAYOUT_CARD_BADGE*`` — the §13.4 card badge ("No claim needed") and its personal/officer forms.
 - ``PREMIUM_PAID_STARTS`` / ``_ACTIVE`` — the confirmation after Paytm's paid callback (SPEC §10
   ``PremiumService`` "on paid callback, extend prepaid_through"): the amount received and the
   cover dates, so a merchant who bought cover after an alert sees when it starts (§9.5).
+- ``COVER_STATUS_NONE`` / ``COVER_BLOCKED_NOW`` (K6-T06, fs-07 section 8.3, copy deck 2.5): the status text of a merchant
+  with no cover, and the BLOCKED line for an alert that is already in force ("tomorrow's alert" would be false).
+- ``DISPUTE_NO_PAYOUT`` / ``DISPUTE_ALREADY_OPEN`` (K5, fs-06 section 10, copy deck 13.2): a question about an amount when
+  there is no payout to question, and a second one while a case for that decision is open.
+- ``TRACK_*`` (K5, copy deck 3.2): the reason line of each step of the claim tracker (`replay.view_claims`), in both
+  languages, so the app words nothing about money or eligibility itself.
+- ``SRC_*``, ``FACT_*`` and ``CF_*`` (H13 and H14, copy deck 5 and 6): the labels of a Source and of a money fact
+  and the counterfactual sentences, which the engine fills from the fields of its own re-run.
 - decline reasons, cover status, check-in follow-ups, "voice unclear", "photo not needed" and
   "payment link unavailable" replies.
 
@@ -33,6 +47,8 @@ from datetime import date
 from types import MappingProxyType
 from typing import Final, Literal
 
+from chhatri.conversation.consent_text import CONSENT_LINES
+from chhatri.conversation.slip_precheck_text import SLIP_PRECHECK_LINES
 from chhatri.domain.models import Merchant
 
 Lang = Literal["hi", "en"]
@@ -131,6 +147,39 @@ _ENTRIES: Final[dict[str, Template]] = {
         "{date_hi} की {instalment} की किस्त रोक दी गई है।",
         "The {instalment} instalment due on {date_en} is paused.",
     ),
+    "HOLIDAY_GRANTED": Template(
+        "आपके लेंडर ने कल की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        "Your lender has paused tomorrow's {instalment} instalment. It moves to the end of your loan with no penalty.",
+    ),
+    "HOLIDAY_GRANTED_TODAY": Template(
+        "आपके लेंडर ने आज की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        "Your lender has paused today's {instalment} instalment. It moves to the end of your loan with no penalty.",
+    ),
+    "HOLIDAY_GRANTED_ON": Template(
+        "आपके लेंडर ने {date_hi} की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        "Your lender has paused the {instalment} instalment due on {date_en}. "
+        "It moves to the end of your loan with no penalty.",
+    ),
+    "HOLIDAY_REFUSED": Template(
+        "आपका लेंडर {when_hi} की {instalment} की किस्त नहीं रोक सका: {reason_hi}। वह हमेशा की तरह देय है। "
+        "आपके भुगतान पर इसका कोई असर नहीं पड़ता।",
+        "Your lender could not pause the {instalment} instalment due {when_en}: {reason_en}. "
+        "It is due as usual. Your payout is not affected.",
+    ),
+    "HOLIDAY_NO_RESPONSE": Template(
+        "हम {when_hi} की {instalment} की किस्त के बारे में आपके लेंडर तक नहीं पहुँच सके, इसलिए वह हमेशा की तरह देय है। "
+        "आपके भुगतान पर इसका कोई असर नहीं पड़ता।",
+        "We could not reach your lender about the {instalment} instalment due {when_en}, "
+        "so it is due as usual. Your payout is not affected.",
+    ),
+    "HOLIDAY_REASON_FLAG_OFF": Template(
+        "यह लोन किस्त की छुट्टी की योजना में शामिल नहीं है", "this loan is not part of the holiday scheme"
+    ),
+    "HOLIDAY_REASON_NOT_ACTIVE": Template("लोन चालू नहीं है", "the loan is not active"),
+    "HOLIDAY_REASON_IN_ARREARS": Template("लोन की कुछ रकम बकाया है", "the loan has an amount overdue"),
+    "HOLIDAY_REASON_NO_ALLOWANCE": Template(
+        "आपकी किस्त की छुट्टियों की सीमा पूरी हो चुकी है", "your holiday allowance is used up"
+    ),
     "EXPLAIN_PERSONAL": Template(
         "आपके दावे का हिसाब: {formula_hi}", "How your claim was worked out: {formula_en}"
     ),
@@ -194,6 +243,160 @@ _ENTRIES: Final[dict[str, Template]] = {
         "आपका कवर चालू है, पर आगे के दिनों का प्रीमियम अभी जमा नहीं है।",
         "Your cover is active, but the premium for the coming days hasn't been paid yet.",
     ),
+    "COVER_STATUS_NONE": Template("अभी कवर नहीं है", "No cover yet"),
+    "COVER_BLOCKED_NOW": Template(
+        "नया कवर वेटिंग पीरियड के बाद शुरू होता है — {starts_on_hi} से। यह अभी चल रहे अलर्ट पर लागू नहीं होगा।",
+        "New cover starts after the waiting period — from {starts_on_en}. "
+        "It won't apply to the alert that is in force now.",
+    ),
+    "DISPUTE_NO_PAYOUT": Template(
+        "हमारी टीम ने आपका सवाल देखा। आपके खाते में अभी कोई भुगतान नहीं हुआ है, इसलिए बदलने के लिए कोई रकम नहीं है। "
+        "आपके दावों के ट्रैकर में कारण दिखता है।",
+        "Our team looked at your question. No payout has been made on your account yet, "
+        "so there is no amount to change. Your claim tracker shows why.",
+    ),
+    "DISPUTE_ALREADY_OPEN": Template(
+        "आपका सवाल पहले से हमारी टीम के पास है। केस {case_id} देखिए।",
+        "Your question is already with our team. See case {case_id}.",
+    ),
+    "TRACK_DETECTED_AREA": Template(
+        "अलर्ट के दौरान आपके इलाके की बिक्री {drop}% गिरी।", "Your area's sales fell {drop}% during the alert."
+    ),
+    "TRACK_DETECTED_PERSONAL": Template(
+        "{dates_hi} को आपकी दुकान में कोई बिक्री नहीं हुई।", "Your shop had no sales on {dates_en}."
+    ),
+    "TRACK_CHECKED_OK": Template("सभी {passed} जाँचें पास हुईं।", "All {passed} checks passed."),
+    "TRACK_CHECKED_FAILED": Template("एक ज़रूरी जाँच पास नहीं हुई।", "A required check did not pass."),
+    "TRACK_REFERRED_UNREADABLE": Template("पर्ची साफ़ नहीं पढ़ी जा सकी।", "The slip could not be read clearly."),
+    "TRACK_REFERRED_NAME": Template(
+        "पर्ची का नाम आपके KYC से मेल नहीं खाता।", "The name on the slip does not match your KYC."
+    ),
+    "TRACK_REFERRED_DATES": Template(
+        "पर्ची की तारीख़ें दुकान बंद रहने के दिनों से मेल नहीं खातीं।",
+        "The slip dates do not match the days your shop was closed.",
+    ),
+    "TRACK_REFERRED_DAYS": Template(
+        "यह दावा अपने-आप भुगतान के दिनों से ज़्यादा दिनों का है।",
+        "This claim covers more days than are paid automatically.",
+    ),
+    "TRACK_PAID_ETA": Template(
+        "लगभग {minutes} मिनट में जमा होगा (डेमो घड़ी)।", "Credit in about {minutes} minutes (demo clock)."
+    ),
+    "TRACK_PAID_FAILED": Template(
+        "भुगतान नहीं हो पाया। कृपया हमारी टीम से बात करें।",
+        "The payout did not go through. Please talk to our team.",
+    ),
+    "TRACK_EDI_REQUESTED": Template(
+        "हमने आपके लेंडर से कहा है। फ़ैसला लेंडर का होता है।", "We asked your lender. The lender decides."
+    ),
+    "TRACK_EDI_REFUSED": Template(
+        "उपलब्ध नहीं। आपकी किस्त हमेशा की तरह देय है।", "Not available. Your instalment is due as usual."
+    ),
+    "TRACK_EDI_REFUSED_WHY": Template("लेंडर ने मना किया: {reason_hi}।", "The lender said no: {reason_en}."),
+    "TRACK_EDI_NO_RESPONSE": Template(
+        "हम आपके लेंडर तक नहीं पहुँच सके। आपकी किस्त हमेशा की तरह देय है।",
+        "We could not reach your lender. Your instalment is due as usual.",
+    ),
+    "TRACK_EDI_NONE": Template("कोई लोन दर्ज नहीं", "No loan on file"),
+    # ---- H13 sources and H14 counterfactuals (fs-09 sections 8 and 9, copy deck 5 and 6) ---------------
+    # The label of a Source is one of these (an alert's label is its own `source` text), and a label never says that an
+    # outside body verified a value. The money-fact labels (FACT_*) head the numbers of the receipt's explanation.
+    "SRC_RULES": Template("छतरी के नियम {rules_version}", "Chhatri rules {rules_version}"),
+    "SRC_CLAUSE": Template("पॉलिसी का खंड {clause}", "Policy clause {clause}"),
+    "SRC_SALES_INDEX": Template("इलाके की बिक्री का हिसाब", "Area sales index"),
+    "SRC_FORECAST": Template(
+        "आपका आम दिन, आपकी पिछली बिक्री से निकाला गया", "Your usual day, worked out from your past sales"
+    ),
+    "SRC_ZONE_BOUND": Template("आपके इलाके का आम दायरा", "Usual range for your area"),
+    "SRC_COVER": Template("आपके कवर का रिकॉर्ड", "Your cover record"),
+    "SRC_PREMIUM": Template("आपका प्रीमियम भुगतान", "Your premium payment"),
+    "SRC_KYC": Template("आपके Paytm खाते का नाम (KYC)", "Name on your Paytm account (KYC)"),
+    "SRC_SLIP": Template("अस्पताल की पर्ची, जैसी पढ़ी गई", "Hospital slip, as read"),
+    "SRC_SALES_DAY": Template("उस दिन की आपकी बिक्री", "Your sales for the day"),
+    "SRC_PAYOUT_HISTORY": Template("आपको पहले मिले भुगतान", "Your earlier payouts"),
+    "SRC_LENDER": Template("लेंडर का जवाब", "Lender's answer"),
+    "FACT_EXPECTED_DAY": Template("आपका आम {weekday_hi}", "Your usual {weekday_en}"),
+    "FACT_AREA_INDEX": Template("इलाके का इंडेक्स", "Area index"),
+    "FACT_DROP_PCT": Template("इलाके की गिरावट", "Area drop"),
+    "FACT_SHARE": Template("छतरी देती है", "Chhatri pays"),
+    "FACT_CAP": Template("एक दिन में ज़्यादा से ज़्यादा", "Most paid for one day"),
+    "FACT_DAYS": Template("दावे के दिन", "Days claimed"),
+    "FACT_AMOUNT": Template("रकम", "Amount"),
+    "CF_FRAME": Template("अगर {condition}, तो {result}।", "If {condition}, {result}."),
+    "CF_JOIN_AND": Template("और", "and"),
+    "CF_RESULT_APPROVED": Template("भुगतान हो जाता", "it would have been paid"),
+    "CF_RESULT_REFERRED": Template("इसे कोई व्यक्ति जाँचता", "a person would have checked it"),
+    "CF_IF_COVER_IN_FORCE": Template(
+        "{date_hi} को आपका कवर चालू होता", "your cover had been active on {date_en}"
+    ),
+    "CF_IF_PREMIUM_PREPAID": Template(
+        "{date_hi} का प्रीमियम पहले से जमा होता", "the premium for {date_en} had been paid in advance"
+    ),
+    "CF_IF_COVER_BEFORE_ALERT": Template(
+        "आपका कवर अलर्ट जारी होने ({issued_hi}) से पहले खरीदा गया होता",
+        "your cover had been bought before the alert was issued, on {issued_en}",
+    ),
+    "CF_IF_ALERT_ACTIVE": Template(
+        "पूरे {hours} घंटे आपके इलाके में मौसम अलर्ट होता",
+        "a weather alert had covered your area for all {hours} hours",
+    ),
+    "CF_IF_INDEX_QUORUM": Template(
+        "आपके इलाके में कम से कम {min_shops} दुकानें गिनी जातीं (गिनी गईं: {shops})",
+        "at least {min_shops} shops had been counted in your area (there were {shops})",
+    ),
+    "CF_IF_BELOW_FLOOR": Template(
+        "आपके इलाके की बिक्री लगातार {hours} घंटे आम स्तर के {floor_pct}% से नीचे रहती",
+        "your area's sales had stayed below {floor_pct}% of the usual level for {hours} hours in a row",
+    ),
+    "CF_IF_BELOW_MODEL_RANGE": Template(
+        "आपके इलाके की बिक्री आम धीमे दिन के दायरे से नीचे होती",
+        "your area's sales had been lower than the usual range for a slow day",
+    ),
+    "CF_IF_SILENCE_VERIFIED": Template(
+        "दावा सिर्फ़ उन दिनों का होता जिनमें बिक्री नहीं हुई ({dates_hi})",
+        "the claim had covered only the days with no sales ({dates_en})",
+    ),
+    "CF_IF_SLIP_READABLE": Template(
+        "अस्पताल के कागज़ की फ़ोटो साफ़ होती", "the photo of the hospital document had been clear"
+    ),
+    "CF_IF_NAME_MATCHES_KYC": Template(
+        "पर्ची का नाम आपके Paytm खाते (KYC) के नाम से मेल खाता",
+        "the name on the slip had matched the name on your Paytm account (KYC)",
+    ),
+    "CF_IF_DATES_MATCH": Template(
+        "पर्ची में दिखे अस्पताल के समय में {dates_hi} शामिल होते", "the stay on the slip had included {dates_en}"
+    ),
+    "CF_IF_WITHIN_AUTO_LIMIT": Template(
+        "दावा {max_auto_days} दिन या उससे कम का होता", "the claim had covered {max_auto_days} days or fewer"
+    ),
+    "CF_EXPLAIN_NOT_ALREADY_PAID": Template(
+        "{dates_hi} का भुगतान पहले हो चुका था, और एक दिन का भुगतान दो बार नहीं होता।",
+        "{dates_en} had already been paid, and one day is not paid twice.",
+    ),
+    "CF_EXPLAIN_WITHIN_ANNUAL_LIMIT": Template(
+        "पिछले {window_days} दिनों के सारे भुगतान जोड़ें तो {paid_total} होते हैं। "
+        "इस दावे को जोड़ने पर कुल रकम साल की सीमा {annual_limit} से ऊपर चली जाती।",
+        "Payouts in the past {window_days} days add up to {paid_total}. "
+        "With this claim the total would pass the yearly limit of {annual_limit}.",
+    ),
+    "CF_AMOUNT_ONE_POINT": Template(
+        "इलाके की गिरावट एक प्रतिशत और होती, तो लगभग {delta} और जुड़ते।",
+        "One more point of area drop would have added about {delta}.",
+    ),
+    "CF_AMOUNT_CAP_BOUND": Template(
+        "आपके आम दिन का आधा {half_day} है, पर एक दिन का ज़्यादा से ज़्यादा भुगतान {cap} है, इसलिए {amount} दिए गए।",
+        "Half of your usual day is {half_day}, but the most paid for one day is {cap}, so {amount} was paid.",
+    ),
+    "CF_AMOUNT_ONE_DAY": Template(
+        "हर अतिरिक्त पात्र दिन के {delta} जुड़ते हैं, बिना समीक्षा के ज़्यादा से ज़्यादा {max_auto_days} दिन तक।",
+        "Each extra qualifying day adds {delta}, up to {max_auto_days} days without a review.",
+    ),
+    "CF_ZONE_NO_TRIGGER": Template(
+        "ज़ोन {zone_number} की बिक्री आम स्तर की {index_pct}% रही और कोई मौसम अलर्ट नहीं था। "
+        "भुगतान के लिए सभी {hours} घंटे अलर्ट और हर घंटे {floor_pct}% से नीचे बिक्री ज़रूरी है।",
+        "Zone {zone_number} sales were {index_pct}% of the usual level, with no weather alert. "
+        "A payout needs an alert for all {hours} hours and every hour below {floor_pct}%.",
+    ),
     "PREMIUM_PAID_STARTS": Template(
         "{name_hi} जी, आपका {amount} का प्रीमियम मिल गया। "
         "आपका कवर {starts_on_hi} से शुरू होगा और {paid_to_hi} तक का प्रीमियम जमा है।",
@@ -229,6 +432,9 @@ _ENTRIES: Final[dict[str, Template]] = {
         "Sorry, I couldn't hear that clearly. Please say it again or type it.",
     ),
 }
+
+_ENTRIES.update({key: Template(hi, en) for key, (hi, en) in SLIP_PRECHECK_LINES.items()})  # N3, fs-02 9.2
+_ENTRIES.update({key: Template(hi, en) for key, (hi, en) in CONSENT_LINES.items()})  # N6, fs-07 9.10
 
 CATALOGUE: Final[Mapping[str, Template]] = MappingProxyType(_ENTRIES)
 SLIP_TO_HUMAN_KEYS: Final[tuple[str, ...]] = (

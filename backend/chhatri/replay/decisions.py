@@ -1,8 +1,9 @@
 """Recording a policy decision: store, audit (with every check), SSE and memory (SPEC §9, §11, §16).
 
 SPEC §11: "Every decision stores all checks in `data`" — the audit payload is the full decision
-(`chhatri.audit.records.decision_data`) plus the claim it decides. The claim summary leaves out the
-raw slip (its fields are in the checks' observed values and in the case evidence).
+(`chhatri.audit.records.decision_data`: the checks, the explanation, and the sources and counterfactuals of the
+receipt, H13 and H14) plus the claim it decides. The claim summary leaves out the raw slip (its fields are in the
+checks' observed values and in the case evidence).
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ from typing import Any, Final
 
 from chhatri.audit.records import decision_data
 from chhatri.domain.models import Claim, Decision
+from chhatri.policy.facts import AreaClaimFacts, PersonalClaimFacts
+from chhatri.policy.receipt import with_receipt
 from chhatri.replay.memory_facts import decision_fact
 from chhatri.replay.publish import Publisher, RuntimeLink
 
@@ -50,9 +53,16 @@ class DecisionRecorder:
         actor: str = POLICY_ACTOR,
         claim: Claim | None = None,
         extra: Mapping[str, Any] | None = None,
+        facts: AreaClaimFacts | PersonalClaimFacts | None = None,
     ) -> Decision:
-        """Add `claim` (when new) and `decision` to the store, then audit, publish and remember."""
+        """Add `claim` (when new) and `decision` to the store, then audit, publish and remember.
+
+        With the `facts` the engine decided on, the decision first gets its sources and counterfactuals (H13, H14), so
+        they are stored, hash-chained and published with it. The decision that was recorded is returned.
+        """
         rt = self._link.rt
+        if facts is not None:
+            decision = with_receipt(decision, facts, rt.static.rules)
         if claim is not None:
             rt.store.add_claim(claim)
         rt.store.add_decision(decision)

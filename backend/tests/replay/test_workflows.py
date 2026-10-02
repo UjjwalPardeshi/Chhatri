@@ -96,7 +96,7 @@ async def test_steps_raise_on_inconsistent_input_and_the_replay_records_it(stati
     with pytest.raises(ValueError, match="merchants hear about credits only"):
         await rt.orchestrator.run_step(PAYOUT, "notify_merchant", payload)
     with pytest.raises(ValueError, match="names merchant S-0001"):
-        await rt.orchestrator.run_step(PAYOUT, "pause_instalment", {**payload, "merchant_id": "S-0001"})
+        await rt.orchestrator.run_step(PAYOUT, "request_holiday", {**payload, "merchant_id": "S-0001"})
 
     async def broken() -> None:
         await rt.orchestrator.run_step(
@@ -134,13 +134,13 @@ def test_the_step_table_is_exactly_the_workflow_definitions() -> None:
         "execute_payout",
         "credit_payout",
         "notify_merchant",
-        "pause_instalment",
+        "request_holiday",
     ]
     assert [(s.name, s.delay_minutes_from_start) for s in WORKFLOWS[PAYOUT]] == [
         ("execute_payout", 0),
         ("credit_payout", 4),
         ("notify_merchant", 4),
-        ("pause_instalment", 5),
+        ("request_holiday", 5),
     ]
     assert [s.name for s in WORKFLOWS[HUMAN_REVIEW]] == ["open_case", "notify_officer"]
     assert [s.delay_minutes_from_start for s in WORKFLOWS[FOLLOW_UP]] == [24 * 60, 24 * 60]

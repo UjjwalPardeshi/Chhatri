@@ -7,7 +7,7 @@ records what the console would show as ``{check name: value}``. Values are plain
 numbers, booleans, lists) so they can be compared with `chhatri.api.demo.golden` and printed.
 
 Timeline (binding decisions B1, B2): payout workflows execute at the decision minute, credit and
-notify 4 simulated minutes later and pause the instalment after 5, so the personal flows step the
+notify 4 simulated minutes later and ask the lender about the instalment after 5, so the personal flows step the
 clock to see the money arrive, exactly as the presenter's clock would.
 """
 
@@ -48,7 +48,7 @@ MAP_ZONES: Final = ("Z3", "Z7", "Z9", "Z12")
 WHY_TEXT: Final = "मुझे इतने ही पैसे क्यों मिले?"  # SPEC §13.6 EXPLAINED
 COVER_TEXT: Final = "Red alert tomorrow. Cover me today."  # SPEC §13.6 BLOCKED
 PAYOUT_WAIT_MINUTES: Final = 4  # B1: credit_payout / notify_merchant offset
-PAUSE_WAIT_MINUTES: Final = 1  # B1: pause_instalment is one minute after the credit
+PAUSE_WAIT_MINUTES: Final = 1  # B1: request_holiday is one minute after the credit
 SIMULATED_LINK_PREFIX: Final = "https://paytm.me/sim-"  # SPEC §14.3 simulated links
 QUOTE_AMOUNT: Final = "<quote amount>"
 

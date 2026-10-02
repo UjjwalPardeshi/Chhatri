@@ -57,6 +57,21 @@ async def merchant_detail(state: StateDep, runtime: RuntimeDep, merchant_id: Mer
     return ok(views.merchant_detail(runtime, merchant_id))
 
 
+@router.get("/{merchant_id}/cover")
+async def merchant_cover(state: StateDep, runtime: RuntimeDep, merchant_id: MerchantId) -> dict[str, Any]:
+    """The cover card (K6, data-model 5.1): derived status, dates, zone price, limit and the alert in force."""
+    merchant_or_404(state, merchant_id)
+    return ok(views.cover_view(runtime, merchant_id))
+
+
+@router.get("/{merchant_id}/claims")
+async def merchant_claims(state: StateDep, runtime: RuntimeDep, merchant_id: MerchantId) -> dict[str, Any]:
+    """The claim tracker (K5, data-model 5.1): every claim with its five steps and every dispute, newest first."""
+    merchant_or_404(state, merchant_id)
+    items = views.claims_view(runtime, merchant_id)
+    return ok_list(items, total=len(items), limit=len(items), offset=0)
+
+
 @router.get("/{merchant_id}/messages")
 async def merchant_messages(
     state: StateDep,

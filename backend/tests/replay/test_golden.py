@@ -20,6 +20,7 @@ from chhatri.domain.enums import (
     CaseStatus,
     CoverQuoteOutcome,
     DecisionOutcome,
+    HolidayStatus,
     MessageKind,
     PayoutStatus,
 )
@@ -51,14 +52,33 @@ WEDNESDAY = date(2025, 8, 20)
 ILL = "मैं अस्पताल में हूँ, बुखार है।"
 WHY = "मुझे इतने ही पैसे क्यों मिले?"
 PREPAID_DAYS = 30
+INSTALMENTS_PAUSED = 123  # the KPI after the storm: the default simulated lender grants every request (X4)
+# The instalment line by flag: off is the BUILT unconditional pause, on is the lender's answer (copy deck 3.3).
+PAUSED_TOMORROW = {
+    False: "Tomorrow's ₹600 instalment is paused.",
+    True: "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty.",
+}
+PAUSED_TODAY = {
+    False: "Today's ₹600 instalment is paused.",
+    True: "Your lender has paused today's ₹600 instalment. It moves to the end of your loan with no penalty.",
+}
+
+
+@pytest.fixture(scope="module", params=[False, True], ids=["flag-off", "x4-on"])
+def x4(request: pytest.FixtureRequest) -> bool:
+    """Whether `x4_lender_request` is on: every golden number holds either way, only the wording differs."""
+    return bool(request.param)
 
 
 @pytest.fixture(scope="module")
-def full(tmp_path_factory: pytest.TempPathFactory) -> StaticContext:
+def full(tmp_path_factory: pytest.TempPathFactory, x4: bool) -> StaticContext:
     missing = [name for name in REQUIRED if not (ARTIFACTS_DIR / name).exists()]
     if missing:
         pytest.skip(f"artefacts missing in {ARTIFACTS_DIR}: {missing} (run make data)")
-    static = load_static(offline_settings(Path(tmp_path_factory.mktemp("golden-var"))))
+    flags = "x4_lender_request" if x4 else ""
+    static = load_static(
+        offline_settings(Path(tmp_path_factory.mktemp("golden-var")), chhatri_features=flags)
+    )
     assert static.model is not None, static.model_error
     return static
 
@@ -99,7 +119,7 @@ def test_indices_and_triggers_at_17_00(monsoon: Runtime) -> None:
     )
 
 
-def test_decisions_17_00_credits_17_04_pauses_17_05_and_the_kpis(monsoon: Runtime) -> None:
+def test_decisions_17_00_credits_17_04_pauses_17_05_and_the_kpis(monsoon: Runtime, x4: bool) -> None:
     rt = monsoon
     decisions = [d for m in rt.static.city.merchants for d in rt.store.decisions_for(m.id)]
     assert len(decisions) == 312 and {d.outcome for d in decisions} == {DecisionOutcome.APPROVED}
@@ -109,6 +129,10 @@ def test_decisions_17_00_credits_17_04_pauses_17_05_and_the_kpis(monsoon: Runtim
     assert rt.store.pauses() and {p.created_at for p in rt.store.pauses()} == {monsoon_at(17, 5)}
     kpis = views.kpis_view(rt)
     assert (kpis["zones_triggered"], kpis["shops_paid"], kpis["trigger_to_money_min"]) == (3, 312, 4)
+    assert kpis["instalments_paused"] == INSTALMENTS_PAUSED == len(rt.store.pauses())
+    requests = rt.store.holiday_requests()
+    assert len(requests) == (INSTALMENTS_PAUSED if x4 else 0)  # off: no lender is asked
+    assert {r.status for r in requests} <= {HolidayStatus.GRANTED}
     rows = views.zone_panel(rt, "Z7")["rows"]
     assert [(r["label"], r["value"]) for r in rows] == [
         ("Alert", "Red alert from 14:00"),
@@ -119,7 +143,7 @@ def test_decisions_17_00_credits_17_04_pauses_17_05_and_the_kpis(monsoon: Runtim
     ]
 
 
-def test_anil_is_paid_1380_and_hears_at_credit_time(monsoon: Runtime) -> None:
+def test_anil_is_paid_1380_and_hears_at_credit_time(monsoon: Runtime, x4: bool) -> None:
     rt = monsoon
     [decision] = rt.store.decisions_for(ANIL)
     view = views.decision_view(decision)
@@ -135,7 +159,7 @@ def test_anil_is_paid_1380_and_hears_at_credit_time(monsoon: Runtime) -> None:
         (MessageKind.TEXT, monsoon_at(17, 4), "Anil ji, heavy rain cut your area's sales by 63% today."),
         (MessageKind.PAYOUT_CARD, monsoon_at(17, 4), timeline[1][2]),
         (MessageKind.SOUNDBOX, monsoon_at(17, 4), "₹1,380 received on Paytm, from Chhatri"),
-        (MessageKind.TEXT, monsoon_at(17, 5), "Tomorrow's ₹600 instalment is paused."),
+        (MessageKind.TEXT, monsoon_at(17, 5), PAUSED_TOMORROW[x4]),
     ]
     assert rt.audit.verify()["valid"] is True
 
@@ -160,7 +184,7 @@ async def illness_until_the_slip(full: StaticContext, scenario: str) -> Runtime:
     return rt
 
 
-async def test_illness_pays_1500_and_pauses_thursdays_instalment(full: StaticContext) -> None:
+async def test_illness_pays_1500_and_pauses_thursdays_instalment(full: StaticContext, x4: bool) -> None:
     rt = await illness_until_the_slip(full, "illness")
     [decision] = rt.store.decisions_for(ANIL)
     assert (decision.outcome, decision.amount_paise) == (DecisionOutcome.APPROVED, 150_000)
@@ -171,7 +195,7 @@ async def test_illness_pays_1500_and_pauses_thursdays_instalment(full: StaticCon
     texts = [m.text_en for m in rt.store.messages(ANIL)]
     assert "Anil ji, your claim is approved. ₹1,500 credited with today's settlement." in texts
     [pause] = rt.store.pauses(ANIL)
-    assert pause.instalment_date == ILLNESS_DAY and texts[-1] == "Today's ₹600 instalment is paused."
+    assert pause.instalment_date == ILLNESS_DAY and texts[-1] == PAUSED_TODAY[x4]
 
 
 async def test_illness_mismatch_is_referred_and_the_officer_approves_1500(full: StaticContext) -> None:

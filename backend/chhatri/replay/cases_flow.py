@@ -3,17 +3,21 @@
 - `open_review`: a REFERRED personal claim opens a PERSONAL_CLAIM_REVIEW case with the evidence
   bundle (expected vs actual on the first silent day, the slip, KYC name and score, silent days,
   precedents of past cases), then starts ``human-review`` and ``follow-up`` (B1).
-- `open_dispute` (deck test EXPLAINED): a DISPUTE case about the merchant's latest paid decision
-  (expected vs actual on its event date, the merchant's words, precedents of past disputes); after
-  a fresh load it is C-2291. The disputed decision and its checks are linked via ``decision_id``.
+- `open_dispute` (deck test EXPLAINED): a DISPUTE case about the merchant's latest settled decision, one that was
+  paid (credited) or declined (expected vs actual on its event date, the merchant's words, precedents of past
+  disputes); after a fresh load it is C-2291. The disputed decision and its checks are linked via ``decision_id``.
+  With no settled decision there is nothing to dispute and no case is opened; a second dispute for a decision
+  that has an open case gets that case back (K5).
 Both publish a ``case`` event, add a feed item and write a memory fact (SPEC §16).
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Final
 
-from chhatri.domain.enums import CaseKind
+from chhatri.conversation.ports import DisputeOutcome
+from chhatri.domain.enums import CaseKind, CaseStatus, DecisionOutcome
 from chhatri.domain.models import Case, Claim, Decision
 from chhatri.money import format_inr
 from chhatri.replay.evidence import hourly_evidence, iso_days, name_evidence, precedents, slip_evidence
@@ -23,6 +27,8 @@ from chhatri.replay.publish import Publisher, RuntimeLink
 from chhatri.replay.runs import start_case_workflows
 
 __all__ = ["CaseFlow"]
+
+logger = logging.getLogger(__name__)
 
 REVIEW_PRECEDENTS: Final = "case"
 DISPUTE_PRECEDENTS: Final = "dispute"
@@ -66,26 +72,42 @@ class CaseFlow:
         )
         return case
 
-    async def open_dispute(self, merchant_id: str, text: str) -> Case:
-        """DISPUTE about the latest paid decision (SPEC §13.5 DISPUTE_AMOUNT, §13.6 EXPLAINED)."""
+    async def open_dispute(self, merchant_id: str, text: str) -> DisputeOutcome:
+        """DISPUTE about the latest settled decision (SPEC §13.5 DISPUTE_AMOUNT, §13.6 EXPLAINED; K5).
+
+        Settled is APPROVED and credited, or DECLINED. With none there is nothing to dispute and no case is opened;
+        a case that is still open for the same decision is returned instead of a second one.
+        """
         rt = self._link.rt
+        decision = rt.store.latest_final_decision(merchant_id)
+        if decision is None:
+            logger.info("dispute from %s has no settled decision to dispute; no case opened", merchant_id)
+            return DisputeOutcome(case=None)
+        already = next(
+            (
+                c
+                for c in rt.store.cases(CaseStatus.OPEN)
+                if c.kind is CaseKind.DISPUTE and c.decision_id == decision.id
+            ),
+            None,
+        )
+        if already is not None:
+            return DisputeOutcome(case=already, already_open=True)
         now = rt.clock.now()
         merchant = rt.static.city.merchant(merchant_id)
-        decision = rt.store.latest_paid_decision(merchant_id)
-        claim = rt.store.claim(decision.claim_id) if decision is not None else None
-        day = claim.event_date if claim is not None else now.date()
+        claim = rt.store.claim(decision.claim_id)
+        day = claim.event_date
         evidence = {
             "expected_vs_actual": hourly_evidence(rt, merchant_id, day, now),
             "merchant_text": text,
             "precedents": await precedents(rt, merchant_id, DISPUTE_PRECEDENTS),
         }
-        if decision is not None and claim is not None:
-            summary = (
-                f"{merchant.shop_name} disputes the {format_inr(decision.amount_paise)} "
-                f"{claim.kind.value.lower()} payout for {weekday_day_month(day)}"
-            )
-        else:
-            summary = f"{merchant.shop_name} disputes a payout amount; no paid claim on record"
+        about = (
+            f"a declined {claim.kind.value.lower()} claim"
+            if decision.outcome is DecisionOutcome.DECLINED
+            else f"the {format_inr(decision.amount_paise)} {claim.kind.value.lower()} payout"
+        )
+        summary = f"{merchant.shop_name} disputes {about} for {weekday_day_month(day)}"
         case = rt.cases.open(
             kind=CaseKind.DISPUTE,
             merchant_id=merchant_id,
@@ -93,12 +115,12 @@ class CaseFlow:
             summary_en=summary,
             summary_hi=None,
             evidence=evidence,
-            claim_id=claim.id if claim is not None else None,
-            decision_id=decision.id if decision is not None else None,
+            claim_id=claim.id,
+            decision_id=decision.id,
         )
         await rt.integrations.memory.remember(dispute_fact(case, merchant.zone_id, decision))
         await self._announce(case, f"{summary} · case {case.id}")
-        return case
+        return DisputeOutcome(case=case)
 
     async def _announce(self, case: Case, text: str) -> None:
         rt = self._link.rt

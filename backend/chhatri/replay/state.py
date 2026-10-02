@@ -29,11 +29,17 @@ from typing import Any, Final, Protocol
 
 import numpy as np
 
+from chhatri.ask.chat import unknown_answerer
+from chhatri.cases.grievances import book_for
 from chhatri.cases.service import CaseService
 from chhatri.clock import ManualClock
 from chhatri.config import Settings
+from chhatri.consent.ledger import consent_gate_open, install_consents
+from chhatri.consent.notice import SETTLEMENT, SLIP
+from chhatri.conversation.message_guard import StoreDistressProbe, guard_for
 from chhatri.conversation.service import ConversationService
 from chhatri.domain.enums import Channel, IntegrationMode
+from chhatri.domain.models import Loan
 from chhatri.events import EventBus
 from chhatri.forecast.errors import ForecastError
 from chhatri.ids import IdFactory
@@ -42,6 +48,7 @@ from chhatri.ledger.instalments import InstalmentService
 from chhatri.ledger.payouts import PayoutService
 from chhatri.ledger.premiums import PremiumService
 from chhatri.policy.rules import PolicyRules
+from chhatri.precheck.registry import precheck_service
 from chhatri.replay.audit_bus import PublishingAuditLog
 from chhatri.replay.board import ZoneBoard
 from chhatri.replay.engine import ReplayEngine
@@ -78,6 +85,7 @@ class IntegrationsFactory(Protocol):
         step_handlers: Orchestrator,
         data_dir: Path,
         rules: PolicyRules,
+        loans: Mapping[str, Loan],
     ) -> Integrations: ...
 
 
@@ -195,6 +203,9 @@ class AppState:
         try:
             world = await asyncio.to_thread(build_world, self.static, scenario)
             core = self._core(world)
+            install_consents(
+                core.store, core.ids, core.audit, self.static.settings
+            )  # N6: seeds only with the flag on
             runtime = self._assemble(world, core)
         except LOAD_ERRORS as exc:
             logger.exception("scenario %s could not be built", scenario)
@@ -235,6 +246,7 @@ class AppState:
             step_handlers=core.orchestrator,
             data_dir=static.data_dir,
             rules=static.rules,
+            loans=static.city.loans,
         )
         return Runtime(
             static=static,
@@ -250,7 +262,13 @@ class AppState:
             engine=self._engine(world, core),
             scheduler=core.scheduler,
             payouts=PayoutService(core.store, core.audit, core.ids, static.rules),
-            instalments=InstalmentService(core.store, core.audit, core.ids),
+            instalments=InstalmentService(
+                core.store,
+                core.audit,
+                core.ids,
+                lender=integrations.lender,
+                timeout_seconds=static.settings.chhatri_lender_timeout_seconds,
+            ),
             premiums=PremiumService(
                 core.store,
                 core.audit,
@@ -258,6 +276,7 @@ class AppState:
                 static.rules,
                 integrations.payments,
                 premiums=static.premiums,
+                settlement_consent=lambda merchant_id: consent_gate_open(core.store, merchant_id, SETTLEMENT),
             ),
             cases=CaseService(core.store, core.audit, core.ids, static.rules),
             board=ZoneBoard(),
@@ -282,6 +301,20 @@ class AppState:
             soundbox=integrations.soundbox,
             claims=core.orchestrator,
             channel_name=_channel(integrations),
+            precheck=lambda: precheck_service(core.link.rt),
+            slip_consent=lambda merchant_id: consent_gate_open(core.store, merchant_id, SLIP),
+            unknown=lambda: unknown_answerer(core.link.rt, self.static.settings),
+            message_guard=guard_for(self.static.settings, self._distress_probe(core)),
+        )
+
+    def _distress_probe(self, core: _Core) -> StoreDistressProbe:
+        """What the X8 guard reads: the replay's alerts and records, and the scenario's grievance book."""
+        return StoreDistressProbe(
+            store=core.store,
+            alerts_between=lambda start, end: core.link.rt.world.shocks.alerts_between(start, end),
+            grievance_open=lambda merchant_id: any(
+                g.status == "OPEN" for g in book_for(core.store).for_merchant(merchant_id)
+            ),
         )
 
     def _engine(self, world: ScenarioData, core: _Core) -> ReplayEngine:

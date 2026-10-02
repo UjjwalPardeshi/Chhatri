@@ -32,6 +32,9 @@ VIEW_NAMES = (
     "audit_view",
     "policy_view",
     "integrations_view",
+    "cover_view",
+    "claims_view",
+    "receipt_view",
 )
 
 

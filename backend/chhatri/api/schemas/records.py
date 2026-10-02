@@ -23,6 +23,7 @@ __all__ = [
     "EvidencePrecedent",
     "EvidenceSlip",
     "Explanation",
+    "HolidayRequest",
     "MerchantCover",
     "MerchantDetail",
     "MerchantLoan",
@@ -37,6 +38,7 @@ __all__ = [
 ]
 
 MERCHANT_ID_PATTERN = r"^S-\d{4}$"
+HOLIDAY_ID_PATTERN = r"^HR-\d{6,}$"
 CASE_ID_PATTERN = r"^C-\d+$"
 SHA256_HEX_LEN = 64
 
@@ -120,6 +122,23 @@ class MerchantLoan(Schema):
     lender_name: str
 
 
+class HolidayRequest(Schema):
+    """One EDI holiday request and the lender's answer (X4, fs-03 section 7.5), whatever the outcome."""
+
+    id: str = Field(pattern=HOLIDAY_ID_PATTERN)
+    loan_id: str
+    decision_id: str
+    payout_id: str
+    instalment_date: IsoDate
+    instalment_paise: int = Field(gt=0)
+    instalment_label: str
+    requested_at: IstTimestamp
+    status: Literal["REQUESTED", "GRANTED", "REFUSED", "NO_RESPONSE"]
+    reason_code: Literal["FLAG_OFF", "NOT_ACTIVE", "IN_ARREARS", "NO_ALLOWANCE"] | None
+    decided_at: IstTimestamp | None
+    lender: str
+
+
 class MerchantDetail(MerchantSummary):
     owner_name_hi: str
     kyc_name_masked: str
@@ -130,6 +149,7 @@ class MerchantDetail(MerchantSummary):
     expected_today_label: str | None
     payouts: list[Payout]
     decisions: list[Decision]
+    holiday_requests: list[HolidayRequest]
 
 
 class MessageCard(Schema):
@@ -179,6 +199,26 @@ class EvidenceSlip(Schema):
     source: str
 
 
+class EvidenceSlipErased(Schema):
+    """The slip after "forget my slip" (N6, fs-07 9.8): only that it was erased, and when."""
+
+    erased: Literal[True]
+    erased_at: AwareTimestamp
+
+
+class EvidencePrecheck(Schema):
+    """How the slip reached the engine through the pre-check (N3.11, fs-02 13.2): ids, codes and counts only."""
+
+    precheck_id: str
+    filed_as: Literal["FIELDS_CONFIRMED", "SENT_TO_TEAM"] | None
+    photos: int = Field(ge=1)
+    injection_suspected: bool
+    mode: Literal["LIVE", "SIMULATED", "FALLBACK"]
+    provider: str
+    model: str | None
+    fallback_reason: str | None
+
+
 class EvidencePrecedent(Schema):
     subject_id: str
     kind: str
@@ -188,7 +228,8 @@ class EvidencePrecedent(Schema):
 
 class CaseEvidence(Schema):
     expected_vs_actual: absent(list[EvidenceHour]) = None
-    slip: absent(EvidenceSlip) = None
+    slip: absent(EvidenceSlip | EvidenceSlipErased) = None
+    precheck: absent(EvidencePrecheck) = None
     kyc_name: absent(str) = None
     name_score: absent(float) = None
     silent_days: absent(list[IsoDate]) = None

@@ -71,7 +71,7 @@ _SPECS: Final = (
     CheckSpec(CheckCode.NOT_ALREADY_PAID, _H, Applies.ALL, "Not already paid",
               "no approved payout for (merchant, date, kind)"),
     CheckSpec(CheckCode.WITHIN_ANNUAL_LIMIT, _H, Applies.ALL, "Within the annual limit",
-              "paid this policy year + amount ≤ annual limit"),
+              "paid in the rolling 365 days + amount ≤ annual limit"),
 )  # fmt: skip
 
 CHECK_SPECS: Final = MappingProxyType({spec.code: spec for spec in _SPECS})

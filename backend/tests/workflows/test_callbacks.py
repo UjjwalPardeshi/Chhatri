@@ -31,7 +31,7 @@ def test_valid_callback() -> None:
         ("credit_payout", body(extra=1), "body"),
         ("credit_payout", body(run_id=""), "run_id"),
         ("credit_payout", body(workflow="refund"), "workflow"),
-        ("pause_instalment", body(), "step"),
+        ("request_holiday", body(), "step"),
         ("credit_payout", body(payload=[1]), "payload"),
         ("open_case", body(step="open_case"), "step"),
         ("credit_payout", body(payload={"decision_id": "D-000001"}), "payload"),

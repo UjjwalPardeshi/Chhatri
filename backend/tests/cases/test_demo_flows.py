@@ -1,7 +1,7 @@
 """Integration across policy → store → ledger → cases → audit for the deck's demo flows.
 
-SPEC §17.2 monsoon (₹1,380 at 17:04, pause 17:05), §13.6 HUMAN (Sunil Pawar slip → case C-2291 →
-officer approves ₹1,500) and BLOCKED (Ramesh → starts 25 Aug + Paytm link).
+SPEC §17.2 monsoon (₹1,380 at 17:04, pause 17:05; X4: the lender is asked at 17:05 and grants), §13.6 HUMAN
+(Sunil Pawar slip → case C-2291 → officer approves ₹1,500) and BLOCKED (Ramesh → starts 25 Aug + Paytm link).
 """
 
 from __future__ import annotations
@@ -18,9 +18,11 @@ from chhatri.domain.enums import (
     ClaimKind,
     CoverQuoteOutcome,
     DecisionOutcome,
+    HolidayStatus,
     PayoutStatus,
 )
 from chhatri.ids import IdFactory
+from chhatri.integrations.lender import SimulatedLender
 from chhatri.ledger.instalments import InstalmentService
 from chhatri.ledger.payouts import PayoutService
 from chhatri.ledger.premiums import PremiumService
@@ -40,13 +42,16 @@ RULES = default_rules()
 DECIDED = ist(2025, 8, 19, 17)
 
 
-def services():
+def services(*, lender: bool = False):
     store, audit, ids = Store(b.city()), AuditLog(), IdFactory()
-    return store, audit, ids, PayoutService(store, audit, ids, RULES), InstalmentService(store, audit, ids)
+    instalments = InstalmentService(
+        store, audit, ids, lender=SimulatedLender(store.city.loans) if lender else None
+    )
+    return store, audit, ids, PayoutService(store, audit, ids, RULES), instalments
 
 
-def test_monsoon_anil_paid_1380_at_1704_and_instalment_paused_at_1705() -> None:
-    store, audit, ids, payouts, instalments = services()
+def decided_and_credited(store, audit, ids, payouts):
+    """Anil's monsoon claim, decided at 17:00 and credited at 17:04: (claim, decision, credited payout)."""
     claim = b.area_claim(id=ids.next("claim"))
     store.add_claim(claim)
     facts = b.area_facts(
@@ -62,7 +67,13 @@ def test_monsoon_anil_paid_1380_at_1704_and_instalment_paused_at_1705() -> None:
         data=decision_data(d),
     )  # fmt: skip
     payout = payouts.execute(d)
-    credited = payouts.credit(payout.id, payouts.credit_due_at(d))
+    return claim, d, payouts.credit(payout.id, payouts.credit_due_at(d))
+
+
+def test_monsoon_anil_paid_1380_at_1704_and_instalment_paused_at_1705() -> None:
+    """The flag-off path: the BUILT unconditional pause."""
+    store, audit, ids, payouts, instalments = services()
+    claim, d, credited = decided_and_credited(store, audit, ids, payouts)
     pause = instalments.pause_next(
         "S-0142", claim.event_date, d, DECIDED + timedelta(minutes=RULES.instalment_pause_delay_minutes)
     )
@@ -80,6 +91,24 @@ def test_monsoon_anil_paid_1380_at_1704_and_instalment_paused_at_1705() -> None:
         b.area_facts(claim=claim, already_paid=True), RULES, decision_id="D-000009", now=DECIDED
     )
     assert again.outcome is DecisionOutcome.DECLINED
+
+
+async def test_monsoon_anil_paid_1380_at_1704_and_the_lender_grants_the_holiday_at_1705() -> None:
+    """X4: the same story with the lender deciding; the payout, the pause date and the time do not move."""
+    store, audit, ids, payouts, instalments = services(lender=True)
+    claim, d, credited = decided_and_credited(store, audit, ids, payouts)
+    at = DECIDED + timedelta(minutes=RULES.instalment_pause_delay_minutes)
+    outcome = await instalments.request_holiday("S-0142", claim.event_date, d, at)
+    assert (d.id, d.outcome, credited.amount_paise) == ("D-000001", DecisionOutcome.APPROVED, rupees(1380))
+    assert credited.credited_at == ist(2025, 8, 19, 17, 4) and credited.status is PayoutStatus.CREDITED
+    assert outcome is not None and outcome.request.status is HolidayStatus.GRANTED
+    assert outcome.pause is not None and outcome.pause.request_id == outcome.request.id
+    assert (outcome.pause.instalment_date, outcome.pause.created_at) == (
+        date(2025, 8, 20),
+        ist(2025, 8, 19, 17, 5),
+    )
+    assert store.payout_for_decision(d.id) == credited  # the payout is untouched by the request
+    assert audit.verify()["valid"] is True and len(audit) == 6  # decision, then request, answer and pause
 
 
 def test_human_mismatch_referred_case_c2291_then_officer_pays_1500() -> None:

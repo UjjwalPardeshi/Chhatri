@@ -185,6 +185,7 @@ class FakeIntegrations:
         )
         for name in INTEGRATION_NAMES
     )
+    gemini_statuses: tuple[IntegrationStatus, ...] = ()
 
 
 def make_scenario(name: str) -> FakeScenario:

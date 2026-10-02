@@ -31,6 +31,7 @@ from chhatri.api.sse import StreamHub
 from chhatri.api.whatsapp_inbox import WhatsAppInbox
 from chhatri.config import Settings, get_settings
 from chhatri.features import FEATURE_NAMES, enabled_features, unknown_features
+from chhatri.integrations.free_tier import free_tier_gate_detail
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +91,17 @@ def _announce_features(settings: Settings) -> None:
         logger.warning("CHHATRI_FEATURES names unknown flags (ignored): %s", ", ".join(unknown))
 
 
+def _announce_free_tier_gate(settings: Settings) -> None:
+    """ADR 0009 section 3: one start-up line that says whether free-tier AI links may be called."""
+    logger.info("free-tier data gate: %s", free_tier_gate_detail(settings))
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     _announce_officer_token(settings)
     _announce_features(settings)
+    _announce_free_tier_gate(settings)
     if getattr(app.state, "chhatri", None) is None:
         state = await asyncio.to_thread(build_default_state, settings)
         app.state.chhatri = state

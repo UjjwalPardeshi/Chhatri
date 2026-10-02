@@ -61,7 +61,7 @@ class FakeClock:
 
 
 def test_spec_limits() -> None:
-    assert dict(RATE_LIMITS) == {"webhooks": 60, "uploads": 20, "messages": 60}
+    assert dict(RATE_LIMITS) == {"webhooks": 60, "uploads": 20, "messages": 60, "whatif": 300}
 
 
 def test_sliding_window_and_retry_after() -> None:

@@ -32,6 +32,18 @@ async def get_decision(
     return ok(views.decision_view(decision))
 
 
+@router.get("/decisions/{decision_id}/receipt")
+async def get_receipt(
+    runtime: RuntimeDep, decision_id: Annotated[str, Path(pattern=DECISION_ID_PATTERN)]
+) -> dict[str, Any]:
+    """The receipt of one decision: sources on every check and number, counterfactuals, payout, audit (H2, H3, H13, H14)."""
+    try:
+        receipt = views.receipt_view(runtime, decision_id)
+    except KeyError as exc:
+        raise ApiError(404, f"decision {decision_id} not found") from exc
+    return ok(receipt)
+
+
 @router.get("/payouts")
 async def list_payouts(
     runtime: RuntimeDep,

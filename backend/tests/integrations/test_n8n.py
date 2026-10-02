@@ -117,7 +117,7 @@ async def test_partial_run_hands_over_only_unreported_steps() -> None:
         "execute_payout",
         "credit_payout",
         "notify_merchant",
-        "pause_instalment",
+        "request_holiday",
     ]
 
 

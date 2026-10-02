@@ -25,6 +25,9 @@ from types import MappingProxyType
 from typing import Final
 
 from chhatri.clock import at as at_time
+from chhatri.consent.ledger import consent_gate_open
+from chhatri.consent.notice import SALES
+from chhatri.conversation.message_guard import MessageSuppressed
 from chhatri.detect.silent import find_silent, silent_this_morning
 from chhatri.detect.triggers import TRIGGER_ALERT_KINDS
 from chhatri.detect.types import SilentFinding
@@ -92,7 +95,13 @@ class PersonalFlow:
         rt = self._link.rt
         today, city = now.date(), rt.static.city
         yesterday = today - ONE_DAY
-        candidates = [m.id for m in city.merchants if rt.store.cover(m.id) and m.id not in self._checkins]
+        candidates = [
+            m.id
+            for m in city.merchants
+            if rt.store.cover(m.id)
+            and m.id not in self._checkins
+            and consent_gate_open(rt.store, m.id, SALES)
+        ]
         if not candidates:
             return
         ranges = rt.world.model.day_ranges_paise(city, rt.world.history, yesterday, candidates)
@@ -130,8 +139,16 @@ class PersonalFlow:
                 "p10_day_paise": finding.p10_day_paise,
             },
         )
-        await rt.conversation.checkin_silent(merchant_id, first)
         shop = rt.static.city.merchant(merchant_id).shop_name
+        try:
+            await rt.conversation.checkin_silent(merchant_id, first)
+        except (
+            MessageSuppressed
+        ) as held:  # X8: the daily cap; the audit holds the reason, the feed says so too
+            rt.feed.add(
+                now, "checkin", f"Check-in with {shop} held back ({held.reason})", merchant_id=merchant_id
+            )
+            return
         text = f"Checked in with {shop} on WhatsApp · no sales since {weekday_day_month(first)}"
         rt.feed.add(now, "checkin", text, merchant_id=merchant_id)
 
@@ -149,7 +166,7 @@ class PersonalFlow:
         decision = evaluate_personal_claim(
             facts, rt.static.rules, decision_id=rt.ids.next("decision"), now=now
         )
-        await self._recorder.record(decision, action="decision.personal", claim=claim)
+        decision = await self._recorder.record(decision, action="decision.personal", claim=claim, facts=facts)
         self._checkins = MappingProxyType({k: v for k, v in self._checkins.items() if k != merchant_id})
         self._feed(decision, claim, now)
         if decision.outcome is DecisionOutcome.APPROVED:

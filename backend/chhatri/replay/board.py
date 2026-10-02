@@ -172,7 +172,7 @@ class ZoneBoard:
         )
 
     def count_pause_step(self, trigger_id: str, paused: bool) -> TriggerProgress:
-        """One more pause_instalment step of the trigger done (paused, or no loan to pause)."""
+        """One more request_holiday step of the trigger done (granted and paused, or nothing to pause)."""
         return self._update(
             trigger_id,
             lambda old: replace(old, pause_steps=old.pause_steps + 1, paused=old.paused + int(paused)),

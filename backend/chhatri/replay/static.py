@@ -9,7 +9,8 @@ Missing or unusable artefacts, documented behaviour (SPEC §19 /api/preflight re
 - model: ``model=None`` and ``model_error`` says why; startup continues, `AppState.load` refuses to
   load a scenario with a clear RuntimeError (the API answers 503).
 - calibration.json missing: the documented `Calibration()` defaults (``load_calibration`` logs it).
-- premiums.json missing: every zone uses ``min_per_day_rupees`` (SPEC §9.1, logged by the loader).
+- premiums.json missing, or a city zone without a price: the table has no entry for it, so a cover quote for
+  that zone fails (X3); the loader logs the missing file and ``load_static`` logs each unpriced zone.
 - backtest report missing: ``backtest_report=None`` (``GET /api/backtest`` answers 404).
 A file that exists but is malformed is an error (ValueError), never silently replaced by defaults.
 """
@@ -26,7 +27,7 @@ from typing import Any, Final, Literal
 from chhatri.config import BACKEND_DIR, Settings
 from chhatri.forecast.errors import ModelArtifactError
 from chhatri.forecast.model import ExpectedSalesModel
-from chhatri.ledger.premium_table import load_premiums
+from chhatri.ledger.premium_table import load_premiums, zones_without_premium
 from chhatri.policy.rules import PolicyRules, default_rules
 from chhatri.sim.calibration import CALIBRATION_FILE, load_calibration
 from chhatri.sim.city import build_city
@@ -83,6 +84,11 @@ class StaticContext:
     def premiums_path(self) -> Path:
         return self.artifacts_dir / PREMIUMS_FILE
 
+    @property
+    def zones_without_premium(self) -> tuple[str, ...]:
+        """City zones that have no price in the premium table (X3), in city order."""
+        return zones_without_premium([zone.id for zone in self.city.zones], self.premiums)
+
 
 def load_model(directory: Path, city: City) -> tuple[ExpectedSalesModel | None, str | None]:
     """(model, None) or (None, reason).
@@ -134,10 +140,15 @@ def load_static(
     data_dir = Path(settings.chhatri_data_dir)
     rules = default_rules()
     calibration = load_calibration(data_dir, artifacts_dir=artifacts)
-    city = build_city(settings.chhatri_seed, data_dir, calibration, scale=scale)
+    premiums = load_premiums(rules, artifacts / PREMIUMS_FILE)
+    city = build_city(settings.chhatri_seed, data_dir, calibration, scale=scale, premiums=premiums)
     model, model_error = load_model(artifacts / MODEL_DIR, city)
     report = load_report(artifacts / BACKTEST_REPORT)
-    premiums = load_premiums(rules, artifacts / PREMIUMS_FILE)
+    unpriced = zones_without_premium([zone.id for zone in city.zones], premiums)
+    if unpriced:
+        logger.error(
+            "no premium for zones %s: a cover quote for them fails; %s", ", ".join(unpriced), MAKE_DATA_HINT
+        )
     logger.info(
         "static context: %d merchants, model %s, %d zone premiums",
         len(city.merchants),

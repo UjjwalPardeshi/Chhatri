@@ -40,6 +40,7 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from chhatri.clock import IST, Clock
+from chhatri.conversation.message_guard import SEND_KIND_META, MessageGuard, MessageSuppressed, SendKind
 from chhatri.conversation.messages import bilingual
 from chhatri.conversation.ports import ConversationStore
 from chhatri.domain.enums import Channel, Direction, Language, MessageKind
@@ -116,10 +117,13 @@ class Outgoing:
     kind: MessageKind
     text_hi: str | None
     text_en: str | None
-    card: Mapping[str, str] | None = None
+    card: Mapping[str, Any] | None = None
     case_id: str | None = None
     template: WhatsAppTemplate | None = None
     voiced: bool = True
+    meta: Mapping[str, Any] = (
+        _NO_META  # extra message meta (the slip pre-check's label), merged into the message
+    )
 
     @classmethod
     def text(cls, key: str, *, template: WhatsAppTemplate | None = None, **facts: object) -> Outgoing:
@@ -133,7 +137,7 @@ class Outgoing:
 
     def wire_text(self) -> str:
         """What a phone shows: the Hindi line + the English line (SPEC §13.1)."""
-        if self.card is not None:
+        if self.card is not None and "amount_label" in self.card:
             card = self.card
             return f"{card['amount_label']} · {card['subtitle_hi']}\n{card['subtitle_en']} · {card['badge']}"
         return "\n".join(line for line in (self.text_hi, self.text_en) if line)
@@ -165,6 +169,7 @@ class Outbox:
         tts: TextToSpeech,
         soundbox: Soundbox,
         channel_name: Channel,
+        guard: MessageGuard | None = None,
     ) -> None:
         channel_name = Channel(channel_name)  # accepts the enum value string, rejects anything else
         if channel_name is Channel.SOUNDBOX:
@@ -179,6 +184,7 @@ class Outbox:
         self._soundbox = soundbox
         self._channel_name = channel_name
         self._whatsapp = channel_name is Channel.WHATSAPP
+        self._guard = guard
 
     def now(self) -> datetime:
         return self._clock.now()
@@ -245,11 +251,16 @@ class Outbox:
     # ------------------------------------------------------------------ outbound
 
     async def send(self, merchant: Merchant, out: Outgoing) -> Message:
-        """Voice, record, publish, deliver and audit one outbound message."""
+        """Voice, record, publish, deliver and audit one outbound message.
+
+        With the X8 guard on, an OFFER in distress or a PROACTIVE message over the daily cap is audited as
+        ``message.suppressed`` and raises ``MessageSuppressed`` before anything is voiced, stored or sent.
+        """
         now = self.now()
+        extra = self._guard_meta(merchant, out, now)
         voice = await self._voice(merchant, out) if out.voiced and out.text_hi else _Voice()
         templated = out.template is not None and self._whatsapp and not self.in_session(merchant.id, now)
-        meta = dict(voice.meta) | ({"case_id": out.case_id} if out.case_id else {})
+        meta = dict(voice.meta) | dict(out.meta) | extra | ({"case_id": out.case_id} if out.case_id else {})
         message = Message(
             id=self._ids.next("message"),
             merchant_id=merchant.id,
@@ -281,6 +292,31 @@ class Outbox:
             },
         )
         return message
+
+    def _guard_meta(self, merchant: Merchant, out: Outgoing, now: datetime) -> dict[str, str]:
+        if self._guard is None:
+            return {}
+        verdict = self._guard.verdict(merchant, out.key, self._store.messages(merchant.id), now)
+        if verdict is not None:
+            self._audit.append(
+                at=now,
+                actor="system",
+                action="message.suppressed",
+                subject_type="merchant",
+                subject_id=merchant.id,
+                data={
+                    "merchant_id": merchant.id,
+                    "kind": verdict.kind.value,
+                    "reason": verdict.reason,
+                    "key": out.key,
+                },
+            )
+            raise MessageSuppressed(out.key, verdict)
+        return (
+            {SEND_KIND_META: SendKind.PROACTIVE.value}
+            if self._guard.kind(out.key) is SendKind.PROACTIVE
+            else {}
+        )
 
     async def _voice(self, merchant: Merchant, out: Outgoing) -> _Voice:
         if not merchant.is_demo or out.text_hi is None:

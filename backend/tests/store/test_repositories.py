@@ -160,6 +160,23 @@ def test_latest_paid_decision_requires_approved_and_credited(store: Store) -> No
     assert store.latest_paid_decision("S-0142") is d2
 
 
+def test_latest_final_decision_is_declined_or_approved_and_credited(store: Store) -> None:
+    """K5: what a dispute is about. A REFERRED decision, and an approved one whose money is still on its way, are not final."""
+    assert store.latest_final_decision("S-0142") is None
+    paid = decision("D-000001")
+    store.add_decision(paid)
+    store.add_payout(payout("P-000001", "D-000001"))  # PENDING
+    store.add_decision(decision("D-000002", DecisionOutcome.REFERRED))
+    assert store.latest_final_decision("S-0142") is None
+    store.replace_payout(payout("P-000001", "D-000001", status=PayoutStatus.CREDITED, credited_at=AT))
+    assert store.latest_final_decision("S-0142") is paid
+    declined = decision("D-000003", DecisionOutcome.DECLINED, amount_paise=0)
+    store.add_decision(declined)
+    assert store.latest_final_decision("S-0142") is declined, "the newest settled decision, paid or declined"
+    store.add_decision(decision("D-000004", merchant_id="S-0907"))
+    assert store.latest_final_decision("S-0907") is None
+
+
 def test_payout_rules(store: Store) -> None:
     p = payout()
     store.add_payout(p)
@@ -380,3 +397,16 @@ def test_duplicate_race_only_one_wins(store: Store) -> None:
     for t in pool:
         t.join()
     assert len(store.payouts()) == 1 and len(errors) == 9
+
+
+def test_claims_and_decisions_list_in_insertion_order(store: Store) -> None:
+    """H8 reads every claim and every decision of the run, oldest first, as frozen snapshots."""
+    assert store.claims() == () and store.decisions() == ()
+    first, second = b.area_claim(id="CL-000009"), b.area_claim(id="CL-000001")
+    for claim in (first, second):
+        store.add_claim(claim)
+    for did, claim_id in (("D-000007", "CL-000009"), ("D-000003", "CL-000001"), ("D-000005", "CL-000001")):
+        store.add_decision(decision(did, claim_id=claim_id))
+    assert store.claims() == (first, second)
+    assert [d.id for d in store.decisions()] == ["D-000007", "D-000003", "D-000005"]
+    assert isinstance(store.claims(), tuple) and isinstance(store.decisions(), tuple)

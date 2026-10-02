@@ -16,7 +16,7 @@ Premium amounts per zone come from backend/artifacts/premiums.json (`premium_tab
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date, datetime, timedelta
 from typing import Final
 
@@ -55,7 +55,9 @@ class PremiumService:
         links: PaymentLinks,
         *,
         premiums: Mapping[str, int] | None = None,
+        settlement_consent: Callable[[str], bool] | None = None,
     ) -> None:
+        self._consent = settlement_consent  # N6: None (flag off) means every merchant has agreed
         self._store = store
         self._audit = audit
         self._ids = ids
@@ -64,7 +66,7 @@ class PremiumService:
         self._premiums = premiums if premiums is not None else load_premiums(rules)
 
     def premium_per_day(self, zone_id: str) -> int:
-        """Daily premium in paise for a zone (premiums.json, else the SPEC §9.1 minimum)."""
+        """Daily premium in paise for a zone (premiums.json); ValueError when the zone has no entry (X3)."""
         return premium_per_day_paise(zone_id, self._premiums, self._rules)
 
     async def create_link(self, merchant: Merchant, quote: CoverQuote, at: datetime) -> PremiumPayment:
@@ -179,10 +181,15 @@ class PremiumService:
         if cover.prepaid_through is not None and cover.prepaid_through > day:
             return None
         premium = cover.premium_per_day_paise
-        if cover.prepaid_through != day or gross < premium:
+        withdrawn = (
+            cover.prepaid_through == day and self._consent is not None and not self._consent(merchant_id)
+        )
+        if cover.prepaid_through != day or gross < premium or withdrawn:
             reason = (
                 "cover lapsed before this day"
                 if cover.prepaid_through != day
+                else "consent withdrawn"
+                if withdrawn
                 else "collections below premium"
             )
             data = {

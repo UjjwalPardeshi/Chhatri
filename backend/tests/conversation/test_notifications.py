@@ -7,8 +7,17 @@ from datetime import date
 import pytest
 
 from chhatri.clock import ist
-from chhatri.domain.enums import CaseStatus, Channel, DecisionOutcome, MessageKind, PayoutStatus
-from chhatri.domain.models import Case, Decision, InstalmentPause
+from chhatri.domain.enums import (
+    CaseKind,
+    CaseStatus,
+    Channel,
+    DecisionOutcome,
+    HolidayReason,
+    HolidayStatus,
+    MessageKind,
+    PayoutStatus,
+)
+from chhatri.domain.models import Case, Decision, HolidayRequest, InstalmentPause
 from chhatri.integrations.whatsapp_sim import SimulatorChannel
 from chhatri.ledger.instalments import InstalmentService
 from chhatri.policy.engine import apply_officer_decision
@@ -134,6 +143,106 @@ async def test_instalment_on_a_date_in_hindi() -> None:
     assert told.text_hi == "25 अगस्त की ₹600 की किस्त रोक दी गई है।"
 
 
+def _holiday(
+    day: date, status: HolidayStatus = HolidayStatus.GRANTED, reason: HolidayReason | None = None
+) -> HolidayRequest:
+    return HolidayRequest(
+        id="HR-000001",
+        merchant_id=ANIL.id,
+        loan_id="LN-0142",
+        decision_id="D-000001",
+        payout_id="P-000001",
+        instalment_date=day,
+        instalment_paise=60_000,
+        requested_at=ist(2025, 8, 21, 11, 45),
+        status=status,
+        reason_code=reason,
+        decided_at=None if status is HolidayStatus.REQUESTED else ist(2025, 8, 21, 11, 45),
+    )
+
+
+@pytest.mark.parametrize(
+    ("day", "expected_en", "expected_hi"),
+    [
+        (
+            date(2025, 8, 22),
+            "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty.",
+            "आपके लेंडर ने कल की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        ),
+        (
+            date(2025, 8, 21),
+            "Your lender has paused today's ₹600 instalment. It moves to the end of your loan with no penalty.",
+            "आपके लेंडर ने आज की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        ),
+        (
+            date(2025, 8, 25),
+            "Your lender has paused the ₹600 instalment due on 25 August. It moves to the end of your loan with no penalty.",
+            "आपके लेंडर ने 25 अगस्त की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        ),
+    ],
+    ids=["tomorrow", "today", "a date"],
+)
+async def test_a_granted_holiday_names_the_lender_and_follows_the_date(
+    day: date, expected_en: str, expected_hi: str
+) -> None:
+    world = make_world(start=ist(2025, 8, 21, 11, 45))
+    told = await world.service.notify_holiday_decided(_holiday(day))
+    assert (told.text_en, told.text_hi, told.kind) == (expected_en, expected_hi, MessageKind.TEXT)
+    assert told.created_at == ist(2025, 8, 21, 11, 45)
+
+
+@pytest.mark.parametrize(
+    ("day", "when_en", "when_hi"),
+    [
+        (date(2025, 8, 22), "tomorrow", "कल"),
+        (date(2025, 8, 21), "today", "आज"),
+        (date(2025, 8, 25), "on 25 August", "25 अगस्त"),
+    ],
+    ids=["tomorrow", "today", "a date"],
+)
+async def test_a_refusal_gives_the_lenders_reason_and_says_the_payout_is_safe(
+    day: date, when_en: str, when_hi: str
+) -> None:
+    world = make_world(start=ist(2025, 8, 21, 11, 45))
+    refused = _holiday(day, HolidayStatus.REFUSED, HolidayReason.NO_ALLOWANCE)
+    told = await world.service.notify_holiday_decided(refused)
+    assert told.text_en == (
+        f"Your lender could not pause the ₹600 instalment due {when_en}: your holiday allowance is used up. "
+        "It is due as usual. Your payout is not affected."
+    )
+    assert told.text_hi == (
+        f"आपका लेंडर {when_hi} की ₹600 की किस्त नहीं रोक सका: आपकी किस्त की छुट्टियों की सीमा पूरी हो चुकी है। "
+        "वह हमेशा की तरह देय है। आपके भुगतान पर इसका कोई असर नहीं पड़ता।"
+    )
+
+
+@pytest.mark.parametrize("reason", list(HolidayReason))
+async def test_every_lender_reason_has_its_own_plain_words(reason: HolidayReason) -> None:
+    world = make_world(start=ist(2025, 8, 21, 11, 45))
+    told = await world.service.notify_holiday_decided(
+        _holiday(date(2025, 8, 22), HolidayStatus.REFUSED, reason)
+    )
+    assert told.text_en is not None and f"{reason.value}" not in told.text_en  # words, never the code
+    assert "Your payout is not affected." in told.text_en
+
+
+async def test_no_answer_says_we_could_not_reach_the_lender_and_the_instalment_is_due() -> None:
+    world = make_world(start=ist(2025, 8, 21, 11, 45))
+    told = await world.service.notify_holiday_decided(_holiday(date(2025, 8, 22), HolidayStatus.NO_RESPONSE))
+    assert told.text_en == (
+        "We could not reach your lender about the ₹600 instalment due tomorrow, so it is due as usual. "
+        "Your payout is not affected."
+    )
+
+
+async def test_a_request_with_no_decision_yet_is_never_announced() -> None:
+    world = make_world(start=ist(2025, 8, 21, 11, 45))
+    waiting = _holiday(date(2025, 8, 22), HolidayStatus.REQUESTED)
+    with pytest.raises(ValueError, match="REQUESTED"):
+        await world.service.notify_holiday_decided(waiting)
+    assert world.store.messages(ANIL.id) == ()
+
+
 async def test_checkin_is_a_template_on_whatsapp_and_text_on_the_simulator() -> None:
     channel = SimulatorChannel()
     whatsapp = make_world(start=ist(2025, 8, 21, 11, 20), channel=channel, channel_name=Channel.WHATSAPP)
@@ -242,6 +351,56 @@ async def test_closed_personal_dispute_is_answered_with_the_daily_limit() -> Non
     assert told.text_en.endswith(
         "our team reviewed your claim. The amount paid follows your policy's daily limit."
     )
+
+
+async def test_a_closed_dispute_with_no_decision_says_there_is_no_amount_to_change(world: World) -> None:
+    """K5: the officer closes a case that names no decision; the merchant hears why nothing changed."""
+    case = world.claims.cases.open(
+        kind=CaseKind.DISPUTE,
+        merchant_id=ANIL.id,
+        at=world.clock.now(),
+        summary_en="x",
+        summary_hi=None,
+        evidence={},
+    )
+    with pytest.raises(ValueError, match="is OPEN, not CLOSED"):
+        await world.service.notify_officer_result(None, case)
+    closed = world.claims.cases.resolve(
+        case.id,
+        status=CaseStatus.CLOSED,
+        by="officer:priya",
+        resolution="no payout yet",
+        at=world.clock.now(),
+    )
+    (told,) = await world.service.notify_officer_result(None, closed)
+    assert told.text_en == (
+        "Our team looked at your question. No payout has been made on your account yet, "
+        "so there is no amount to change. Your claim tracker shows why."
+    )
+    assert told.text_hi and "कोई भुगतान नहीं हुआ" in told.text_hi
+    assert (told.kind, told.meta["case_id"]) == (MessageKind.TEXT, closed.id)
+
+
+async def test_a_decision_is_required_for_every_case_but_a_dispute(world: World) -> None:
+    decision, _, _ = _paid_area(world)
+    case = world.claims.cases.open(
+        kind=CaseKind.DISPUTE,
+        merchant_id=ANIL.id,
+        at=world.clock.now(),
+        summary_en="x",
+        summary_hi=None,
+        evidence={},
+        claim_id=decision.claim_id,
+        decision_id=decision.id,
+    )
+    closed = world.claims.cases.resolve(
+        case.id, status=CaseStatus.CLOSED, by="officer:priya", resolution="ok", at=world.clock.now()
+    )
+    with pytest.raises(ValueError, match="names decision"):
+        await world.service.notify_officer_result(None, closed)
+    review = closed.model_copy(update={"kind": CaseKind.PERSONAL_CLAIM_REVIEW})
+    with pytest.raises(ValueError, match="needs the decision it resolved"):
+        await world.service.notify_officer_result(None, review)
 
 
 async def test_dispute_answer_validation(world: World) -> None:

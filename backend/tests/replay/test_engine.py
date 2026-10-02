@@ -264,7 +264,7 @@ async def test_money_decided_at_the_end_still_arrives_on_its_schedule() -> None:
     rig, ran = Rig(end=monsoon_at(8, 10), settle_minutes=5), Ran()
     await rig.engine.step(10)
     rig.scheduler.schedule(monsoon_at(8, 14), "payout:D-1:credit_payout", ran.job("credit"))
-    rig.scheduler.schedule(monsoon_at(8, 15), "payout:D-1:pause_instalment", ran.job("pause"))
+    rig.scheduler.schedule(monsoon_at(8, 15), "payout:D-1:request_holiday", ran.job("pause"))
     rig.scheduler.schedule(
         monsoon_at(8, 10) + timedelta(hours=24), "follow-up:C-1:check_case_sla", ran.job("sla")
     )

@@ -11,6 +11,7 @@ from chhatri.conversation.reasons import (
     dispute_reason_key,
     hard_fail_reason_key,
     officer_reason_key,
+    referred_track_key,
     slip_to_human_key,
 )
 from chhatri.domain.enums import CaseKind, CheckCode, CheckStatus, DecisionOutcome, Severity
@@ -136,3 +137,28 @@ def test_dispute_reason_follows_what_was_disputed() -> None:
     assert {"REASON_OFFICER_DISPUTE", "REASON_OFFICER_DISPUTE_PERSONAL"} <= set(CATALOGUE)
     with pytest.raises(ValueError, match="has no explanation"):
         dispute_reason_key(_decision(outcome=DecisionOutcome.APPROVED))
+
+
+def test_dispute_reason_for_a_declined_decision_reuses_its_reason_text() -> None:
+    """K5: a dispute about a refusal is answered with the reason the claim was refused for."""
+    refused = _decision(_check(CheckCode.PREMIUM_PREPAID, F, Severity.HARD), outcome=DecisionOutcome.DECLINED)
+    assert dispute_reason_key(refused) == "REASON_PREMIUM_PREPAID"
+    by_officer = _decision(_check(CheckCode.NAME_MATCHES_KYC, F, S), outcome=DecisionOutcome.DECLINED)
+    assert dispute_reason_key(by_officer) == "REASON_OFFICER_PERSONAL"
+    assert {"REASON_PREMIUM_PREPAID", "REASON_OFFICER_PERSONAL"} <= set(CATALOGUE)
+
+
+@pytest.mark.parametrize(
+    ("code", "key"),
+    [
+        (CheckCode.SLIP_READABLE, "TRACK_REFERRED_UNREADABLE"),
+        (CheckCode.NAME_MATCHES_KYC, "TRACK_REFERRED_NAME"),
+        (CheckCode.DATES_MATCH, "TRACK_REFERRED_DATES"),
+        (CheckCode.WITHIN_AUTO_LIMIT, "TRACK_REFERRED_DAYS"),
+    ],
+)
+def test_the_tracker_says_why_a_claim_is_with_a_person_with_the_same_issue_as_the_chat(
+    code: CheckCode, key: str
+) -> None:
+    decision = _decision(_check(code, U, S))
+    assert referred_track_key(decision) == key and key in CATALOGUE

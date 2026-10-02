@@ -62,15 +62,17 @@ def test_load_premiums_from_file(tmp_path: Path) -> None:
         table["Z9"] = 1  # type: ignore[index]
 
 
-def test_missing_file_falls_back_to_minimum(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_missing_file_gives_no_zone_a_price(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     table = load_premiums(RULES, tmp_path / "absent.json")
     assert dict(table) == {}
-    assert premium_per_day_paise("Z7", table, RULES) == rupees(2)
-    assert "minimum premium" in caplog.text
+    with pytest.raises(ValueError, match="no premium for zone Z7"):
+        premium_per_day_paise("Z7", table, RULES)
+    assert "no zone has a premium" in caplog.text
 
 
-def test_zone_without_entry_uses_minimum() -> None:
-    assert premium_per_day_paise("Z9", PREMIUMS, RULES) == rupees(2)
+def test_zone_without_entry_is_an_error() -> None:
+    with pytest.raises(ValueError, match="no premium for zone Z9"):
+        premium_per_day_paise("Z9", PREMIUMS, RULES)
     assert premium_per_day_paise("Z7", PREMIUMS, RULES) == 450
 
 
@@ -97,7 +99,8 @@ def test_service_loads_default_artifact_when_no_table_given(
     )
     service = PremiumService(store, audit, ids, RULES, FakeLinks())
     assert service.premium_per_day("Z7") == 510
-    assert service.premium_per_day("Z3") == rupees(2)
+    with pytest.raises(ValueError, match="no premium for zone Z3"):
+        service.premium_per_day("Z3")
 
 
 # --- payment links --------------------------------------------------------------------------

@@ -75,6 +75,7 @@ async def test_explained_why_then_dispute_opens_c2291(world: World) -> None:
 
 async def test_explained_with_the_english_deck_sentence() -> None:
     world = make_world(start=ist(2025, 8, 19, 17, 12))
+    world.claims.pay(world.claims.decide_area(ANIL, z7_trigger()))  # a dispute is about a decision (K5)
     _, ack, chip = await world.service.handle_text(ANIL.id, "My loss was bigger than that.")
     assert ack.text_en.startswith("Okay, I'm sending this to our team.")
     assert chip.text_en == "Sent to a claims officer · case C-2291"

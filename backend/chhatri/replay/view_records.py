@@ -21,12 +21,14 @@ from chhatri.domain.models import (
     CheckResult,
     Decision,
     Explanation,
+    HolidayRequest,
     InstalmentPause,
     Merchant,
     Message,
     Payout,
 )
 from chhatri.money import format_inr
+from chhatri.policy.cover import effective_status
 from chhatri.policy.engine import publish_expected_day
 
 if TYPE_CHECKING:
@@ -39,6 +41,7 @@ __all__ = [
     "check_view",
     "decision_view",
     "explanation_view",
+    "holiday_request_view",
     "iso",
     "iso_date",
     "mask_name",
@@ -189,6 +192,24 @@ def pause_view(p: InstalmentPause) -> dict[str, Any]:
     }
 
 
+def holiday_request_view(r: HolidayRequest, lender: str) -> dict[str, Any]:
+    """An EDI holiday request with the lender's answer (X4); ``lender`` is the name on the merchant's loan."""
+    return {
+        "id": r.id,
+        "loan_id": r.loan_id,
+        "decision_id": r.decision_id,
+        "payout_id": r.payout_id,
+        "instalment_date": iso_date(r.instalment_date),
+        "instalment_paise": r.instalment_paise,
+        "instalment_label": format_inr(r.instalment_paise),
+        "requested_at": iso(r.requested_at),
+        "status": r.status.value,
+        "reason_code": r.reason_code.value if r.reason_code is not None else None,
+        "decided_at": iso_or_none(r.decided_at),
+        "lender": lender,
+    }
+
+
 def message_view(m: Message) -> dict[str, Any]:
     return {
         "id": m.id,
@@ -281,6 +302,7 @@ def merchant_detail(rt: Runtime, merchant_id: str) -> dict[str, Any]:
     """MerchantDetail; KeyError for an unknown merchant."""
     m = rt.static.city.merchant(merchant_id)
     cover = rt.store.cover(m.id)
+    today = rt.clock.now().astimezone(IST).date()
     loan = rt.static.city.loans.get(m.id)
     return _summary(rt, m) | {
         "owner_name_hi": m.owner_name_hi,
@@ -290,7 +312,9 @@ def merchant_detail(rt: Runtime, merchant_id: str) -> dict[str, Any]:
         "cover": None
         if cover is None
         else {
-            "status": cover.status.value,
+            "status": effective_status(
+                cover, today
+            ).value,  # derived (K6), so the console agrees with the app
             "starts_on": iso_date(cover.starts_on),
             "prepaid_through": iso_date(cover.prepaid_through) if cover.prepaid_through else None,
             "premium_per_day_label": format_inr(cover.premium_per_day_paise),
@@ -304,4 +328,9 @@ def merchant_detail(rt: Runtime, merchant_id: str) -> dict[str, Any]:
         "expected_today_label": _expected_today_label(rt, m.id),
         "payouts": [payout_view(p) for p in rt.store.payouts(merchant_id=m.id)],
         "decisions": [decision_view(d) for d in rt.store.decisions_for(m.id)],
+        "holiday_requests": [
+            holiday_request_view(r, loan.lender_name)
+            for r in rt.store.holiday_requests(m.id)
+            if loan is not None
+        ],
     }

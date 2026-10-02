@@ -25,6 +25,11 @@ def _has(value: SecretStr | str | None) -> bool:
     return bool(raw.strip())
 
 
+def _model_id(value: str) -> str:
+    """A model id as the API names it: trimmed, without the `models/` prefix its own list puts in front."""
+    return value.strip().removeprefix("models/").strip()
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
@@ -45,6 +50,9 @@ class Settings(BaseSettings):
     chhatri_log_level: str = "INFO"
     # Feature flags (Wave 0): comma-separated names from chhatri.features.FEATURE_NAMES; empty = all off.
     chhatri_features: str = ""
+    # X4: how long Chhatri waits for the lender's answer to an EDI holiday request, in seconds. One attempt, no
+    # retry (fs-03 section 7.4); proposed 10 s, a target to tune. Simulated lender answers are instant.
+    chhatri_lender_timeout_seconds: float = Field(default=10.0, gt=0)
 
     # Sarvam (SPEC §14.1)
     sarvam_api_key: SecretStr | None = None
@@ -52,6 +60,14 @@ class Settings(BaseSettings):
     sarvam_stt_model: str = "saaras:v3"
     sarvam_tts_model: str = "bulbul:v3"
     sarvam_tts_speaker: str = "ritu"
+
+    # Gemini (Google AI Studio free tier; ADR 0003). A link is in a chain only with a key AND a model id. No model id
+    # has a default: the free-tier ids change, so `make check-keys` lists the real ones and the environment names one.
+    google_api_key: SecretStr | None = None
+    gemini_model: str = ""  # text model; also reads slips unless GEMINI_VISION_MODEL names another
+    gemini_vision_model: str = ""  # optional: a model that accepts images, for the slip reader
+    # ADR 0009: free-tier AI links are called only when the deployment says its data is synthetic. Fails closed.
+    chhatri_data_is_synthetic: bool = False
 
     # WhatsApp Cloud API (SPEC §14.2)
     whatsapp_access_token: SecretStr | None = None
@@ -84,6 +100,27 @@ class Settings(BaseSettings):
     @property
     def sarvam_live(self) -> bool:
         return _has(self.sarvam_api_key)
+
+    @property
+    def gemini_key_set(self) -> bool:
+        return _has(self.google_api_key)
+
+    @property
+    def gemini_chat_model_id(self) -> str:
+        return _model_id(self.gemini_model)
+
+    @property
+    def gemini_vision_model_id(self) -> str:
+        """The slip reader's model: GEMINI_VISION_MODEL, else the text model."""
+        return _model_id(self.gemini_vision_model) or self.gemini_chat_model_id
+
+    @property
+    def gemini_chat_live(self) -> bool:
+        return self.gemini_key_set and bool(self.gemini_chat_model_id)
+
+    @property
+    def gemini_vision_live(self) -> bool:
+        return self.gemini_key_set and bool(self.gemini_vision_model_id)
 
     @property
     def whatsapp_live(self) -> bool:

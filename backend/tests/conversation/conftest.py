@@ -16,11 +16,13 @@ import pytest
 from chhatri.audit.log import AuditLog
 from chhatri.cases.service import CaseService
 from chhatri.clock import ManualClock, ist
+from chhatri.conversation.ports import DisputeOutcome
 from chhatri.conversation.service import ConversationService
 from chhatri.domain.enums import (
     AlertKind,
     AlertLevel,
     CaseKind,
+    CaseStatus,
     Channel,
     ClaimKind,
     DecisionOutcome,
@@ -30,7 +32,6 @@ from chhatri.domain.enums import (
 from chhatri.domain.models import (
     Alert,
     AreaTrigger,
-    Case,
     Claim,
     Cover,
     CoverQuote,
@@ -226,18 +227,31 @@ class WorldClaims:
         self.silence = None
         return decision
 
-    async def open_dispute(self, merchant_id: str, text: str) -> Case:
-        disputed = self.store.latest_paid_decision(merchant_id)
-        return self.cases.open(
+    async def open_dispute(self, merchant_id: str, text: str) -> DisputeOutcome:
+        disputed = self.store.latest_final_decision(merchant_id)
+        if disputed is None:
+            return DisputeOutcome(case=None)
+        open_case = next(
+            (
+                c
+                for c in self.store.cases(CaseStatus.OPEN)
+                if c.kind is CaseKind.DISPUTE and c.decision_id == disputed.id
+            ),
+            None,
+        )
+        if open_case is not None:
+            return DisputeOutcome(case=open_case, already_open=True)
+        case = self.cases.open(
             kind=CaseKind.DISPUTE,
             merchant_id=merchant_id,
             at=self.clock.now(),
             summary_en="Merchant disputes the payout",
             summary_hi=None,
             evidence={"merchant_text": text},
-            claim_id=disputed.claim_id if disputed is not None else None,
-            decision_id=disputed.id if disputed is not None else None,
+            claim_id=disputed.claim_id,
+            decision_id=disputed.id,
         )
+        return DisputeOutcome(case=case)
 
     async def quote_cover(self, merchant_id: str) -> tuple[CoverQuote, PremiumPayment | None]:
         merchant, now = self.store.city.merchant(merchant_id), self.clock.now()

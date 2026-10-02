@@ -187,3 +187,62 @@ def test_dates(day: date, hi: str, en: str) -> None:
 def test_month_tables_have_twelve_entries() -> None:
     assert len(messages.MONTHS_HI) == 12
     assert len(messages.MONTHS_EN) == 12
+
+
+HOLIDAY_GRANTED_KEYS = ("HOLIDAY_GRANTED", "HOLIDAY_GRANTED_TODAY", "HOLIDAY_GRANTED_ON")
+HOLIDAY_REASONS = {
+    "FLAG_OFF": ("यह लोन किस्त की छुट्टी की योजना में शामिल नहीं है", "this loan is not part of the holiday scheme"),
+    "NOT_ACTIVE": ("लोन चालू नहीं है", "the loan is not active"),
+    "IN_ARREARS": ("लोन की कुछ रकम बकाया है", "the loan has an amount overdue"),
+    "NO_ALLOWANCE": ("आपकी किस्त की छुट्टियों की सीमा पूरी हो चुकी है", "your holiday allowance is used up"),
+}
+
+
+def test_holiday_messages_render_and_name_the_lender() -> None:
+    """X4 (copy deck 3.3): the lender decides, so every holiday line names the lender and none says Chhatri paused."""
+    assert bilingual("HOLIDAY_GRANTED", instalment="₹600") == (
+        "आपके लेंडर ने कल की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty.",
+    )
+    assert bilingual("HOLIDAY_GRANTED_TODAY", instalment="₹600") == (
+        "आपके लेंडर ने आज की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        "Your lender has paused today's ₹600 instalment. It moves to the end of your loan with no penalty.",
+    )
+    assert bilingual("HOLIDAY_GRANTED_ON", instalment="₹600", date_hi="25 अगस्त", date_en="25 August") == (
+        "आपके लेंडर ने 25 अगस्त की ₹600 की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।",
+        "Your lender has paused the ₹600 instalment due on 25 August. It moves to the end of your loan with no penalty.",
+    )
+    refused = bilingual(
+        "HOLIDAY_REFUSED",
+        instalment="₹600",
+        when_hi="कल",
+        when_en="tomorrow",
+        reason_hi=HOLIDAY_REASONS["IN_ARREARS"][0],
+        reason_en=HOLIDAY_REASONS["IN_ARREARS"][1],
+    )
+    assert refused == (
+        "आपका लेंडर कल की ₹600 की किस्त नहीं रोक सका: लोन की कुछ रकम बकाया है। वह हमेशा की तरह देय है। "
+        "आपके भुगतान पर इसका कोई असर नहीं पड़ता।",
+        "Your lender could not pause the ₹600 instalment due tomorrow: the loan has an amount overdue. "
+        "It is due as usual. Your payout is not affected.",
+    )
+    assert bilingual("HOLIDAY_NO_RESPONSE", instalment="₹600", when_hi="25 अगस्त", when_en="on 25 August") == (
+        "हम 25 अगस्त की ₹600 की किस्त के बारे में आपके लेंडर तक नहीं पहुँच सके, इसलिए वह हमेशा की तरह देय है। "
+        "आपके भुगतान पर इसका कोई असर नहीं पड़ता।",
+        "We could not reach your lender about the ₹600 instalment due on 25 August, so it is due as usual. "
+        "Your payout is not affected.",
+    )
+    for code, (hi, en) in HOLIDAY_REASONS.items():
+        assert bilingual(f"HOLIDAY_REASON_{code}") == (hi, en)
+    for key in (*HOLIDAY_GRANTED_KEYS, "HOLIDAY_REFUSED", "HOLIDAY_NO_RESPONSE"):
+        entry = CATALOGUE[key]
+        assert "lender" in entry.en and "लेंडर" in (entry.hi or "")
+        assert "Chhatri paused" not in entry.en and "छतरी ने" not in (entry.hi or "")
+
+
+def test_the_built_instalment_lines_stay_for_the_flag_off_path() -> None:
+    """While `x4_lender_request` exists the catalogue keeps both sets; the three INSTALMENT_PAUSED lines serve the off path."""
+    assert bilingual("INSTALMENT_PAUSED_TODAY", instalment="₹600")[1] == "Today's ₹600 instalment is paused."
+    assert bilingual("INSTALMENT_PAUSED_ON", instalment="₹600", date_hi="25 अगस्त", date_en="25 August")[
+        1
+    ] == ("The ₹600 instalment due on 25 August is paused.")

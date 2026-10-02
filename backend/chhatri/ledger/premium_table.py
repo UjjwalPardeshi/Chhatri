@@ -1,15 +1,18 @@
 """Per-zone daily premiums (SPEC §9.1, §9.7, §18; binding decision B6).
 
 `backend/artifacts/premiums.json` (`{zone_id: premium_per_day_paise}`) is written only by the
-backtest. When the file is absent every zone uses `min_per_day_rupees` — the documented SPEC §9.1
-fallback — and a warning is logged. A present but malformed file is an error, never ignored.
+backtest. When the file is absent the table is empty and a warning is logged. A zone with no entry has
+no price: `premium_per_day_paise` raises instead of quietly charging the minimum (X3), and
+`zones_without_premium` names the zones so start-up and `/api/preflight` can say which. The
+`min_per_day_rupees` minimum stays as the floor `parse_premiums` enforces on every entry. A present but
+malformed file is an error, never ignored.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import Final
@@ -44,9 +47,9 @@ def parse_premiums(raw: object, rules: PolicyRules) -> Mapping[str, int]:
 
 
 def load_premiums(rules: PolicyRules, path: Path = PREMIUMS_PATH) -> Mapping[str, int]:
-    """Read premiums.json; an absent file yields an empty table (every zone at the minimum)."""
+    """Read premiums.json; an absent file yields an empty table (no zone has a price, X3)."""
     if not path.exists():
-        logger.warning("%s not found; every zone uses the minimum premium (SPEC §9.1)", path)
+        logger.warning("%s not found; no zone has a premium, so a cover quote for any zone fails", path)
         return MappingProxyType({})
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -57,5 +60,13 @@ def load_premiums(rules: PolicyRules, path: Path = PREMIUMS_PATH) -> Mapping[str
 
 
 def premium_per_day_paise(zone_id: str, premiums: Mapping[str, int], rules: PolicyRules) -> int:
-    """Zone premium from the table, or the SPEC §9.1 minimum when the zone has no entry."""
-    return premiums.get(zone_id, min_premium_paise(rules))
+    """Zone premium from the table. A zone with no entry has no price: ValueError, never the minimum (X3)."""
+    try:
+        return premiums[zone_id]
+    except KeyError:
+        raise ValueError(f"no premium for zone {zone_id}") from None
+
+
+def zones_without_premium(zone_ids: Iterable[str], premiums: Mapping[str, int]) -> tuple[str, ...]:
+    """The zones of `zone_ids` that have no entry in `premiums`, in the order given."""
+    return tuple(zone_id for zone_id in zone_ids if zone_id not in premiums)

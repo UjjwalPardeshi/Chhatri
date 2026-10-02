@@ -15,7 +15,7 @@ from chhatri.domain.enums import MessageKind
 from chhatri.integrations.base import IntegrationError, Transcript
 from chhatri.integrations.demo_voice import DEMO_VOICE_MIME, demo_voice_note
 from chhatri.sim.city import ANIL
-from tests.conversation.conftest import SILENT_DAY, World, make_world
+from tests.conversation.conftest import SILENT_DAY, World, make_world, z7_trigger
 
 
 class ScriptedSTT:
@@ -52,7 +52,13 @@ def test_claims_port_is_importable_from_service_and_structural(world: World) -> 
     assert isinstance(world.claims, ClaimsPort)
     assert isinstance(world.store, ConversationStore)
     assert isinstance(world.city, MerchantDirectory)
-    assert ConversationService.__init__.__kwdefaults__ is None  # every dependency is required
+    # every dependency is required except the optional resolvers and guard of the flagged features (N3 pre-check, N2 Ask, X8, N6 slip consent)
+    assert set(ConversationService.__init__.__kwdefaults__ or {}) <= {
+        "precheck",
+        "unknown",
+        "message_guard",
+        "slip_consent",
+    }
 
 
 async def test_handle_text_validates_input(world: World) -> None:
@@ -101,6 +107,7 @@ async def test_demo_voice_note_is_transcribed_stored_and_answered(world: World) 
 
 async def test_live_stt_transcript_is_labelled_sarvam(world: World) -> None:
     _stt(world, ScriptedSTT(Transcript("मेरा नुकसान ज़्यादा हुआ।", "hi-IN", 0.97, "sarvam:saaras:v3")))
+    world.claims.pay(world.claims.decide_area(ANIL, z7_trigger()))  # a dispute is about a decision (K5)
     inbound, ack, chip = await world.service.handle_voice(ANIL.id, b"OggS-voice", "audio/ogg")
     assert inbound.meta == {"voice_source": "sarvam", "transcript": "मेरा नुकसान ज़्यादा हुआ।"}
     assert chip.text_en == "Sent to a claims officer · case C-2291"

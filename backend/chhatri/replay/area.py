@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 from typing import Final
 
 from chhatri.clock import floor_hour
+from chhatri.consent.ledger import consent_gate_open
+from chhatri.consent.notice import SALES
 from chhatri.detect.triggers import evaluate_hour
 from chhatri.detect.types import ZoneState
 from chhatri.domain.enums import ClaimKind, DecisionOutcome
@@ -140,7 +142,12 @@ class AreaFlow:
     async def _claims(self, trigger: AreaTrigger, alert: Alert) -> None:
         rt = self._link.rt
         rt.board.start_progress(trigger)
-        covered = [m for m in rt.static.city.merchants_in_zone(trigger.zone_id) if rt.store.cover(m.id)]
+        covered = [
+            m
+            for m in rt.static.city.merchants_in_zone(trigger.zone_id)
+            if rt.store.cover(m.id)
+            and consent_gate_open(rt.store, m.id, SALES)  # N6: a withdrawn merchant is uncovered
+        ]
         declined = 0
         for merchant in covered:
             decision = await self._claim(merchant, trigger, alert)
@@ -176,4 +183,4 @@ class AreaFlow:
         decision = evaluate_area_claim(
             facts, rt.static.rules, decision_id=rt.ids.next("decision"), now=trigger.fired_at
         )
-        return await self._recorder.record(decision, action="decision.area", claim=claim)
+        return await self._recorder.record(decision, action="decision.area", claim=claim, facts=facts)

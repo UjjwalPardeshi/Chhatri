@@ -53,3 +53,16 @@ def static(
 def monsoon_1705(static: StaticContext) -> Runtime:
     """The monsoon replay at 17:05 (credits 17:04, pauses 17:05); read-only for every test."""
     return run_in_thread(lambda: loaded(static, "monsoon", seek="17:05"))
+
+
+@pytest.fixture(scope="session")
+def static_x4(small_city: City, small_model: ExpectedSalesModel, var_dir: Path) -> StaticContext:
+    """The same small world with the flag `x4_lender_request` on: the lender decides the EDI holiday."""
+    on = offline_settings(var_dir, chhatri_features="x4_lender_request")
+    return make_static(on, small_city, small_model, var_dir / "artifacts")
+
+
+@pytest.fixture(scope="session")
+def monsoon_1705_x4(static_x4: StaticContext) -> Runtime:
+    """The monsoon replay at 17:05 with the lender deciding; read-only for every test."""
+    return run_in_thread(lambda: loaded(static_x4, "monsoon", seek="17:05"))

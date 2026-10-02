@@ -17,6 +17,7 @@ from chhatri.api.deps import RuntimeDep, StateDep, merchant_or_404, require_offi
 from chhatri.api.envelope import ok
 from chhatri.api.errors import ApiError
 from chhatri.api.requests import PremiumLinkRequest
+from chhatri.consent.purchase import PurchaseInvalid, check_purchase, expect_grant
 from chhatri.domain.models import CoverQuote, PremiumPayment
 from chhatri.integrations.base import IntegrationError
 from chhatri.money import format_inr
@@ -74,8 +75,18 @@ async def premium_link(
     """Quote cover for ``merchant_id`` and return the Paytm link (staging when live)."""
     merchant_or_404(state, body.merchant_id)
     try:
+        check_purchase(
+            runtime, body.merchant_id, body.consents, body.notice_version
+        )  # N6: a no-op while the flag is off
+    except PurchaseInvalid as exc:
+        raise ApiError(422, "consent is incomplete", fields=exc.fields) from exc
+    try:
         quote, premium = await runtime.orchestrator.quote_cover(body.merchant_id)
     except IntegrationError as exc:
         logger.warning("payment link failed: %s", exc.safe_message)
         raise ApiError(502, "payment link service unavailable") from exc
+    if premium is not None:
+        expect_grant(
+            runtime, body.merchant_id, premium.id, body.consents, body.notice_version, runtime.clock.now()
+        )
     return ok({"quote": quote_view(quote), "premium": premium_view(premium) if premium else None})

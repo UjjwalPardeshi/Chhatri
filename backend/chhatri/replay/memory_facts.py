@@ -81,16 +81,21 @@ def dispute_fact(case: Case, zone_id: str, decision: Decision | None) -> MemoryF
     )
 
 
-def case_fact(case: Case, zone_id: str, decision: Decision) -> MemoryFact:
+def case_fact(case: Case, zone_id: str, decision: Decision | None) -> MemoryFact:
+    """A resolved case; a dispute that named no decision had no amount to change."""
+    outcome = (
+        f"{decision.outcome.value} {format_inr(decision.amount_paise)}" if decision else "no payout to change"
+    )
     return MemoryFact(
         kind="case",
         subject_id=case.id,
         merchant_id=case.merchant_id,
         zone_id=zone_id,
         at=case.resolved_at or case.opened_at,
-        text=f"{case.kind.value} {case.id} resolved {case.status.value}: {decision.outcome.value} "
-        f"{format_inr(decision.amount_paise)}",
-        attrs={"decision_id": decision.id, "status": case.status.value},
+        text=f"{case.kind.value} {case.id} resolved {case.status.value}: {outcome}",
+        attrs={"decision_id": decision.id, "status": case.status.value}
+        if decision
+        else {"status": case.status.value},
     )
 
 

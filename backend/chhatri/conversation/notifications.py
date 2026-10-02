@@ -7,6 +7,11 @@ Called by the orchestrator's workflow steps at simulated time:
   tomorrow's; the illness claim for Wednesday pauses Thursday's instalment while it is paid on
   Thursday, so "today's" (INSTALMENT_PAUSED_TODAY) or a dated line (INSTALMENT_PAUSED_ON) is used
   whenever "tomorrow's" would be false.
+- ``holiday_decided`` at request time (X4, flag ``x4_lender_request``; 17:05 for the storm), once the lender has
+  answered or stayed silent: HOLIDAY_GRANTED / _TODAY / _ON (the lender paused it; the date picks the line),
+  HOLIDAY_REFUSED with the lender's reason in plain words, or HOLIDAY_NO_RESPONSE. Every line names the lender
+  as the decider and a refusal or silence says the payout is not affected. A request still REQUESTED has no
+  answer to announce and raises ``ValueError``.
 - ``personal_paid`` at credit time: PERSONAL_PAID, or OFFICER_APPROVED when an officer's decision is
   being paid (the illness_mismatch story), then PAYOUT_CARD and SOUNDBOX.
 - ``premium_paid`` after Paytm's paid callback: PREMIUM_PAID_STARTS (the cover starts after the
@@ -16,8 +21,9 @@ Called by the orchestrator's workflow steps at simulated time:
   told once the money is credited, by ``personal_paid`` ("… {amount} जमा" must be true when read),
   so it returns no message. A DISPUTE case (SPEC §12, §13.5) is answered without a new payout: the
   officer CLOSES it and the disputed decision stands, so the merchant gets OFFICER_DECLINED with the
-  dispute reason (area numbers, or the personal daily cap) — the "24 घंटे में जवाब मिलेगा" promise
-  of DISPUTE_ACK is kept.
+  dispute reason (area numbers, the personal daily cap, or the reason a declined claim was declined) — the
+  "24 घंटे में जवाब मिलेगा" promise of DISPUTE_ACK is kept. A dispute that names no decision is answered with
+  DISPUTE_NO_PAYOUT (there is no amount to change).
 
 Every money message is checked against its decision and payout (APPROVED, same merchant, same
 amount, CREDITED); a mismatch raises ``ValueError`` rather than telling a merchant a wrong number.
@@ -44,6 +50,7 @@ from chhatri.domain.enums import (
     CaseKind,
     CaseStatus,
     DecisionOutcome,
+    HolidayStatus,
     MessageKind,
     PayoutStatus,
     PremiumStatus,
@@ -53,6 +60,7 @@ from chhatri.domain.models import (
     Case,
     Cover,
     Decision,
+    HolidayRequest,
     InstalmentPause,
     Merchant,
     Message,
@@ -154,6 +162,51 @@ class Notifications:
             )
         return await self._outbox.send(merchant, reply)
 
+    def _when(self, due: date) -> tuple[str, str]:
+        """(Hindi, English) for "due {when}": tomorrow, today or a date (HOLIDAY_REFUSED, HOLIDAY_NO_RESPONSE)."""
+        today = self._today()
+        if due == today + ONE_DAY:
+            return "कल", "tomorrow"
+        if due == today:
+            return "आज", "today"
+        return date_hi(due), f"on {date_en(due)}"
+
+    async def holiday_decided(self, request: HolidayRequest) -> Message:
+        """Tell the merchant what the lender decided about the EDI holiday, in the lender's terms (X4)."""
+        _require(
+            request.status is not HolidayStatus.REQUESTED,
+            f"holiday request {request.id} is still REQUESTED; the lender has not answered",
+        )
+        merchant = self._directory.merchant(request.merchant_id)
+        instalment = format_inr(request.instalment_paise)
+        today, due = self._today(), request.instalment_date
+        when_hi, when_en = self._when(due)
+        if request.status is HolidayStatus.GRANTED:
+            if due == today + ONE_DAY:
+                reply = Outgoing.text("HOLIDAY_GRANTED", instalment=instalment)
+            elif due == today:
+                reply = Outgoing.text("HOLIDAY_GRANTED_TODAY", instalment=instalment)
+            else:
+                reply = Outgoing.text(
+                    "HOLIDAY_GRANTED_ON", instalment=instalment, date_hi=date_hi(due), date_en=date_en(due)
+                )
+        elif request.status is HolidayStatus.REFUSED:
+            _require(request.reason_code is not None, f"refused holiday request {request.id} has no reason")
+            reason_hi, reason_en = bilingual(f"HOLIDAY_REASON_{request.reason_code.value}")  # type: ignore[union-attr]
+            reply = Outgoing.text(
+                "HOLIDAY_REFUSED",
+                instalment=instalment,
+                when_hi=when_hi,
+                when_en=when_en,
+                reason_hi=reason_hi,
+                reason_en=reason_en,
+            )
+        else:
+            reply = Outgoing.text(
+                "HOLIDAY_NO_RESPONSE", instalment=instalment, when_hi=when_hi, when_en=when_en
+            )
+        return await self._outbox.send(merchant, reply)
+
     async def premium_paid(self, premium: PremiumPayment, cover: Cover) -> Message:
         _require(
             premium.status is PremiumStatus.PAID, f"payment {premium.id} is {premium.status.value}, not PAID"
@@ -187,12 +240,14 @@ class Notifications:
             merchant, Outgoing.text("CHECKIN_SILENT", template=template, name_hi=names["name_hi"])
         )
 
-    async def officer_result(self, decision: Decision, case: Case) -> tuple[Message, ...]:
+    async def officer_result(self, decision: Decision | None, case: Case) -> tuple[Message, ...]:
+        if case.kind is CaseKind.DISPUTE:
+            return (await self._dispute_answered(decision, case),)
+        if decision is None:
+            raise ValueError(f"case {case.id} needs the decision it resolved")
         _require(
             decision.merchant_id == case.merchant_id, f"decision {decision.id} is not for case {case.id}"
         )
-        if case.kind is CaseKind.DISPUTE:
-            return (await self._dispute_answered(decision, case),)
         _require(
             decision.decided_by.startswith(OFFICER_PREFIX), f"decision {decision.id} is not an officer's"
         )
@@ -206,15 +261,23 @@ class Notifications:
         )
         return (await self._outbox.send(merchant, reply.with_case(case.id)),)
 
-    async def _dispute_answered(self, disputed: Decision, case: Case) -> Message:
-        """OFFICER_DECLINED for a CLOSED dispute: the disputed decision stands (SPEC §12, §13.5)."""
+    async def _dispute_answered(self, disputed: Decision | None, case: Case) -> Message:
+        """The answer to a CLOSED dispute: the disputed decision stands, or there was none to change (SPEC §12, K5)."""
         _require(case.status is CaseStatus.CLOSED, f"dispute case {case.id} is {case.status}, not CLOSED")
-        _require(
-            disputed.id == case.decision_id, f"decision {disputed.id} is not the one disputed in {case.id}"
-        )
-        merchant = self._directory.merchant(disputed.merchant_id)
-        reason_hi, reason_en = bilingual(dispute_reason_key(disputed))
-        reply = Outgoing.text(
-            "OFFICER_DECLINED", reason_hi=reason_hi, reason_en=reason_en, **name_facts(merchant)
-        )
+        merchant = self._directory.merchant(case.merchant_id)
+        if disputed is None:
+            _require(case.decision_id is None, f"dispute case {case.id} names decision {case.decision_id}")
+            reply = Outgoing.text("DISPUTE_NO_PAYOUT")
+        else:
+            _require(
+                disputed.id == case.decision_id,
+                f"decision {disputed.id} is not the one disputed in {case.id}",
+            )
+            _require(
+                disputed.merchant_id == case.merchant_id, f"decision {disputed.id} is not for case {case.id}"
+            )
+            reason_hi, reason_en = bilingual(dispute_reason_key(disputed))
+            reply = Outgoing.text(
+                "OFFICER_DECLINED", reason_hi=reason_hi, reason_en=reason_en, **name_facts(merchant)
+            )
         return await self._outbox.send(merchant, reply.with_case(case.id))

@@ -48,7 +48,7 @@ def test_workflows_cover_the_three_backend_workflows(
         "execute_payout",
         "credit_payout",
         "notify_merchant",
-        "pause_instalment",
+        "request_holiday",
     )
     assert workflows["human-review"] == ("open_case", "notify_officer")
     assert workflows["follow-up"] == ("check_case_sla", "notify_officer")

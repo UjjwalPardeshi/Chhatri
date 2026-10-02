@@ -16,7 +16,17 @@ from chhatri.replay.static import StaticContext
 from chhatri.replay.view_records import mask_name, mask_phone
 from tests.replay.helpers import ANIL, MONSOON_DAY, RAMESH, loaded, run_in_thread, slip_bytes
 
-OPTIONAL_KEYS = {schemas.FeedItem: {"zone_id", "merchant_id"}}
+OPTIONAL_KEYS = {
+    schemas.FeedItem: {"zone_id", "merchant_id"},
+    schemas.IntegrationStatus: {
+        "provider",
+        "model",
+        "fallback_reason",
+        "switchable",
+        "forced",
+        "last_call",
+    },  # X6
+}
 
 
 def check(model: type[BaseModel], view: dict[str, Any]) -> None:
@@ -149,6 +159,38 @@ def test_labels_and_masks_follow_the_deck(monsoon_1705: Runtime) -> None:
         [],
         [],
     )
+
+
+def test_merchant_detail_lists_every_holiday_request_with_the_lenders_answer(
+    monsoon_1705_x4: Runtime,
+) -> None:
+    """X4: `holiday_requests[]` holds every request, whatever the answer (the pauses hold the grants only)."""
+    rt = monsoon_1705_x4
+    anil = views.merchant_detail(rt, ANIL)
+    check(schemas.MerchantDetail, anil)
+    [request] = anil["holiday_requests"]
+    check(schemas.HolidayRequest, request)
+    assert request == {
+        "id": "HR-" + request["id"][3:],
+        "loan_id": rt.static.city.loans[ANIL].id,
+        "decision_id": rt.store.decisions_for(ANIL)[0].id,
+        "payout_id": rt.store.payouts(merchant_id=ANIL)[0].id,
+        "instalment_date": "2025-08-20",
+        "instalment_paise": 60_000,
+        "instalment_label": "₹600",
+        "requested_at": "2025-08-19T17:05:00+05:30",
+        "status": "GRANTED",
+        "reason_code": None,
+        "decided_at": "2025-08-19T17:05:00+05:30",
+        "lender": "Simulated lender (NBFC partner)",
+    }
+    assert views.merchant_detail(rt, RAMESH)["holiday_requests"] == []  # no loan, nothing asked
+
+
+def test_merchant_detail_has_no_holiday_requests_with_the_flag_off(monsoon_1705: Runtime) -> None:
+    detail = views.merchant_detail(monsoon_1705, ANIL)
+    check(schemas.MerchantDetail, detail)
+    assert detail["holiday_requests"] == []
 
 
 def test_the_zone_panels_read_like_slide_6(monsoon_1705: Runtime) -> None:

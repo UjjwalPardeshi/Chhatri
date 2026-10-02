@@ -18,7 +18,8 @@ DOCS = (
 ANIL = {"name_hi": "अनिल", "name_en": "Anil"}
 DEMO_MESSAGES = [
     ("AREA_PAYOUT_INTRO", {**ANIL, "drop": 63}),
-    ("INSTALMENT_PAUSED", {"instalment": "₹600"}),
+    ("HOLIDAY_GRANTED", {"instalment": "₹600"}),
+    ("HOLIDAY_GRANTED_TODAY", {"instalment": "₹600"}),
     ("SOUNDBOX", {"amount": "₹1,380"}),
     (
         "EXPLAIN_AREA",

@@ -18,6 +18,10 @@ Indices are computed over the zone's covered, open merchants (see `area_index`),
   hours_below ≥ 1) — the Z9 case of SPEC §17.2;
 - `normal` otherwise.
 `hours_below` counts consecutive completed hours below the floor, newest backwards, alert or not.
+
+The five conditions (a)-(d) above and the zone status live in one pure function, `trigger_verdict`
+(fs-09 section 9.5). `evaluate_hour` calls it for every zone; the what-if panel (H24) and the
+zone-level counterfactual (H14) call it with edited inputs, so no threshold is copied anywhere.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
@@ -86,6 +91,89 @@ def _status(
     return "slow_day" if (window < lower or below >= 1) else "normal"
 
 
+class TriggerCondition(StrEnum):
+    """The five conditions of the area trigger, as the what-if panel and the receipts name them."""
+
+    ALERT_COVERS_WINDOW = "ALERT_COVERS_WINDOW"
+    HOURS_BELOW_FLOOR = "HOURS_BELOW_FLOOR"
+    WINDOW_BELOW_BOUND = "WINDOW_BELOW_BOUND"
+    SHOPS_QUORUM = "SHOPS_QUORUM"
+    FIRST_TRIGGER_TODAY = "FIRST_TRIGGER_TODAY"
+
+
+CONDITION_ORDER: Final = tuple(TriggerCondition)
+
+
+@dataclass(frozen=True, slots=True)
+class VerdictInputs:
+    """What the rule looks at for one zone and one hour boundary (every value already computed).
+
+    ``hourly_pct`` holds the completed hours of the window, oldest first, ``None`` for an hour with
+    nothing expected. ``alert_covers_window`` means a RAIN or CIVIC alert, issued by the evaluation
+    time, is valid for every hour of the window. ``alert_covers_last_hour`` is the same for the newest
+    hour only; it matters for the status alone, and a covered window covers its last hour too.
+    """
+
+    hourly_pct: tuple[int | None, ...]
+    window_pct: int | None
+    lower_bound_pct: int
+    shops_in_index: int
+    alert_covers_window: bool
+    already_triggered_today: bool
+    alert_covers_last_hour: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionResult:
+    code: TriggerCondition
+    met: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Verdict:
+    """Whether the zone fires, each condition on its own, and the zone status the map shows."""
+
+    conditions: tuple[ConditionResult, ...]
+    fires: bool
+    status: ZoneStatusName
+    hours_below: int
+
+    def met(self, code: TriggerCondition) -> bool:
+        return next(c.met for c in self.conditions if c.code is code)
+
+
+def trigger_verdict(inputs: VerdictInputs, rules: PolicyRules) -> Verdict:
+    """The one trigger rule (SPEC §8.2): all five conditions must hold, every comparison strictly less than.
+
+    Pure: the same inputs give the same verdict, nothing is read or written. ValueError when the number
+    of hourly values is not ``rules.area.consecutive_hours``.
+    """
+    area, hourly = rules.area, inputs.hourly_pct
+    if len(hourly) != area.consecutive_hours:
+        raise ValueError(f"the rule needs exactly {area.consecutive_hours} hourly indices, got {len(hourly)}")
+    below = _hours_below(hourly, area.index_floor_pct)
+    window, lower = inputs.window_pct, inputs.lower_bound_pct
+    quorum = inputs.shops_in_index >= area.min_shops_in_index
+    met = {
+        TriggerCondition.ALERT_COVERS_WINDOW: inputs.alert_covers_window,
+        TriggerCondition.HOURS_BELOW_FLOOR: below == len(hourly),
+        TriggerCondition.WINDOW_BELOW_BOUND: window is not None and window < lower,
+        TriggerCondition.SHOPS_QUORUM: quorum,
+        TriggerCondition.FIRST_TRIGGER_TODAY: not inputs.already_triggered_today,
+    }
+    fires = all(met.values())
+    status = _status(
+        fired=fires,
+        done=inputs.already_triggered_today,
+        quorum=quorum,
+        window=window,
+        lower=lower,
+        alert_last_hour=inputs.alert_covers_window or inputs.alert_covers_last_hour,
+        below=below,
+    )
+    return Verdict(tuple(ConditionResult(code, met[code]) for code in CONDITION_ORDER), fires, status, below)
+
+
 def _zone_indices(
     actual: SalesPanel, expected_p50: np.ndarray, rows: np.ndarray, i: int, j: int
 ) -> tuple[tuple[int | None, ...], int | None]:
@@ -96,37 +184,34 @@ def _zone_indices(
 
 def _evaluate_zone(ctx: _Context, zone_id: str, rows: np.ndarray) -> tuple[ZoneState, AreaTrigger | None]:
     hourly, window = _zone_indices(ctx.actual, ctx.expected_p50, rows, ctx.i, ctx.j)
-    area = ctx.rules.area
     try:
         lower = ctx.lower_bounds[zone_id]
     except KeyError:
         raise ValueError(f"lower_bounds has no entry for zone {zone_id}") from None
-    below = _hours_below(hourly, area.index_floor_pct)
-    quorum = rows.size >= area.min_shops_in_index
     window_alert = alert_for(ctx.alerts, zone_id, ctx.start, ctx.at, ctx.at)
     last_alert = alert_for(ctx.alerts, zone_id, ctx.at - HOUR, ctx.at, ctx.at)
-    done = (zone_id, ctx.day) in ctx.already_triggered
-    fired_alert = window_alert if below == len(hourly) and quorum and not done else None
-    trigger = None
-    if fired_alert is not None and window is not None and window < lower:
-        trigger = _trigger(ctx, zone_id, fired_alert, hourly, window, lower, rows.size)
-    fired = trigger is not None
-    status = _status(
-        fired=fired,
-        done=done,
-        quorum=quorum,
-        window=window,
-        lower=lower,
-        alert_last_hour=last_alert is not None,
-        below=below,
+    verdict = trigger_verdict(
+        VerdictInputs(
+            hourly_pct=hourly,
+            window_pct=window,
+            lower_bound_pct=lower,
+            shops_in_index=int(rows.size),
+            alert_covers_window=window_alert is not None,
+            alert_covers_last_hour=last_alert is not None,
+            already_triggered_today=(zone_id, ctx.day) in ctx.already_triggered,
+        ),
+        ctx.rules,
     )
-    shown_alert = window_alert if fired else last_alert
+    trigger = None
+    if verdict.fires and window_alert is not None and window is not None:  # the verdict implies both
+        trigger = _trigger(ctx, zone_id, window_alert, hourly, window, lower, rows.size)
+    shown_alert = window_alert if trigger is not None else last_alert
     state = ZoneState(
         zone_id=zone_id,
-        status=status,
+        status=verdict.status,
         index_pct=window,
         hourly_pct=hourly,
-        hours_below=below,
+        hours_below=verdict.hours_below,
         alert_id=shown_alert.id if shown_alert else None,
         shops_in_index=int(rows.size),
         lower_bound_pct=lower,

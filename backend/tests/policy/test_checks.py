@@ -38,7 +38,12 @@ def test_catalogue_matches_spec_table() -> None:
 def test_cover_in_force() -> None:
     assert ck.cover_in_force(b.cover(), DAY).status is P
     assert ck.cover_in_force(None, DAY).status is F
-    assert ck.cover_in_force(b.cover(status=CoverStatus.WAITING), DAY).status is F
+    # K6: WAITING is derived from the start date, so a stored WAITING cover that has started is in force
+    assert ck.cover_in_force(b.cover(status=CoverStatus.WAITING), DAY).status is P
+    assert (
+        ck.cover_in_force(b.cover(status=CoverStatus.WAITING, starts_on=date(2025, 8, 20)), DAY).status is F
+    )
+    assert ck.cover_in_force(b.cover(status=CoverStatus.CANCELLED), DAY).status is F
     assert ck.cover_in_force(b.cover(starts_on=date(2025, 8, 20)), DAY).status is F
     assert ck.cover_in_force(b.cover(starts_on=DAY), DAY).status is P
     r = ck.cover_in_force(b.cover(), DAY)

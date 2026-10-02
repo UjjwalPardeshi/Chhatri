@@ -12,7 +12,9 @@ Documented interpretations:
   decision time); the 365-day window is (on − 365 days, on] and counts CREDITED and PENDING payouts.
 - `latest_paid_decision` = the most recently added APPROVED decision whose payout is CREDITED.
 - Extensions beyond §24.3 (used by ledger/replay): `payouts(merchant_id=...)`, `payout`, `covers`,
-  `quote`, `premiums`, `decisions_for_claim` and `paid_event_dates` (NOT_ALREADY_PAID facts).
+  `quote`, `premiums`, `claims` and `decisions` (the whole run, for the H8 ops counts), `claims_for`, `decisions_for_claim`,
+  `paid_event_dates` (NOT_ALREADY_PAID facts) and the EDI holiday
+  requests of X4 (`add_holiday_request`, `replace_holiday_request`, `holiday_requests`).
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from chhatri.domain.models import (
     Cover,
     CoverQuote,
     Decision,
+    HolidayRequest,
     InstalmentPause,
     Message,
     Payout,
@@ -74,6 +77,7 @@ class Store:
         self._payout_by_decision: dict[str, str] = {}
         self._payout_ids_by_merchant: dict[str, list[str]] = {}
         self._pauses: dict[str, InstalmentPause] = {}
+        self._holiday_requests: dict[str, HolidayRequest] = {}
         self._premiums: dict[str, PremiumPayment] = {}
         self._premium_by_link: dict[str, str] = {}
         self._quotes: dict[str, CoverQuote] = {}
@@ -119,6 +123,18 @@ class Store:
         with self._lock:
             return _get(self._decisions, decision_id, "decision")
 
+    def claims(self) -> tuple[Claim, ...]:
+        """Every claim of the run, oldest first (read-only; the ops summary counts them, H8)."""
+        return self._select(self._claims)
+
+    def claims_for(self, merchant_id: str) -> tuple[Claim, ...]:
+        """A merchant's claims, oldest first (the tracker, K5)."""
+        return self._select(self._claims, lambda c: c.merchant_id == merchant_id)
+
+    def decisions(self) -> tuple[Decision, ...]:
+        """Every decision of the run in the order it was made, officer decisions after the ones they supersede."""
+        return self._select(self._decisions)
+
     def decisions_for(self, merchant_id: str) -> tuple[Decision, ...]:
         """Decisions for a merchant, oldest first."""
         return self._select(self._decisions, lambda d: d.merchant_id == merchant_id)
@@ -130,6 +146,25 @@ class Store:
         """Latest APPROVED decision whose payout is CREDITED (SPEC §24.3)."""
         with self._lock:
             for d in reversed(self.decisions_for(merchant_id)):
+                payout = self.payout_for_decision(d.id)
+                if (
+                    d.outcome is DecisionOutcome.APPROVED
+                    and payout
+                    and payout.status is PayoutStatus.CREDITED
+                ):
+                    return d
+            return None
+
+    def latest_final_decision(self, merchant_id: str) -> Decision | None:
+        """Latest decision that settled a claim: DECLINED, or APPROVED with its payout CREDITED (what a dispute is about).
+
+        A REFERRED decision is still open and an approved one whose money has not landed is not settled, so
+        neither can be disputed yet (K5).
+        """
+        with self._lock:
+            for d in reversed(self.decisions_for(merchant_id)):
+                if d.outcome is DecisionOutcome.DECLINED:
+                    return d
                 payout = self.payout_for_decision(d.id)
                 if (
                     d.outcome is DecisionOutcome.APPROVED
@@ -210,6 +245,31 @@ class Store:
     def pauses(self, merchant_id: str | None = None) -> tuple[InstalmentPause, ...]:
         return self._select(self._pauses, lambda p: merchant_id is None or p.merchant_id == merchant_id)
 
+    # EDI holiday requests (X4) ---------------------------------------------------------------
+    def add_holiday_request(self, request: HolidayRequest) -> None:
+        with self._lock:
+            _insert(self._holiday_requests, request.id, request, "holiday request")
+
+    def replace_holiday_request(self, request: HolidayRequest) -> None:
+        """Move a request on to its decision; the loan, the instalment and the merchant never change."""
+        with self._lock:
+            old = _get(self._holiday_requests, request.id, "holiday request")
+            if (old.merchant_id, old.loan_id, old.instalment_date) != (
+                request.merchant_id,
+                request.loan_id,
+                request.instalment_date,
+            ):
+                raise ValueError(
+                    f"holiday request {request.id} cannot change its merchant, loan or instalment"
+                )
+            self._holiday_requests[request.id] = request
+
+    def holiday_requests(self, merchant_id: str | None = None) -> tuple[HolidayRequest, ...]:
+        """Every request, whatever its outcome, oldest first (``pauses`` holds the grants only)."""
+        return self._select(
+            self._holiday_requests, lambda r: merchant_id is None or r.merchant_id == merchant_id
+        )
+
     # premiums + quotes -----------------------------------------------------------------------
     def add_premium(self, p: PremiumPayment) -> None:
         with self._lock:
@@ -282,6 +342,27 @@ class Store:
     def media(self, media_id: str) -> tuple[bytes, str]:
         with self._lock:
             return _get(self._media, media_id, "media")
+
+    # erase (N6/H23): a merchant's "forget my slip" replaces records with erased copies; nothing else edits them ----
+    def replace_claim(self, c: Claim) -> None:
+        with self._lock:
+            _get(self._claims, c.id, "claim")
+            self._claims[c.id] = c
+
+    def replace_decision(self, d: Decision) -> None:
+        with self._lock:
+            _get(self._decisions, d.id, "decision")
+            self._decisions[d.id] = d
+
+    def replace_message(self, m: Message) -> None:
+        with self._lock:
+            _get(self._messages, m.id, "message")
+            self._messages[m.id] = m
+
+    def delete_media(self, media_id: str) -> bool:
+        """Remove stored bytes; True when there were any (the id then answers KeyError like an unknown one)."""
+        with self._lock:
+            return self._media.pop(media_id, None) is not None
 
     # area triggers ---------------------------------------------------------------------------
     def area_trigger(self, trigger_id: str) -> AreaTrigger | None:

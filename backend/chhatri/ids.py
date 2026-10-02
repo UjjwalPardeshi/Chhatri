@@ -14,12 +14,18 @@ PREFIXES: Final[dict[str, str]] = {
     "payout": "P",
     "claim": "CL",
     "pause": "IP",
+    "holiday": "HR",
     "premium": "PR",
     "message": "M",
     "alert": "A",
     "media": "MD",
     "quote": "Q",
     "workflow": "WF",
+    "ask": "AQ",
+    "stt": "ST",
+    "precheck": "PC",
+    "grievance": "GR",
+    "consent": "CN",
 }
 
 CASE_START: Final = 2291

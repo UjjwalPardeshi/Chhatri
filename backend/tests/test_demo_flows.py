@@ -29,7 +29,7 @@ import pytest
 
 from chhatri.api.app import create_app
 from chhatri.api.demo import FLOWS, GOLDEN, CheckRow, DemoApi, DemoNumbers, compare, expectations, rehearse
-from chhatri.api.demo.local import in_process_client, offline_settings
+from chhatri.api.demo.local import DEMO_FEATURES, in_process_client, offline_settings
 from chhatri.clock import at
 from chhatri.config import BACKEND_DIR
 from chhatri.detect.triggers import evaluate_hour
@@ -104,7 +104,7 @@ def derive_numbers(static: StaticContext) -> DemoNumbers:
 @pytest.fixture(scope="session")
 def small_static(tmp_path_factory: pytest.TempPathFactory) -> StaticContext:
     var_dir = tmp_path_factory.mktemp("demo-flows")
-    settings = replay_settings(var_dir, chhatri_demo_mode=True)
+    settings = replay_settings(var_dir, chhatri_demo_mode=True, chhatri_features=",".join(DEMO_FEATURES))
     return make_static(settings, small_world.small_city(), small_world.small_model(), var_dir / "artifacts")
 
 
@@ -238,3 +238,14 @@ def test_demo_check_script_exits_0_on_the_full_artefacts(
     script = load_demo_check()
     assert script.main(["--json"]) == 0, capsys.readouterr().out[-2000:]
     assert '"passed": true' in capsys.readouterr().out
+
+
+def test_the_rehearsal_runs_with_the_demo_flags_on_top_of_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The golden strings pin the X4 wording, so `offline_settings` always adds the demo flags."""
+    monkeypatch.delenv("CHHATRI_FEATURES", raising=False)
+    assert offline_settings().chhatri_features == "x4_lender_request"
+    monkeypatch.setenv("CHHATRI_FEATURES", "n1_miniapp typo")
+    assert offline_settings().chhatri_features == "n1_miniapp,x4_lender_request"
+    assert offline_settings(chhatri_features="").chhatri_features == ""  # an explicit value is respected

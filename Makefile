@@ -18,7 +18,7 @@ CONSOLE_URL ?= http://localhost:$(CONSOLE_PORT)
 COVERAGE_MIN ?= 80
 INFRA_COVERAGE_MIN ?= 90
 
-.PHONY: help setup data test test-backend test-frontend test-slow test-infra dev demo-check e2e \
+.PHONY: help setup data test test-backend test-frontend test-slow test-infra evals dev demo-check e2e \
 	env check-keys up down lint n8n-workflows n8n-selftest clean
 
 help: ## List the targets
@@ -48,6 +48,9 @@ test-slow: ## Golden numbers + full-artefact flows (pytest -m slow; needs commit
 test-infra: ## Infra checks: n8n workflows generated from WORKFLOWS, compose, Makefile, env, nginx, scripts
 	cd $(ROOT) && $(PY) scripts/n8n_workflows.py --check
 	cd $(ROOT) && $(PY) -m pytest -p no:cacheprovider scripts/tests --cov=scripts --cov-report=term-missing --cov-fail-under=$(INFRA_COVERAGE_MIN)
+
+evals: ## H25 offline evaluation suites (no network, no key): writes backend/artifacts/evals/summary.json
+	cd $(ROOT)/backend && $(PY) -m chhatri.evals
 
 dev: ## Backend (uvicorn :8000, reload) + console (vite :5173, proxies /api); Ctrl+C stops both
 	trap 'kill $$(jobs -p) 2>/dev/null || true' INT TERM EXIT; \

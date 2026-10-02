@@ -134,6 +134,41 @@ def test_every_flag_is_off_when_nothing_is_set(repo_root: Path, tmp_path: Path) 
     assert doc["services"]["frontend"]["build"]["args"]["VITE_FEATURES"] == ""
 
 
+AI_SETTINGS = ("GOOGLE_API_KEY", "GEMINI_MODEL", "GEMINI_VISION_MODEL", "CHHATRI_DATA_IS_SYNTHETIC")
+
+
+def test_env_example_documents_gemini_and_declares_the_prototype_data_synthetic(repo_root: Path) -> None:
+    """Card 4.1: Gemini needs a key AND a model id (none has a default), and ADR 0009's gate is open in the example."""
+    text = (repo_root / ".env.example").read_text(encoding="utf-8")
+    for name in ("GOOGLE_API_KEY", "GEMINI_MODEL", "GEMINI_VISION_MODEL"):
+        assert re.search(rf"^# {name}=$", text, flags=re.M), f"{name} must be a commented line with no value"
+    assert re.search(r"^CHHATRI_DATA_IS_SYNTHETIC=true$", text, flags=re.M)
+    assert not re.search(r"gemini-\d", text, flags=re.I), (
+        "no document names a Gemini model: the free-tier ids change"
+    )
+
+
+def test_a_make_env_file_opens_the_gate_and_leaves_gemini_waiting_for_a_key(
+    repo_root: Path, tmp_path: Path
+) -> None:
+    import init_env
+
+    target = tmp_path / ".env"
+    assert init_env.main(["--example", str(repo_root / ".env.example"), "--target", str(target)]) == 0
+    settings = Settings(_env_file=target)  # type: ignore[call-arg]
+    assert settings.chhatri_data_is_synthetic is True
+    assert settings.google_api_key is None and settings.gemini_model == ""
+    assert not settings.gemini_chat_live and not settings.gemini_vision_live
+
+
+def test_compose_passes_the_ai_settings_only_when_they_are_set(repo_root: Path, tmp_path: Path) -> None:
+    env = _resolved(repo_root, tmp_path, "")["services"]["backend"]["environment"]
+    assert all(env.get(name) is None for name in AI_SETTINGS)  # never an empty string: unset stays unset
+    values = "GOOGLE_API_KEY=k1\nGEMINI_MODEL=m1\nGEMINI_VISION_MODEL=m2\nCHHATRI_DATA_IS_SYNTHETIC=true\n"
+    env = _resolved(repo_root, tmp_path, values)["services"]["backend"]["environment"]
+    assert [env[name] for name in AI_SETTINGS] == ["k1", "m1", "m2", "true"]
+
+
 def test_compose_config_validates_and_resolves(repo_root: Path, tmp_path: Path) -> None:
     env_file = tmp_path / "stack.env"
     env_file.write_text(

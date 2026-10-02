@@ -9,8 +9,17 @@ from datetime import timedelta
 
 import pytest
 
-from chhatri.domain.enums import ClaimKind, DecisionOutcome, MessageKind, PayoutStatus
+from chhatri.domain.enums import (
+    ClaimKind,
+    DecisionOutcome,
+    HolidayReason,
+    HolidayStatus,
+    MessageKind,
+    PayoutStatus,
+)
 from chhatri.events import Event
+from chhatri.integrations.base import LenderAnswer, LenderNoResponse, LenderRequest
+from chhatri.integrations.lender import LenderFixtures, SimulatedLender
 from chhatri.money import format_inr
 from chhatri.policy.engine import publish_expected_day
 from chhatri.replay import views, world
@@ -18,7 +27,7 @@ from chhatri.replay.state import Runtime
 from chhatri.replay.static import StaticContext
 from chhatri.sim.types import Calibration, City, Scenario
 from chhatri.workflows.definitions import PAYOUT
-from tests.replay.helpers import ANIL, MONSOON_DAY, RAMESH, loaded, monsoon_at
+from tests.replay.helpers import ANIL, MONSOON_DAY, RAMESH, integrations_with, loaded, monsoon_at
 
 TRIGGERED = ("Z3", "Z7", "Z12")
 ALERT_ID = "A-20250818-01"
@@ -110,6 +119,102 @@ def test_anil_hears_at_credit_time_then_about_the_pause(monsoon_1705: Runtime) -
     assert timeline[3][2] == "Tomorrow's ₹600 instalment is paused."
 
 
+# ----------------------------------------------------------------------------- X4: the lender decides
+
+
+def audit_actions(rt: Runtime) -> list[str]:
+    return [
+        e.action for start in range(0, len(rt.audit), 5000) for e in rt.audit.entries(after=start, limit=5000)
+    ]
+
+
+def paid_with_loans(rt: Runtime) -> set[str]:
+    return {d.merchant_id for d in area_decisions(rt) if d.merchant_id in rt.static.city.loans}
+
+
+def test_with_the_lender_deciding_every_paid_shop_with_a_loan_is_asked_once_and_granted(
+    monsoon_1705_x4: Runtime,
+) -> None:
+    rt = monsoon_1705_x4
+    requests, pauses = rt.store.holiday_requests(), rt.store.pauses()
+    shops = paid_with_loans(rt)
+    assert {r.merchant_id for r in requests} == shops and len(requests) == len(shops) > 0
+    assert {r.status for r in requests} == {HolidayStatus.GRANTED}
+    assert {(r.requested_at, r.decided_at) for r in requests} == {(monsoon_at(17, 5), monsoon_at(17, 5))}
+    assert {r.instalment_date for r in requests} == {MONSOON_DAY + timedelta(days=1)}
+    assert sorted(p.request_id or "" for p in pauses) == sorted(r.id for r in requests)  # a grant, a pause
+    assert {p.created_at for p in pauses} == {monsoon_at(17, 5)}
+    actions = audit_actions(rt)
+    for action in ("instalment.holiday_request", "instalment.holiday_decision", "instalment.pause"):
+        assert actions.count(action) == len(shops)
+    assert rt.audit.verify()["valid"] is True
+
+
+def test_anil_is_told_what_his_lender_decided_not_that_chhatri_paused_it(monsoon_1705_x4: Runtime) -> None:
+    rt = monsoon_1705_x4
+    last = rt.store.messages(ANIL)[-1]
+    assert (last.kind, last.created_at) == (MessageKind.TEXT, monsoon_at(17, 5))
+    assert last.text_en == (
+        "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty."
+    )
+    assert "लेंडर" in (last.text_hi or "")
+    [request] = rt.store.holiday_requests(ANIL)
+    assert (request.status, request.instalment_paise) == (HolidayStatus.GRANTED, 60_000)
+
+
+def test_the_flag_off_path_still_pauses_without_asking_a_lender(monsoon_1705: Runtime) -> None:
+    """With `x4_lender_request` off nothing changes: the BUILT pause and its line, no request rows."""
+    rt = monsoon_1705
+    assert rt.store.holiday_requests() == () and len(rt.store.pauses()) > 0
+    assert all(p.request_id is None for p in rt.store.pauses())
+    assert rt.store.messages(ANIL)[-1].text_en == "Tomorrow's ₹600 instalment is paused."
+    actions = set(audit_actions(rt))
+    assert actions.isdisjoint({"instalment.holiday_request", "instalment.holiday_decision"})
+
+
+class SilentFor:
+    """The simulated lender, except that it never answers for the loans in `loan_ids`."""
+
+    def __init__(self, inner: SimulatedLender, loan_ids: set[str]) -> None:
+        self._inner, self._silent = inner, loan_ids
+
+    async def request_holiday(self, request: LenderRequest) -> LenderAnswer:
+        if request.loan_id in self._silent:
+            raise LenderNoResponse()
+        return await self._inner.request_holiday(request)
+
+
+async def test_kpi_counts_grants_only(static_x4: StaticContext) -> None:
+    """A refused or unanswered request is a row and an audit entry, never a paused instalment."""
+    city = static_x4.city
+    ordered = sorted(city.loans.values(), key=lambda loan: loan.merchant_id)
+    refused_loan, silent_loan = city.loans[ANIL], next(loan for loan in ordered if loan.merchant_id != ANIL)
+    lender = SilentFor(
+        SimulatedLender(city.loans, fixtures=LenderFixtures(in_arrears=frozenset({refused_loan.id}))),
+        {silent_loan.id},
+    )
+    rt = await loaded(
+        static_x4, "monsoon", seek="17:05", integrations_factory=integrations_with(lender=lender)
+    )
+    requests = rt.store.holiday_requests()
+    by_status = {s: [r for r in requests if r.status is s] for s in HolidayStatus}
+    assert [r.merchant_id for r in by_status[HolidayStatus.REFUSED]] == [ANIL]
+    assert by_status[HolidayStatus.REFUSED][0].reason_code is HolidayReason.IN_ARREARS
+    assert [r.merchant_id for r in by_status[HolidayStatus.NO_RESPONSE]] == [silent_loan.merchant_id]
+    granted = len(by_status[HolidayStatus.GRANTED])
+    assert granted == len(requests) - 2 > 0 and by_status[HolidayStatus.REQUESTED] == []
+    assert views.kpis_view(rt)["instalments_paused"] == granted == len(rt.store.pauses())
+    assert ANIL not in {p.merchant_id for p in rt.store.pauses()}
+    assert (
+        rt.store.payouts(merchant_id=ANIL)[0].status is PayoutStatus.CREDITED
+    )  # a refusal never touches money
+    told = rt.store.messages(ANIL)[-1].text_en or ""
+    assert told.startswith(
+        "Your lender could not pause the ₹600 instalment due tomorrow: the loan has an amount overdue."
+    )
+    assert rt.audit.verify()["valid"] is True
+
+
 def test_kpis_and_the_audit_trail_after_the_storm(monsoon_1705: Runtime) -> None:
     rt = monsoon_1705
     decisions = area_decisions(rt)
@@ -179,7 +284,7 @@ async def test_minute_by_minute_decision_credit_notify_pause_and_sse_events(stat
     assert rt.store.payouts(merchant_id=ANIL)[0].credited_at == monsoon_at(17, 4)
     assert len(rt.store.messages(ANIL)) == 3 and rt.store.pauses() == ()
     assert paid_rows(rt) == ["17:04, with the settlement", approved]
-    await rt.engine.step(1)  # 17:05: pause_instalment
+    await rt.engine.step(1)  # 17:05: request_holiday
     assert len(rt.store.pauses(ANIL)) == 1 and len(rt.store.messages(ANIL)) == 4
     assert paid_rows(rt) == ["17:04, with the settlement", f"{approved} · instalments paused"]
     await asyncio.sleep(0)

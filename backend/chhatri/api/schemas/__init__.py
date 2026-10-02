@@ -39,6 +39,15 @@ from chhatri.api.schemas.live import (
     ZoneSnapshot,
     ZoneStatusName,
 )
+from chhatri.api.schemas.ops import (
+    OpsCasesByKind,
+    OpsClaims,
+    OpsHolidayCounts,
+    OpsNextDue,
+    OpsPayouts,
+    OpsSummary,
+    OpsZonePaid,
+)
 from chhatri.api.schemas.records import (
     AuditEntry,
     AuditVerify,
@@ -54,6 +63,7 @@ from chhatri.api.schemas.records import (
     EvidencePrecedent,
     EvidenceSlip,
     Explanation,
+    HolidayRequest,
     MerchantCover,
     MerchantDetail,
     MerchantLoan,
@@ -65,6 +75,15 @@ from chhatri.api.schemas.records import (
     PolicyAuthority,
     PolicyCheck,
     PolicyView,
+)
+from chhatri.api.schemas.rights import (
+    ConsentActivityItem,
+    ConsentItem,
+    ConsentWithdrawal,
+    Grievance,
+    PrecheckConfirmation,
+    PrecheckView,
+    SlipForgetResult,
 )
 from chhatri.api.schemas.service import (
     CoverQuoteView,
@@ -81,8 +100,25 @@ from chhatri.api.schemas.service import (
     WorkflowName,
     WorkflowStep,
 )
+from chhatri.api.schemas.whatif import (
+    WhatIfArea,
+    WhatIfCondition,
+    WhatIfConditionSide,
+    WhatIfExample,
+    WhatIfFixed,
+    WhatIfSide,
+    WhatIfSource,
+    WhatIfWindow,
+)
 
 __all__ = [
+    "SlipForgetResult",
+    "PrecheckView",
+    "PrecheckConfirmation",
+    "Grievance",
+    "ConsentWithdrawal",
+    "ConsentItem",
+    "ConsentActivityItem",
     "Alert",
     "AlertKind",
     "AlertLevel",
@@ -111,6 +147,7 @@ __all__ = [
     "FeatureCollection",
     "FeedItem",
     "Health",
+    "HolidayRequest",
     "InstalmentPause",
     "IntegrationName",
     "IntegrationStatus",
@@ -127,6 +164,13 @@ __all__ = [
     "MessageCard",
     "MessageMeta",
     "OfficerActionResult",
+    "OpsCasesByKind",
+    "OpsClaims",
+    "OpsHolidayCounts",
+    "OpsNextDue",
+    "OpsPayouts",
+    "OpsSummary",
+    "OpsZonePaid",
     "PaytmAck",
     "Payout",
     "PolicyAuthority",
@@ -142,6 +186,14 @@ __all__ = [
     "StreamEvent",
     "StreamEventType",
     "WeatherNow",
+    "WhatIfArea",
+    "WhatIfCondition",
+    "WhatIfConditionSide",
+    "WhatIfExample",
+    "WhatIfFixed",
+    "WhatIfSide",
+    "WhatIfSource",
+    "WhatIfWindow",
     "WhatsAppAck",
     "WorkflowCallbackResult",
     "WorkflowName",

@@ -29,6 +29,7 @@ from chhatri.sim.geo import WardGeography, build_geography, ward_zone_ids, with_
 from chhatri.sim.merchants import (
     GeneratedShop,
     ZonePlacer,
+    at_zone_price,
     cover_for,
     generate_shop,
     loan_for,
@@ -182,9 +183,17 @@ def _profile(shop: GeneratedShop) -> ShopProfile:
 
 
 def build_city(
-    seed: int, data_dir: Path, calibration: Calibration | None = None, scale: Scale = "full"
+    seed: int,
+    data_dir: Path,
+    calibration: Calibration | None = None,
+    scale: Scale = "full",
+    premiums: Mapping[str, int] | None = None,
 ) -> City:
-    """Deterministic city from the seed (SPEC §5, §24.1); ``calibration`` defaults to `Calibration()`."""
+    """Deterministic city from the seed (SPEC §5, §24.1); ``calibration`` defaults to `Calibration()`.
+
+    ``premiums`` (zone id → paise a day, K6-T04) seeds every pilot cover at its zone's price. The backtest builds the
+    city without it, because it is the one that computes the table; the app builds it with the committed table.
+    """
     calibration = calibration if calibration is not None else Calibration()
     rules = default_rules()
     zone_ids = tuple(sorted(ward_zone_ids().values(), key=zone_number))
@@ -199,7 +208,11 @@ def build_city(
         geography=geography,
         merchants=tuple(s.merchant for s in shops),
         profiles={s.merchant.id: _profile(s) for s in shops},
-        covers={s.merchant.id: s.cover for s in shops if s.cover is not None},
+        covers={
+            s.merchant.id: at_zone_price(s.cover, s.merchant.zone_id, premiums or {})
+            for s in shops
+            if s.cover is not None
+        },
         loans={s.merchant.id: s.loan for s in shops if s.loan is not None},
     )
     logger.info(

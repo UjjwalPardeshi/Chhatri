@@ -20,11 +20,18 @@ from __future__ import annotations
 import io
 import logging
 import wave
+from collections.abc import Callable
 from datetime import date
 from typing import Final
 
 from chhatri.clock import Clock
-from chhatri.conversation.nlu import detect_intent
+from chhatri.conversation.ask_port import UnknownResolver
+from chhatri.conversation.consent_text import CONSENT_WITHDRAWN_KEYS
+from chhatri.conversation.explain_first import explain_first
+from chhatri.conversation.intents import Intent, classify
+from chhatri.conversation.message_guard import MessageGuard
+from chhatri.conversation.messages import date_en, date_hi, name_facts
+from chhatri.conversation.nlu import IntentResult, detect_intent
 from chhatri.conversation.notifications import Notifications
 from chhatri.conversation.outbox import (
     AI_ACTOR,
@@ -36,18 +43,20 @@ from chhatri.conversation.outbox import (
 )
 from chhatri.conversation.ports import ClaimsPort, ConversationStore, MerchantDirectory
 from chhatri.conversation.replies import Replies
-from chhatri.conversation.slip_flow import SlipFlow
+from chhatri.conversation.slip_flow import FiledSlip, PrecheckResolver, SlipFlow
 from chhatri.domain.enums import Channel, MessageKind
 from chhatri.domain.models import (
     AreaTrigger,
     Case,
     Cover,
     Decision,
+    HolidayRequest,
     InstalmentPause,
     Merchant,
     Message,
     Payout,
     PremiumPayment,
+    SlipExtraction,
 )
 from chhatri.events import EventBus
 from chhatri.ids import IdFactory
@@ -68,6 +77,7 @@ logger = logging.getLogger(__name__)
 
 MAX_TEXT_CHARS: Final = 2000
 SARVAM_SOURCE_PREFIX: Final = "sarvam"
+MODEL_BLOCKED_INTENTS: Final = frozenset({Intent.DISPUTE_AMOUNT, Intent.BUY_COVER})
 
 
 def wav_duration_s(audio: bytes) -> float | None:
@@ -105,11 +115,16 @@ class ConversationService:
         soundbox: Soundbox,
         claims: ClaimsPort,
         channel_name: Channel,
+        precheck: PrecheckResolver | None = None,
+        unknown: UnknownResolver | None = None,
+        message_guard: MessageGuard | None = None,
+        slip_consent: Callable[[str], bool] | None = None,
     ) -> None:
         self._city = city
         self._audit = audit
         self._stt = stt
         self._chat = chat
+        self._unknown = unknown
         self._outbox = Outbox(
             store=store,
             audit=audit,
@@ -120,10 +135,19 @@ class ConversationService:
             tts=tts,
             soundbox=soundbox,
             channel_name=channel_name,
+            guard=message_guard,
         )
         self._store = store
         self._replies = Replies(outbox=self._outbox, claims=claims, store=store)
-        self._slips = SlipFlow(outbox=self._outbox, claims=claims, store=store, reader=slips, audit=audit)
+        self._slips = SlipFlow(
+            outbox=self._outbox,
+            claims=claims,
+            store=store,
+            reader=slips,
+            audit=audit,
+            **({} if precheck is None else {"precheck": precheck}),
+            **({} if slip_consent is None else {"slip_consent": slip_consent}),
+        )
         self._notices = Notifications(outbox=self._outbox, directory=city)
 
     # ------------------------------------------------------------------ inbound
@@ -178,6 +202,10 @@ class ConversationService:
         )
         return (inbound, *await self._slips.reply(merchant, image, mime, media_id))
 
+    async def file_slip(self, merchant_id: str, slip: SlipExtraction, media_id: str) -> FiledSlip:
+        """File a personal claim for a slip the merchant confirmed or sent to the team (N3, the pre-check's confirm)."""
+        return await self._slips.file(self._city.merchant(merchant_id), slip, media_id)
+
     async def _transcribe(self, audio: bytes, mime: str, hint: str | None) -> tuple[str, str]:
         try:
             heard = await self._stt.transcribe(audio, mime, language_hint=hint)
@@ -191,7 +219,11 @@ class ConversationService:
         return text, source
 
     async def _answer(self, merchant: Merchant, inbound: Message, text: str) -> tuple[Message, ...]:
-        detected = await detect_intent(text, self._chat)
+        answerer = self._unknown() if self._unknown is not None else None
+        if answerer is None:
+            detected = await detect_intent(text, self._chat)
+        else:  # N2 is on: the word lists alone choose the intent, so a model can never open a case (fs-05 N2.15)
+            detected = IntentResult(classify(text), "rules")
         self._audit.append(
             at=inbound.created_at,
             actor=AI_ACTOR,
@@ -200,6 +232,20 @@ class ConversationService:
             subject_id=inbound.id,
             data={"merchant_id": merchant.id, "intent": detected.intent.value, "source": detected.source},
         )
+        grounded = detected.intent is Intent.UNKNOWN or explain_first(text, detected.intent)  # N2.7
+        if answerer is not None and grounded:
+            reply = await answerer.answer_unknown(merchant.id, text)
+            out = Outgoing(
+                key="ASK_ANSWER",
+                kind=MessageKind.TEXT,
+                text_hi=reply.text_hi,
+                text_en=reply.text_en,
+                meta=reply.meta,
+            )
+            return (await self._outbox.send(merchant, out),)
+        if detected.source == "llm" and detected.intent in MODEL_BLOCKED_INTENTS:
+            # N2.15: with N2 off, a model-chosen intent never runs a handler that writes (a case, a payment link)
+            return await self._replies.respond(merchant, Intent.UNKNOWN, text)
         return await self._replies.respond(merchant, detected.intent, text)
 
     # ------------------------------------------------------------------ business-initiated
@@ -214,6 +260,10 @@ class ConversationService:
         """INSTALMENT_PAUSED at pause time (SPEC §13.5)."""
         return await self._notices.instalment_paused(pause)
 
+    async def notify_holiday_decided(self, request: HolidayRequest) -> Message:
+        """HOLIDAY_GRANTED* / HOLIDAY_REFUSED / HOLIDAY_NO_RESPONSE once the lender has answered (X4)."""
+        return await self._notices.holiday_decided(request)
+
     async def notify_personal_paid(self, decision: Decision, payout: Payout) -> tuple[Message, ...]:
         """PERSONAL_PAID / OFFICER_APPROVED → PAYOUT_CARD → SOUNDBOX, at credit time."""
         return await self._notices.personal_paid(decision, payout)
@@ -226,6 +276,32 @@ class ConversationService:
         """CHECKIN_SILENT, business-initiated (template outside the 24 h window, SPEC §13.7)."""
         return await self._notices.checkin_silent(merchant_id, first_silent_day)
 
-    async def notify_officer_result(self, decision: Decision, case: Case) -> tuple[Message, ...]:
-        """OFFICER_DECLINED now; an approval is told at credit time by ``notify_personal_paid``."""
+    async def notify_dispute_opened(self, case: Case, *, already_open: bool = False) -> tuple[Message, ...]:
+        """DISPUTE_ACK (or DISPUTE_ALREADY_OPEN) and the case chip, for a dispute opened from the app (N5)."""
+        merchant = self._city.merchant(case.merchant_id)
+        return await self._replies.dispute_opened(merchant, case, already_open=already_open)
+
+    async def notify_consent_withdrawn(
+        self, merchant_id: str, purpose: str, paid_through: date | None = None
+    ) -> Message:
+        """CONSENT_WITHDRAWN_SALES, _SLIP or _SETTLEMENT: one chat line after a withdrawal (N6, fs-07 9.4)."""
+        merchant = self._city.merchant(merchant_id)
+        key = CONSENT_WITHDRAWN_KEYS[purpose]
+        facts: dict[str, str] = dict(name_facts(merchant))
+        if key == "CONSENT_WITHDRAWN_SETTLEMENT":
+            facts |= {
+                "paid_to_en": "the date you have paid for" if paid_through is None else date_en(paid_through),
+                "paid_to_hi": "जिस तारीख़ तक आपने भुगतान किया है"
+                if paid_through is None
+                else date_hi(paid_through),
+            }
+        else:
+            facts = {k: v for k, v in facts.items() if k in ("name_hi", "name_en")}
+        return await self._outbox.send(merchant, Outgoing.text(key, **facts))
+
+    async def notify_officer_result(self, decision: Decision | None, case: Case) -> tuple[Message, ...]:
+        """OFFICER_DECLINED now; an approval is told at credit time by ``notify_personal_paid``.
+
+        A dispute that names no decision (``None``) is answered with DISPUTE_NO_PAYOUT.
+        """
         return await self._notices.officer_result(decision, case)

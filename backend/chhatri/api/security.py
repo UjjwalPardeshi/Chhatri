@@ -38,7 +38,11 @@ __all__ = [
 ]
 
 RATE_WINDOW_SECONDS: Final = 60.0
-RATE_LIMITS: Final[Mapping[str, int]] = MappingProxyType({"webhooks": 60, "uploads": 20, "messages": 60})
+# `whatif`: the what-if drawer debounces a slider by about 150 ms (fs-08 11.2), so at most about 7 requests a
+# second while it moves; 300 a minute leaves room for 40 seconds of non-stop dragging.
+RATE_LIMITS: Final[Mapping[str, int]] = MappingProxyType(
+    {"webhooks": 60, "uploads": 20, "messages": 60, "whatif": 300}
+)
 MAX_TRACKED_CLIENTS: Final = 10_000
 BEARER_PREFIX: Final = "bearer "
 PHONE_VISIBLE_DIGITS: Final = 5

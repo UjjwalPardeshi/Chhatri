@@ -15,6 +15,7 @@ from chhatri.api.deps import require_feature
 from chhatri.api.envelope import ok
 from chhatri.api.errors import install_error_handlers
 from chhatri.api.schemas import Health
+from chhatri.integrations.free_tier import free_tier_gate_detail
 from tests.api.fakes import FakeAppState, make_settings
 from tests.api.helpers import data_of, error_of
 
@@ -116,3 +117,16 @@ async def test_startup_says_when_no_flag_is_on(caplog: pytest.LogCaptureFixture,
             pass
     assert "feature flags on: none" in caplog.text
     assert "unknown flags" not in caplog.text
+
+
+@pytest.mark.parametrize("synthetic", [True, False])
+async def test_startup_announces_the_free_tier_data_gate(
+    caplog: pytest.LogCaptureFixture, patched_views: None, synthetic: bool
+) -> None:
+    """ADR 0009 section 3: the start-up log says whether free-tier AI links may be called."""
+    settings = make_settings(chhatri_data_is_synthetic=synthetic)
+    app = create_app(settings, state=FakeAppState(settings))
+    with caplog.at_level(logging.INFO, logger="chhatri.api.app"):
+        async with app.router.lifespan_context(app):
+            pass
+    assert f"free-tier data gate: {free_tier_gate_detail(settings)}" in caplog.text

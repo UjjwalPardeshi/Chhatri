@@ -167,8 +167,8 @@
       "waitBetweenTries": 1000
     },
     {
-      "id": "29cdf6cb-d6dd-5486-90c6-c0c410ad98cc",
-      "name": "Step 4 · pause_instalment",
+      "id": "ab5a6a09-4a3a-5c73-bddf-59b33916b451",
+      "name": "Step 4 · request_holiday",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
@@ -177,7 +177,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CHHATRI_PUBLIC_URL }}/internal/workflows/pause_instalment",
+        "url": "={{ $env.CHHATRI_PUBLIC_URL }}/internal/workflows/request_holiday",
         "sendHeaders": true,
         "specifyHeaders": "keypair",
         "headerParameters": {
@@ -191,7 +191,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ run_id: $('Chhatri webhook').first().json.body.run_id, workflow: 'payout', step: 'pause_instalment', payload: $('Chhatri webhook').first().json.body.payload }) }}",
+        "jsonBody": "={{ JSON.stringify({ run_id: $('Chhatri webhook').first().json.body.run_id, workflow: 'payout', step: 'request_holiday', payload: $('Chhatri webhook').first().json.body.payload }) }}",
         "options": {
           "timeout": 10000
         }
@@ -211,7 +211,7 @@
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'completed', steps: ['execute_payout', 'credit_payout', 'notify_merchant', 'pause_instalment'] } }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, data: { run_id: $('Chhatri webhook').first().json.body.run_id, status: 'completed', steps: ['execute_payout', 'credit_payout', 'notify_merchant', 'request_holiday'] } }) }}",
         "options": {
           "responseCode": 200
         }
@@ -291,14 +291,14 @@
       "main": [
         [
           {
-            "node": "Step 4 · pause_instalment",
+            "node": "Step 4 · request_holiday",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Step 4 · pause_instalment": {
+    "Step 4 · request_holiday": {
       "main": [
         [
           {
@@ -321,7 +321,7 @@
       "execute_payout",
       "credit_payout",
       "notify_merchant",
-      "pause_instalment"
+      "request_holiday"
     ]
   }
 }

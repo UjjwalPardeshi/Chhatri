@@ -6,7 +6,9 @@
 |                                    | APPROVED, not paid under another decision) — n8n never decides  |
 | credit_payout (payout)             | PayoutService.credit → CREDITED at the step time               |
 | notify_merchant (payout)           | area: notify_area_payout; personal: notify_personal_paid        |
-| pause_instalment (payout)          | InstalmentService.pause_next(event_date + 1 day) + message      |
+| request_holiday (payout)           | flag x4_lender_request on: ask the lender (InstalmentService.   |
+|                                    | request_holiday) and tell the merchant its answer; off: the     |
+|                                    | BUILT pause_next(event_date + 1 day) + INSTALMENT_PAUSED line   |
 | open_case (human-review)           | the case (opened with the claim) enters the officer queue       |
 | notify_officer (human-review)      | officer notified: feed item + audit                             |
 | check_case_sla (follow-up)         | audits whether the case is still open at its SLA                |
@@ -22,8 +24,10 @@ from collections.abc import Awaitable, Callable, Mapping
 from types import MappingProxyType
 from typing import Any, Final
 
-from chhatri.domain.enums import CaseStatus, ClaimKind, PayoutStatus
-from chhatri.domain.models import Case, Payout
+from chhatri.domain.enums import CaseStatus, ClaimKind, HolidayStatus, PayoutStatus
+from chhatri.domain.models import Case, Claim, Decision, InstalmentPause, Payout
+from chhatri.features import is_enabled
+from chhatri.ledger.instalments import HolidayOutcome
 from chhatri.money import format_inr
 from chhatri.replay.area import progress_feed
 from chhatri.replay.fmt import day_month, hhmm
@@ -35,6 +39,7 @@ __all__ = ["WorkflowSteps"]
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
 WORKFLOW_ACTOR: Final = "workflow:{name}"
+LENDER_FLAG: Final = "x4_lender_request"
 
 
 def _actor(workflow: str) -> str:
@@ -52,7 +57,7 @@ class WorkflowSteps:
                 (wf.PAYOUT, wf.EXECUTE_PAYOUT): self._execute,
                 (wf.PAYOUT, wf.CREDIT_PAYOUT): self._credit,
                 (wf.PAYOUT, wf.NOTIFY_MERCHANT): self._notify_merchant,
-                (wf.PAYOUT, wf.PAUSE_INSTALMENT): self._pause,
+                (wf.PAYOUT, wf.REQUEST_HOLIDAY): self._request_holiday,
                 (wf.HUMAN_REVIEW, wf.OPEN_CASE): self._open_case,
                 (wf.HUMAN_REVIEW, wf.NOTIFY_OFFICER): self._notify_officer,
                 (wf.FOLLOW_UP, wf.CHECK_CASE_SLA): self._check_sla,
@@ -123,21 +128,63 @@ class WorkflowSteps:
         else:
             await rt.conversation.notify_personal_paid(decision, payout)
 
-    async def _pause(self, payload: Mapping[str, Any]) -> None:
+    async def _request_holiday(self, payload: Mapping[str, Any]) -> None:
+        """The instalment step: the lender decides (flag on), or the BUILT unconditional pause (flag off)."""
         rt = self._link.rt
         decision = rt.store.decision(payload["decision_id"])
         _same_merchant(decision.merchant_id, payload)
         claim = rt.store.claim(decision.claim_id)
+        if is_enabled(LENDER_FLAG, rt.static.settings):
+            pause = await self._lender_decides(decision, claim)
+        else:
+            pause = await self._pause_without_asking(decision, claim)
+        if claim.trigger_id is not None:
+            progress_feed(self._link, rt.board.count_pause_step(claim.trigger_id, paused=pause is not None))
+
+    async def _pause_without_asking(self, decision: Decision, claim: Claim) -> InstalmentPause | None:
+        """As at commit 86575ea: pause at once, tell the merchant it is paused."""
+        rt = self._link.rt
         pause = rt.instalments.pause_next(decision.merchant_id, claim.event_date, decision, rt.clock.now())
         if pause is not None:
             self._publisher.pause(pause)
             await rt.conversation.notify_instalment_paused(pause)
-        if claim.trigger_id is not None:
-            progress_feed(self._link, rt.board.count_pause_step(claim.trigger_id, paused=pause is not None))
-        elif pause is not None:
+            self._feed_pause(claim, pause)
+        return pause
+
+    async def _lender_decides(self, decision: Decision, claim: Claim) -> InstalmentPause | None:
+        """Ask the lender once; tell the merchant what it answered. Only a grant pauses anything (X4)."""
+        rt = self._link.rt
+        outcome = await rt.instalments.request_holiday(
+            decision.merchant_id, claim.event_date, decision, rt.clock.now()
+        )
+        if outcome is None:
+            return None
+        if outcome.pause is not None:
+            self._publisher.pause(outcome.pause)
+            self._feed_pause(claim, outcome.pause)
+        else:
+            self._feed_no_holiday(outcome)
+        await rt.conversation.notify_holiday_decided(outcome.request)
+        return outcome.pause
+
+    def _feed_pause(self, claim: Claim, pause: InstalmentPause) -> None:
+        """A personal claim's pause is one feed line (an area trigger's are summed per zone)."""
+        rt = self._link.rt
+        if claim.trigger_id is None:
             shop = rt.static.city.merchant(pause.merchant_id).shop_name
             text = f"{shop}: {format_inr(pause.amount_paise)} instalment of {day_month(pause.instalment_date)} paused"
             rt.feed.add(rt.clock.now(), "instalment", text, merchant_id=pause.merchant_id)
+
+    def _feed_no_holiday(self, outcome: HolidayOutcome) -> None:
+        """Console line for a refusal or no answer (fs-03 §8.3): ``holiday`` type, so it is not counted as paused."""
+        rt = self._link.rt
+        request = outcome.request
+        shop = rt.static.city.merchant(request.merchant_id).shop_name
+        if request.status is HolidayStatus.REFUSED and request.reason_code is not None:
+            text = f"{shop}: lender refused the holiday ({request.reason_code.value})"
+        else:
+            text = f"{shop}: lender did not answer the holiday request"
+        rt.feed.add(rt.clock.now(), "holiday", text, merchant_id=request.merchant_id)
 
     # ---------------------------------------------------------------- cases
 

@@ -95,3 +95,14 @@ def test_premium_must_be_positive() -> None:
 def test_naive_time_rejected() -> None:
     with pytest.raises(ValueError, match="aware"):
         quote(now=datetime(2025, 8, 18, 18, 10))
+
+
+def test_quote_says_whether_the_blocking_alert_is_in_force() -> None:
+    """K6-T06: COVER_BLOCKED_NOW is for an alert already in force, COVER_BLOCKED for one that starts later."""
+    later = quote()  # Mon 18 Aug 18:10: the alert starts tomorrow at 14:00
+    assert later.outcome is CoverQuoteOutcome.BLOCKED and later.blocking_alert_in_force is False
+    in_force = quote(now=ist(2025, 8, 19, 15, 0))
+    assert in_force.outcome is CoverQuoteOutcome.BLOCKED and in_force.blocking_alert_in_force is True
+    starting_now = quote(now=ist(2025, 8, 19, 14, 0))
+    assert starting_now.blocking_alert_in_force is True, "valid_from is not after the request time"
+    assert quote(alerts=()).blocking_alert_in_force is False

@@ -11,7 +11,9 @@
   the code decides the money, so an officer answers a dispute without a new payout — the case is
   CLOSED with the officer's note (approve = payout confirmed, decline = dispute rejected), the
   merchant gets the answer (`notify_officer_result`, keeping DISPUTE_ACK's "you'll hear back") and
-  the disputed decision is returned unchanged. A dispute with no paid decision cannot be decided.
+  the disputed decision is returned unchanged. An officer can always close a dispute: one that names
+  no decision is closed the same way, the merchant is told there is no amount to change and ``None``
+  is returned (K5). Any other case without a decision still cannot be decided.
 - Only OPEN cases can be decided (ValueError otherwise, the API answers 409).
 """
 
@@ -35,6 +37,7 @@ __all__ = ["OfficerFlow"]
 OFFICER_ACTOR: Final = "officer:{officer_id}"
 DISPUTE_CONFIRMED: Final = "Payout confirmed by a claims officer"
 DISPUTE_REJECTED: Final = "Dispute declined by a claims officer"
+DISPUTE_NO_DECISION: Final = "Closed by a claims officer: no payout on record"
 
 
 class OfficerFlow:
@@ -48,18 +51,18 @@ class OfficerFlow:
         self._recorder = recorder
         self._personal = personal
 
-    async def decide(self, case_id: str, *, approve: bool, officer_id: str, note: str) -> Decision:
-        """Approve or decline an OPEN case; returns the decision that now stands."""
+    async def decide(self, case_id: str, *, approve: bool, officer_id: str, note: str) -> Decision | None:
+        """Approve or decline an OPEN case; returns the decision that now stands (None: a dispute with none)."""
         rt = self._link.rt
         case = rt.store.case(case_id)
         if case.status is not CaseStatus.OPEN:
             raise ValueError(f"case {case_id} is {case.status.value}; only OPEN cases can be decided")
         if not OFFICER_ID_PATTERN.fullmatch(officer_id):
             raise ValueError("officer_id must be a short token of letters, digits, '.', '_', '@' or '-'")
-        if case.decision_id is None:
-            raise ValueError(f"case {case_id} has no decision to review")
         if case.kind is CaseKind.DISPUTE:
             return await self._close_dispute(case, approve, officer_id, note)
+        if case.decision_id is None:
+            raise ValueError(f"case {case_id} has no decision to review")
         return await self._resolve_referred(case, approve, officer_id, note)
 
     def _fresh_facts(self, claim: Claim) -> PersonalClaimFacts:
@@ -79,9 +82,10 @@ class OfficerFlow:
                 f"case {case.id}: decision {referred.id} is a {referred.outcome.value} {claim.kind.value} "
                 "decision; only REFERRED personal claims go to an officer"
             )
+        facts = self._fresh_facts(claim)
         decision = apply_officer_decision(
             referred,
-            self._fresh_facts(claim),
+            facts,
             approve=approve,
             officer_id=officer_id,
             note=note,
@@ -90,7 +94,9 @@ class OfficerFlow:
             now=rt.clock.now(),
         )
         actor = OFFICER_ACTOR.format(officer_id=officer_id)
-        await self._recorder.record(decision, action="decision.officer", actor=actor, extra={"note": note})
+        decision = await self._recorder.record(
+            decision, action="decision.officer", actor=actor, extra={"note": note}, facts=facts
+        )
         status = CaseStatus.APPROVED if decision.outcome is DecisionOutcome.APPROVED else CaseStatus.DECLINED
         resolved = await self._resolve(case, status, actor, note, decision)
         if decision.outcome is DecisionOutcome.APPROVED:
@@ -98,18 +104,20 @@ class OfficerFlow:
         await rt.conversation.notify_officer_result(decision, resolved)
         return decision
 
-    async def _close_dispute(self, case: Case, approve: bool, officer_id: str, note: str) -> Decision:
+    async def _close_dispute(self, case: Case, approve: bool, officer_id: str, note: str) -> Decision | None:
         """CLOSED with the officer's note; the merchant hears back (DISPUTE_ACK promised it, §13.4)."""
         rt = self._link.rt
-        disputed = rt.store.decision(case.decision_id or "")
-        resolution = note.strip() or (DISPUTE_CONFIRMED if approve else DISPUTE_REJECTED)
+        disputed = rt.store.decision(case.decision_id) if case.decision_id is not None else None
+        default = (
+            DISPUTE_NO_DECISION if disputed is None else DISPUTE_CONFIRMED if approve else DISPUTE_REJECTED
+        )
         actor = OFFICER_ACTOR.format(officer_id=officer_id)
-        resolved = await self._resolve(case, CaseStatus.CLOSED, actor, resolution, disputed)
+        resolved = await self._resolve(case, CaseStatus.CLOSED, actor, note.strip() or default, disputed)
         await rt.conversation.notify_officer_result(disputed, resolved)
         return disputed
 
     async def _resolve(
-        self, case: Case, status: CaseStatus, actor: str, resolution: str, decision: Decision
+        self, case: Case, status: CaseStatus, actor: str, resolution: str, decision: Decision | None
     ) -> Case:
         rt = self._link.rt
         resolved = rt.cases.resolve(

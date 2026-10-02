@@ -12,6 +12,11 @@ from tests.api.helpers import error_of
 SPEC_ROUTES: tuple[tuple[str, str, str | None], ...] = (
     ("GET", "/api/health", None),
     ("GET", "/api/integrations", None),
+    (
+        "POST",
+        "/api/integrations/{component}/fallback",
+        None,
+    ),  # flag x6_provider_panel + demo mode; token tested in test_fallback_route
     ("GET", "/api/session", None),
     ("GET", "/api/preflight", None),
     ("GET", "/api/weather/now", None),
@@ -28,16 +33,24 @@ SPEC_ROUTES: tuple[tuple[str, str, str | None], ...] = (
     ("GET", "/api/stream", None),
     ("GET", "/api/merchants", None),
     ("GET", "/api/merchants/{merchant_id}", None),
+    ("GET", "/api/merchants/{merchant_id}/cover", None),
+    ("GET", "/api/merchants/{merchant_id}/claims", None),
     ("GET", "/api/merchants/{merchant_id}/messages", None),
     ("POST", "/api/merchants/{merchant_id}/messages", None),
+    ("POST", "/api/merchants/{merchant_id}/ask", None),  # flag n2_ask_chhatri
     ("POST", "/api/merchants/{merchant_id}/voice", None),
     ("POST", "/api/merchants/{merchant_id}/voice-demo", None),
+    ("POST", "/api/voice/stt", None),  # flag n4_voice
+    ("POST", "/api/voice/tts", None),  # flag n4_voice
     ("POST", "/api/merchants/{merchant_id}/photo", None),
+    ("POST", "/api/merchants/{merchant_id}/slip-precheck", None),
+    ("POST", "/api/merchants/{merchant_id}/slip-precheck/{precheck_id}/confirm", None),
     ("GET", "/api/cases", None),
     ("GET", "/api/cases/{case_id}", None),
     ("POST", "/api/cases/{case_id}/approve", "officer"),
     ("POST", "/api/cases/{case_id}/decline", "officer"),
     ("GET", "/api/decisions/{decision_id}", None),
+    ("GET", "/api/decisions/{decision_id}/receipt", None),
     ("GET", "/api/payouts", None),
     ("GET", "/api/audit", None),
     ("GET", "/api/audit/verify", None),
@@ -49,6 +62,23 @@ SPEC_ROUTES: tuple[tuple[str, str, str | None], ...] = (
     ("POST", "/webhooks/whatsapp", None),
     ("POST", "/internal/workflows/{step}", "internal"),
     ("GET", "/api/media/{media_id}", None),
+    ("GET", "/api/ops/summary", None),
+    ("POST", "/api/whatif/area", None),
+    ("GET", "/api/evals/summary", None),  # flag h25_evals
+    ("GET", "/api/merchants/{merchant_id}/grievances", None),  # flag n5_grievances
+    ("POST", "/api/merchants/{merchant_id}/grievances", None),  # flag n5_grievances
+    ("GET", "/api/merchants/{merchant_id}/consents", None),  # flag n6_consents
+    ("GET", "/api/merchants/{merchant_id}/consents/activity", None),  # flag n6_consents
+    (
+        "POST",
+        "/api/merchants/{merchant_id}/consents/{consent_id}/withdraw",
+        None,
+    ),  # officer token and flag n6_consents; the token is tested in test_consents
+    (
+        "POST",
+        "/api/merchants/{merchant_id}/slips/{slip_id}/forget",
+        None,
+    ),  # officer token and flag n6_consents; the token is tested in test_consents
 )
 EXAMPLES = {
     "{zone_id}": "Z7",
@@ -57,6 +87,9 @@ EXAMPLES = {
     "{decision_id}": "D-000001",
     "{step}": "execute_payout",
     "{media_id}": "MD-000001",
+    "{precheck_id}": "PC-000001",
+    "{consent_id}": "CN-000001",
+    "{slip_id}": "MD-000001",
 }
 
 
@@ -71,7 +104,7 @@ def test_route_table_matches_spec_exactly(app: FastAPI) -> None:
         (method.upper(), path) for path, operations in app.openapi()["paths"].items() for method in operations
     }
     assert served == {(method, path) for method, path, _ in SPEC_ROUTES}
-    assert len(SPEC_ROUTES) == 39
+    assert len(SPEC_ROUTES) == 57
 
 
 @pytest.mark.parametrize(("method", "path"), [(m, p) for m, p, auth in SPEC_ROUTES if auth == "officer"])

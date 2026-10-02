@@ -12,8 +12,10 @@ from chhatri.api.deps import RuntimeDep, SettingsDep, StateDep
 from chhatri.api.envelope import ok, ok_list
 from chhatri.api.errors import ApiError
 from chhatri.clock import IST, SystemClock, floor_hour
-from chhatri.features import enabled_features
+from chhatri.features import enabled_features, is_enabled
 from chhatri.integrations.base import IntegrationError
+from chhatri.integrations.panel import panel_rows
+from chhatri.integrations.switch import PROCESS_SWITCH
 from chhatri.replay import views
 
 logger = logging.getLogger(__name__)
@@ -44,8 +46,12 @@ async def health(request: Request, settings: SettingsDep) -> dict[str, Any]:
 
 
 @router.get("/integrations")
-async def integrations(runtime: RuntimeDep) -> dict[str, Any]:
-    """Each component as LIVE or SIMULATED (SPEC §0.1)."""
+async def integrations(runtime: RuntimeDep, settings: SettingsDep) -> dict[str, Any]:
+    """Each component as LIVE or SIMULATED (SPEC §0.1). With flag `x6_provider_panel` on: 17 rows that also say
+    FALLBACK, the provider, model and reason, whether the demo switch can force it, and whether it is forced."""
+    if is_enabled("x6_provider_panel", settings):
+        rows = panel_rows(runtime.integrations, settings, PROCESS_SWITCH)
+        return ok_list(rows, total=len(rows), limit=len(rows), offset=0)
     items = views.integrations_view(tuple(runtime.integrations.statuses))
     return ok_list(items, total=len(items), limit=len(items), offset=0)
 

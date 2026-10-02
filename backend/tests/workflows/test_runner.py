@@ -24,14 +24,14 @@ async def test_monsoon_timeline_decision_1700_credit_1704_pause_1705() -> None:
         ("17:00", "payout:D-000001:execute_payout"),
         ("17:04", "payout:D-000001:credit_payout"),
         ("17:04", "payout:D-000001:notify_merchant"),
-        ("17:05", "payout:D-000001:pause_instalment"),
+        ("17:05", "payout:D-000001:request_holiday"),
     ]
     await scheduler.run_all()
     assert [step for _, step, _ in handlers.calls] == [
         "execute_payout",
         "credit_payout",
         "notify_merchant",
-        "pause_instalment",
+        "request_holiday",
     ]
     assert all(dict(payload) == PAYOUT for *_, payload in handlers.calls)
 
@@ -81,7 +81,7 @@ async def test_takeover_schedules_only_steps_not_yet_reported() -> None:
         "payout:D-000001:execute_payout",
         "payout:D-000001:credit_payout",
         "payout:D-000001:notify_merchant",
-        "payout:D-000001:pause_instalment",
+        "payout:D-000001:request_holiday",
     ]
 
 

@@ -53,6 +53,7 @@ _INSERT: Final = (
 _SELECT_ONE: Final = "SELECT * FROM audit_entries WHERE seq = ?"
 _SELECT_PAGE: Final = "SELECT * FROM audit_entries WHERE seq > ? ORDER BY seq LIMIT ?"
 _SELECT_ALL: Final = "SELECT * FROM audit_entries ORDER BY seq"
+_SELECT_ABOUT: Final = "SELECT * FROM audit_entries WHERE action = ? AND subject_id = ? ORDER BY seq DESC"
 
 
 def canonical_json(value: Any) -> str:
@@ -193,6 +194,13 @@ class AuditLog:
                 (after, limit),
             ).fetchall()
         return tuple(_to_entry(r) for r in rows)
+
+    def latest(self, *, action: str, subject_id: str, at_or_before: datetime) -> AuditEntry | None:
+        """The newest entry of `action` about `subject_id` made at or before simulated time `at_or_before`."""
+        limit = require_aware(at_or_before)
+        with self._lock:
+            rows = self._conn.execute(_SELECT_ABOUT, (action, subject_id)).fetchall()
+        return next((entry for entry in map(_to_entry, rows) if entry.at <= limit), None)
 
     def _rows(self) -> Iterator[sqlite3.Row]:
         yield from self._conn.execute(_SELECT_ALL)
