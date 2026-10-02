@@ -19,7 +19,7 @@ COVERAGE_MIN ?= 80
 INFRA_COVERAGE_MIN ?= 90
 
 .PHONY: help setup data test test-backend test-frontend test-slow test-infra dev demo-check e2e \
-	env up down lint n8n-workflows n8n-selftest clean
+	env check-keys up down lint n8n-workflows n8n-selftest clean
 
 help: ## List the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -63,6 +63,9 @@ e2e: ## Playwright (chromium) against running backend + console at CONSOLE_URL (
 
 env: ## Create .env from .env.example with generated secrets; an existing .env is only checked, never overwritten
 	python3 $(ROOT)/scripts/init_env.py
+
+check-keys: ## SARVAM_API_KEY and GOOGLE_API_KEY as SET / NOT SET (never printed); with a Google key, lists the Gemini models
+	python3 $(ROOT)/scripts/check_keys.py
 
 up: env ## docker compose up -d --build (backend, frontend, n8n), waits until healthy
 	cd $(ROOT) && docker compose up -d --build --wait

@@ -52,6 +52,7 @@ def test_data_is_exactly_build_data(repo_root: Path) -> None:
         ("e2e", ["CONSOLE_URL=http://localhost:5173 npm run test:e2e"]),
         ("up", ["scripts/init_env.py", "docker compose up -d --build"]),
         ("env", ["python3 ", "scripts/init_env.py"]),
+        ("check-keys", ["python3 ", "scripts/check_keys.py"]),
         (
             "test-infra",
             [
