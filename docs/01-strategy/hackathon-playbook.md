@@ -197,4 +197,4 @@
 - 2026-10-02 · v1.4 · final consistency pass against the code
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
 - 2026-10-02 · v1.1 · fact-check pass: verified all prohibited claims are correctly listed in section 9; removed private note references; reframed partnership language
-- 2026-10-02 · v1 · first draft, from strategy brief with exact disclosure wording, the three wow moments, and the on-site timeline.
+- 2026-10-02 · v1 · first draft, from the team strategy notes with exact disclosure wording, the three wow moments, and the on-site timeline.

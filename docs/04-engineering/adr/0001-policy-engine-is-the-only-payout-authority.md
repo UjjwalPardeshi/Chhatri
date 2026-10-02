@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-Only the policy engine (`backend/chhatri/policy/engine.py`) can produce an APPROVED decision. AI assistants (Gemini, Sarvam) build the case—they extract data, grade evidence, suggest amounts—but code, reading `rules.yaml` (version pilot-0.1), decides the money and the payout approval. This ensures reproducibility, auditability and regulatory compliance (SPEC §0.2, §9).
+Only the policy engine (`backend/chhatri/policy/engine.py`) can produce an APPROVED decision. AI services (Sarvam today, Gemini PLANNED) help build the case: they read a slip and route a message. They never set an amount or an outcome. Code, reading `rules.yaml` (version pilot-0.1), decides the money. This gives reproducible, auditable payouts and one place for an insurer or regulator to look (SPEC §0.2, §9).
 
 ## Context
 
@@ -17,7 +17,7 @@ An AI hackathon in fintech naturally invites LLM-based claim approval: a grounde
 
 - **Non-reproducibility:** two LLM calls on the same input may give different outputs; a merchant cannot verify how much they were paid.
 - **Audit failure:** regulators and judges cannot trace an approval through an LLM's reasoning.
-- **Regulatory exposure:** Insurance Act 1938 and IRDAI rules expect deterministic, documented underwriting rules.
+- **Regulatory exposure:** an insurer has to explain, document and file the rules it underwrites (to be confirmed with the partner insurer). A payout that depends on a model's answer is hard to defend.
 
 The team's SPEC §0.2 principle, "The AI builds the case; code decides the money," inverts this: the AI assists in data gathering and reasoning, but only code produces APPROVED decisions.
 
@@ -25,22 +25,24 @@ The team's SPEC §0.2 principle, "The AI builds the case; code decides the money
 
 The policy engine is the **single enforcement point** for payouts. It reads the merchant's data (sales, alert state, KYC name, slip fields) and `rules.yaml` and produces a decision object with:
 
-- Status (APPROVED, REFERRED, BLOCKED).
+- Outcome: APPROVED, REFERRED or DECLINED. (BLOCKED is a cover quote outcome, never a claim outcome.)
 - Amount (if APPROVED).
-- Checks run and their results (HARD: name match, cover active; SOFT: slip readable, dates in range).
+- Checks run and their results. HARD checks: cover in force, premium prepaid, the area-trigger checks, verified silence, not already paid, annual limit. SOFT checks: slip readable, name matches KYC, dates match, within the 3-day limit.
 - Formula and source facts (for "why this amount" explanations).
 - A hash-chained audit entry.
 
-Code path: `backend/chhatri/policy/engine.py`, `evaluate_area_claim()`, `evaluate_personal_claim()`.
+Any HARD fail gives DECLINED. A SOFT FAIL or an UNSURE check gives REFERRED. Area claims have HARD checks only, so they are never REFERRED.
+
+Code path: `backend/chhatri/policy/engine.py`, `evaluate_area_claim()`, `evaluate_personal_claim()`. A claims officer decides only REFERRED personal claims, through `apply_officer_decision()`. It re-runs every check, and a SOFT check the officer approves is recorded as WAIVED_BY_OFFICER. A HARD fail still declines.
 
 The AI's role:
 
-- **Extract:** Sarvam Vision (today) or Gemini Vision (PLANNED) reads the hospital slip and extracts patient name, dates, hospital (N3).
-- **Grade:** An intent classifier (the word list first; the chat model only for UNKNOWN text) routes the merchant's message (K5, N2).
-- **Suggest:** Ask Chhatri can offer reasons (citations to clauses) but never suggests an amount or approval.
-- **Guard:** A guard function rejects any answer containing a money figure not in the decision facts (N2).
+- **Extract:** Sarvam Vision reads the hospital slip and extracts patient name, dates, hospital (live only with `SARVAM_API_KEY`, else the simulated reader). Gemini Vision is PLANNED (N3, Wave 2).
+- **Route:** An intent classifier (the word list first; the chat model only for UNKNOWN text) routes the merchant's message (K5).
+- **Suggest:** Ask Chhatri (PLANNED, N2) will cite policy clauses. It never suggests an amount or an approval.
+- **Guard:** A guard function (PLANNED, N2, H17) will reject any answer containing a money figure that is not in the decision facts.
 
-Any claim path that does not go through the policy engine is blocked in code. Tests enforce it.
+No money moves without the engine. The payout step (`backend/chhatri/ledger/payouts.py`) refuses any decision that is not a stored APPROVED decision, and only the engine creates APPROVED outcomes. The payout-authority table has tests in `backend/tests/policy/test_engine.py`.
 
 ## Alternatives considered
 
@@ -71,16 +73,16 @@ Any claim path that does not go through the policy engine is blocked in code. Te
 
 **Signals:**
 
-1. Backend tests pass with 99%+ coverage; every rule edge case is tested (verified from facts-and-sources.md §D).
-2. The policy engine is never called with a decision already made; no APPROVED decision is overridden (test over decision flow).
-3. The audit log is hash-chained and verifiable; `/api/audit/verify` does not report gaps (K7).
+1. Backend tests pass at 99.7% coverage, measured on 2 Oct (see [Facts and sources](../../01-strategy/facts-and-sources.md), section D), and every rule edge case is tested.
+2. No payout exists without a stored APPROVED decision (a test over the payout step).
+3. The audit log is hash-chained and verifiable; `GET /api/audit/verify` returns `valid: true` (K7).
 4. A merchant can reproduce the payout amount from the decision explanation's formula and facts.
-5. No regulatory action or rejection on the basis of non-determinism or missing logic.
-6. A new lender partner can understand and override rules.yaml without modifying code.
+5. After a pilot: no regulatory objection on the basis of non-determinism or missing logic.
+6. A partner insurer or lender can read and change `rules.yaml` without touching code.
 
 ## Follow-ups
 
-- **Task:** Implement the honest-wording test (X7, [competitive-landscape.md](../../01-strategy/competitive-landscape.md) H4) to catch any LLM-generated template that claims a payout or promise.
+- **Task:** Implement the honest-wording test (X7, H4 in the [PRD](../../02-product/prd.md), Wave 1) to catch any message that claims a payout or a promise.
 - **Task:** Document rules.yaml change process and review checklist before the partnership phase.
 - **After the hackathon:** Consult with a partner insurer on regulatory filing requirements for the policy rules.
 
@@ -91,6 +93,7 @@ Any claim path that does not go through the policy engine is blocked in code. Te
 
 ## Changelog
 
+- 2026-10-02 · v2.1 · fixed against the code: claim outcomes are APPROVED, REFERRED, DECLINED (BLOCKED is a cover quote outcome); name match is a SOFT check; officer path and WAIVED_BY_OFFICER added; Gemini, Ask Chhatri and the money-figure guard marked PLANNED; the AI no longer "suggests amounts"; signals made checkable.
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly establishes policy engine as sole APPROVED authority.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: verified ADR 0001 correctly establishes policy engine as sole APPROVED authority; no changes needed (compliant with canonical framing).
 - 2026-10-02 · v1 · first draft.

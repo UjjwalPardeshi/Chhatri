@@ -9,6 +9,8 @@
 
 ## TL;DR
 
+- The failing-first test list for every feature is in the [implementation guide](implementation-guide.md); AI quality (intent accuracy, guard red-team, slip extraction) is measured as set out in the [AI evaluation plan](ai-evaluation-plan.md).
+
 - **Test pyramid:** Backend 1,711 fast + 36 slow (99.7% coverage); frontend 262 of 264 (X1 fix planned); infra 118; demo-check 70 of 70.
 - **Quality gates:** CI passes lint + fast tests + coverage ≥80% on every push; slow tests and demo-check on PR merge.
 - **New work (P0):** Every feature (N1–N4, N7, X1–X8, H1–H6) has a test; K1–K5 and K8 have integration tests; ask-chhatri and slip reading have eval sets.
@@ -159,7 +161,7 @@ Before committing:
 | Slip extraction (eval set) | AI eval + unit | 40 queries | `backend/tests/integrations/` | LIVE (Sarvam); PLANNED (Gemini) |
 | Pre-check readiness (UI) | Unit + e2e | 10 | `frontend/` + `playwright` | PLANNED |
 | Confidence gate (≥0.80) | Unit | 6 | `backend/tests/integrations/` | LIVE (Sarvam); PLANNED (Gemini) |
-| Fallback to Tesseract | Unit | 4 | `backend/tests/integrations/` | PLANNED (P1) |
+| Fallback to Tesseract | Unit | 4 | `backend/tests/integrations/` | PLANNED (P0, Wave 2) |
 
 ### N4: Real Hindi voice (Saaras + Bulbul)
 
@@ -197,11 +199,11 @@ Before committing:
 - AI components (ask-chhatri, slip reading, intent detection) have eval sets and guardrails.
 - Demo scenarios are validated by `demo-check` (70 checks).
 
-### Out of scope (P1 or roadmap)
+### Tested in their waves (everything is P0)
 
-- N5 (grievance ladder) SLA-clock integration tests (roadmap: after pilot ops setup)
-- N6 (consent centre) withdrawal/revocation flow (roadmap: compliance team sign-off)
-- N8 (Marathi) translation tests (roadmap: after launch language)
+- N5 (grievance ladder) clock and routing tests: Wave 3 (implementation guide §5.1)
+- N6 (consent centre) withdrawal, activity log and forget-my-slip tests: Wave 3 (implementation guide §5.2)
+- N8 (Marathi) copy and language-switch tests: Wave 4 (implementation guide §6.7); the Marathi text itself still needs a native speaker's review
 - Performance and load testing (roadmap: after real-merchant pilot)
 
 ## 4. AI evaluation
@@ -240,7 +242,7 @@ Before committing:
 
 **Target:** ≥90% of slips reach "extractable" or "low confidence" (avoids hard failures); ≥50% "extractable" on the first try.
 
-**Current providers:** Sarvam Vision (if `SARVAM_API_KEY` set) or simulation. Tesseract OCR fallback is PLANNED (P1); Gemini Vision is PLANNED (N3).
+**Current providers:** Sarvam Vision (if `SARVAM_API_KEY` set) or simulation. Tesseract OCR fallback and Gemini Vision are PLANNED (N3, P0, Wave 2).
 
 **Run:** `make test-slow` includes slip extraction checks; slips tested against `backend/chhatri/integrations/sarvam_*.py` (for Sarvam) and planned Tesseract integration.
 
@@ -409,5 +411,6 @@ A feature is **done** when:
 
 ## Changelog
 
+- 2026-10-02 · v1.4 · linked per-feature test lists (implementation guide) and the AI evaluation plan
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: N2 and N3 section headers updated with provider statuses (Gemini PLANNED, Sarvam LIVE, Tesseract PLANNED); test status table rows clarified to show current (LIVE Sarvam) and planned (Gemini) eval paths; grounded-answer eval and slip extraction evals marked with provider availability; intent detection section clarified.
 - 2026-10-02 · v1 · first draft, from the team's test audit and the definition-of-done checklist.

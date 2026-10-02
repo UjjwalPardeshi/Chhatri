@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
+| Status | Draft v2.1 · 2 Oct 2026 |
 | Owner | Omkar Kadam |
 | Audience | Insurer partners, lender partners, compliance counsel, regulators |
 | Related | [Facts and sources](../01-strategy/facts-and-sources.md) · [Policy wording](../02-product/policy-wording-and-cis.md) · [Business model](business-model-and-unit-economics.md) · [Go-to-market and pilot plan](go-to-market-and-pilot-plan.md) |
@@ -14,8 +14,9 @@
 - **Core framework:** s.64VB (cash before cover), parametric product filing, zero-document area claims, one-document hospital-cash claims with human review for doubt, 24-hour dispute SLA.
 - **Lending:** RBI (Digital Lending) Directions 2025 (A25) apply. EDI holidays are the lender's decision, requested by Chhatri. The lender defers the instalment to the loan's end; or alternatively, the insurer funds it from the payout.
 - **Data protection:** DPDP Act and Rules 2025 (A22) apply. Substantive obligations begin 14 May 2027. Design now for purpose-specific, withdrawable consent.
-- **AI governance:** Map the design to RBI FREE-AI's 7 sutras (A23). LLM never decides money; human review for doubtful cases; everything audited; eval set exists.
-- **Messaging:** WhatsApp Business API (A18) — opt-in required, templates outside the 24-hour window.
+- **AI governance:** Map the design to RBI FREE-AI's 7 sutras (A23). LLM never decides money; human review for doubtful cases; everything audited. The AI evaluation sets are PLANNED (H25, Wave 3) and nothing is measured yet.
+- **Messaging:** WhatsApp Business API (A18) — opt-in required, templates outside the 24-hour window. WhatsApp is SIMULATED in the prototype.
+- **Status words:** BUILT means in the code today. PLANNED means not written yet, with its build wave. Consent centre, grievance ladder, Ask Chhatri and slip deletion are PLANNED.
 
 ---
 
@@ -42,15 +43,15 @@ The prototype is built to demonstrate the architecture. No position in this docu
 - Establishes grievance redressal and claims processes (see section 4).
 
 **Distributor:** Paytm Insurance Broking Pvt Ltd (A4, IRDAI broker licence renewed to 16 Feb 2029) distributes the product:
-- Sells cover to merchants through the Paytm for Business app.
-- Handles the simulated payment link in the demo (see docs/SPEC.md §0.1).
-- Collects standing consent for daily settlement deductions (premium and dispute data) from merchants.
+- Would sell cover to merchants through the Paytm for Business app (the mini-app is PLANNED, N1). Today cover is bought through a payment link in the chat.
+- Handles the simulated payment link in the demo (see docs/SPEC.md §0.1). The team has no Paytm keys.
+- Collects standing consent for daily settlement deductions (the premium) from merchants.
 
 **Paytm's role:** Paytm does not underwrite. Paytm:
 - Provides merchant data (sales, KYC, settlement account).
-- Provides the settlement rail (daily deduction for premium; next-day credit for payout).
+- Provides the settlement rail (daily deduction for premium; payout credit with the settlement).
 - Operates the Soundbox (transaction log).
-- Hosts the merchant mini-app and Ask Chhatri.
+- Would host the merchant mini-app and Ask Chhatri (both PLANNED).
 - Does not approve or modify claim decisions.
 
 ---
@@ -63,11 +64,11 @@ The prototype is built to demonstrate the architecture. No position in this docu
 
 **Chhatri's design:**
 - Cover for a day starts only when that day's premium has been received.
-- For the first purchase: a 30-day prepayment is collected via a simulated Paytm payment link (demo), or a real link if the insurer chooses live integration. The merchant must complete this before cover starts.
-- For subsequent days: the premium is deducted from the previous evening's settlement (e.g. 17:00 deduction on day N grants cover for day N+1). The deduction is made under explicit standing consent given at cover purchase (see section 6.1).
-- A day with no settlement (because the shop had zero sales or is closed) still requires a premium payment. In that case, Chhatri can request a standalone premium payment, or the lender can allow it to be deferred to the next settlement.
+- For the first purchase: a 30-day prepayment is collected via a SIMULATED Paytm payment link (a real link needs Paytm keys, which the team does not have). The 30 days run from the cover start date, which is 7 days after the request. The merchant must complete this before cover starts.
+- For subsequent days: the premium is deducted from the evening's settlement (the prototype runs it at 21:00 simulated time, and a deduction on day N prepays day N+1). The deduction is made under explicit standing consent given at cover purchase (see section 6.2).
+- A day whose collections are below the premium (because the shop had few or no sales) does not advance the prepaid date, and cover lapses after the prepaid date. The prototype has no standalone payment or deferral for this case. A payment link for it is a possible design, not built.
 
-**Compliance:** Every payout is audited to confirm the premium was received before the claim date (see section 7 on audit).
+**Compliance:** Every claim is checked for premium received through the event date (the PREMIUM_PREPAID check), and the decision is audited (see section 7 on audit).
 
 ### 3.2 Parametric product filing
 
@@ -80,7 +81,7 @@ The prototype is built to demonstrate the architecture. No position in this docu
 **Chhatri's role:** Chhatri provides:
 - The policy rules and formula (rules.yaml pilot-0.1; section 3.4 below).
 - The claims logic (policy engine; docs/SPEC.md §9).
-- The backtest and any evidence of performance or basis risk (docs/01-strategy/current-state-audit.md).
+- The backtest and any evidence of performance or basis risk (docs/04-engineering/ml-model-card.md). The backtest uses simulated sales and real rainfall, and its calibration is circular by design, so it checks the specification and is not evidence about real merchants.
 
 The insurer and counsel manage the filing.
 
@@ -89,64 +90,66 @@ The insurer and counsel manage the filing.
 Parametric insurance inherently carries basis risk: the payout trigger (area index and hospital silence) may not perfectly match the merchant's actual loss (Clarke et al. 2012, A8). Chhatri explicitly accepts this:
 
 - The payout is 50% of the loss, not 100%, to acknowledge moral hazard and basis risk.
-- The area trigger uses the merchant's own sales data (not area-wide weather alone), reducing basis risk vs weather-only triggers.
+- The area trigger uses the shops' own sales in the zone (not weather alone), which should reduce basis risk compared with a weather-only trigger. On simulated sales the backtest paid 89 of 148 simulated real drops against 49 of 148 for a weather-only trigger. That is a specification check, not a result on real merchants.
 - But the shop-level loss may still differ from the area index, which is why there is a dispute mechanism (section 4.3).
 
 ### 3.4 Policy rules and limits
 
-Policy rules are stored in `backend/chhatri/policy/rules.yaml` (version pilot-0.1). Every payout is logged (section 7). Rules are:
+Policy rules are stored in `backend/chhatri/policy/rules.yaml` (version pilot-0.1). Every payout is logged (section 7). The table lists the substantive thresholds. The complete rule set is in `rules.yaml`. Rules are:
 
 | Rule | Value | Notes |
 |---|---|---|
 | **Payout share** | 50% | Covers half the computed loss. The other 50% is the merchant's deductible, to manage moral hazard. |
-| **Area trigger** | Index < 50% for 3 consecutive hours AND below model's conformal lower bound, during an alert, with ≥ 20 shops in the index | Reduces false positives vs a weather-only trigger. |
+| **Area trigger** | Index < 50% in each of 3 consecutive hours AND the 3-hour index below the zone's conformal lower bound, during a RAIN or CIVIC alert (any colour), with ≥ 20 shops in the index | Reduces false positives vs a weather-only trigger. |
 | **Area daily cap** | ₹2,500 per merchant per day | Limits concentration risk. |
-| **Hospital-cash trigger** | Silent day (zero Soundbox sales) + hospital slip with readable patient name and dates matching the silent day(s) | Two checks for authenticity: name match ≥ 85 (rapidfuzz token_set_ratio); slip confidence ≥ 80. |
-| **Hospital-cash daily cap** | ₹1,500 per merchant per day, for up to 3 days automatically | Automated decisions for 3 days; 4+ days go to a claims officer for review. |
-| **Annual limit** | ₹30,000 per merchant per year (calendar year) | Caps total exposure per merchant. |
-| **Waiting period** | 7 days | Standard waiting period to prevent abuse. |
-| **Alert look-ahead** | 72 hours | Prevents buying cover just before an alert. |
-| **Name match threshold** | ≥ 85 (token_set_ratio) | Balances false accepts vs false rejects. Below 85 triggers human review (REFERRED). |
-| **Slip confidence** | ≥ 0.80 | Extracted fields (patient name, dates, hospital) must have ≥ 80% confidence. |
-| **Dispute SLA** | 24 hours | Time to decide a dispute (section 4.3). |
+| **Hospital-cash trigger** | Silent day (no sales in business hours) + hospital slip with readable patient name and dates covering the silent day(s) | Checks for authenticity: name match ≥ 85 (rapidfuzz token_set_ratio); slip confidence ≥ 0.80. |
+| **Hospital-cash daily cap** | ₹1,500 per merchant per day, for up to 3 days automatically | More than 3 silent days sends the whole claim to a claims officer. |
+| **Annual limit** | ₹30,000 per merchant over any rolling 365 days (a hard check) | Caps total exposure per merchant. |
+| **Waiting period** | 7 days | Cover starts 7 days after the request. Prevents abuse. |
+| **Alert look-ahead** | 72 hours | A quote while an alert is valid or starts within 72 hours is BLOCKED: the new cover will not apply to it. The link is still offered. |
+| **Name match threshold** | ≥ 85 (token_set_ratio) | A SOFT check. Below 85 sends the claim to a claims officer (REFERRED). |
+| **Slip confidence** | ≥ 0.80 | A SOFT check. The lower of the reader's name and admission-date confidences must be at least 0.80. |
+| **Dispute SLA** | 24 hours | Time to respond to a dispute (section 4.1). Each case has a due time and records whether it was resolved in time. |
 | **Premium loading** | 35% (expected loss ÷ 0.65) | Used to calculate the premium for each zone. |
 | **Minimum daily premium** | ₹2 | Floor below which the product is not economical. |
-| **First payment prepay** | 30 days | The initial premium payment covers 30 days. |
+| **First payment prepay** | 30 days | The initial premium payment covers 30 days from the cover start date. |
+| **Payout rail delay** | 4 minutes | The simulated rail credits an approved payout 4 minutes after the decision. |
+| **EDI request delay** | 5 minutes | Today the simulated step pauses the next instalment 5 minutes after the decision. X4 turns it into a request to the lender. |
 
 ### 3.5 Claims: zero-document area claims
 
-**Trigger:** The area sales index falls below 50% for 3 consecutive hours during a Red alert and is below the AI model's lower bound.
+**Trigger:** The area sales index falls below 50% in each of 3 consecutive hours during a RAIN or CIVIC alert (any colour; a Red alert is only the demo case) and the 3-hour index is below the zone's lower bound.
 
 **Decision:** Every insured shop in that zone is checked:
 - Is the merchant covered on that date?
 - Has the waiting period ended?
+- Was the cover bought before the alert was issued?
 - Is the premium paid (s.64VB)?
 
-**Payout:** Automatic. No documents from the merchant. Amount = 50% × expected day × drop %, capped at ₹2,500. Paid via settlement (next 4 minutes).
+**Payout:** Automatic. No documents from the merchant. Amount = 50% × expected day × drop %, capped at ₹2,500. In the prototype the simulated rail credits it 4 minutes after the decision.
 
-**Explanation:** The merchant sees a breakdown of the calculation: expected day amount (₹), drop % (from the area index), the cap applied, and a reference to clause C2 in the policy wording. The explanation is reproducible from the numbers shown (see docs/SPEC.md §4.3).
+**Explanation (BUILT, K5):** The merchant sees the formula: expected day amount (₹), drop % (from the area index), the half-of-the-loss rule and the cap when it applies. Showing the source of each number (H13) and a reference to clause C2 are PLANNED (N1, H17). The explanation is reproducible from the numbers shown (see docs/SPEC.md §4.3).
 
 ### 3.6 Claims: one-document hospital-cash claims with human review for doubt
 
-**Trigger:** The Soundbox records zero sales (silent day).
+**Trigger:** A silent day: a completed day with no sales in the shop's business hours, still none by 11:00 the next morning (the shop is not on its weekly off and its zone had no area event).
 
 **Process:**
-1. Chhatri sends a voice check-in to the merchant (Sarvam TTS/STT or fallback to browser speech). "Are you okay?" The merchant replies by voice or tap.
-2. Merchant sends a photo of a hospital document (admission proof, discharge summary, hospital ID).
-3. Chhatri extracts the patient name, admission and discharge dates, hospital name (Gemini vision or Sarvam Vision).
-4. The policy engine checks (HARD checks):
-   - Does the extracted name match the KYC name at ≥ 85%?
-   - Do the dates match the silent day(s)?
-   - Is the extraction confidence ≥ 80%?
+1. Chhatri sends a check-in message at 11:20 (BUILT, in Hindi and English): "Your shop has been closed since yesterday. Is everything okay?" A voice version (Sarvam TTS and STT, browser speech as a fallback) is PLANNED (N4). The merchant replies by voice note or tap.
+2. Merchant sends a photo of a hospital document (admission slip, discharge summary, prescription or bill).
+3. Chhatri extracts the patient name, admission and discharge dates, hospital name (Sarvam Vision today, live only with a key and otherwise the simulated reader; Gemini vision is PLANNED, N3).
+4. The policy engine runs the checks:
+   - SOFT checks: does the extracted name match the KYC name at ≥ 85? Do the slip dates cover the silent day(s)? Is the slip readable (confidence ≥ 0.80)? Is the claim for 3 days or fewer?
+   - HARD checks: cover in force, premium prepaid, silence verified from sales, not already paid, annual limit.
 
 **Decision:**
-- **APPROVED (all HARD checks pass):** Automatic payout. Amount = 50% × expected day, capped at ₹1,500 per day, for up to 3 days automatically.
-- **REFERRED (all HARD checks pass but any SOFT check is uncertain or fails):** A claims officer (Rajesh, persona) reviews the extracted fields, the raw slip, and the merchant's explanation. The officer can approve or decline. Outcome is the same as APPROVED or declined.
-- **DECLINED (clear failure, e.g. wrong hospital, dates are 3 months old):** No payout. Merchant sees a reason and can dispute.
+- **APPROVED (every check passes):** Automatic payout. Amount = 50% × expected day, capped at ₹1,500 per day, for up to 3 days automatically.
+- **REFERRED (a SOFT check fails or is unsure):** A claims officer (Rajesh, persona) reviews the slip image, the extracted name, the KYC name, the match score, the silent days and the checks. The officer re-runs all checks and can approve or decline. A SOFT check the officer approves is recorded as WAIVED_BY_OFFICER. A HARD fail still declines.
+- **DECLINED (a HARD check fails, for example cover not in force, premium not prepaid, silence not verified, already paid, annual limit):** No payout. Merchant sees a reason and can dispute.
 
-**SLA:** The officer reviews within 24 hours (IRDAI Master Circular A24 requires 1 hour for cashless, 3 hours for discharge authorisation; Chhatri's 24-hour SLA for a pre-claim document is gentler).
+**SLA:** We tell the merchant to expect an answer within 24 hours. IRDAI's Master Circular (A24) sets 1 hour for cashless requests and 3 hours for discharge authorisation in health insurance. Chhatri is an income cover, not a health policy, so A24 may not apply. If it did, the 24-hour target would be slower than the rule. This is a question for counsel.
 
-**Explanation:** Merchant sees the decision reason, the extracted fields, the checks that passed or failed, and a link to clause C3 in the policy wording.
+**Explanation:** The decision shows the reason and the checks that passed or failed. A link to clause C3 and an extracted-fields screen for the merchant are PLANNED (H17, N3).
 
 ---
 
@@ -154,21 +157,19 @@ Policy rules are stored in `backend/chhatri/policy/rules.yaml` (version pilot-0.
 
 ### 4.1 Dispute mechanics and 24-hour SLA
 
-**Trigger:** A merchant disagrees with a payout amount or a decline.
+**Trigger:** A merchant disagrees with a payout amount (BUILT: "My loss was bigger" in the chat). A dispute of a decline is not built.
 
 **Process:**
-1. Merchant taps "Dispute" in the claims tracker.
-2. Merchant explains the disagreement (optional text input or voice note).
-3. A case is opened (case ID in the tracker).
-4. A 24-hour clock starts.
+1. Merchant tells Chhatri in the chat. A "Dispute" button in the claims tracker is PLANNED (N1, H1).
+2. Chhatri replies "Okay, I'm sending this to our team. You'll hear back within 24 hours." and shows "Sent to a claims officer · case C-2291" (case number as an example).
+3. A case of kind DISPUTE is opened with a due time 24 hours later.
 
-**Resolution:**
-- Chhatri (or the claims officer, if REFERRED) re-runs every check on the facts shown to the merchant.
-- If an error is found (e.g. the expected day was miscalculated), the correct payout is paid immediately.
-- If the facts are correct, a message explains why (e.g. "Your hospital slip showed 20 Aug, but the silent day was 19 Aug; we cannot approve for 20 Aug").
-- The merchant is notified of the resolution within 24 hours.
+**Resolution (BUILT):**
+- A claims officer reviews the decision's numbers and either confirms the payout or rejects the dispute. The reason shown is, for example, "Your area's numbers support the amount paid."
+- A dispute never changes the amount, and the case is then CLOSED. It records whether it was closed within the 24 hours.
+- There is no path yet to correct an amount if the engine itself was wrong. A correction would need a new decision by the insurer (open question).
 
-**Outcome:** Dispute is marked as resolved (accepted, partially approved, or clarified). The 24-hour clock is closed.
+**Outcome:** The case status is CLOSED. DISPUTE and REFERRED are different case kinds: a REFERRED claim is decided by an officer (section 3.6), and a DISPUTE is a challenge to a decision already made.
 
 ### 4.2 Grievance ladder (per B)
 
@@ -180,7 +181,7 @@ If a merchant is unhappy with Chhatri's dispute resolution, the grievance ladder
 
 3. **Insurance Ombudsman:** If the complaint is still unresolved or the merchant disagrees with IRDAI's direction, they can approach the Insurance Ombudsman (free to the policyholder, under the Insurance Ombudsman Rules, 2017). The Ombudsman can award compensation up to the amount specified in their rules (check current limits with counsel).
 
-**Chhatri's role:** Chhatri shows this ladder in the merchant's claims tracker (H5, feature spec fs-06). Chhatri logs every escalation and decision.
+**Chhatri's role:** Chhatri will show this ladder, with response clocks and a router for who owns the complaint (Paytm, the insurer or the lender), in the merchant mini-app (PLANNED, N5 and H22, Wave 3; feature spec fs-06). Chhatri will log every escalation and decision.
 
 ---
 
@@ -188,7 +189,7 @@ If a merchant is unhappy with Chhatri's dispute resolution, the grievance ladder
 
 ### 5.1 Scope
 
-The RBI (Digital Lending) Directions, 2025 (A25, issued 8 May 2025) apply to all lending relationships involving digital platforms (including Paytm). The Directions require:
+The RBI (Digital Lending) Directions, 2025 (A25, issued 8 May 2025) apply to lending relationships involving digital platforms (including Paytm). As we read them, and subject to counsel, the Directions require:
 - Transparent terms and conditions.
 - Clear disclosure of charges and repayment schedules.
 - No deceptive practices.
@@ -197,25 +198,24 @@ The RBI (Digital Lending) Directions, 2025 (A25, issued 8 May 2025) apply to all
 
 ### 5.2 EDI holiday as a pre-agreed policy
 
-**Chhatri's design:** After a payout, Chhatri requests the lender to defer the next day's loan instalment (EDI). The lender applies a pre-agreed policy rule:
-- Loan is active (not REPAID, DEFAULTED, CANCELLED).
-- Borrower is not in arrears (zero or pending-resolution arrears).
-- Holiday allowance is not exhausted (e.g. 2 of 3 holidays used this year).
-- Lender flag is enabled (borrower has opted into EDI-holiday benefit).
+**Chhatri's design:** After a payout, Chhatri requests the lender to defer the next instalment (EDI). The lender applies a pre-agreed policy rule (the four conditions of X4, [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md)):
+- Loan is active (not repaid, defaulted or cancelled).
+- Borrower is not in arrears.
+- Holiday allowance is not exhausted (the allowance is a lender setting; the number is not fixed here).
+- The loan is in the holiday scheme (the borrower has opted in).
 
-**RBI compliance:** The deferral is the **lender's decision**, made under its board-approved policy. Chhatri is the initiator (via a structured request), but the lender holds the authority. This complies with the Directions: no unilateral Chhatri pause; the lender's policy is board-approved; the benefit is offered to all eligible borrowers fairly.
+**RBI position (to be confirmed with the lender's counsel):** The deferral is the **lender's decision**, made under its board-approved policy. Chhatri is the initiator (via a structured request), but the lender holds the authority. The design aims to be consistent with the Directions: no unilateral Chhatri pause, a board-approved lender policy, and the same benefit for all eligible borrowers. Whether a pre-agreed holiday counts as a restructuring is for the lender's compliance team.
 
 **Two settlement models:**
-1. **Lender-deferred model (default):** The lender defers the instalment to the end of the loan tenure. The merchant's loan duration does not change; the last instalment date extends by 1 day (or multiple days if multiple deferrals apply). The merchant is told "Your ₹600 instalment is deferred to 31 December 2026" (as an example).
-2. **Insurer-funded model (alternative):** Chhatri (or the insurer) pays the deferred instalment directly to the lender from the payout, so the loan terms never change. The merchant is told "Your ₹600 instalment is covered by your insurance payout" or not told at all (depending on the insurer's choice). This is similar to an EMI-protection cover.
+1. **Lender-deferred model (default):** The lender defers the instalment to the end of the loan tenure with no penalty. The merchant's loan duration does not change; the last instalment date extends by 1 day (or more if several deferrals apply). The merchant is told what the lender decided. Proposed wording (X4, fs-03 section 8.2): "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty."
+2. **Insurer-funded model (alternative):** The insurer pays the instalment directly to the lender from the payout, so the loan terms never change. This is similar to an EMI-protection cover. The merchant message would be agreed with the insurer.
 
 The insurer and lender will agree on the model during the pilot.
 
 ### 5.3 Code implementation and audit
 
-- **Request:** `backend/chhatri/ledger/instalments.py`, method `pause_next()` (X4 guard added).
-- **Lender decision:** Simulated in the demo, via a pre-agreed rule in `backend/chhatri/sim/city.py`. In production, the lender's API provides this decision.
-- **Audit:** Every EDI holiday request and lender decision is logged in `backend/chhatri/audit/log.py` with the request id, lender decision (granted/not granted), reason code and timestamp.
+- **Today (BUILT):** `backend/chhatri/ledger/instalments.py`, method `pause_next()`, pauses the next instalment 5 minutes after the decision. It has no lender check and no lender answer: the simulated lender always grants. The message "Tomorrow's ₹600 instalment is paused." reads as if Chhatri did it. The audit entry is `instalment.pause`.
+- **PLANNED (X4, Wave 1):** the step becomes a request to a simulated lender that applies the four conditions above. A refusal creates no pause, and the payout is never touched. The audit entries become `instalment.holiday_request` and `instalment.holiday_decision` with a reason code. In production, the lender's API provides the decision.
 
 ---
 
@@ -223,12 +223,14 @@ The insurer and lender will agree on the model during the pilot.
 
 ### 6.1 DPDP Act applicability and timeline (A22)
 
-The Digital Personal Data Protection Act, 2023 came into force on 14 Nov 2025 (phased rollout):
-- **14 Nov 2025:** The Act applies. Most entities must begin preparing for the DPDP Rules.
-- **14 Nov 2026:** Consent managers (intermediaries that help manage consent) must register.
-- **14 May 2027:** Substantive obligations apply: consent, notices, breach reporting within 72 hours, data minimisation, deletion on request, etc.
+The DPDP Rules, 2025 were notified on 13 Nov 2025 (published 14 Nov) under the Digital Personal Data Protection Act, 2023. The rollout is phased (A22):
+- **14 Nov 2025:** The first phase begins.
+- **14 Nov 2026:** Consent managers (intermediaries that help manage consent) come in, for example.
+- **14 May 2027:** Substantive obligations apply: consent, notices, breach reporting within 72 hours, and more.
 
-**Chhatri's timeline:** Chhatri is being designed now (Oct 2026) to meet the May 2027 substantive obligations, so there is no rework at go-live.
+**Chhatri's timeline:** Chhatri is being designed now (Oct 2026) with the May 2027 substantive obligations in mind, to limit rework at go-live. Counsel must confirm the detail.
+
+**Status today:** The consent centre, the consent activity log and slip deletion are PLANNED (N6 and H23, Wave 3). Today the original slip image is kept in memory so an officer can see it, with no deletion path. Everything in sections 6.2 to 6.5 describes the design to build, not what the code does.
 
 ### 6.2 Purpose-specific, withdrawable consent
 
@@ -264,7 +266,7 @@ The Digital Personal Data Protection Act, 2023 came into force on 14 Nov 2025 (p
 - Location data beyond the zone.
 
 **Masking:**
-- In the consent centre (N6, feature spec fs-07), the merchant can view their slip data. Patient names are masked as "P**** J**** (92% match)" to prevent unintended data exposure.
+- In the consent centre (PLANNED, N6, feature spec fs-07), the merchant can view their slip data. Patient names would be masked, for example "P**** J****", to prevent unintended data exposure.
 - In reports shared with the insurer, merchant names are replaced with merchant IDs.
 
 ### 6.4 Children
@@ -273,15 +275,15 @@ Chhatri is only for merchants (adults, age ≥ 18). No data is collected on chil
 
 ### 6.5 Notices and requests
 
-**Initial notice (at cover purchase):**
-Chhatri shows a data notice in the mini-app:
+**Initial notice (at cover purchase, PLANNED):**
+Chhatri will show a data notice in the mini-app:
 - What data is collected (sales, Soundbox, hospital slips).
 - Why (claims and premium calculation).
 - How long it is kept (7 years for claims disputes; slip data deleted 30 days after claim closure).
 - The merchant's rights (view, correct, delete, withdraw consent).
 - Contact for data requests (support phone and email).
 
-**Data subject requests:**
+**Data subject requests (proposed process, not built):**
 - Merchant can ask "What data do you have on me?" → Chhatri sends a CSV of all data in 30 days.
 - Merchant can ask "Fix my KYC name." → Chhatri updates it and confirms in 7 days.
 - Merchant can ask "Delete my slip." → After the claim is closed, Chhatri deletes it in 30 days.
@@ -296,47 +298,44 @@ RBI released the FREE-AI committee report on 13 Aug 2025. It is advisory (not ye
 
 | Sutra | Meaning | Chhatri's design |
 |---|---|---|
-| **Trust** | AI systems must be trustworthy and auditable. | (1) Policy engine is pure code (no LLM); (2) Audit log is hash-chained; (3) `GET /api/audit/verify` allows anyone to verify a decision's authenticity. |
-| **People First** | AI must respect human autonomy and protect vulnerable groups. | (1) Every merchant can dispute a decision; (2) A human reviews doubtful hospital-cash claims (REFERRED); (3) No automated collection or wage deduction (decisions are settled via Paytm only). |
-| **Innovation** | AI can improve financial inclusion and efficiency. | (1) Area claims are decided in 4 minutes (vs 30–60 days today); (2) Area trigger uses the merchant's own sales data (novel); (3) Hospital-cash uses live document reading (Gemini or Sarvam). |
-| **Fairness** | AI decisions must not discriminate. All eligible merchants are paid the same formula. | (1) Formula is identical for all merchants in the same zone; (2) Name-match threshold (85%) is uniform; (3) Dispute SLA (24 hours) is uniform; (4) Backtest shows basis risk (not all losses are caught, and some false positives occur); (5) Exclusions are clear (e.g. non-Red alerts are not covered). |
-| **Accountability** | Developers and institutions must take responsibility. | (1) Chhatri logs every decision and its reasoning; (2) Insurer (not Paytm) is accountable for underwriting; (3) Paytm (distributor) and insurer (underwriter) are both liable under insurance law. (4) Every test is named and measured (1,711 backend tests, 262 frontend tests). |
-| **Explainability** | Merchants must understand why a decision was made. | (1) Every decision shows the formula: expected day, drop %, cap, and final amount; (2) Every check result is shown (e.g. "Name match: 92% (passes threshold of 85%)"); (3) Ask Chhatri answers coverage questions grounded in clauses C1–C12; (4) No black-box numbers. |
-| **Resilience** | Systems must fail gracefully and recover. | (1) Fallback AI providers (Gemini → Sarvam → deterministic templates); (2) Fallback messengers (Sarvam → browser Web Speech); (3) In-process workflows on the demo laptop (no network required). |
+| **Trust** | AI systems must be trustworthy and auditable. | (1) Policy engine is pure code (no LLM); (2) Audit log is hash-chained; (3) `GET /api/audit/verify` lets an auditor with API access recompute the chain. |
+| **People First** | AI must respect human autonomy and protect vulnerable groups. | (1) A merchant can dispute a payout amount (BUILT); (2) A human reviews doubtful hospital-cash claims (REFERRED); (3) Premium is deducted from settlement only under standing consent, and only when the day's collections cover it; (4) No loan offers or cross-sell during distress (X8, PLANNED, Wave 3). |
+| **Innovation** | AI can improve financial inclusion and efficiency. | (1) In the prototype the payout is credited 4 minutes after the decision (a simulated rail; earlier plans took 30–60 days, A3); (2) The area trigger uses the zone's shops' own sales; (3) Hospital-cash reads one photo (Sarvam today when keyed; Gemini PLANNED). |
+| **Fairness** | AI decisions must not discriminate. All eligible merchants are paid the same formula. | (1) Formula is identical for all merchants in the same zone; (2) Name-match threshold (85) is uniform; (3) Dispute SLA (24 hours) is uniform; (4) The backtest shows basis risk (not all losses are caught, and some payouts have no real drop), on simulated sales; (5) Exclusions are clear (e.g. a HEATWAVE alert does not trigger cover). |
+| **Accountability** | Developers and institutions must take responsibility. | (1) Chhatri logs every decision and its reasoning; (2) Insurer (not Paytm) is accountable for underwriting; (3) Paytm (distributor) and insurer (underwriter) are both liable under insurance law (to be confirmed by counsel). (4) Tests: backend 1,711 fast and 36 slow tests at 99.7% coverage, frontend 262 of 264 passing (X1 fixes the other 2), measured on 2 Oct. The AI parts are not measured yet (H25). |
+| **Explainability** | Merchants must understand why a decision was made. | (1) Every decision shows the formula: expected day, drop %, cap when it applies, and final amount (BUILT, K5); (2) Every check result is shown to the officer (e.g. "Name match: 100, passes the threshold of 85"); (3) Ask Chhatri answers coverage questions grounded in clauses C1–C12 (PLANNED, N2, Wave 2); (4) No black-box numbers. |
+| **Resilience** | Systems must fail gracefully and recover. | (1) A fallback chain for AI providers (Gemini, then Sarvam, then templates or a person) is PLANNED (ADR 0003, Wave 2); today it is Sarvam, else the simulators; (2) Browser speech as a fallback is PLANNED (N4); (3) BUILT: the in-process workflow runner needs no network (n8n is optional). |
 
 ### 7.2 LLM authority
 
 **Principle (docs/SPEC.md §0.2):** "The AI builds the case; code decides the money."
 
 **Implementation:**
-- **Ask Chhatri (N2):** An LLM (Gemini or Sarvam) answers coverage and claims questions. But:
+- **Ask Chhatri (N2, PLANNED, Wave 2):** An LLM (Gemini or Sarvam) will answer coverage and claims questions. But:
   - The answer is grounded only in the policy wording (clauses C1–C12) and the merchant's own decision facts (from the decision table).
-  - The LLM is guarded (docs/SPEC.md §13.3): no digit that is not in the decision facts; no promises of money.
+  - The LLM is guarded (design in docs/SPEC.md §13.3; the guard is PLANNED with N2 and H17): no digit that is not in the decision facts; no promises of money.
   - Any money figure shown to the merchant must have a corresponding check in the decision record.
   - If the LLM cannot find a grounded answer, it says "I don't know; let me connect you to a person."
-- **Slip reading (N3):** Gemini Vision or Sarvam Vision extracts patient name, admission/discharge dates and hospital. But:
-  - The extracted confidence scores are shown to the merchant.
-  - Below the confidence gate (0.80), the case is referred to a human.
-  - The merchant can see the extracted fields and retake the photo if it is unclear.
+  - Today the chat model sees only text the word-list classifier cannot place (UNKNOWN), and the merchant's money messages are templates filled from decision facts.
+- **Slip reading (N3):** Sarvam Vision (BUILT, live only with a key; otherwise the simulated reader) extracts patient name, admission/discharge dates and hospital. Gemini Vision is PLANNED. But:
+  - The slip reader's confidence is shown to the officer today. The merchant-facing pre-check (extracted fields, retake, confirm) is PLANNED (N3, H5, H15).
+  - Below the confidence gate (0.80), the case is referred to a human (BUILT).
+  - The merchant will be able to see the extracted fields and retake the photo if it is unclear (PLANNED).
 
 **No LLM payout authority:** The policy engine (`backend/chhatri/policy/engine.py`) is the only code that can produce an APPROVED decision. The LLM has no authority over money.
 
 ### 7.3 Human involvement
 
 Humans are involved in:
-- **REFERRED hospital-cash claims:** When a slip does not quite pass the automatic checks (e.g. name is 88% match), a claims officer reviews and approves or declines.
-- **Disputes:** When a merchant disputes a decision, a person re-checks the numbers.
+- **REFERRED hospital-cash claims:** When a slip does not pass the automatic checks (e.g. the name scores below 85), a claims officer reviews and approves or declines.
+- **Disputes:** When a merchant disputes a payout, a claims officer re-checks the numbers and confirms the payout or rejects the dispute.
 - **Escalations:** When a merchant escalates to the insurer or IRDAI, a person handles it.
 
 ### 7.4 Evals and guardrails
 
-**Ask Chhatri eval set (N2):**
-- 30+ test questions covering coverage, claims, disputes, premiums, EDI holidays, exclusions.
-- Each question has a ground-truth answer from the policy wording.
-- The LLM's answer is scored on factuality (exact match or near-match) and grounding (all claims backed by policy text or decision facts).
-- Target: ≥ 95% factual accuracy.
+**AI evaluation (H25, PLANNED, Wave 3).** The [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) defines six suites: intent routing, the guard against unsupported figures and promises, end-to-end Ask answers, slip reading with the confidence gate, voice, and the labels and fallback behaviour of every chain. Nothing has been measured. The console page `/evals` will read NOT MEASURED until a stored run exists. A target such as "at least 95% factual accuracy for Ask Chhatri" is a target, not a result.
 
-**Guard tests (X7):** A test suite enforces honest wording:
+**Guard tests (X7, PLANNED, Wave 1):** A test suite will enforce honest wording:
 - Merchant-facing templates are rejected if they use absolute language ("guaranteed", "100%", "always").
 - No payout amount is shown unless it is in the decision facts.
 - No "paid" message appears before a payout record exists.
@@ -349,19 +348,19 @@ Humans are involved in:
 
 ### 8.1 WhatsApp Business API (A18)
 
-**Setup:** Chhatri uses the WhatsApp Cloud API. In the demo, a test number is used (no business verification required). In production, Paytm will use its verified business number.
+**Setup:** The prototype has a WhatsApp Cloud API adapter, but the team has no WhatsApp keys, so WhatsApp is SIMULATED (the in-console phone) on stage. A Meta developer test number works without business verification (A18). In production, Paytm would use its verified business number.
 
 **Rules (A18):**
 - **Free-form replies (inside 24-hour window):** No cost. If the merchant replies to any message from Chhatri within 24 hours, Chhatri can send a free-form reply (e.g. "Hi, I received your message. Let me check that for you").
-- **Proactive messages (outside 24-hour window):** Must use an approved template. Template examples:
-  - "Hi [name], a Red alert is issued for your zone. Your cover is active. Stay safe."
-  - "[name], Your claim of ₹1,380 has been approved and will be credited today."
+- **Proactive messages (outside 24-hour window):** Must use an approved template. Template examples (proposed, not in the message catalogue):
+  - "Hi [name], a heavy-rain alert is issued for your zone."
+  - "[name], your claim of ₹1,380 has been approved and credited with today's settlement."
 
-**Chhatri's approach:** Merchant-facing copy is in `backend/chhatri/conversation/messages.py`. Every message is templated (no free-generation; see docs/SPEC.md §4.1). Opt-in consent is collected at cover purchase. Opt-out is available anytime.
+**Chhatri's approach:** Merchant-facing copy is in `backend/chhatri/conversation/messages.py`. Money messages are templates filled from the decision facts (no free-generation; see docs/SPEC.md §4.1). Opt-in capture and opt-out are proposed and belong with the consent centre (PLANNED, N6).
 
 ### 8.2 In-app messaging
 
-All claims decisions, disputes, EDI holidays and grievance updates are shown in the merchant mini-app (N1) in Hindi and English. WhatsApp is the secondary channel (opt-in backup).
+Claims decisions, disputes, EDI holidays and grievance updates will be shown in the merchant mini-app (N1, PLANNED) in Hindi and English. Today they appear in the chat (the phone simulator). WhatsApp would be the secondary channel (opt-in backup).
 
 ---
 
@@ -372,25 +371,25 @@ This table summarizes the regulatory requirements and Chhatri's design responses
 | # | Requirement | Source | Chhatri design | Status | Owner | Evidence |
 |---|---|---|---|---|---|---|
 | 1 | Insurer underwrites; broker distributes. | Insurance Act 1938 | Partner general insurer underwrites; Paytm Insurance Broking distributes. Paytm does not underwrite. | Design | Omkar Kadam | fs-* docs, commercial discussions (pilot plan) |
-| 2 | Cover starts only when premium is received (cash before cover). | Insurance Act 1938, s.64VB | First 30 days: prepayment via link. Then: daily settlement deduction under standing consent. Every payout is audited to confirm premium receipt before claim date. | Design | Omkar Kadam | docs/SPEC.md §9.6; policy-wording.md C6 |
+| 2 | Cover starts only when premium is received (cash before cover). | Insurance Act 1938, s.64VB | First 30 days: prepayment via link. Then: daily settlement deduction under standing consent. Every claim runs the PREMIUM_PREPAID check (prepaid through the event date). | BUILT (link SIMULATED); legal confirmation PLANNED | Omkar Kadam | docs/SPEC.md §9.6; policy-wording-and-cis.md C6 |
 | 3 | Parametric product must be filed with IRDAI. | IRDAI guidelines | Insurer files via standard process or regulatory sandbox. Chhatri provides rules, logic and backtest evidence. | Planned (post-hackathon) | Omkar Kadam | docs/01-strategy/current-state-audit.md; docs/02-product/feature-specs/fs-01-area-auto-claim.md |
-| 4 | Area claims processed transparently with a formula. | IRDAI health insurance circular (A24) | Formula shown to merchant: expected day × drop % × 0.5, capped at ₹2,500. All numbers are in the decision and audit log. | Live (demo) | Ujjwal Pardeshi | backend/chhatri/policy/explain.py; docs/02-product/prd.md |
-| 5 | Hospital-cash claims with ≤ 1-hour decision (cashless). | IRDAI Master Circular (A24) | Chhatri's decision: automatic if checks pass; human review (REFERRED) within 24 hours if borderline. More generous SLA than IRDAI's 1 hour (design choice for a hackathon). | Live (demo) | Ujjwal Pardeshi | backend/chhatri/policy/engine.py; docs/SPEC.md §9 |
-| 6 | Grievance ladder: GRO → Bima Bharosa → Ombudsman. | Insurance Ombudsman Rules 2017 | Chhatri shows the ladder in the tracker. Insurer GRO is the entry point. | Design (N5) | Omkar Kadam | docs/02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md |
-| 7 | Dispute resolution SLA. | IRDAI guidelines | 24-hour SLA for a dispute response. | Live (demo) | Ujjwal Pardeshi | backend/chhatri/policy/engine.py; policy-wording.md C9 |
-| 8 | Lending: EDI holiday is the lender's decision, not Chhatri's. | RBI Digital Lending Directions 2025 (A25) | Chhatri requests; lender decides via pre-agreed rule (X4: active loan, not in arrears, holiday allowance, flag enabled). Lender decision is logged and audited. | Design (X4 planned) | Omkar Kadam | docs/02-product/feature-specs/fs-03-edi-holiday.md; backend/chhatri/ledger/instalments.py |
+| 4 | Area claims processed transparently with a formula. | General best practice (transparency) | Formula shown to merchant: expected day × drop % × 0.5, capped at ₹2,500. All numbers are in the decision and audit log. | BUILT (K5) | Ujjwal Pardeshi | backend/chhatri/policy/explain.py; docs/02-product/prd.md |
+| 5 | Health-claim timelines (1 hour for cashless, 3 hours for discharge authorisation). | IRDAI Master Circular (A24), for health insurance | Chhatri's decision: automatic if checks pass; human review (REFERRED) with a 24-hour target. That is slower than A24, which is written for health insurance and may not apply to an income cover. Counsel to confirm. | BUILT (decision and review); applicability to confirm | Ujjwal Pardeshi | backend/chhatri/policy/engine.py; docs/SPEC.md §9 |
+| 6 | Grievance ladder: GRO → Bima Bharosa → Ombudsman. | Insurance Ombudsman Rules 2017 | Chhatri will show the ladder in the mini-app. Insurer GRO is the entry point. | PLANNED (N5, H22, Wave 3) | Omkar Kadam | docs/02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md |
+| 7 | Dispute response within a stated time. | Chhatri's own target (no IRDAI rule cited here) | 24-hour target for a dispute response. Each case has a due time (opened + 24 hours) and records whether it closed in time. | BUILT | Ujjwal Pardeshi | backend/chhatri/cases/service.py; policy-wording-and-cis.md C9 |
+| 8 | Lending: EDI holiday is the lender's decision, not Chhatri's. | RBI Digital Lending Directions 2025 (A25) | Chhatri requests; lender decides via pre-agreed rule (X4: active loan, not in arrears, holiday allowance, flag enabled). Lender decision is logged and audited. Today the simulated lender always grants with no check. | PLANNED (X4, Wave 1) | Omkar Kadam | docs/02-product/feature-specs/fs-03-edi-holiday.md; backend/chhatri/ledger/instalments.py |
 | 9 | No unilateral loan restructuring without board approval. | RBI Digital Lending Directions 2025 (A25) | EDI holiday is the lender's board-approved policy. Chhatri initiates the request; lender executes. All merchants are treated equally. | Design | Omkar Kadam | docs/02-product/feature-specs/fs-03-edi-holiday.md |
-| 10 | Purpose-specific consent for data use. | DPDP Act 2023, DPDP Rules 2025 (A22) | Sales data: purpose "claims and premium"; withdrawable. Slip data: purpose "claim verification"; deleted after closure. Both collected in the mini-app with explicit consent. | Design (N6 consent centre) | Omkar Kadam | docs/02-product/feature-specs/fs-07-cover-purchase-and-consent.md; policy-wording.md C11 |
+| 10 | Purpose-specific consent for data use. | DPDP Act 2023, DPDP Rules 2025 (A22) | Sales data: purpose "claims and premium"; withdrawable. Slip data: purpose "claim verification"; deleted after closure. Both collected in the mini-app with explicit consent. | PLANNED (N6 consent centre, H23, Wave 3) | Omkar Kadam | docs/02-product/feature-specs/fs-07-cover-purchase-and-consent.md; policy-wording-and-cis.md C11 |
 | 11 | Data minimisation; no unnecessary PII collection. | DPDP Act 2023 (A22) | Chhatri collects only: merchant ID, phone, KYC name, sales, Soundbox, hospital slip (name, dates, hospital). No personal email, home address, dependant data or detailed health records. | Design | Omkar Kadam | docs/04-engineering/data-model-and-api.md |
-| 12 | No data on children; no automated decisions affecting children. | DPDP Act 2023 (A22) | Cover is for merchants (age ≥ 18) only. No data on children collected. Merchant's own coverage is limited by policy (e.g. hospital claims only for the merchant, not dependants). | Design | Omkar Kadam | policy-wording.md (scope) |
-| 13 | DPDP compliance timeline and phased obligations. | DPDP Rules 2025 (A22) | Timeline: 14 May 2027 for substantive obligations. Chhatri is designed to meet May 2027 requirements now (phased compliance feasible by then). | Design | Omkar Kadam | Section 6 (DPDP Act applicability and timeline); docs/02-product/feature-specs/fs-07-cover-purchase-and-consent.md |
-| 14 | AI governance: LLM does not decide money. | RBI FREE-AI report (A23) | Policy engine is pure code; LLM (Ask Chhatri) is a grounded assistant only. Human review for doubtful cases. Audit log records all decisions. | Live (N2 backend) | Ujjwal Pardeshi | docs/04-engineering/ai-architecture-and-guardrails.md; policy-engine.md (K4, K5) |
-| 15 | AI: Trust, People First, Innovation, Fairness, Accountability, Explainability, Resilience. | RBI FREE-AI report (A23) | Mapped in section 7.1 above. Audit log and evals are in place. Fallback providers and messengers reduce reliance on a single AI service. | Design | Omkar Kadam | docs/04-engineering/ai-architecture-and-guardrails.md; Section 7 (AI governance) |
-| 16 | Opt-in for WhatsApp messaging; approval of templates. | WhatsApp Business API (A18) | Consent collected at cover purchase. Templates are in the message catalogue (backend/chhatri/conversation/messages.py). Outside 24-hour window, templates only. | Live (demo, with test number) | Ujjwal Pardeshi | docs/SPEC.md §16 |
-| 17 | Audit trail: every decision is logged and tamper-evident. | General best practice; DPDP (breach reporting requires audit trail). | Hash-chained audit log in SQLite. `GET /api/audit/verify` recomputes hashes. Wall-clock times are excluded from the hash (only simulated time). | Live | Ujjwal Pardeshi | docs/04-engineering/system-architecture.md; backend/chhatri/audit/log.py |
-| 18 | No hardcoded secrets; secret management. | General best practice | All secrets from environment (`.env`). `make env` generates random keys. `.env.example` lists the keys but has no values. Demo mode generates a demo token if none is set. | Live | Ujjwal Pardeshi | docs/SECURITY.md; backend/chhatri/config.py |
-| 19 | Rate limiting and fraud prevention. | General best practice | In-memory sliding window (60 s): webhooks 60/min, uploads 20/min, phone messages 60/min. Type validation by magic bytes (images, audio). File size limits (5 MB images, 30 s audio). | Live | Ujjwal Pardeshi | docs/SECURITY.md |
-| 20 | CORS and cross-origin security. | General best practice | Only `CHHATRI_CONSOLE_ORIGIN` allowed, no credentials. Console is same-origin via nginx. | Live | Ujjwal Pardeshi | docs/SECURITY.md |
+| 12 | No data on children; no automated decisions affecting children. | DPDP Act 2023 (A22) | Cover is for merchants (age ≥ 18) only. No data on children collected. Merchant's own coverage is limited by policy (e.g. hospital claims only for the merchant, not dependants). | Design | Omkar Kadam | policy-wording-and-cis.md (scope) |
+| 13 | DPDP compliance timeline and phased obligations. | DPDP Rules 2025 (A22) | Timeline: 14 May 2027 for substantive obligations. Chhatri is designed with the May 2027 requirements in mind (to confirm with counsel). | Design | Omkar Kadam | Section 6 (DPDP Act applicability and timeline); docs/02-product/feature-specs/fs-07-cover-purchase-and-consent.md |
+| 14 | AI governance: LLM does not decide money. | RBI FREE-AI report (A23) | Policy engine is pure code; LLM (Ask Chhatri) is a grounded assistant only. Human review for doubtful cases. Audit log records all decisions. | BUILT (engine, review, audit); Ask Chhatri PLANNED (N2, Wave 2) | Ujjwal Pardeshi | docs/04-engineering/ai-architecture-and-guardrails.md; docs/02-product/feature-specs/fs-09-policy-engine-and-audit.md |
+| 15 | AI: Trust, People First, Innovation, Fairness, Accountability, Explainability, Resilience. | RBI FREE-AI report (A23) | Mapped in section 7.1 above. The audit log is in place. The evaluations (H25) and the fallback chain (ADR 0003) are PLANNED. | Design | Omkar Kadam | docs/04-engineering/ai-architecture-and-guardrails.md; docs/04-engineering/ai-evaluation-plan.md; Section 7 (AI governance) |
+| 16 | Opt-in for WhatsApp messaging; approval of templates. | WhatsApp Business API (A18) | The message catalogue is in backend/chhatri/conversation/messages.py. Outside the 24-hour window only approved templates may be sent. Opt-in capture is PLANNED with the consent centre (N6). The team has no WhatsApp keys, so WhatsApp is SIMULATED. | BUILT (catalogue and adapter); opt-in PLANNED | Ujjwal Pardeshi | docs/SPEC.md §16 |
+| 17 | Audit trail: every decision is logged and tamper-evident. | General best practice; DPDP (breach reporting requires audit trail). | Hash-chained audit log in SQLite. `GET /api/audit/verify` recomputes hashes. Wall-clock times are excluded from the hash (only simulated time). | BUILT | Ujjwal Pardeshi | docs/04-engineering/system-architecture.md; backend/chhatri/audit/log.py |
+| 18 | No hardcoded secrets; secret management. | General best practice | All secrets from environment (`.env`). `make env` generates random keys. `.env.example` lists the keys but has no values. Demo mode generates a demo token if none is set. | BUILT | Ujjwal Pardeshi | docs/SECURITY.md; backend/chhatri/config.py |
+| 19 | Rate limiting and fraud prevention. | General best practice | In-memory sliding window (60 s): webhooks 60/min, uploads 20/min, phone messages 60/min. Type validation by magic bytes (images, audio). File size limits (5 MB images, 5 MB and 30 s audio). | BUILT | Ujjwal Pardeshi | docs/SECURITY.md |
+| 20 | CORS and cross-origin security. | General best practice | Only `CHHATRI_CONSOLE_ORIGIN` allowed, no credentials. Console is same-origin via nginx. | BUILT | Ujjwal Pardeshi | docs/SECURITY.md |
 
 ---
 
@@ -404,7 +403,7 @@ This table summarizes the regulatory requirements and Chhatri's design responses
 
 4. **Lending partner agreement:** Which partner lender will confirm the pre-agreed rule (X4) and the EDI-holiday mechanics? Owner: Omkar Kadam.
 
-5. **Hospital network:** Which hospitals are eligible for hospital-cash claims? Should Chhatri maintain a whitelist, or is any government or registered private hospital acceptable? Owner: Omkar Kadam.
+5. **Hospital network:** Which hospitals are eligible for hospital-cash claims? Should Chhatri keep an approved-hospital list, or is any government or registered private hospital acceptable? The prototype checks neither. Owner: Omkar Kadam.
 
 6. **DPDP consent manager:** Will Paytm or the insurer use a DPDP consent manager, or handle consent directly? Timeline? Owner: Omkar Kadam.
 
@@ -416,10 +415,15 @@ This table summarizes the regulatory requirements and Chhatri's design responses
 
 10. **Regulatory sandbox timeline:** If the insurer chooses the sandbox route, when can an application be filed, and what is the expected sandbox period? Are there specific caps on payouts during the sandbox phase? Owner: Omkar Kadam.
 
+11. **Correcting an engine error:** A dispute cannot change an amount today. If the engine itself was wrong, what is the correction route (a new decision by the insurer, a goodwill payment, a grievance)? Owner: Ujjwal Pardeshi.
+
+12. **Applicability of A24:** Do the health-claim timelines apply to an income cover with a hospital-slip trigger, or only to health policies? Owner: Omkar Kadam.
+
 ---
 
 ## Changelog
 
+- 2026-10-02 · v2.1 · fixed against the code: name, dates and slip confidence are SOFT checks (REFERRED, with WAIVED_BY_OFFICER), HARD failures DECLINE; the annual limit is a rolling 365 days; disputes never change an amount and close the case; today's EDI pause has no lender check (X4 PLANNED) and the lender-decides wording is proposed; any RAIN or CIVIC alert triggers (not Red only); rules table gains the 4-minute payout and 5-minute pause delays and points to rules.yaml for the full set; unbuilt items (mini-app, consent centre, grievance ladder, Ask Chhatri, evals, slip deletion, Gemini) marked PLANNED; WhatsApp and the Paytm link marked SIMULATED; the AI evaluation is linked and NOT MEASURED; the A24 comparison corrected.
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; all regulatory positions correctly use future tense for partnerships and future obligations.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
 - 2026-10-02 · v1.2 · logic and truth audit fixes.

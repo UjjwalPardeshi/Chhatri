@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
+| Status | Draft v1.5 · 2 Oct 2026 |
 | Owner | Omkar Kadam |
 | Audience | Judges, mentors, partners, investors |
 | Related | [Facts and sources](../01-strategy/facts-and-sources.md) · [Go-to-market plan](./go-to-market-and-pilot-plan.md) · [Metrics and impact](../02-product/metrics-and-impact.md) · [Regulatory and compliance](./regulatory-and-compliance.md) |
@@ -10,7 +10,8 @@
 ## TL;DR
 
 - A partner general insurer underwrites and carries the risk. Paytm Insurance Broking distributes. Paytm provides sales data, settlement rail, Soundbox and the app.
-- Premium per zone per day = max(₹2, backtest area loss per shop ÷ 365 ÷ (1 − 0.35)); the first 30 days are prepaid, then the evening settlement prepays each next day. Hospital-cash claims are not yet in the price.
+- **Hospital cash is not priced yet.** The zone premiums below cover area (monsoon) claims only. Pricing hospital-cash claims is an open question.
+- Premium per zone per day = max(₹2, backtest area loss per shop ÷ 365 ÷ (1 − 0.35)); the first 30 days are prepaid, counted from the cover start date, then the evening settlement prepays each next day.
 - Today's premiums come from simulated sales and give 65% loss ratio by construction; the pilot must validate on real merchants.
 - On simulated sales, zone premiums run from ₹6.93 to ₹38.82 a day (Z7: ₹18.62). A Z7 merchant covered all year pays ₹6,796 against about ₹4,418 of expected area payouts. The real price is an open decision for the pilot.
 - Fraud controls: area index (one shop cannot fake a loss), waiting period with alert look-ahead, KYC name match, human review, annual ₹30,000 cap.
@@ -30,7 +31,7 @@
 
 ### 1.2 Coverage and cover start
 
-- Cover is bought in the Paytm for Business app or through a payment link (the 30-day prepayment).
+- Cover is bought through a payment link sent in the chat (the 30-day prepayment; BUILT, link SIMULATED). Buying inside the Paytm for Business app is the PLANNED mini-app (N1, Wave 1).
 - **Premium paid upfront:** first 30 days (link), then daily settlement deduction (standing consent).
 - **Cover starts:** 7 days after purchase (the waiting period), and each day's cover needs that day's premium received first (s.64VB cash before cover).
 - **Waiting period:** 7 days, always. A quote while an alert is active or forecast within 72 hours is marked BLOCKED: the new cover cannot apply to that alert, though the merchant can still buy cover for later (K6).
@@ -51,10 +52,10 @@ Paytm Insurance Broking earns a broker commission from the insurer, subject to I
 
 Two benefits, to be validated in the pilot:
 
-1. **Merchant stickiness:** The policy reduces the merchant's loan default rate during loss events. If EDI holidays reduce missed-payment callbacks by 5–10%, lending-book recovery improves.
-2. **Settlement friction:** Higher daily transaction volumes near claim-detection events may boost settlement flow if merchants restock sooner. Measured in the pilot.
+1. **Merchant stickiness:** The policy could reduce missed loan payments during loss events. The 5–10% fall in missed-payment callbacks that we sometimes quote is an illustrative hypothesis, not a measurement.
+2. **Settlement friction:** Higher daily transaction volumes near claim-detection events may boost settlement flow if merchants restock sooner.
 
-Neither is revenue; both are operational hypotheses.
+Neither is revenue; both are operational hypotheses. The pilot measures them: renewal rate in month 2 (target ≥ 80%), missed payments on shock days with and without a granted holiday, and the lender's grant rate (target ≥ 90%). Paytm's income from this product is distribution commission and merchant retention.
 
 ## 3. Pricing method
 
@@ -81,9 +82,9 @@ From `backend/artifacts/premiums.json` (derived from the simulated backtest Jun�
 
 ### 3.3 First payment: 30-day prepayment
 
-When a merchant buys cover, they pay 30 days of premium upfront through a Paytm payment link (simulated in the demo; Paytm staging or live with keys).
+When a merchant buys cover, they pay 30 days of premium upfront through a Paytm payment link. The link is SIMULATED today, because the team has no Paytm keys.
 
-Example: a Z7 merchant buys on 1 Aug and pays ₹558.60. Cover starts on 8 Aug, after the 7-day waiting period, and the payment prepays 30 days of cover. When those run out, the evening settlement prepays each next day's ₹18.62.
+Example: a Z7 merchant buys on 1 Aug and pays ₹558.60. Cover starts on 8 Aug, after the 7-day waiting period, and the payment prepays the 30 days from the start date (8 Aug to 6 Sep). The 7 days between the purchase and the start are not paid for and not covered. When the 30 days run out, the evening settlement prepays each next day's ₹18.62.
 
 ### 3.4 Daily renewal: settlement deduction
 
@@ -149,7 +150,7 @@ The policy rules (`rules.yaml`, version pilot-0.1) include:
 
 ### 5.1 Area-index floor (K1)
 
-An area claim pays only if the zone-wide sales index stays **below 50% for 3 consecutive hours and below the model's lower bound, with ≥20 shops in the index**.
+An area claim pays only if the zone-wide sales index stays **below 50% for 3 consecutive hours and below the zone's lower bound, during a RAIN or CIVIC alert, with ≥20 shops in the index**.
 
 **Economic role:** One merchant's collusion (pretending no sales, getting paid) is invisible if 20+ other shops have real sales that push the index above 50%. The index is computed from the pool, not per shop.
 
@@ -162,7 +163,7 @@ An area claim pays only if the zone-wide sales index stays **below 50% for 3 con
 
 ### 5.3 KYC name match (K2)
 
-For hospital-cash claims, the slip's patient name must match the KYC name with a token-set fuzzy-match ratio ≥ 85 (rapidfuzz). Family members cannot claim on the merchant's policy.
+For hospital-cash claims, the slip's patient name must match the KYC name with a token-set fuzzy-match ratio ≥ 85 (rapidfuzz). Family members cannot claim on the merchant's policy. A mismatch is a SOFT failure: the claim goes to a claims officer, not to an automatic decline.
 
 **Economic role:** Prevents a merchant from submitting slips from relatives, inflating claim frequency.
 
@@ -176,7 +177,7 @@ For hospital-cash claims, the slip's patient name must match the KYC name with a
 ### 5.5 Human review threshold (K2)
 
 - Area claims: approved automatically when every hard check passes. They are never referred, though a merchant can dispute.
-- Hospital-cash claims: approved automatically only for up to 3 days with every check passing (name, slip, dates). Otherwise they are REFERRED to a claims officer.
+- Hospital-cash claims: approved automatically only for up to 3 days with every check passing (name, slip, dates). A failed or unsure slip check, or more than 3 days, sends the whole claim to a claims officer (REFERRED). A failed hard check, such as cover not in force, declines it.
 - Paying twice for the same day is blocked by a hard check (NOT_ALREADY_PAID).
 
 **Economic role:** Doubtful cases get a second pair of eyes before the insurer pays.
@@ -191,7 +192,7 @@ For hospital-cash claims, the slip's patient name must match the KYC name with a
 ### 5.7 Daily payout cap (K1, K2)
 
 - Area claim: ₹2,500 per shop per day.
-- Hospital-cash claim: ₹1,500 per day.
+- Hospital-cash claim: ₹1,500 per day, for up to 3 days automatically.
 
 **Economic role:** Prevents a merchant from claiming unrealistic losses on one day, even if the index is low.
 
@@ -220,7 +221,7 @@ Chhatri's role is claims adjudication and payout orchestration; the insurer bear
 
 4. **Lending-book improvement (A5):** Paytm partners with NBFCs and banks on merchant lending. EDI holidays could reduce missed payments on shock days, reducing losses that trigger default-loss protections in those lending partnerships (A5; hypothesis to test in the pilot).
 
-5. **Soundbox reuse:** Paytm's payment devices already announce payments. A payout announcement is a marginal feature with high engagement.
+5. **Soundbox reuse:** Paytm's payment devices already announce payments. A payout announcement is a marginal feature. In the prototype the Soundbox line is simulated.
 
 ### 7.2 Honest limits (what we don't claim)
 
@@ -238,7 +239,7 @@ Chhatri's role is claims adjudication and payout orchestration; the insurer bear
 | Claims are resolved in 24 hours (K5) | Median case resolution time | ≤ 24 h from opening |
 | Human-review cases are fair (disputes < 5%) | Disputed cases ÷ reviewed cases | < 5% |
 | EDI holiday acceptance (lender willingness) | Lender approves ≥ 90% of requests | ≥ 90% |
-| Grounded answers are accurate (N2) | Eval set: LLM citations match policy | ≥ 95% |
+| Grounded answers are accurate (N2, PLANNED) | Eval set: citations match policy ([AI evaluation plan](../04-engineering/ai-evaluation-plan.md)); not measured yet | ≥ 95% (target) |
 | Cost per payout is sustainable | (AI + operations cost per claim) | < 10% of average payout |
 
 ## Open questions
@@ -250,6 +251,7 @@ Chhatri's role is claims adjudication and payout orchestration; the insurer bear
 
 ## Changelog
 
+- 2026-10-02 · v1.5 · TL;DR says plainly that hospital cash is not priced yet; the 30 prepaid days are counted from the cover start date; the Paytm link is SIMULATED (no keys); index rule names the RAIN or CIVIC alert; hospital-cash outcomes corrected (SOFT failure or more than 3 days is REFERRED, hard failure is DECLINED); the unmeasured 5–10% figure is labelled a hypothesis and a pilot measurement plan added.
 - 2026-10-02 · v1.4 · unit economics rebuilt on the backtest pricing identity (65% loss ratio) with a sensitivity table; prices from the artefact; cover start and BLOCKED wording; officer waiver rule
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
 - 2026-10-02 · v1.2 · logic and truth audit fixes

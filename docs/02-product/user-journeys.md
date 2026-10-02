@@ -262,7 +262,7 @@ sequenceDiagram
     activate Policy
     Policy->>Policy: Check: cover active PASS
     Policy->>Policy: Check: premium paid PASS
-    Policy->>Policy: Check: NAME_MATCHES_KYC FAIL (hard check fail)
+    Policy->>Policy: Check: NAME_MATCHES_KYC FAIL (SOFT check, so the claim is REFERRED)
     Policy->>Policy: Re-run all HARD checks with officer context
     Policy->>Policy: All HARD checks pass (e.g., KYC name corrected on slip review)
     Policy->>Policy: Decision: APPROVED ₹1,500, decided_by="officer:rajesh", checks include WAIVED_BY_OFFICER

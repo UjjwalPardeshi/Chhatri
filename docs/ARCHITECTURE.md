@@ -176,8 +176,9 @@ make up:      browser -> frontend (nginx :8080) --/api, /webhooks--> backend :80
 ```
 
 - The **backend image** (`backend/Dockerfile`) is Python 3.12 slim and runs as non-root uid 10001.
-  `/app/data` and `/app/artifacts` are baked in, run state lives in `/app/var` (volume), and the
-  healthcheck uses only the stdlib (urllib).
+  `/app/data` and `/app/artifacts` are baked in, `/app/var` is a volume reserved for run state (nothing
+  is written there yet: the store and the audit log are in memory and are rebuilt on every scenario
+  load), and the healthcheck uses only the stdlib (urllib).
 - The **frontend image** (`frontend/Dockerfile`) runs `npm run build`, then unprivileged
   nginx 1.30. `frontend/nginx.conf` is a template (`${CHHATRI_BACKEND_UPSTREAM}`). `/api` is proxied
   over HTTP/1.1 with buffering off and a 1 h read timeout, and there is no gzip on

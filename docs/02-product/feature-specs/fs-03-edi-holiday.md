@@ -1,319 +1,403 @@
-# Feature spec: EDI holiday (K3)
+# Feature spec: EDI holiday (K3, X4, X8)
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
+| Status | v1.4 · K3 BUILT as an unconditional pause (commit 86575ea) · X4 lender request, guard and wording PLANNED, build wave 1 · X8 PLANNED, build wave 3 |
 | Owner | Omkar Kadam |
+| Date | 2 Oct 2026 |
 | Audience | Product team, lender partners, engineers, claims officers |
-| Related | [Policy engine](fs-09-policy-engine-and-audit.md) · [Facts and sources](../../01-strategy/facts-and-sources.md) · [Regulatory compliance](../../05-business/regulatory-and-compliance.md) · [Feature roadmap](../prd.md) |
+| Related | [fs-09 policy engine and audit](fs-09-policy-engine-and-audit.md) · [fs-06 explanations, disputes and grievance](fs-06-explanations-disputes-and-grievance.md) · [fs-08 claims officer console](fs-08-claims-officer-console.md) · [Policy wording and CIS](../policy-wording-and-cis.md) (C10) · [ADR 0006](../../04-engineering/adr/0006-edi-holiday-is-the-lenders-decision.md) · [Regulatory and compliance](../../05-business/regulatory-and-compliance.md) · [Facts and sources](../../01-strategy/facts-and-sources.md) · [Copy deck](../../03-design/copy-deck.md) · [Implementation guide](../../04-engineering/implementation-guide.md) |
 
 ## TL;DR
 
-- **K3 reframing:** Chhatri requests an EDI holiday from the lender after an approved payout; the lender's pre-agreed rule decides. Not a Chhatri pause.
-- **Mechanics:** The instalment due the day after the event moves to the end of the loan tenure with no penal charge, confirmed by the lender before payout.
-- **Lender pre-agreed rule (X4):** Loan is active, not in arrears, holiday allowance not used up, and lender flag is on.
-- **Alternative:** Insurer pays the instalment from the payout (EMI-protection style), so the loan terms never change.
-- **Timing:** In monsoon replay, 17:05 (5 minutes after the ₹1,380 area credit to Anil at 17:00); next-day EDI is ₹600 (from rules).
-- **Status:** X4 rule designed (spec §4, pseudocode §7); code implementation planned for 2–3 Oct. X8 rule: no cross-sell or loan offers while alert or claim is open.
+- **EDI means equated daily instalment.** An EDI holiday is the **lender's decision**. After a payout, Chhatri **requests** the holiday under a pre-agreed rule. The lender grants or refuses. The merchant is told what the lender decided.
+- **Today (BUILT):** after an APPROVED payout, the instalment step pauses the next instalment with no check, and the message "Tomorrow's ₹600 instalment is paused." reads as if Chhatri did it. The `Loan` record has no status, arrears or allowance.
+- **X4 (PLANNED, wave 1):** Chhatri sends the lender a request and acts on the answer. Chhatri checks its own preconditions first (payout credited, loan on record, no request yet). The simulated lender applies four conditions: loan active, not in arrears, allowance left, flag on. A refusal creates no pause, and the payout is untouched.
+- **Timing:** decision 17:00, credit 17:04, request 17:05 (the step runs 5 simulated minutes after the decision, 1 minute after the credit).
+- **Wording:** new lender-decides messages replace the three `INSTALMENT_PAUSED` lines. That needs a coordinated change of the catalogue, SPEC section 13.4, DEMO.md and the tests that pin them (section 8.4).
+- **X8 (PLANNED, wave 3):** no loan or top-up offer while a merchant is in distress, and a daily cap on proactive messages. No such offer exists in the product today.
+- **Priority:** K3, X4 and X8 are all P0, behind feature flags. An unfinished piece stays hidden.
+
+IDs covered: **K3 · X4 · X8**.
 
 ## 1. Summary
 
-K3 is a reframing of what the prototype calls "instalment pause" from a unilateral Chhatri action to a **lender-requested, lender-approved deferral**. After Chhatri pays a claim (area or personal), it requests an EDI holiday for the next day's loan instalment. The lender applies a pre-agreed policy rule (the loan is active, not in arrears, and the holiday allowance is not used up). If the rule passes, the instalment moves to the end of the tenure with no penalty. The merchant sees the lender's decision, not a Chhatri action.
+K3 is a request, not an action. After Chhatri pays a claim, it asks the merchant's lender to move the next daily instalment to the end of the loan, with no penalty. The lender applies a rule it agreed in advance. If the rule passes, the lender grants. If not, the lender refuses and gives a reason. Chhatri shows the merchant the lender's answer in the lender's terms ("Your lender has paused...", "Your lender could not pause...").
 
-This feature spans **insurance (K3), lending (X4)** and complies with the **RBI (Digital Lending) Directions, 2025 (A25)**, which make any deferral the lender's decision.
-
-IDs covered: **K3 · X4 · X8** (no cross-sell during open alert or claim).
+This matches the RBI (Digital Lending) Directions, 2025 (A25), which leave a deferral to the lender. Whether a pre-agreed holiday counts as a restructuring is for the lender's compliance team to confirm.
 
 ## 2. Status today and what changes
 
-| What | Status | Code path | Change |
+| What | Status | Where | Change |
 |---|---|---|---|
-| **Instalment pause on payout** | LIVE | `backend/chhatri/ledger/instalments.py`, `InstalmentService.pause_next()` | Reframe: lender decides, not Chhatri |
-| **Lender rule check (X4)** | DESIGNED · IMPL PLANNED | `backend/chhatri/ledger/instalments.py` (after line 44) | Rule spec defined (§4, §7); code impl: add guard to check_lender_holiday_eligibility, log reason code. Target: 2–3 Oct. |
-| **Merchant messaging (K3)** | NEEDS COPY | `backend/chhatri/conversation/messages.py` | Add: lender decision reason (granted or not) |
-| **Audit trail (K3)** | LIVE | `backend/chhatri/audit/log.py` | Log: request, lender decision, reason code |
-| **Alternative: insurer-funded** | PLANNED | — | If lender allows: insurer pays EMI from payout; loan unchanged |
-
-### Today's code
-
-The prototype's `InstalmentService` (lines 29–86 in `instalments.py`) pauses "tomorrow's" instalment (line 50: `due = event_date + NEXT_DAY`). It:
-1. Checks if the merchant has a loan (line 46: `loan = self._store.city.loans.get(merchant_id)`)
-2. Moves the instalment to the end with no penalty (lines 60–62)
-3. Logs an audit event `instalment.pause` with reason text (lines 74–83)
-
-**What is missing:** a lender rule guard (X4) that confirms the lender has allowed the holiday.
+| Instalment step after a payout | BUILT | `ledger/instalments.py` (`InstalmentService.pause_next`), workflow `payout` step `pause_instalment` at +5 minutes (`workflows/definitions.py`) | Becomes `request_holiday` (X4) |
+| What it does today | BUILT | Pauses the instalment due on event date + 1 day. Returns nothing if the merchant has no loan or that instalment is already paused. Writes an `InstalmentPause` and the audit entry `instalment.pause` (lender "Simulated lender (NBFC partner)", moved to end of tenure, penalty 0) | Adds preconditions and a lender answer |
+| Loan record | BUILT | `domain/models.py` (`Loan`): id, merchant, lender name, daily instalment, outstanding amount. No status, arrears or allowance | Unchanged. The lender keeps its own records (section 7.2) |
+| Merchant message | BUILT | `INSTALMENT_PAUSED`, `INSTALMENT_PAUSED_TODAY`, `INSTALMENT_PAUSED_ON` in `conversation/messages.py`; chosen in `conversation/notifications.py` | Replaced by lender-decides wording (section 8) |
+| Lender component status | BUILT | `lender`, always SIMULATED, "Simulated lender (NBFC partner)" (`integrations/statuses.py`) | Becomes a real simulated adapter |
+| Simulated lender adapter | PLANNED, wave 1 | new `integrations/lender.py`, a `Lender` port in `integrations/base.py` | Section 7 |
+| Request and decision records, ids `HR-` | PLANNED, wave 1 | `domain/models.py`, `ids.py`, `ledger/instalments.py` | Section 7.5 |
+| Console and tracker rows | PLANNED, wave 1 and 4 | fs-08, fs-04 | Section 8.3 |
+| X8 message guard | PLANNED, wave 3 | `conversation/outbox.py` | Section 9 |
 
 ## 3. User stories and jobs to be done
 
 | Persona | Job to be done | Context |
 |---|---|---|
-| **Anil (merchant)** | Get immediate relief when sales fall, without needing to negotiate with the lender | Area alert triggers; Anil is paid same day |
-| | Understand why his next instalment moved; see confirmation from the lender | Claims message explains decision |
-| **Rajesh (claims officer)** | Verify a payout qualifies for an EDI holiday before approving in a REFERRED case | Officer console shows holiday eligibility |
-| **Lender compliance officer** | Confirm the merchant's loan is eligible for a pre-agreed holiday under the board-approved policy | Chhatri has pre-agreed rule (X4) on file |
-| **Insurer GRO** | Decide whether to fund the EDI from the payout or request the lender to defer | Part of the payout-settlement conversation |
+| **Anil (merchant)** | Get relief on the day his sales fell, and know who decided. | Paid ₹1,380 at 17:04. His ₹600 instalment is next. He reads "Your lender has paused tomorrow's ₹600 instalment." |
+| **A merchant refused by the lender** | Understand a "no" without thinking Chhatri cheated him. | He reads the lender's reason and sees that the payout is unaffected. He can raise it with the lender (fs-06). |
+| **Rajesh (claims officer)** | See what happened to each holiday request. | The console shows request, answer and reason per payout. He does not decide holidays. |
+| **Lender compliance officer** | Check that the request follows the agreed rule and carries no more data than needed. | The request has loan, instalment date and proof of a credited payout. No claim reason, no amount, no slip data. |
+| **Judge** | See that the lender, not Chhatri, decides. | Presenter turns the lender to "no response" in the provider panel (X6) and replays. The merchant sees the fail-safe message. |
 
 ## 4. Rules
 
 From `backend/chhatri/policy/rules.yaml` (pilot-0.1):
 
-| Key | Value | Applies to |
+| Key | Value | Effect |
 |---|---|---|
-| `instalment_pause_delay_minutes` | 5 | Workflow orchestration; the instalment pause is queued 5 min after the payout is credited. |
-| `payout_rail_delay_minutes` | 4 | The payout itself (e.g. ₹1,380) is credited at 17:04; the pause happens at 17:05. |
+| `payout_rail_delay_minutes` | 4 | The payout is credited 4 simulated minutes after the decision (17:04 for the storm). |
+| `instalment_pause_delay_minutes` | 5 | The instalment step runs 5 simulated minutes after the decision (17:05), which is 1 minute after the credit. After X4 this step sends the request. |
 
-No other rules in `rules.yaml` directly govern the EDI holiday. The **lender's pre-agreed rule (X4)** is held by the lender and consulted at payout time:
+The lender's own rule is not in `rules.yaml`. It belongs to the lender and is consulted at request time. The simulator holds illustrative settings in code:
 
-| Condition | Meaning | Guard |
+| Lender setting (simulator) | Value | Note |
 |---|---|---|
-| Loan is active | `loan.status == ACTIVE` (not REPAID, DEFAULTED, etc.) | `X4.loan_active` |
-| Not in arrears | Zero or pending-resolution arrears | `X4.not_in_arrears` |
-| Holiday allowance not used up | The merchant has not exhausted the allowance (e.g. 2 of 3 holidays used this year) | `X4.allowance_remaining` |
-| Lender flag is on | The merchant has signed up for the EDI-holiday benefit | `X4.lender_flag_enabled` |
+| Programme flag | on | "Opted in": the lender takes part in holiday requests. |
+| Holiday allowance | a count per rolling 365 days (illustrative value 3) | Policy wording C10 says "allowance left for holidays this year". The count is the lender's board-approved policy, not a Chhatri rule. |
+| Prior holidays | none at the start of a run | So every demo request has allowance left. |
+| Arrears fixtures | none by default | Tests set them. |
 
-All four must pass for the lender to grant the holiday.
+Because no fixture is on by default, every loan holder in the storm run is granted and the KPI "instalments paused" stays at 123. Golden numbers do not move.
 
 ## 5. Flow and state diagram
 
-### Sequence: area payout leading to EDI holiday
-
 ```mermaid
 sequenceDiagram
-  participant Chhatri as Policy Engine
-  participant Lender as Simulated Lender
-  participant Merchant as Merchant (Anil)
-  
-  Note over Chhatri: Area trigger fires, 17:00
-  Chhatri->>Chhatri: Evaluate area claim (K1)
-  Chhatri->>Chhatri: Decision: APPROVED ₹1,380
-  Note over Chhatri: Trigger-to-decision: ~0 min
-  
-  Chhatri->>Lender: Check loan state (X4 rule)<br/>GET /loan-service/S-0142
-  Lender-->>Chhatri: Active, not in arrears,<br/>allowance remaining,<br/>flag enabled
-  
-  Note over Chhatri: Queue payout + EDI holiday request<br/>Payout delivery: 17:04 (4 min delay)
-  Chhatri->>Merchant: WhatsApp + Soundbox<br/>₹1,380, settlement today
-  Merchant-->>Chhatri: (silent)
-  
-  Note over Chhatri: EDI request queued, 17:05 (5 min delay)
-  Chhatri->>Lender: POST /holiday/request<br/>decision_id, loan_id, next_date
-  Lender->>Lender: Apply pre-agreed rule (X4)
-  Lender-->>Chhatri: GRANTED (or DENIED)
-  
-  Chhatri->>Merchant: Message: instalment paused<br/>dated or ack
-  Chhatri->>Chhatri: Audit event: instalment.pause
+  participant WF as Payout workflow
+  participant Svc as Instalment service
+  participant L as Simulated lender
+  participant M as Merchant
+  Note over WF: 17:00 decision, 17:04 credit
+  WF->>Svc: step pause_instalment at 17:05
+  Svc->>Svc: check guards G1 to G4
+  Svc->>L: holiday request with loan, instalment date and payout proof
+  L->>L: apply L1 to L4 on its own records
+  alt granted
+    L-->>Svc: GRANTED, moved to end of tenure, penalty 0
+    Svc->>Svc: record the pause and audit instalment.pause
+    Svc-->>M: Your lender has paused the instalment
+  else refused with a reason
+    L-->>Svc: REFUSED with a reason code
+    Svc-->>M: Your lender could not pause it, with the reason
+  else no answer in time
+    L--xSvc: no response
+    Svc-->>M: We could not reach your lender
+  end
 ```
-
-### State diagram: holiday lifecycle
 
 ```mermaid
 stateDiagram-v2
-  [*] --> none
-  
-  none --> requested: Payout APPROVED
-  requested --> granted: Lender rule passes
-  requested --> denied: Lender rule fails
-  granted --> applied: End-of-tenure date set
-  denied --> none: Instalment stays due
-  applied --> [*]
+  [*] --> NotSent
+  NotSent --> Requested : payout credited and preconditions met
+  Requested --> Granted : lender grants
+  Requested --> Refused : lender refuses with a reason
+  Requested --> NoResponse : no answer in time
+  Granted --> [*]
+  Refused --> [*]
+  NoResponse --> [*]
 ```
 
 ## 6. Inputs and data sources
 
-| Input | Source | Status | Example (monsoon) |
+| Input | Source | Mode today |
+|---|---|---|
+| Decision (APPROVED) and its payout (CREDITED) | policy engine (fs-09), `ledger/payouts.py` | BUILT |
+| Merchant's loan | `Store.city.loans`: id (`LN-0142` style), lender name, daily instalment, outstanding | SIMULATED |
+| Instalment date | event date + 1 day. A personal claim for Wednesday gives Thursday's instalment | BUILT |
+| Lender rule and records | the simulated lender (section 7.2) | PLANNED, SIMULATED |
+| Lender answer | `GRANTED` or `REFUSED` with a reason code | PLANNED, SIMULATED |
+
+The example loan is Anil's (S-0142): ₹600 a day, lender "Simulated lender (NBFC partner)".
+
+## 7. Decision logic: guard and lender rule
+
+### 7.1 Chhatri's guards (checked before any request)
+
+These four checks are the X4 guard. The ids G1 to G4 stand for guard.
+
+| Id | Condition | If not met |
+|---|---|---|
+| G1 | The decision is APPROVED. | `ValueError` (as today). |
+| G2 | The payout for the decision is CREDITED. | No request. The step is skipped and the skip is audited. The normal order (credit +4, request +5) satisfies it. |
+| G3 | The merchant has a loan on record. | Nothing happens (as today). |
+| G4 | No request exists yet for this loan and instalment date. | Nothing happens (as today for "already paused"). One request per instalment. |
+
+### 7.2 The lender's pre-agreed rule (simulated, X4)
+
+The simulated lender answers from its own records. All four must hold for a grant. When several fail, the reason returned is the first in this order.
+
+| Order | Id | Condition | Reason code if not met |
 |---|---|---|---|
-| Decision outcome | Policy engine (K4) | LIVE | APPROVED (area claim) |
-| Merchant's loan | Store: `Store.city.loans.get(merchant_id)` | SIMULATED | Loan ID: `LN-S0142-001` |
-| Daily instalment amount | Loan record: `loan.daily_instalment_paise` | SIMULATED | ₹600 = 60000 paise |
-| Instalment due date | `event_date + 1 day` | LIVE | Wed 20 Aug (for event 19 Aug) |
-| Lender's pre-agreed rule (X4) | POST to simulated lender service | SIMULATED | Rule: active + not arrears + allowance + flag |
-| Lender decision | SIMULATED lender responds | SIMULATED | GRANTED |
-| Lender decision reason code | Lender reason field | SIMULATED | E.g. `"holiday_applied"` or `"no_allowance"` |
+| 1 | L4 | The programme flag is on for this loan. | `FLAG_OFF` |
+| 2 | L1 | The loan is active (outstanding above zero). | `NOT_ACTIVE` |
+| 3 | L2 | The loan is not in arrears. | `IN_ARREARS` |
+| 4 | L3 | The holiday allowance is not used up. | `NO_ALLOWANCE` |
 
-## 7. Decision logic and checks
+A grant moves the instalment to the end of the tenure with penalty 0, as today. The grant is recorded in the lender's own ledger, which is what L3 counts.
 
-The EDI holiday request is made **only after an APPROVED payout** (line 44 in `instalments.py`: `if decision.outcome is not DecisionOutcome.APPROVED`).
+### 7.3 Messages exchanged (the contract with a lender)
 
-### X4 guard (proposed): lender pre-agreed rule
+The request carries only what the lender needs. It carries no claim kind, no reason for the claim, no slip data and no payout amount. A hospital-cash payout is therefore not revealed to the lender.
 
-```python
-# Pseudocode: backend/chhatri/ledger/instalments.py (after line 44)
+Request (Chhatri to lender):
 
-def check_lender_holiday_eligibility(loan: Loan, merchant_id: str) -> (bool, str):
-    """
-    Check the lender's pre-agreed rule (X4).
-    Returns (eligible: bool, reason_code: str).
-    """
-    lender_service = ...  # call to simulated or live lender API
-    rule = LenderHolidayRule(
-        loan_active = loan.status == LoanStatus.ACTIVE,
-        not_in_arrears = loan.arrears_paise == 0,
-        allowance_remaining = loan.holidays_used < loan.holidays_allowed,  # e.g. 1 < 2
-        lender_flag_enabled = loan.edi_holiday_flag_enabled,
-    )
-    if not rule.all_pass():
-        return False, rule.first_failing_condition()  # e.g. "no_allowance"
-    return True, "eligible"
+```json
+{
+  "request_id": "HR-000001",
+  "merchant_id": "S-0142",
+  "loan_id": "LN-0142",
+  "decision_id": "D-000142",
+  "payout_id": "P-000142",
+  "payout_credited_at": "2025-08-19T17:04:00+05:30",
+  "instalment_date": "2025-08-20",
+  "instalment_paise": 60000,
+  "requested_at": "2025-08-19T17:05:00+05:30",
+  "basis": "Pre-agreed rule: one instalment holiday after a credited Chhatri payout"
+}
 ```
 
-The result is logged in the audit trail and sent to the merchant.
+Response, granted:
 
-### Merchant-facing message: lender decision
+```json
+{
+  "request_id": "HR-000001",
+  "loan_id": "LN-0142",
+  "decision": "GRANTED",
+  "reason_code": null,
+  "moved_to": "END_OF_TENURE",
+  "penalty_paise": 0,
+  "decided_at": "2025-08-19T17:05:00+05:30",
+  "lender": "Simulated lender (NBFC partner)"
+}
+```
 
-When the lender decides:
-- **GRANTED:** Use the existing `INSTALMENT_PAUSED` copy (lines 60–62 in `messages.py`), with a reference to the lender decision.
-- **NOT GRANTED:** Show why (e.g. "allowance used up") and that the instalment is due as normal.
+Response, refused:
+
+```json
+{
+  "request_id": "HR-000002",
+  "loan_id": "LN-0654",
+  "decision": "REFUSED",
+  "reason_code": "IN_ARREARS",
+  "moved_to": null,
+  "penalty_paise": 0,
+  "decided_at": "2025-08-19T17:05:00+05:30",
+  "lender": "Simulated lender (NBFC partner)"
+}
+```
+
+The ids are examples. Request ids are `HR-` plus a six-digit sequence per run, like the other ids, and double as the idempotency key: sending the same request id twice returns the first answer.
+
+### 7.4 Failure handling
+
+- **One attempt, no retry.** If the lender does not answer within the time limit, Chhatri records `NO_RESPONSE` and does not pause. A later retry could grant after the merchant was told "not paused", so there is none. The time limit is a setting, with a proposed 10 seconds (a target to tune). In simulated time the wait is instant.
+- **Fail safe.** Any error or no answer is treated as not granted. Chhatri never assumes a grant.
+- **Demo control.** The provider panel (X6, fs-08) can force the `lender` component to FALLBACK. In FALLBACK the simulated lender does not answer, so every request ends as `NO_RESPONSE`.
+- **The payout is independent.** The payout is credited at +4 before the request goes out. A refusal or no answer changes nothing about it.
+
+### 7.5 Records (PLANNED)
+
+`HolidayRequest` (frozen model): `id` (`HR-000001`, new prefix `HR` in `ids.py`), `merchant_id`, `loan_id`, `decision_id`, `payout_id`, `instalment_date`, `instalment_paise`, `requested_at`, `status` (`REQUESTED`, `GRANTED`, `REFUSED`, `NO_RESPONSE`), `reason_code`, `decided_at`. The existing `InstalmentPause` is created only for a grant and gains `request_id`. `GET /api/merchants/{id}` gains `holiday_requests[]` (all outcomes) next to the existing `pauses` (grants only). The KPI "instalments paused" counts grants only.
 
 ## 8. Merchant-facing copy
 
-### Existing copy (SPEC §13.4, deck)
+### 8.1 Existing strings (BUILT, exact)
 
-From `backend/chhatri/conversation/messages.py`:
+| Key | Hindi | English |
+|---|---|---|
+| `INSTALMENT_PAUSED` | `कल की {instalment} की किस्त रोक दी गई है।` | `Tomorrow's {instalment} instalment is paused.` |
+| `INSTALMENT_PAUSED_TODAY` | `आज की {instalment} की किस्त रोक दी गई है।` | `Today's {instalment} instalment is paused.` |
+| `INSTALMENT_PAUSED_ON` | `{date_hi} की {instalment} की किस्त रोक दी गई है।` | `The {instalment} instalment due on {date_en} is paused.` |
 
-```python
-"INSTALMENT_PAUSED": Template(
-    "कल की {instalment} की किस्त रोक दी गई है।", 
-    "Tomorrow's {instalment} instalment is paused."
-),
-```
+The problem: none of these says who paused it. The notification picks a variant from the instalment date (tomorrow, today, or a dated line), because a personal claim for Wednesday pauses Thursday's instalment while it is paid on Thursday.
 
-**Problem:** This copy does not say who paused it or that it is the lender's decision.
+### 8.2 Proposed lender-decides wording (not in the catalogue yet)
 
-### Proposed copy change (K3 implementation)
+English is proposed here. Hindi is written in the [copy deck](../../03-design/copy-deck.md) and reviewed by a native speaker before use. The three existing Hindi lines are the model for tone.
 
-| Key | Hindi | English | When | Filled with |
-|---|---|---|---|---|
-| `INSTALMENT_PAUSED_GRANTED` | `आपकी फाइल के अनुसार, कल की {instalment} की किस्त {date} को दे दी जाएगी।` | `Your lender has approved: tomorrow's {instalment} instalment will be due on {date}.` | Lender grants holiday | `{instalment}` = formatted rupee amount (₹600); `{date}` = last day of tenure |
-| `INSTALMENT_PAUSED_NOT_GRANTED` | `आपकी ऋण के लिए किस्त की छुट्टी अभी उपलब्ध नहीं है। कल की {instalment} की किस्त सामान्य समय पर देय है।` | `Your loan's instalment holiday is not available right now. Tomorrow's {instalment} is due as scheduled.` | Lender denies | `{instalment}` = amount; reason omitted (merchant sees "not available") |
-| `INSTALMENT_PAUSED_REASON_CODE` | (merged into above) | (merged into above) | Officer console only | Reason code: `no_allowance`, `not_active`, `in_arrears`, `flag_off` |
+| Key (proposed) | English (proposed) | When |
+|---|---|---|
+| `HOLIDAY_GRANTED` | "Your lender has paused tomorrow's {instalment} instalment. It moves to the end of your loan with no penalty." | Granted, instalment due tomorrow |
+| `HOLIDAY_GRANTED_TODAY` | "Your lender has paused today's {instalment} instalment. It moves to the end of your loan with no penalty." | Granted, due today |
+| `HOLIDAY_GRANTED_ON` | "Your lender has paused the {instalment} instalment due on {date_en}. It moves to the end of your loan with no penalty." | Granted, due another day |
+| `HOLIDAY_REFUSED` | "Your lender could not pause {when} {instalment} instalment: {reason}. It is due as usual. Your payout is not affected." | Refused, with a reason below |
+| `HOLIDAY_NO_RESPONSE` | "We could not reach your lender about {when} {instalment} instalment, so it is due as usual. Your payout is not affected." | No answer in time |
 
-**Changelog item:** Move `INSTALMENT_PAUSED` → `INSTALMENT_PAUSED_GRANTED` in the copy. Update the test file `backend/tests/conversation/test_messages.py` to verify the new keys.
+`{when}` reads "tomorrow's", "today's" or "the one due on {date}". Reason texts (proposed), one per code:
 
-## 9. Edge cases and failure modes
+| Code | `{reason}` (proposed) |
+|---|---|
+| `FLAG_OFF` | "this loan is not part of the holiday scheme" |
+| `NOT_ACTIVE` | "the loan is not active" |
+| `IN_ARREARS` | "the loan has an amount overdue" |
+| `NO_ALLOWANCE` | "your holiday allowance is used up" |
 
-| Case | Merchant state | Behaviour | Audit event | Message |
-|---|---|---|---|---|
-| **No loan** | Merchant unregistered for credit; `loan = None` | Pause function returns `None`; nothing logged. | None. | (no message; flow continues) |
-| **Holiday granted** | Active loan, eligible | Instalment moved to end of tenure (date TBD by lender). | `instalment.pause` with reason: `"moved to end of tenure, no penalty"` | `INSTALMENT_PAUSED_GRANTED` with `{date}` |
-| **Holiday not granted: allowance used up** | Merchant has used all seasonal holidays (e.g. 2 of 2). | Pause request rejected; instalment stays due next day. | `instalment.holiday_request_denied` with reason: `no_allowance` | `INSTALMENT_PAUSED_NOT_GRANTED` (with reason code in case view, not message) |
-| **Holiday not granted: loan in arrears** | Merchant has pending arrears. | Pause rejected. | `instalment.holiday_request_denied` with reason: `in_arrears` | `INSTALMENT_PAUSED_NOT_GRANTED` |
-| **Holiday not granted: loan not active** | Merchant's loan is REPAID or DEFAULTED. | Pause rejected. | `instalment.holiday_request_denied` with reason: `not_active` | `INSTALMENT_PAUSED_NOT_GRANTED` |
-| **Holiday not granted: lender flag off** | Merchant did not sign up for EDI-holiday benefit. | Pause rejected. | `instalment.holiday_request_denied` with reason: `flag_off` | `INSTALMENT_PAUSED_NOT_GRANTED` |
-| **Lender service timeout** | Network failure calling lender. | Fallback: assume NOT GRANTED; instalment stays due. | `instalment.holiday_request_error` with reason: `timeout` | `INSTALMENT_PAUSED_NOT_GRANTED` (degraded) |
-| **X8 rule: cross-sell suppression** | Alert is active or a claim is open for the merchant. | No loan or top-up offer card shown during the merchant's journey through the claim. | `message.suppressed` with reason: `active_alert` or `open_claim` | (card not sent) |
+Wording rules: it always names the lender as the one who decided, never says "Chhatri paused", and never promises a follow-up. Policy wording C10 has its own sample lines for yes and no. They are proposals too and must be aligned with the copy deck before a pilot.
 
-## 10. Guardrails, privacy and compliance notes
+### 8.3 What the merchant sees on a refusal
 
-### RBI Digital Lending Directions, 2025 (A25)
+1. **In chat or WhatsApp:** `HOLIDAY_REFUSED` (or `HOLIDAY_NO_RESPONSE`), one message, sent after the payout card. The payout message and the Soundbox line at 17:04 are unchanged.
+2. **In the claim tracker (H1, fs-04):** the last step reads "Instalment: lender said no, {reason}". It is not shown as paused, and the payout step stays green.
+3. **Next step (H21):** a button "Ask the lender about this", which opens a grievance with topic `EDI_HOLIDAY` (fs-06, respondent LENDER). The decision receipt carries the request and the answer.
+4. **In the console:** a feed line "{shop}: lender refused the holiday ({code})" and the row in the merchant detail. The KPI "instalments paused" does not count it.
 
-The **lender** decides any instalment deferral under its board-approved policy. Chhatri does not independently defer a loan. This aligns with RBI (Digital Lending) Directions, 2025 (A25), which state that deferral is the lender's decision.
+### 8.4 Coordinated change (the catalogue is pinned by tests)
 
-**Hedge:** Whether a pre-agreed holiday counts as a restructuring is for the lender's compliance team to confirm.
+`scripts/tests/test_docs.py` requires DEMO.md to quote the catalogue exactly, and the demo-check golden file quotes the instalment line. Replacing the wording touches all of these in one change:
 
-### Insurance Act 1938, s.64VB (cash before cover)
+| File | Change |
+|---|---|
+| `backend/chhatri/conversation/messages.py` | Add the `HOLIDAY_*` keys. Remove or stop using the three `INSTALMENT_PAUSED*` keys. |
+| `backend/chhatri/conversation/notifications.py` | `instalment_paused` becomes `holiday_decided` and picks the variant from the lender's answer and the date. |
+| `docs/SPEC.md` section 13.4 and section 10 | New strings. Replace "Chhatri pauses" with the request and answer. |
+| `docs/DEMO.md` (the 17:05 steps and the closing numbers) | Quote the new `HOLIDAY_GRANTED*` strings and describe a request that the lender grants. |
+| `scripts/tests/test_docs.py` | Replace the `INSTALMENT_PAUSED` entry in `DEMO_MESSAGES`. |
+| `backend/chhatri/api/demo/golden.py` | The "instalment message" expectation (`Today's ₹600 instalment is paused.`). |
+| Backend tests | `test_notifications.py` (`test_monsoon_17_04_intro_card_soundbox_then_17_05_pause`, `test_instalment_wording_follows_the_date`, `test_instalment_on_a_date_in_hindi`), `replay/test_golden.py` (`test_illness_pays_1500_and_pauses_thursdays_instalment`), `replay/test_area_flow.py`, `cases/test_demo_flows.py` |
+| `frontend/src/mock` | Same new strings and the request and answer shape |
 
-The EDI holiday does not affect the premium schedule. Cover for a day starts when that day's premium is received, either the initial 30-day prepayment or a settlement deduction the previous evening, made with standing consent. The holiday is a **loan deferral**, not a premium relief.
+## 9. X8: no loan offers during distress, and a message cap (PLANNED, wave 3)
 
-### DPDP consent (A22)
+No loan or top-up offer exists in the product today. X8 is a guard that must be in place before any such message is ever added.
 
-The EDI holiday request involves the merchant's loan state (arrears, tenure, flag). This is financial data. The merchant has given consent for cover and claims (sales data); lending data is separate. **Open question:** Does the lender's terms of service cover this consultation, or is explicit consent needed?
+| Rule | Definition |
+|---|---|
+| Message kinds | A closed map from catalogue key to kind. `TRANSACTIONAL`: payout, receipt, decision and reply messages. `PROACTIVE`: check-ins and reminders. `OFFER`: any loan, top-up or cross-sell card. |
+| Offer suppression | An `OFFER` is not sent while any of these is true for the merchant: an alert covers their zone (valid now, or issued and starting within the 72-hour look-ahead); a claim is being decided; a case is OPEN; a REFERRED decision waits for an officer; a grievance is OPEN (fs-06). |
+| Frequency cap | At most `max_proactive_per_day` `PROACTIVE` messages per merchant per calendar day (IST). Proposed value 3, a setting to tune. `TRANSACTIONAL` messages are never capped or suppressed. |
+| Where | A single check before `Outbox.send` in `conversation/outbox.py`. |
+| Audit | `message.suppressed` (proposed name) with the merchant, the message kind, the reason and no message text. |
 
-### Audit trail
+Since no `OFFER` exists, the tests add a fake `OFFER` key to exercise the guard.
 
-Every holiday request is logged with:
-- Actor: `workflow:payout`
-- Action: `instalment.holiday_request` (request) and `instalment.holiday_decision` (response)
-- Data: merchant ID, loan ID, lender, decision, reason code, moved-to date
+## 10. Edge cases and failure modes
 
-The entry is tamper-evident (hash chain, `/api/audit/verify`; K7).
-
-## 11. Acceptance criteria
-
-| Given | When | Then | Audit event |
+| Case | Behaviour | Message | Audit |
 |---|---|---|---|
-| Merchant Anil has a ₹600 EDI, active loan, unused holiday allowance. Area trigger fires at 17:00. | Policy engine approves payout ₹1,380 at 17:00. | By 17:05, Anil receives message that his next (Wed) instalment is paused. Lender has moved it to end of tenure. | `instalment.pause` with reason: `moved_to_end, no_penalty, lender_approved` |
-| Merchant has used all seasonal holidays (2 of 2). | Area payout approved. Pause request sent to lender at 17:05. | Lender rejects (no allowance). Anil gets message: "Holiday not available; instalment due tomorrow as normal." | `instalment.holiday_request_denied` with reason: `no_allowance` |
-| Merchant's loan is in arrears. | Area payout approved. | Lender rejects. Anil does not see a pause message (or sees "not available"). Instalment stays due. | `instalment.holiday_request_denied` with reason: `in_arrears` |
-| A red alert or a claim is open for Anil's zone. | Anil's claim is decided REFERRED and a case is opened. | No loan offer or cross-sell card is shown (X8). Any pending offer is suppressed. | `message.suppressed` with reason: `open_claim` |
-| Hospital-cash claim is decided REFERRED. | Officer approves the claim (₹1,500 personal payout). | Officer re-runs all HARD checks (K4). If all pass, officer can click Approve. Pause request follows the same path as an auto-approved payout. | `instalment.pause` with decided_by: `officer:officer-id` |
+| No loan | Nothing happens | none | none |
+| Instalment already has a request | Nothing happens (idempotent) | none | none |
+| Granted | Pause record created, instalment moved to end of tenure, penalty 0 | `HOLIDAY_GRANTED*` | `instalment.holiday_request`, `instalment.holiday_decision`, `instalment.pause` |
+| Refused: programme flag off | No pause | `HOLIDAY_REFUSED`, reason "this loan is not part of the holiday scheme" | request, decision (reason `FLAG_OFF`) |
+| Refused: loan not active | No pause | `HOLIDAY_REFUSED`, "the loan is not active" | decision (`NOT_ACTIVE`) |
+| Refused: arrears | No pause | `HOLIDAY_REFUSED`, "the loan has an amount overdue" | decision (`IN_ARREARS`) |
+| Refused: allowance used | No pause | `HOLIDAY_REFUSED`, "your holiday allowance is used up" | decision (`NO_ALLOWANCE`) |
+| Lender does not answer in time | No pause, no retry | `HOLIDAY_NO_RESPONSE` | decision (`NO_RESPONSE`) |
+| Payout not yet credited when the step runs | No request, step skipped | none | skip audited |
+| Officer-approved claim (REFERRED then approved) | Same path after the credit | same | same |
+| Merchant has more than one loan | Not modelled: one loan per merchant today | none | none (open question 6) |
+| An offer card while an alert is active | Suppressed (X8) | none | `message.suppressed` |
 
-## 12. Telemetry and audit events
+## 11. Guardrails, privacy and compliance notes
 
-### Audit events logged (K7, SPEC §11)
+- **RBI (Digital Lending) Directions, 2025 (A25):** the lender decides any deferral under its board-approved policy. Chhatri requests, and never changes a loan. Whether a pre-agreed holiday counts as a restructuring is for the lender's compliance team to confirm.
+- **Insurance Act 1938, s.64VB (cash before cover):** unaffected. A holiday defers a loan instalment. It is not premium relief.
+- **DPDP (A22):** the request shares the merchant's loan id, an instalment date and proof that a payout was credited. It does not share the claim kind, the reason, slip data or the payout amount. Which consent covers this sharing is not settled (open question 1).
+- **Honest wording:** every merchant line names the lender as the decider. The honest-wording test (X7) scans the `HOLIDAY_*` keys for promises and for "Chhatri paused".
+- **Alternative lender setting:** some lenders may prefer that the instalment is settled out of the payout, so the loan terms never change. That would be a payout split, not a holiday. It is not built and not in scope for the hackathon.
 
-| Action | Subject type | Occurs when | Data fields |
+## 12. Acceptance criteria
+
+| Given | When | Then | Audit |
 |---|---|---|---|
-| `instalment.holiday_request` | `instalment_holiday_request` | Payout is APPROVED (area or personal); pause request is sent to lender. | `merchant_id`, `loan_id`, `lender`, `instalment_date`, `amount_paise`, `decision_id` |
-| `instalment.holiday_decision` | `instalment_holiday_decision` | Lender responds with GRANTED or NOT_GRANTED. | `merchant_id`, `loan_id`, `lender`, `decision`, `reason_code`, `moved_to_date` (if granted) |
-| `instalment.pause` | `instalment_pause` | Holiday is GRANTED; the pause record is created. | `merchant_id`, `loan_id`, `lender`, `instalment_date`, `amount_paise`, `decision_id`, `moved_to`, `penalty_paise` (0) |
-| `instalment.holiday_request_denied` | `instalment_holiday_request` | Holiday is NOT_GRANTED. | `merchant_id`, `loan_id`, `lender`, `reason_code` (e.g. `no_allowance`, `in_arrears`, `not_active`, `flag_off`) |
-| `message.suppressed` | `message` | X8: a cross-sell card or loan offer is suppressed during an alert or open claim. | `merchant_id`, `alert_id` or `claim_id` or `case_id`, `suppression_reason` |
+| Anil (S-0142, ₹600 a day) is paid ₹1,380, decision D-000142, credit 17:04 | The step runs at 17:05 | A request goes out, the simulated lender grants, a pause record exists, and Anil gets `HOLIDAY_GRANTED` | `instalment.holiday_request`, `instalment.holiday_decision`, `instalment.pause` |
+| The storm run to 17:06 | KPIs are read | "Instalments paused" is 123 and the Z7 total stays ₹58,900 | n/a |
+| A loan the simulated lender holds in arrears | A payout is credited and the step runs | The lender refuses with `IN_ARREARS`, no pause record exists, the payout stays CREDITED, the merchant gets `HOLIDAY_REFUSED` naming the reason | request, decision |
+| A loan with its allowance used up | The step runs | Refused with `NO_ALLOWANCE` | request, decision |
+| The lender is forced to FALLBACK in the provider panel | The step runs | `NO_RESPONSE`, no pause, `HOLIDAY_NO_RESPONSE` | request, decision |
+| The payout is still PENDING | The step runs | No request, the skip is audited | skip |
+| An officer approves a REFERRED claim | The payout credits and the step runs | Same path as an automatic payout | same |
+| A request is built for a hospital-cash payout | The payload is inspected | It has no claim kind, reason, slip field or amount | none |
+| PLANNED X8: an alert covers the zone | An `OFFER` message is queued | It is suppressed and `message.suppressed` is logged | `message.suppressed` |
+| PLANNED X8: the merchant has received the daily cap of `PROACTIVE` messages | Another `PROACTIVE` message is queued | It is suppressed. A `TRANSACTIONAL` message still goes out. | `message.suppressed` |
 
-### Console metrics (K8)
+## 13. Telemetry and audit events
 
-The claims-officer console (`/policy` page, pending redesign) will show:
-- Holiday requests today: count by decision (GRANTED, DENIED, ERROR).
-- Most common denial reason: histogram.
-
-## 13. Planned changes and tasks
-
-| ID | Task | Owner | Effort (h) | PR in | Notes |
-|---|---|---|---|---|---|
-| X4 | Add lender pre-agreed rule guard (`check_lender_holiday_eligibility`) to `instalments.py` | Ujjwal Pardeshi | 1.5 | 2 Oct eve | Query simulated lender service; log reason code |
-| K3 | Merchant copy: add `INSTALMENT_PAUSED_GRANTED`, `INSTALMENT_PAUSED_NOT_GRANTED` to `messages.py` | Omkar Kadam | 0.5 | 2 Oct eve | Bilingual; update test |
-| K3 | Update DEMO.md step 5 to show lender decision message | Omkar Kadam | 0.5 | 2 Oct eve | Emphasize lender decides |
-| K3 | Update SPEC §10 to use K3 name and lender-request framing | Omkar Kadam | 0.5 | 2 Oct eve | Remove "Chhatri pauses" language |
-| X8 | Guard: no loan/top-up offers while `active_alert or open_claim` | Ujjwal Pardeshi | 1 | 2 Oct or 3 Oct | Test: verify card is not sent |
-| N/A | Alternative: insurer-funded EDI holiday design doc | Omkar Kadam | 0.5 | Post-hackathon | Roadmap; decide with lender and insurer |
-
-## 14. Test plan
-
-### Existing tests (commit 86575ea)
-
-From `backend/tests/ledger/test_instalments.py`:
-- `test_pause_next_success`: Happy path; merchant has active loan, pause created.
-- `test_pause_next_no_loan`: Merchant has no loan; returns None.
-- `test_pause_next_already_paused`: Instalment already paused for the same date; returns None.
-
-From `backend/tests/conversation/test_messages.py`:
-- `test_render_instalment_paused`: `INSTALMENT_PAUSED` key renders with `{instalment}` filled.
-
-### New tests (X4, K3)
-
-| Test | File | Checks | Acceptance |
+| Action | Subject | When | Data |
 |---|---|---|---|
-| `test_lender_holiday_eligible_all_pass` | `test_instalments.py` | X4 rule all conditions pass → eligible | `(True, "eligible")` |
-| `test_lender_holiday_ineligible_no_allowance` | `test_instalments.py` | Merchant has used all holidays → not eligible | `(False, "no_allowance")` |
-| `test_lender_holiday_ineligible_in_arrears` | `test_instalments.py` | Loan in arrears → not eligible | `(False, "in_arrears")` |
-| `test_lender_holiday_ineligible_not_active` | `test_instalments.py` | Loan not ACTIVE → not eligible | `(False, "not_active")` |
-| `test_lender_holiday_ineligible_flag_off` | `test_instalments.py` | Lender flag disabled → not eligible | `(False, "flag_off")` |
-| `test_pause_with_lender_granted` | `test_instalments.py` | Pause is created when lender grants. | Pause record exists; audit event logged. |
-| `test_pause_blocked_when_lender_denies` | `test_instalments.py` | Pause is not created when lender denies. | Pause record does not exist; denial audit event logged. |
-| `test_render_instalment_paused_granted` | `test_messages.py` | New key `INSTALMENT_PAUSED_GRANTED` renders. | Message includes `{instalment}` and `{date}`. |
-| `test_render_instalment_paused_not_granted` | `test_messages.py` | New key `INSTALMENT_PAUSED_NOT_GRANTED` renders. | Message says "not available". |
-| `test_x8_suppress_offer_during_alert` | `test_conversation.py` or `test_integrations.py` | X8 rule: card not sent if active alert. | Card not in message list. |
-| `test_x8_suppress_offer_during_open_claim` | Same | X8 rule: card not sent if open case. | Card not in message list. |
-| `test_monsoon_demo_anil_pause_at_1705` | `backend/scripts/demo_check.py` | Anil's instalment pause logged at 17:05. | Audit entry for `instalment.pause` with correct loan ID and reason. |
+| `instalment.holiday_request` (PLANNED) | holiday request `HR-…` | The request is sent | merchant, loan, decision, payout, instalment date, instalment amount, lender |
+| `instalment.holiday_decision` (PLANNED) | holiday request `HR-…` | The lender answers, or the time limit passes | decision (`GRANTED`, `REFUSED`, `NO_RESPONSE`), reason code, moved to, penalty |
+| `instalment.pause` (BUILT, kept) | instalment pause `IP-…` | Only on a grant | loan, lender, date, amount, decision id, moved to, penalty, plus `request_id` |
+| `message.suppressed` (PLANNED, X8) | message | A message is held back | merchant, kind, reason. No text. |
+
+Actors are `workflow:payout` for the request, decision and pause entries, and `system` for X8. The ops strip (fs-08) shows holiday requests by outcome from these entries.
+
+## 14. Build plan
+
+All P0. Owners: Ujjwal (backend), Omkar (copy, UI, docs).
+
+| Task | Owner | Wave |
+|---|---|---|
+| `Lender` port, `SimulatedLender` (L1 to L4, ledger, fixtures, FALLBACK = no answer) | Ujjwal | 1 |
+| `HolidayRequest` model, `HR` ids, `request_holiday` with G1 to G4, one attempt, audit | Ujjwal | 1 |
+| `GET /api/merchants/{id}` gains `holiday_requests`; KPI counts grants only | Ujjwal | 1 |
+| `HOLIDAY_*` keys, notification, honest-wording scan (X7) | Ujjwal and Omkar | 1 |
+| Hindi lines in the copy deck, native review | Omkar | 1 |
+| Coordinated change in section 8.4 (SPEC, DEMO.md, `test_docs.py`, goldens, mock) | Omkar and Ujjwal | 1 |
+| Tracker row, console feed line, grievance link `EDI_HOLIDAY` | Omkar | 1 and 3 |
+| X8 message kinds, suppression, cap, audit | Ujjwal | 3 |
+
+## 15. Test plan
+
+### Existing tests (BUILT)
+
+- `backend/tests/ledger/test_instalments.py`: `test_pauses_tomorrows_instalment`, `test_second_pause_for_same_day_is_none`, `test_no_loan_means_no_pause`, `test_rejects_other_merchant_or_unapproved`.
+- `backend/tests/conversation/test_notifications.py`: `test_monsoon_17_04_intro_card_soundbox_then_17_05_pause`, `test_instalment_wording_follows_the_date`, `test_instalment_on_a_date_in_hindi`.
+- `backend/tests/replay/test_area_flow.py`: `test_next_days_instalments_are_paused_at_17_05_for_every_paid_shop_with_a_loan`, `test_anil_hears_at_credit_time_then_about_the_pause`.
+- `backend/tests/replay/test_golden.py`: `test_illness_pays_1500_and_pauses_thursdays_instalment`, `test_decisions_17_00_credits_17_04_pauses_17_05_and_the_kpis`.
+- `backend/tests/cases/test_demo_flows.py`: `test_monsoon_anil_paid_1380_at_1704_and_instalment_paused_at_1705`.
+
+These change with section 8.4. The pause assertions stay, and the message assertions move to the new wording.
+
+### New tests (PLANNED)
+
+| Test | File | What it checks |
+|---|---|---|
+| `test_lender_rule_order_and_reasons` | `backend/tests/integrations/test_lender.py` | L4, L1, L2, L3 and the first-failing reason. |
+| `test_lender_grant_is_recorded_and_counts_toward_allowance` | same | A grant is in the lender's ledger and L3 counts it. |
+| `test_lender_fallback_gives_no_answer` | same | FALLBACK means no response. |
+| `test_request_waits_for_a_credited_payout` | `backend/tests/ledger/test_instalments.py` | G2. |
+| `test_request_is_idempotent_per_instalment` | same | G4 and the request id. |
+| `test_refusal_creates_no_pause` | same | Reasons `IN_ARREARS`, `NO_ALLOWANCE`, `NOT_ACTIVE`, `FLAG_OFF`, and `NO_RESPONSE`. |
+| `test_request_carries_no_claim_reason_or_amount` | same | The payload fields in 7.3 only. |
+| `test_kpi_counts_grants_only` | `backend/tests/replay/test_area_flow.py` | 123 stays 123 with the default lender. |
+| `test_holiday_messages_render_and_name_the_lender` | `backend/tests/conversation/test_messages.py` | New keys render and mention "lender". |
+| `test_honest_wording_covers_holiday_keys` | X7 test | No "Chhatri paused" and no promise. |
+| `test_offer_suppressed_during_alert_or_open_case` and `test_proactive_cap` | `backend/tests/conversation/test_outbox.py` | X8 rules with a fake `OFFER` key. |
+| Mock parity | `frontend/src/mock/routes.test.ts` | Static demo serves request and answer. |
 
 ### Regression checks
 
-Run the existing suite; ensure no breakage:
 ```bash
-make test-backend       # 1,711 fast tests + 36 slow tests
-make test-frontend      # 262/264 unit tests (X1 fixes 2 more)
+make test-backend   # backend pytest, not slow, coverage at least 80%
+make test-slow      # golden numbers
+make test-frontend  # typecheck, lint, unit tests
+make demo-check     # every scenario through the HTTP API
 ```
 
 ## Open questions
 
-1. **Lender integration:** Which NBFC/bank partner will be the first to provide a real holiday service? When can we start testing with their API (including auth tokens)? **Owner:** Omkar Kadam.
-2. **Alternative lender setting:** If the insurer pays the instalment from the payout (EMI-protection style), what are the legal and tax implications for the insurer and the lender? **Owner:** Omkar Kadam (with business partner and insurer counsel).
-3. **Hedging on "restructuring":** The lender's compliance team will decide whether a pre-agreed holiday counts as a restructuring under RBI rules. Do we need a compliance sign-off before launching with a partner, or is a general DPDP consent enough? **Owner:** Omkar Kadam.
-4. **DPDP consent for loan state:** Does asking the lender for holiday eligibility require a separate consent, or is it covered by the existing financial-services consent? **Owner:** Omkar Kadam.
-5. **Seasonal cap on holidays:** Should the holiday allowance reset yearly, seasonally (per monsoon), or per loan tenure? **Owner:** Ujjwal Pardeshi (with lender input).
-6. **Fallback when lender unavailable:** If the lender service times out or is down, should we grant the holiday optimistically or deny it pessimistically? Currently we deny. **Owner:** Ujjwal Pardeshi.
+1. **Consent for sharing with the lender.** Which consent purpose covers sending the loan id, instalment date and payout proof to the lender? Proposal: add a purpose to the consent centre (N6, fs-07). Owner: Omkar Kadam.
+2. **Lender policy values.** Programme flag, allowance count and period, and arrears definition come from the partner lender. The simulator values are illustrative. Owner: Omkar Kadam.
+3. **Time limit.** Proposed 10 seconds. Is that right for a real lender API? Owner: Ujjwal Pardeshi.
+4. **Stage refusal.** Default plan: the X6 switch (no response). Option: put an arrears fixture on Anil's loan in the `illness_mismatch` scenario, which shows a named reason live. It needs the golden file and DEMO.md for that scenario updated. Owner: Omkar Kadam.
+5. **Restructuring.** Does a pre-agreed holiday count as a restructuring for the lender? A compliance call by the lender. Owner: Omkar Kadam.
+6. **More than one loan.** Which loan's instalment does a request name? The data model has one loan per merchant. Owner: Ujjwal Pardeshi with the lender.
+7. **Insurer-funded alternative.** Pay the instalment out of the payout instead of a holiday. Deferred beyond the hackathon. Owner: Omkar Kadam.
 
 ## Changelog
 
+- 2026-10-02 · v1.4 · lender-decides wording throughout; X4 made build-ready (preconditions, lender rule, request and response JSON, failure handling, refusal wording, tests); removed line-number references and pseudocode for code that does not exist; timing corrected (request 17:05, 5 minutes after the decision); X8 specified; coordinated change list for the pinned strings; build waves replace dates
 - 2026-10-02 · v1.3 · final consistency pass against the code
 - 2026-10-02 · v1.2 · logic and truth audit fixes
 - 2026-10-02 · v1.1 · fact-check pass

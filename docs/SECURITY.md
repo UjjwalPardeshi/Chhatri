@@ -49,7 +49,9 @@ limits, and the checklist to run before a demo.
 The audit log is an append-only SQLite hash chain: SHA-256 over canonical JSON, with a genesis of
 64 zeros. The wall-clock `recorded_at` is excluded from the hash. `GET /api/audit/verify` recomputes
 the chain and reports the first bad `seq`. Every decision stores all of its checks. Actors are named:
-`policy-engine`, `officer:<id>`, `workflow:<name>`, `merchant:<id>`, and so on.
+`policy-engine`, `officer:<id>`, `workflow:<name>`, `merchant:<id>`, and so on. The chain is
+tamper-evident, not durable: it lives in an in-memory database that is rebuilt on every scenario load
+(the replay is deterministic, so a reload gives the same chain), and a restart empties it.
 
 ### Privacy (SPEC §14.2, §21)
 
@@ -62,7 +64,8 @@ the chain and reports the first bad `seq`. Every decision stores all of its chec
 ### Containers and network
 
 - Backend image: Python 3.12 slim, **non-root** (uid 10001). The code, data and artefacts under `/app`
-  are root-owned and read-only to the app; run state goes to `/app/var` (a volume). There is no compiler,
+  are root-owned and read-only to the app; `/app/var` (a volume) is the one place it may write, and
+  nothing is written there yet, because the store and the audit log are in memory. There is no compiler,
   curl or wget in the image, and the healthcheck uses stdlib urllib.
 - Console image: **unprivileged** nginx (uid 101), `server_tokens off`, `X-Content-Type-Options:
   nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: same-origin`. Only `/api/` and `/webhooks/`
@@ -86,7 +89,8 @@ the chain and reports the first bad `seq`. Every decision stores all of its chec
 - [ ] `.env` exists (`make env`), is mode 0600, is not committed (`git status` shows nothing), and has
       no empty `CHHATRI_OFFICER_TOKEN=` line.
 - [ ] `WHATSAPP_DEMO_RECIPIENT` is the presenter's own number, if WhatsApp is live.
-- [ ] Every Paytm variable points at **staging** (`PAYTM_BASE_URL=https://securestage.paytmpayments.com`).
+- [ ] Every Paytm variable that is set points at **staging** (`PAYTM_BASE_URL=https://securestage.paytmpayments.com`).
+      With none set, the premium link is simulated and no request goes to Paytm.
 - [ ] Ports are bound to `127.0.0.1`. If a tunnel is used, it forwards only `/webhooks/whatsapp`.
 - [ ] `GET /api/audit/verify` returns `valid: true` after a full rehearsal.
 - [ ] `make test`, `make test-infra` and `make n8n-selftest` pass on the demo machine.

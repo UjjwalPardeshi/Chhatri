@@ -5,115 +5,117 @@
 | Status | Accepted |
 | Owner | Omkar Kadam |
 | Date | 2026-10-02 |
-| Related | [SPEC §9.5, §17.1](../../SPEC.md) · [PRD, K3](../../02-product/prd.md) · [Facts and sources (B, regulatory section)](../../01-strategy/facts-and-sources.md) · [RBI (Digital Lending) Directions 2025 (A25)](../../01-strategy/facts-and-sources.md) |
+| Related | [SPEC §10, §13.4, §15](../../SPEC.md) · [fs-03 EDI holiday (K3, X4, X8)](../../02-product/feature-specs/fs-03-edi-holiday.md) · [fs-06 grievance](../../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) · [fs-07 consent](../../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) · [fs-08 console (provider panel)](../../02-product/feature-specs/fs-08-claims-officer-console.md) · [PRD, K3 and X4](../../02-product/prd.md) · [Policy wording and CIS, C10](../../02-product/policy-wording-and-cis.md) · [Regulatory and compliance, section 5.2](../../05-business/regulatory-and-compliance.md) · [Facts and sources (A25, section B)](../../01-strategy/facts-and-sources.md) |
 
 ## TL;DR
 
-When a merchant receives an approved payout, Chhatri can **request** that the lender pause the next instalment (EDI holiday), citing the decision id. The lender's own board-approved policy decides: the loan must be active, not in arrears, and the holiday allowance must not be used up. This is reframed from the early prototype's "Chhatri pauses the instalment," which was unilateral and legally risky. RBI (Digital Lending) Directions, 2025 (A25) make the lender the decision-maker. Chhatri is a **requester**, not an authority over the loan.
+EDI means equated daily instalment. After a payout is credited, Chhatri **asks** the merchant's lender to move the next instalment to the end of the loan. The lender answers from a rule it agreed in advance, and Chhatri tells the merchant what the lender decided.
+
+The regulatory position (A25, to be confirmed with the partner insurer's compliance team and counsel): under the RBI (Digital Lending) Directions, 2025, any instalment deferral is the lender's decision under its board-approved policy. Chhatri can only request an EDI holiday, or have the insurer pay the instalment as part of the payout. Whether a pre-agreed holiday counts as a restructuring is for the lender's compliance team to decide.
+
+- **BUILT today:** the `pause_instalment` step pauses the next instalment with no check and no lender answer, and the message reads as if Chhatri did it.
+- **PLANNED, build wave 1 (X4):** the step becomes a request to a simulated lender that applies four conditions. A refusal creates no pause. The payout is never touched.
 
 ## Context
 
-**Early prototype issue:** the code showed a comment "instalment paused" without checking the loan's state or the lender's policy. This is problematic because:
+**What the code does today (BUILT).** `InstalmentService.pause_next` (`backend/chhatri/ledger/instalments.py`) pauses the instalment due on the event date plus one day, unless the merchant has no loan or that instalment is already paused. It writes an `InstalmentPause` and the audit entry `instalment.pause`, naming "Simulated lender (NBFC partner)". The `Loan` record holds an id, a lender name, a daily instalment and an outstanding amount. It has no status, no arrears and no holiday allowance, so the code cannot tell a loan that qualifies from one that does not. The merchant is told "Tomorrow's ₹600 instalment is paused." and nothing says who decided.
 
-- The lender (NBFC or bank) owns the loan contract. Paytm acts as a settlement agent, not a lender.
-- RBI Digital Lending Directions 2025 (A25) require any deferral or restructuring to be the lender's decision under its written policy, not Paytm's unilateral action.
-- If a deferral is mislabeled as not being a restructuring (or vice versa), the lender's compliance team can face action.
+**Why that is not good enough.**
 
-**Regulatory clarification:** s.64VB of the Insurance Act 1938 does not require the insurer to pay the loan; it only requires cover to start after premium is received. The EDI holiday can be:
+- The lender owns the loan contract. Chhatri is not the lender.
+- Under the A25 position a deferral is the lender's decision. A message that says Chhatri paused the instalment states something Chhatri cannot do.
+- A real lender would refuse some requests (a loan in arrears, an allowance used up). The merchant must hear that as the lender's answer, with the payout unaffected.
 
-1. **Insurer-funded:** the payout amount is reduced by the instalment, so the loan terms never change (alternative lender setting, K3 open question).
-2. **Lender's decision:** the lender pauses the instalment under a pre-agreed rule, and it is either a deferral (rescheduled later) or a waiver (forgiven). The rules must be documented.
+**Two ways to make the holiday real.** Both are described in the regulatory page.
 
-**Use case:** Anil is paid ₹1,380 on day D. His ₹600 instalment is due on day D+1. Chhatri sends a message to the lender: "Merchant S-0142 received payout decision C-2291. Holiday allowed?" The lender checks: loan is active, balance is not past due, and Anil has one holiday left this quarter. Lender responds: "Holiday granted; instalment moved to [date]." Anil sees: "Your ₹600 instalment is paused until [date]."
+1. **Lender-deferred (the default of this ADR).** The lender moves the instalment to the end of the tenure under a pre-agreed rule.
+2. **Insurer-funded (alternative, not built).** The instalment is paid to the lender out of the payout, so the loan terms never change. That is a payout split, not a holiday.
+
+The Insurance Act 1938, s.64VB (cash before cover) is unaffected: a holiday defers a loan instalment, it is not premium relief.
+
+**Use case (monsoon replay).** Anil (S-0142) is paid ₹1,380 on decision D-000142. The credit is at 17:04. At 17:05 Chhatri sends his lender a request for the ₹600 instalment due the next day. The simulated lender finds the loan active, not in arrears and with allowance left, and grants. Anil reads (proposed wording) "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty." C-2291 is the case id of Anil's later dispute, not a decision id.
 
 ## Decision
 
-**Chhatri's role:**
+**Chhatri requests. The lender decides. Chhatri never changes a loan.**
 
-1. After an APPROVED payout, check if a follow-up EDI holiday request should be sent to the lender (currently always yes, but this is parameterizable).
-2. Call `POST /api/merchants/{id}/edi-holiday-request` with:
-   - `payout_decision_id`: the id of the approved payout decision (decision ids start with D; C-2291 is a case id, not a decision id).
-   - `payout_amount_rupees`: the amount paid.
-   - `merchant_loan_id`: if Paytm has it.
-3. The lender (simulated in the demo) responds with:
-   - `granted: true/false`.
-   - `holiday_end_date`: when the instalment is rescheduled (if granted).
-   - `reason`: why granted or denied (e.g., "loan in arrears" → not granted).
-4. Chhatri logs the response in the audit trail (K7) and shows the merchant the decision: "Your ₹600 instalment is paused until [date]" or "The lender could not grant a holiday because [reason]. We will follow up."
+1. **When.** After the payout is CREDITED, at the existing instalment step, 5 simulated minutes after the decision (17:05 for the storm), one minute after the credit. The step `pause_instalment` is renamed `request_holiday` in `backend/chhatri/workflows/definitions.py`, and the n8n files are regenerated with `scripts/n8n_workflows.py` (`make test-infra` fails on drift).
+2. **Chhatri's own guards (G1 to G4), the X4 guard.** The decision is APPROVED. The payout is CREDITED. The merchant has a loan on record. No request exists yet for that loan and instalment date. If the payout is not credited, no request goes out and the skip is audited.
+3. **The lender's rule (L1 to L4).** The simulated lender (new `Lender` port in `integrations/base.py`, adapter `integrations/lender.py`) grants only if all four hold. When several fail, it returns the first in this order.
 
-**Code enforcement (X4 guard):**
+   | Order | Condition | Reason code if not met |
+   |---|---|---|
+   | 1 | Programme flag on for the loan (L4) | `FLAG_OFF` |
+   | 2 | Loan active (L1) | `NOT_ACTIVE` |
+   | 3 | Not in arrears (L2) | `IN_ARREARS` |
+   | 4 | Holiday allowance left (L3) | `NO_ALLOWANCE` |
 
-- Never call the EDI request without a successful payout decision.
-- Never skip the lender's approval check; do not assume it is granted.
-- Log the lender's response and show it to the merchant.
-- A test enforces: "if payout is APPROVED, an EDI request is sent; if lender denies, no instalment is marked paused in the merchant's view."
-
-**Wording change:**
-
-- Old: "Your instalment is paused."
-- New: "We've requested a ₹600 instalment pause with your lender. Here's their decision: [paused until X / not granted, reason]."
-
-**Alternative lender setting (K3 open question):**
-
-Some lenders may prefer the insurer to pay the instalment, so the lender's records never show a deferral. The rule then becomes:
-
-- `payout_to_merchant = payout_amount − next_instalment`.
-- `payout_to_lender = next_instalment`.
-
-This is a payout-split, not a restructuring. It is deferred to the pilot phase.
+   The rule belongs to the lender and is not in `rules.yaml`. The simulator's allowance (a count per rolling 365 days, illustrative value 3) is a setting of the simulator, not a Chhatri rule. With no fixture on by default, every loan holder in the storm is granted, so the KPI "instalments paused" stays at 123 and no golden number moves.
+4. **The request carries only what the lender needs:** request id (`HR-` plus six digits, also the idempotency key), merchant, loan, decision id, payout id, credit time, instalment date, instalment amount, request time and the basis ("Pre-agreed rule: one instalment holiday after a credited Chhatri payout"). It carries no claim kind, no reason, no slip data and no payout amount, so a hospital-cash payout is not revealed to the lender. The exact JSON is in fs-03 section 7.3.
+5. **One attempt, fail safe.** If the lender gives no answer within the time limit, Chhatri records `NO_RESPONSE` and does not pause. There is no retry, because a later grant could land after the merchant was told "not paused". Any error is treated as not granted. The time limit is a setting, with a proposed target of 10 seconds. In simulated time the wait is instant.
+6. **The payout is independent.** It is credited at 17:04, before the request. A refusal or no answer changes nothing about it.
+7. **No public HTTP route for the request.** It is an internal call through the `Lender` port, like the other integrations. `GET /api/merchants/{id}` gains `holiday_requests[]` (every outcome) beside the existing `pauses` (grants only).
+8. **Merchant wording.** Every line names the lender as the one who decided. None says "Chhatri paused" and none promises a follow-up. A refusal says the payout is not affected and offers "Ask the lender about this", a grievance with respondent LENDER (fs-06). The five proposed keys `HOLIDAY_GRANTED`, `HOLIDAY_GRANTED_TODAY`, `HOLIDAY_GRANTED_ON`, `HOLIDAY_REFUSED` and `HOLIDAY_NO_RESPONSE` replace the three `INSTALMENT_PAUSED*` keys. Replacing them touches the catalogue, SPEC §13.4, DEMO.md and the tests that pin them, in one change (fs-03 section 8.4).
+9. **Audit.** `instalment.holiday_request` and `instalment.holiday_decision` (proposed names) are new. `instalment.pause` is kept, written only on a grant, and gains the request id. The audit chain stays the record of who asked and who answered.
+10. **Demo control.** The provider panel (X6, fs-08) can force the `lender` component to FALLBACK. In FALLBACK the simulated lender does not answer, so every request ends as `NO_RESPONSE` and the merchant sees the fail-safe message. A named refusal needs a loan fixture in arrears, which tests set.
 
 ## Alternatives considered
 
-1. **Unilateral EDI pause by Chhatri (rejected):** update the loan state directly without asking the lender. Pro: instant; no external call. Con: illegal (violates RBI Directions); regulatory risk; the lender's compliance system becomes out of sync with the merchant's view.
-
-2. **Lender pre-approval at cover purchase (considered):** when a merchant buys cover, get pre-signed permission to pause instalments (e.g., "up to ₹5,000 per quarter"). Pro: faster at payout time. Con: requires legal agreement with the lender; not scalable across many lenders; adds friction to the cover purchase.
-
-3. **Automatic instalment reduction (rejected):** instead of a pause, reduce the next instalment by the payout amount (e.g., ₹600 → ₹0, leaving balance for later). Pro: no lender communication needed. Con: the loan's amortization schedule is broken; the lender's system must handle partial payments; not standard.
+1. **Unilateral pause by Chhatri (BUILT today, rejected).** Update the loan state without asking. Pro: instant, no external call. Con: under the A25 position the deferral is the lender's decision, the lender's records and the merchant's view can drift apart, and Chhatri would be promising relief on a loan it cannot see (arrears, allowance).
+2. **Standing permission at cover purchase (considered, deferred).** Get the lender's pre-signed permission to pause instalments when the merchant buys cover. Pro: faster at payout time. Con: it needs a legal agreement with each lender, adds a step to cover purchase, needs its own consent (fs-07), and the lender still decides under its own policy.
+3. **Insurer-funded instalment (deferred beyond the hackathon).** Pay the next instalment to the lender out of the payout: `payout_to_merchant = payout − next instalment` and `payout_to_lender = next instalment`. The loan terms never change, and it is a payout split, not a restructuring. Con: the merchant receives less cash on the day the product is for, and the published payout arithmetic (half of the expected day times the drop) no longer matches the cash the merchant receives. The partner insurer and lender choose between the two models in a pilot.
+4. **Automatic reduction of the next instalment (rejected).** Reduce the instalment by the payout amount instead of pausing it. Pro: no lender call. Con: it breaks the lender's amortisation schedule and the lender's system would have to accept partial payments.
 
 ## Consequences
 
-**Positive:**
+**Positive**
 
-- **Regulatory compliance:** Chhatri respects RBI Directions 2025; the lender is the decision-maker.
-- **Transparency:** the merchant sees the lender's decision, not a promise from Chhatri.
-- **Auditability:** every EDI request and response is logged with timestamps and decision ids.
-- **Pilot-ready:** the design scales to multiple lenders, each with their own policy and holiday limits.
+- The merchant sees the lender's decision, in the lender's terms, not a promise from Chhatri.
+- Every request and answer is in the audit chain with the decision id.
+- The `Lender` port is the one place where a real lender's API would sit. The simulated lender stays a SIMULATED component and is labelled as one.
+- The payout does not wait for, or depend on, the lender.
 
-**Negative:**
+**Negative**
 
-- **Latency:** an EDI request adds 1–2 s to the payout workflow (lender API call). In the demo, the lender response is simulated and instant.
-- **Failure mode:** if the lender denies, the merchant sees "instalment not paused." This may be unexpected. Mitigate: clear messaging and a follow-up option to contact the lender's support.
+- Three outcomes (granted, refused, no response) mean more states in the tracker, the console and the tests.
+- The demo grants every request by default. That keeps the golden numbers, and it also means the refusal path is seen on stage only when it is forced.
+- The coordinated wording change touches several pinned files at once (fs-03 section 8.4).
 
-**Risks:**
+**Risks**
 
-- **Lender policy ambiguity:** different lenders may interpret "active" or "arrears" differently. Mitigate: the pilot design includes a lender-policy matrix (holidays per quarter, arrears threshold) confirmed with the partner.
-- **Timing:** if the EDI request is sent late (e.g., after the instalment is already deducted), it is too late. Mitigate: send the request within 1 minute of the payout being credited (orchestration timing, X8).
-- **Coverage:** if a merchant has multiple loans, which one's instalment is paused? Mitigate: Chhatri sends the request for the loan linked to the Paytm device (usually one per merchant).
+- **Lender policy values are illustrative.** The programme flag, the allowance count and the arrears definition come from the partner lender, and a real lender may define "active" and "in arrears" differently.
+- **Timing.** A real lender may deduct the instalment at a fixed time. The request goes out one minute after the credit in the simulation. Real deduction times are not known.
+- **Several loans.** The data model holds one loan per merchant. A merchant with two loans is not modelled.
+- **Consent.** Which consent purpose covers sharing the loan id, the instalment date and the payout proof with the lender is not settled (fs-07).
 
 ## How we will know it was right
 
-**Signals:**
-
-1. Every payout decision (APPROVED) has a matching EDI request in the audit log.
-2. The merchant's tracker shows the lender's decision ("paused until X" or "not granted, reason").
-3. The UI wording never says "Chhatri paused" but always "We requested ... the lender decided."
-4. A test enforces: if a lender denies the EDI request, the merchant does not see "paused" (X4 guard).
-5. A partner lender can review the EDI request format and policy matrix and confirm alignment.
+1. A refusal creates no pause record and the payout stays CREDITED (`test_refusal_creates_no_pause`, planned in `backend/tests/ledger/test_instalments.py`).
+2. No merchant line says "Chhatri paused" or promises a follow-up (the honest-wording test X7 scans the `HOLIDAY_*` keys).
+3. With the default lender the KPI "instalments paused" is still 123 and counts grants only (`test_kpi_counts_grants_only`).
+4. A request built for a hospital-cash payout carries no claim kind, reason, slip field or amount (`test_request_carries_no_claim_reason_or_amount`).
+5. On stage, forcing the lender to FALLBACK shows `HOLIDAY_NO_RESPONSE` and no pause.
+6. In a pilot, a partner lender reviews the request format and the four conditions and confirms or changes them.
 
 ## Follow-ups
 
-- **Task:** Implement the EDI request endpoint and mock lender responses (Ujjwal).
-- **Task:** Add the EDI decision to the merchant's claim tracker (Omkar, N1 screen 4).
-- **Task:** Write a test for the EDI request and lender response flow (both).
-- **After the hackathon:** Consult with a lender partner on their policy (e.g., max holidays per quarter, arrears thresholds, restructuring vs deferral treatment).
+- Wave 1: `Lender` port and `SimulatedLender` (L1 to L4, ledger, fixtures, FALLBACK as no answer), `HolidayRequest` records with `HR-` ids, `request_holiday` with G1 to G4, the `HOLIDAY_*` messages and the coordinated change in fs-03 section 8.4 (Ujjwal, with Omkar for copy).
+- Wave 1: regenerate `n8n/workflows/*.json` for the renamed step and keep `make test-infra` green.
+- Wave 2: the `lender` switch in the provider panel (fs-08 section 9).
+- Waves 1 and 3: tracker row, console feed line and the grievance link `EDI_HOLIDAY` (Omkar).
+- After the hackathon: confirm the lender's own rule, the restructuring treatment and the time limit with a partner lender.
 
 ## Open questions
 
-1. Should the insurer-funded alternative (payout split) be included as a feature flag for the pilot, or deferred? Owner: Omkar Kadam.
-2. If a lender denies the EDI holiday, should Chhatri offer to reduce the next instalment from the payout? Owner: Omkar Kadam.
-3. How long does a typical lender take to respond to an EDI request (SLA)? Should Chhatri time out after 10 s and assume denial? Owner: Ujjwal Pardeshi.
+1. Does a pre-agreed holiday count as a restructuring for the lender? A compliance call by the lender. Owner: Omkar Kadam.
+2. Which loan does a request name when a merchant has more than one? Owner: Ujjwal Pardeshi, with the lender.
+3. Is a 10-second time limit right for a real lender API? Owner: Ujjwal Pardeshi.
+4. Which consent purpose covers the sharing with the lender (a purpose in the consent centre, N6)? Owner: Omkar Kadam.
+5. Should the insurer-funded alternative be a feature flag in a pilot, or stay deferred? Owner: Omkar Kadam.
+6. On stage, is the X6 "no response" switch enough, or should one scenario carry an arrears fixture that shows a named refusal? It would need that scenario's golden file and DEMO.md updated. Owner: Omkar Kadam.
 
 ## Changelog
 
+- 2026-10-02 · v3 · restated against the code and fs-03: today's pause is unconditional (BUILT), the lender request is PLANNED in wave 1; lender rule L1 to L4 with reason codes and a fixed order; request carries no claim data; one attempt and a fail-safe no response; the `POST /api/merchants/{id}/edi-holiday-request` route, which does not exist in the code, removed (no public route for the request); the "We will follow up" wording removed; C-2291 corrected to a case id (the decision is D-000142); the regulatory position uses the facts-page hedge, with the unsupported "illegal" claim and the invented ₹5,000 example removed; SPEC references corrected
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly establishes EDI holiday as lender's decision with Chhatri as requester.
 - 2026-10-02 · v1 · first draft.

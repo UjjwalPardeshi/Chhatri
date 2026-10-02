@@ -1,6 +1,7 @@
 # Demo script: 3 October 2026 (about 7 minutes)
 
-This is the presenter's script for the live demo. It follows the deck (slides 3, 6, 7 and 8). Every
+This is the presenter's script for the live demo. It follows the round-1 deck (slides 3, 6, 7 and 8;
+the final deck has its own outline in `docs/06-delivery/final-deck-and-video-script.md`). Every
 number and string below comes from the SPEC (§4.3, §9.6, §13.4, §13.6, §17.2) and is asserted by
 `make test-slow` (golden numbers) and `make demo-check`. **If the console shows anything different
 from this page, stop and run `make demo-check` before going on.**
@@ -61,9 +62,9 @@ post /api/merchants/S-0142/photo '{}'                   # the loaded scenario's 
 ## 0:00–0:30 · The problem (deck slide 3)
 
 > "Anil runs a tea stall in Parel. On a day of heavy rain his sales fall by more than half, and his ₹600
-> loan instalment is still cut from his settlement. Today, getting paid for that day takes 30 to 60
-> days of forms and documents. Paytm already sees his sales fall, as it happens. With Chhatri, the
-> claim starts itself, and he is paid the same evening."
+> loan instalment is still cut from his settlement. Getting paid for a day like that has typically
+> taken 30 to 60 days of forms and documents. Paytm already sees his sales fall, as it happens. With
+> Chhatri, the claim starts itself, and he is paid the same evening."
 
 ## 0:30–2:30 · Storm replay on the live map (deck slides 3 and 6)
 
@@ -143,8 +144,11 @@ zone was normal.
    send one photo of the hospital slip.*
 3. Send the **sample slip** (`anil_admission_slip.png`: patient "Anil R. Jadhav", admitted
    2025-08-20, "Viral fever", KEM Hospital, Parel).
-   > "The vision model reads the name and dates. The policy engine checks them against KYC
+   > "The slip reader takes the name and dates. The policy engine checks them against KYC
    > (ANIL RAMESH JADHAV) and against the silent day."
+
+   Say "vision model" only if the Sarvam vision badge reads LIVE; with a simulator it is "the slip reader".
+
    Decision **APPROVED ₹1,500**, decided at the minute you send the slip (11:20 if you paused there):
    - Formula: `½ × ₹4,300 = ₹2,150 a day, capped at ₹1,500 × 1 day = ₹1,500` (Hindi
      `₹4,300 का आधा = ₹2,150 प्रतिदिन; सीमा ₹1,500 × 1 दिन = ₹1,500`). ₹4,300 is Anil's usual
@@ -199,9 +203,15 @@ Pav, Z3, not covered) and tap the voice chip **cover**.
 
 ## 6:30–7:00 · Close (deck slide 13)
 
-> "Live in this prototype: Sarvam voice, the policy engine, WhatsApp, the claims console and the Paytm
-> premium link on staging. Sales, the weather replay, KYC, payouts and the lender are simulated and
-> labelled. Code decides the money, and every step is logged."
+WhatsApp and the Paytm premium link are **SIMULATED** on stage: the team has no WhatsApp Cloud API keys
+and no Paytm staging keys, so the phone is the console's simulator and the link is `https://paytm.me/sim-…`.
+Sarvam (speech, chat, slip reading) is live only when `SARVAM_API_KEY` is set. Name only what the header
+badges show as LIVE.
+
+> "What runs live here: the policy engine, the forecast model, the audit chain and the claims console.
+> [Say that Sarvam speech and slip reading are live only if their badges read LIVE.] Simulated and
+> labelled: shop sales, the alert feed, WhatsApp, the Paytm payment link, KYC, payouts, the lender and
+> the Soundbox. Code decides the money, and every step is logged."
 
 ---
 

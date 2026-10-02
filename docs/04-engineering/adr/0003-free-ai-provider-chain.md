@@ -2,127 +2,108 @@
 
 | | |
 |---|---|
-| Status | Accepted |
+| Status | Accepted as a decision, 2 Oct 2026. Implementation status: the Sarvam links are BUILT. The Gemini links, the FALLBACK label, per-component toggles, the forced-fallback switch and the free-tier gate are PLANNED (Wave 2). Accepting the decision is not evidence that the planned parts exist |
 | Owner | Ujjwal Pardeshi |
 | Date | 2026-10-02 |
-| Related | [SPEC §0.1](../../SPEC.md) · [Free-tier stack and setup](../free-tier-stack-and-setup.md) · [Facts and sources (A17, A19)](../../01-strategy/facts-and-sources.md) |
+| Related | [SPEC §0.1, §14](../../SPEC.md) · [AI architecture and guardrails §3](../ai-architecture-and-guardrails.md) · [Free-tier stack and setup](../free-tier-stack-and-setup.md) · [ADR 0001](0001-policy-engine-is-the-only-payout-authority.md) · [ADR 0004](0004-live-simulated-fallback-labels.md) · [ADR 0009](0009-synthetic-data-only-to-free-tier-ai.md) · [Ask Chhatri (fs-05) §10](../../02-product/feature-specs/fs-05-ask-chhatri.md) · [Hospital-cash claim (fs-02) §7.2](../../02-product/feature-specs/fs-02-hospital-cash-claim.md) · [Facts and sources (A17, A19)](../../01-strategy/facts-and-sources.md) |
 
 ## TL;DR
 
-Chhatri uses a provider chain for each AI need: try primary → fallback → deterministic. TODAY: **Grounding** (Ask Chhatri, N2): Sarvam sarvam-105b (free credits) → deterministic templates. **Vision** (slip reading, N3): Sarvam Vision doc-ai (free credits) → Tesseract OCR (offline). **Speech** (N4): Sarvam Saaras/Bulbul (free credits) → browser Web Speech API → tap chips. PLAN (Oct 2–3): Add **Gemini free-tier adapter as the first provider** for N2 and N3, making the chain: 1. Gemini (PLANNED) → 2. Sarvam (existing) → 3. Deterministic fallback. Cognee (memory) and n8n (workflows) are kept optional; the in-process runner is the default. This keeps costs to zero and maximizes demo resilience.
+Every AI need gets an ordered chain of free-tier providers that ends in something deterministic. Gemini comes first where its adapter exists, then Sarvam, then a catalogue template, the simulated reader or a person, depending on the need. A link is in a chain only when fully configured. Each result says which link answered and why (mode, provider, model, fallback reason). No document names a Gemini model or a quota, because both change: the model id is set in an environment variable and chosen from the current free tier in Google AI Studio on the day. Today only the Sarvam links and the simulators exist. The Gemini adapters, the labels and the switches are planned for Wave 2.
 
 ## Context
 
-**TODAY (commit 86575ea, 2 Oct):** Sarvam adapters are live for chat (sarvam-105b), vision (doc-ai), speech (Saaras v3/v4, Bulbul v3) with free starter credits. NO Gemini adapter is integrated yet. NO Tesseract fallback is deployed yet.
+**What exists (BUILT, checked against commit 86575ea on 2 Oct 2026).** Sarvam adapters for chat (default model `sarvam-105b`, setting `SARVAM_CHAT_MODEL`), document reading, speech to text (`saaras:v3`) and text to speech (`bulbul:v3`). The registry builds live adapters when `SARVAM_API_KEY` is set and offline simulators otherwise, and `GET /api/integrations` reports LIVE or SIMULATED for 15 named components. Chat is used for one thing: choosing an intent for UNKNOWN text, from the nine intent values. The rules answer everything else.
 
-**PLAN (2–3 Oct):** The team will add Gemini free-tier adapter as the FIRST provider (PLANNED) for Ask Chhatri (N2) and slip reading (N3). This keeps Sarvam as the second provider and maintains deterministic fallbacks as the final chain link.
+**What does not exist.** Gemini adapters, a FALLBACK mode, per-component toggles, a forced-fallback switch, a free-tier data gate, Tesseract and browser speech recognition. This ADR describes the design for them. It does not say they run.
 
-**Approved free accounts:** Google AI Studio (Gemini free tier, approved for pilot) and Sarvam free credits (approved). WhatsApp Cloud API is not funded. No budget for paid APIs during hackathon.
+**Constraints.** The project uses free tools only. Free tiers have quotas that are not stable and can fail during a demo. The team holds Sarvam free credits. A Google AI Studio key is a Wave 0 task. Content sent to a free tier may be used by the provider (facts A19), so only synthetic data is sent ([ADR 0009](0009-synthetic-data-only-to-free-tier-ai.md)).
 
-**Opportunity:** Free models are now capable. Gemini's free-tier text and vision models handle English and Hindi. Sarvam's chat, Saaras, and Bulbul handle Indian languages and regional contexts well. Tesseract (optional local OCR) is open-source. Fallbacks are fast and deterministic (word lists, regex, templates, browser APIs). Provider chain enables per-component control and ensures demo resilience.
-
-**Sequencing:** if a provider is down or quota-exhausted, the next chain link fires without latency. Per-component toggles (X6 provider panel, H7) let the team choose which provider is active on stage (e.g., use Sarvam only to preserve Gemini quota, or switch to deterministic templates if both are slow).
+**Why a chain.** One free tier is one point of failure. A chain keeps each flow working when a provider is slow, out of quota or down, and the label keeps the demo honest about which link answered. The design puts Gemini first for grounded text and vision on the expectation that it writes Hindi and reads photos well. That expectation is to be measured in the harness (H25), not assumed. Sarvam is built for Indian languages and speech and is already integrated.
 
 ## Decision
 
-**Provider registry** (backend/chhatri/integrations/registry.py, SPEC §0.1). TODAY (as of commit 86575ea): only Sarvam is live. PLAN (Oct 2–3): activate Gemini as provider 1 for N2 and N3.
+**1. One chain per need.** Chains are fixed in order and end deterministically.
 
-| Need | Provider 1 (PRIMARY) | Provider 2 | Provider 3 (FALLBACK) | Status |
-|---|---|---|---|---|
-| Ask Chhatri (N2) grounding | Gemini free tier | Sarvam sarvam-105b (free credits) | Deterministic templates | PLANNED: Gemini Oct 2–3; TODAY: Sarvam LIVE with key |
-| Slip reading (N3) vision | Gemini Vision | Sarvam Vision doc-ai (free credits) | Tesseract hin+eng (local, offline) or REFERRED | PLANNED: Gemini Oct 2–3; TODAY: Sarvam LIVE with key |
-| Intent detection (UNKNOWN only) | Sarvam sarvam-105b (free credits) | Rule-based lexicon | — | TODAY: Sarvam LIVE with key; rules always available |
-| Speech-to-text (N4) | Sarvam Saaras v3/v4 (free credits) | Browser Web Speech API | Tap-to-send chips (no speech) | TODAY: Sarvam LIVE with key |
-| Text-to-speech (N4) | Sarvam Bulbul v3 (free credits) | Browser speechSynthesis | Text only | TODAY: Sarvam LIVE with key |
-| Workflows (orchestration) | In-process runner (code, same day) | n8n CE self-hosted (shown, not live on stage) | — | TODAY: in-process |
-| Memory (optional) | Cognee (open source, optional) | Networkx graph (in-process) | — | TODAY: in-process graph |
+| Need | Chain | BUILT | PLANNED |
+|---|---|---|---|
+| Ask Chhatri answer (N2) | Rules for known intents, then Gemini chat, then Sarvam chat, then a catalogue template | Rules, templates and the Sarvam chat adapter | Gemini chat adapter, the Ask service and its guard (Wave 2) |
+| Intent for UNKNOWN text | Sarvam chat (intent value only, 500 characters at most), then the rules' UNKNOWN | BUILT | Replaced by the Ask path when N2 is on: the model no longer chooses intents |
+| Slip reading (N3) | Gemini vision, then Sarvam Vision (document intelligence), then REFERRED. The simulated reader when the chain has no live link, the data gate is closed or fallback is forced | Sarvam adapter, simulated reader, REFERRED on a read failure | Gemini vision adapter, the pre-check, labels (Wave 2) |
+| Speech to text (N4) | Sarvam, then browser recognition, then typed text with confirmation chips | Sarvam adapter, simulator | Browser recognition, chips (Wave 2) |
+| Text to speech (N4) | Sarvam (demo merchants only today), then browser `speechSynthesis`, then text | BUILT | `POST /api/voice/tts` (Wave 2) |
 
-**Integration flow:**
+Tesseract is a PLANNED later link for slips, after Sarvam and before REFERRED. It is not in the Wave 2 chain and its output would never be given to a model. Workflows and memory are not AI chains: see [ADR 0008](0008-in-process-workflows-on-stage.md) and AI architecture §1.
 
-1. On startup, `build_integrations()` reads env vars (SARVAM_API_KEY, etc.).
-2. If a key is set and the provider is reachable, it is marked LIVE. Otherwise, SIMULATED.
-3. On each call, try primary. If it fails (timeout, quota, error), fall back. Log the switch.
-4. A provider-panel header in the console shows which mode is active for each component (X6, H7).
+**2. Rules for every chain.**
 
-**Free-tier usage limits (A17, A19):**
+1. A link is in the chain only when fully configured: Sarvam needs `SARVAM_API_KEY`, Gemini needs `GOOGLE_API_KEY` and a model id in `GEMINI_MODEL` (name proposed). A Gemini key without a model id leaves Gemini out and the provider panel says "key set, model not set".
+2. Failure falls through to the next link. The BUILT retry plumbing applies: retries only on HTTP 429 and 5xx, at most 3 attempts in all with waits of 0.5 s then 1 s, no retry on a timeout, safe error messages. The default timeout is 10 s and the Sarvam document bound is 60 s. On interactive paths each link gets one attempt, with budgets set in the Wave 2 rehearsal so a chain fits its target (Ask 5 s for at least 95 % of rehearsal questions, slip read 10 s for at least 90 %, both targets and unmeasured).
+3. Every AI-backed result carries `mode`, `provider`, `model`, `fallback_reason` and `attempts` ([fs-05 §10](../../02-product/feature-specs/fs-05-ask-chhatri.md)). SIMULATED means no live path was configured or allowed. FALLBACK means a configured link failed or was blocked and a later link answered. LIVE means the chain worked as designed.
+4. The model id comes from the environment and is echoed in the label. Screens never hard-code a model name. Documents name no Gemini model and no quota, because both change. The Sarvam defaults quoted here are read from the code.
+5. The free-tier data gate of [ADR 0009](0009-synthetic-data-only-to-free-tier-ai.md) is asked before any free-tier link is called.
+6. No provider output sets money ([ADR 0001](0001-policy-engine-is-the-only-payout-authority.md)). Text goes through the guard and fields through schema validation, whatever the provider.
+7. Gemini adapters follow the Sarvam pattern: `integrations/gemini_chat.py` implements the BUILT `ChatModel` protocol and `integrations/gemini_vision.py` implements the BUILT `SlipReader` protocol, both over the shared retry module. The registry gains the status names `gemini_chat` and `gemini_vision` (proposed), which changes the fixed list of 15 names in SPEC §19.2. X6 adds the per-component toggles and `POST /api/integrations/{component}/fallback`.
 
-- Sarvam: free starter credits (amount not published, A17); free-form use covers the demo.
-- Tesseract: no limit (local, open source).
-- Browser Web Speech API: no limit (local).
-
-**Privacy rule:** Send only synthetic demo data to Sarvam (demo merchants like Anil S-0142, sample slips) and never personal data or merchant records (facts-and-sources.md §D: sales data is simulated for now).
+**3. Starting the chain.** At startup `build_integrations()` reads the settings. A component is LIVE when its live adapter is in use and SIMULATED otherwise. FALLBACK appears per result, not per component, because it describes what happened to one request.
 
 ## Alternatives considered
 
-1. **Gemini + Sarvam chain (CHOSEN):** Activate Gemini free tier as provider 1 (Oct 2–3), keep Sarvam as provider 2 (existing code), then deterministic fallback. Pro: best quality (Gemini state-of-the-art for text and vision); Sarvam excellent for Hindi/regional context and speech; flexible provider control (X6 panel); resilient if either provider is slow or down. Con: requires Gemini API key setup; Gemini quota unknown (estimated sufficient for 3–7 min demo); adds code complexity for adapter. Risk: quota exhaustion mid-demo mitigated by fallback chain and per-component toggle.
-
-2. **Sarvam only (rejected):** Keep the current single-provider chain (Sarvam → deterministic fallback). Pro: simpler code (no Gemini adapter); existing code already works. Con: less resilience if Sarvam is down or slow; misses opportunity to leverage Gemini's superior text quality; judges expect "two free-tier providers" per team's pre-demo notes. Outcome: chosen over for Oct 2–3 build, but kept as existing provider 2.
-
-3. **Local-only AI (rejected):** Ollama or TinyLLM on the demo laptop. Pro: no external dependency; no quota; fully offline. Con: latency is high (5–10 min for some models); no good Hindi models in local libraries; slip vision quality poor; demo looks fake. Does not meet judges' expectations for "live AI."
-
-4. **Paid APIs (rejected):** Use Claude API (paid) or other paid providers. Pro: best quality. Con: budget is zero; hackathon is student phase, not production; demo risk if quota exhausted mid-show; not in spirit of free-tier challenge. Deferred to post-hackathon roadmap.
-
-5. **Mock all AI (rejected):** Deterministic simulators everywhere (no external calls). Pro: fully deterministic; no quota risk; simple setup. Con: demo looks fake; judges see "vision" reading embedded JSON, not a real model; fails the "live AI" expectation. Kept only as fallback when providers are unavailable.
+1. **Gemini first, Sarvam second, deterministic last (chosen).** Two providers give resilience and let each be switched off to protect its quota. The cost is an adapter, a chain and labels to build and test, and a Google AI Studio key.
+2. **Sarvam only (the BUILT state).** Simplest, and it already works. One free tier is a single point of failure, and a second provider cannot be compared against it. Kept as the second link and as the state when no Gemini key is set.
+3. **Local models only.** No external dependency and no quota. The team has not evaluated local model quality or latency for Hindi grounding or slip reading, and evaluating them would cost time the waves do not have. Not chosen for Wave 2. A pilot with real data needs a processor decision under ADR 0009 and this stays open.
+4. **Paid APIs.** Rejected by the project rule that only free tools are used.
+5. **Simulators only.** Fully deterministic and always available, but nothing live to evaluate or show. Kept as the last link and for tests, never presented as live.
 
 ## Consequences
 
-**Positive:**
+**Positive**
 
-- **Zero cost:** Gemini free tier and Sarvam starter credits are both free. Combined quota estimated sufficient for a 3–7 minute demo.
-- **High-quality output with two providers:** Gemini's text and vision models are strong; Sarvam excels at Hindi/regional context and speech. Two providers = two chances for good coverage and fallback resilience.
-- **Resilience:** if Gemini is slow or down, Sarvam fires automatically; if both are slow, deterministic fallback is available. No manual intervention needed.
-- **Privacy-safe:** no real data sent to external services; synthetic demo data only; compliance ready (ADR 0009).
-- **Verifiable:** the provider chain is transparent; every call is logged; X6 provider panel shows which provider was used and its status.
-- **Flexible control:** team can toggle providers on stage (X6 panel, H7) to manage quota and latency in real time.
-- **Deterministic fallbacks:** if both Gemini and Sarvam are unavailable, deterministic templates, Tesseract, and browser APIs still work (no call fails entirely).
+- Zero cost for the prototype.
+- A failing link degrades one flow, not the product, and the label says what happened.
+- Two providers can be compared on the same sets in the evaluation harness (H25).
+- Adapters reuse existing plumbing, so the new code is small and testable with fakes.
 
-**Negative:**
+**Negative**
 
-- **Quota risk:** Gemini and Sarvam free-tier quotas are not published. Demo could exhaust them if used heavily. Mitigation: per-component toggles (X6) let team enable only hero moments; profile quotas on 2 Oct morning.
-- **Code complexity:** Gemini adapter (~200 LOC) adds engineering complexity and test surface area. Mitigated by clear module structure (integrations/gemini_*.py following sarvam_*.py pattern).
-- **Latency variance:** primary + fallback logic adds ~200ms overhead if primary times out before fallback starts. Mitigated by setting tight timeouts (3–5s).
-- **Quality variability:** free models weaker than paid Claude API. Gemini may hallucinate on unfamiliar contexts; Sarvam vision may fail on blurry photos.
+- Free quotas are not stable. They can only be known from AI Studio and the Sarvam dashboard on the day.
+- More code and tests: two adapters, a chain with attempts, labels and switches.
+- Quality is unmeasured. Free models can be wrong. The guard, schemas, the merchant's confirmation and the engine's checks carry the safety, and H25 measures the rest.
+- A failed link spends its time budget before the next one starts, so budgets matter.
 
-**Risks:**
+**Risks and mitigations**
 
-- **Gemini quota exhaustion:** free tier quota unknown; demo could run out mid-show. Mitigate: profile live calls on 2 Oct morning; cache common Ask Chhatri questions; test fallback templates in isolation; team has final say via X6 toggle to disable Gemini on stage if needed.
-- **Sarvam fallback not sufficient:** if both Gemini and Sarvam are down, only deterministic templates remain for Ask Chhatri and Tesseract for slip reading. Mitigate: this is still acceptable (demo shows policy engine works); pre-test templates and Tesseract on demo laptop with no internet (N3 pre-check + N4 offline paths).
-- **Gemini API key exposure:** API key must be in environment or config. Mitigate: never commit to repo; use .env (gitignored); rotate after demo; use strict project-level API quotas in Google Cloud Console.
-- **Provider choice confusion on stage:** if team manually toggles X6 panel during demo, judges may question decision. Mitigate: pre-decide provider strategy (e.g., "Gemini first for text, Sarvam for speech to preserve Gemini quota"); document in setup guide.
+- Quota runs out on stage: per-component toggles and the forced-fallback switch (X6), and a rehearsal that records real call counts.
+- Key exposure: keys are environment-only, `.env` is not committed, and keys are rotated after the event.
+- A model is renamed or retired: the id is an environment variable and is echoed in every label.
+- The two providers behave differently on the same prompt: validation and the guard are provider-independent, and the evaluation runs each provider separately.
+- Provider terms allow reuse of free-tier content: only synthetic data is sent, and the data gate is planned ([ADR 0009](0009-synthetic-data-only-to-free-tier-ai.md)).
 
 ## How we will know it was right
 
-**Signals:**
-
-1. Demo completes with both Gemini and Sarvam live; provider chain switches work as expected (can verify via X6 panel and console logs on 2 Oct evening setup).
-2. Gemini adapter is live by Oct 3, 17:00 UTC; Ask Chhatri questions are answered by Gemini free tier (text quality matches or exceeds Sarvam).
-3. Slip reading extracts name, dates, hospital via Gemini Vision (Oct 3) or Sarvam Vision; ≥80% confidence on demo slips; pre-check catches issues before policy checks run (N3, H5).
-4. Fallback paths (Tesseract, deterministic templates, browser Speech API) work without external calls (tested on the demo laptop with no internet, N3 and N4 offline paths).
-5. X6 provider panel shows correct status for each component (LIVE, SIMULATED, FALLBACK); console logs show provider switches when a primary times out or fails.
-6. Ask Chhatri answers a merchant question in <5 s (Gemini or Sarvam); intent detection in <1 s if both LLM providers are down (rules only).
-7. On 3 Oct 17:00 during the demo, the team can confirm: Gemini API key is active → Gemini is marked LIVE in X6 → at least one Ask Chhatri question is answered by Gemini (verifiable in logs or UI badge).
+1. A chain test with fakes shows the fixed order, skipped unconfigured links, and the right label for every failure reason.
+2. `GET /api/integrations` and the provider panel show per-component status, including "key set, model not set".
+3. The Wave 2 rehearsal measures latency against the two targets and records fallback counts.
+4. A forced-fallback drill completes every flow with the label SIMULATED and reason `FORCED`.
+5. The first harness run (Wave 3) measures each provider separately and shows the numbers on `/evals`. Until then nothing about provider quality is claimed.
 
 ## Follow-ups
 
-- **Task (Ujjwal, Oct 2 morning):** Set up Gemini free-tier API key (Google AI Studio) and verify quota. Profile Gemini latencies on Ask Chhatri (N2) and slip reading (N3) with sample requests.
-- **Task (Ujjwal, Oct 2 afternoon):** Implement Gemini adapter (backend/chhatri/integrations/gemini_*.py) following sarvam_*.py pattern. Add provider registry entries for Gemini as provider 1 for N2 and N3.
-- **Task (Ujjwal, Oct 2 evening):** Test Gemini + Sarvam fallback chain in isolation (unit tests); verify timeout and retry logic.
-- **Task (Team, Oct 2 evening):** Test provider chain on demo laptop with X6 panel toggle. Verify Gemini and Sarvam both report LIVE status; test fallback to Tesseract (N3) and deterministic templates (N2) by unplugging internet or disabling keys.
-- **Task (Team, Oct 3 morning):** Verify Sarvam API key and credits on demo morning; test quota sufficiency with a few live calls (speech, vision, chat).
-- **Task (Team, Oct 3 morning):** Test browser Web Speech API and Tesseract on the demo laptop (N4 fallback, N3 local OCR; must work offline).
-- **Task (Team, Oct 3 morning):** Run end-to-end flow: Ask Chhatri question → Gemini response (verify in logs); upload slip → Gemini Vision extraction (verify badge shows LIVE); verify provider logs show Gemini was called first.
-- **After the hackathon:** Post-demo retrospective: which provider was faster (Gemini or Sarvam)? Which had better quality? Recommend provider priority for production stack (roadmap).
+- **Wave 0, Ujjwal Pardeshi.** Create a Google AI Studio key. Read the current free-tier model list and limits in AI Studio, pick one model that accepts text and images (or two), confirm it returns JSON that matches a schema, and record the choice in the rehearsal notes, not in documents.
+- **Wave 2, Ujjwal Pardeshi.** Gemini chat and vision adapters, the chains with attempts and labels, the new status names, per-component toggles, forced fallback and the data gate (tasks N2.1, N2.10, N3.2, N3.3). Tests with fakes for every failure reason.
+- **Wave 2, Omkar Kadam.** Provider panel and label display (X6, H26).
+- **Wave 2 rehearsal.** Set per-link budgets, decide the stage toggles in advance, and count real calls against the quota shown in the consoles.
+- **Wave 3.** Run the harness per provider and add the measured results to this ADR's changelog.
 
 ## Open questions
 
-1. Can Gemini API quota be increased beyond free tier for the pilot phase (post-hackathon)? Owner: Ujjwal Pardeshi.
-2. Can Sarvam free-tier credits be extended beyond the starter pack for the pilot? Owner: Ujjwal Pardeshi.
-3. For production (after pilot), should the provider priority be: (a) Gemini first (lower cost, better quality), (b) Sarvam first (existing integration, good Hindi), (c) local Cognee + vector search (no external calls)? Owner: Ujjwal Pardeshi.
-4. Should Tesseract be replaced with a local ONNX model for faster OCR, or is 1–2 s latency acceptable? Owner: Ujjwal Pardeshi.
-5. For Ask Chhatri grounding, should Gemini use the same system prompt and guard logic as Sarvam, or a Gemini-specific prompt? Owner: Ujjwal Pardeshi.
+1. Can the Gemini or Sarvam quotas be raised for a pilot, and at what cost? Owner: Ujjwal Pardeshi.
+2. For production, should the first link be Gemini, Sarvam, or a model run inside the insurer's infrastructure? This depends on ADR 0009 and the processor decision. Owner: Ujjwal Pardeshi.
+3. Should Gemini and Sarvam chat share one system prompt and one guard? The default is yes. A provider-specific prompt is allowed only if the evaluation shows a need. Owner: Ujjwal Pardeshi.
 
 ## Changelog
 
+- 2026-10-02 · v3 · aligned with the code and the Wave 2 specs: decision Accepted while implementation is PLANNED, stated explicitly; one chain per need with BUILT and PLANNED columns; the intent call is Sarvam for UNKNOWN text only and is replaced by the Ask path; Gemini adapters follow the Sarvam pattern with the model id in an environment variable and no model name or quota in documents; Tesseract and browser speech recognition are planned and not in the Wave 2 chain; retry facts corrected (waits of 0.5 s then 1 s); removed the invented adapter size, "judges expect two providers" note, free-tier limits for browser speech, the "marked LIVE if reachable" rule, the status-flapping mitigation and the time-of-day milestones
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes the provider chain (Gemini PLANNED, Sarvam TODAY) and synthetic-only rule for free tiers.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: restored Gemini free tier as PLANNED first provider (Oct 2–3) for N2 and N3; clarified TODAY vs PLAN split; updated context, decision table, alternatives, consequences, signals, and follow-up tasks to reflect provider chain with Gemini primary, Sarvam secondary, deterministic fallback.
 - 2026-10-02 · v1.2 · logic and truth audit fixes: updated provider registry to reflect actual implementation (Sarvam only, no Gemini integrations); revised constraints, consequences, risks, and acceptance signals accordingly.

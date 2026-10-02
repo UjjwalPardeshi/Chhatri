@@ -295,6 +295,6 @@ For a live pilot on real merchants:
 
 ## Changelog
 
-- 2026-10-02 · v1.4 · final consistency pass against the code: corrected training window to 18 Feb–18 Aug 2025 (includes calibration period in fit window per truth sheet).
+- 2026-10-02 · v1.4 · final consistency pass against the code: corrected training window to 18 Feb–18 Aug 2025 (includes calibration period in fit window per the training code).
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: verified model card contains honest framing of simulated training data and circular calibration; no changes needed (compliant with canonical framing).
 - 2026-10-02 · v1 · first draft, from the team's audit of the prototype (commit 86575ea).

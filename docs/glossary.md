@@ -20,22 +20,25 @@ This glossary defines terms used in Chhatri's product, engineering, regulatory a
 | **Annual limit** | Maximum total payout per merchant per policy year. Chhatri's pilot annual limit: ₹30,000. | Policy wording C4; rules.yaml; SPEC §9. |
 | **APPROVED** | A claim decision made by the policy engine (code, not AI) that authorizes a payout. Opposite: REFERRED, DECLINED. | Policy engine (ADR 0001, 0002); decision objects; SPEC §9. |
 | **Area sales index** | Ratio of actual hourly sales in a zone to expected sales for that hour: index = Σ(actual) ÷ Σ(expected). Below 50% for 3 hours, during an alert, triggers an area income claim. | Area claim trigger (K1, ADR 0002); backtest; demo (Z7 37%, Z3 38%). |
-| **Arrears** | Loan instalment(s) past due (not paid by the due date). An EDI holiday cannot be granted if the merchant's loan is in arrears. | EDI holiday (K3, ADR 0006); lending terminology; lender policy. |
+| **Arrears** | Loan instalment(s) past due (not paid by the due date). An EDI holiday cannot be granted if the merchant's loan is in arrears (the check is planned: fix X4; today the lender is simulated). | EDI holiday (K3, ADR 0006); lending terminology; lender policy. |
 | **Ask Chhatri** | A grounded AI assistant that answers merchant questions about coverage, claims and grievances in Hindi and English, with citations to the policy wording. | Feature N2; AI architecture; ask endpoint. |
 | **Backtest** | Historical simulation of Chhatri's trigger and payout logic against real weather data and simulated sales (Jun–Sep 2024, 2025). Shows how many real drops were paid and at what cost. Specification validation, not real-merchant performance prediction. | ML model card; facts-and-sources.md §D. |
 | **Basis risk** | The risk that a parametric insurance trigger (e.g., weather) does not match the actual loss, leaving the merchant uncompensated. Clarke et al. (2012, A8) found 1-in-3 chance of no payout even with total yield loss. | Competitive landscape; ADR 0002; trigger design. |
 | **Bima Bharosa** | IRDAI's online complaint portal for insurance grievances. Complaints must be attended within 14 days. Second step in the grievance ladder after the insurer's GRO. | Regulatory and compliance; grievance ladder; policy wording C9. |
 | **BLOCKED** | A cover-purchase quote outcome (e.g., merchant tries to buy cover during a red alert, or K6 waiting period blocks them). The reason is "New cover starts after the waiting period" / "नया कवर वेटिंग पीरियड के बाद शुरू होता है". Opposite: OK. | Policy engine; cover purchase (K6); SPEC §9.5. |
 | **Broker** | A licensed intermediary (e.g., Paytm Insurance Broking) that distributes insurance on behalf of an insurer. The broker does not underwrite or bear risk. | Regulatory and compliance; A4; policy distribution. |
+| **Build wave** | One of six ordered steps of the 2–3 Oct build (0 setup, 1 demo spine, 2 live AI, 3 trust and rights, 4 judge wow, 5 ship). Everything is P0; the wave sets the order. | [Build plan](06-delivery/build-plan.md); [implementation guide](04-engineering/implementation-guide.md). |
 | **Bulbul** | Sarvam's Hindi text-to-speech (TTS) API (v3). Used for merchant voice notifications. | Feature N4; AI architecture; free-tier stack. |
 | **Case** | An open claim or dispute with a decision id and an SLA (24 hours for resolution). Cases are tracked in the console and the merchant's tracker (e.g., case C-2291). | Policy engine; audit; SPEC §11; product: K5, N1. |
 | **CIS** | Customer Information Sheet; a regulatory document summarising the policy, premium, coverage and contact details given to the merchant before purchase. | Regulatory and compliance; policy wording and CIS; IRDAI requirement. |
 | **Clause** | A section of the policy wording, identified by a clause ID (C1–C12, e.g., C3 "What is covered: hospital cash"). Ask Chhatri cites clauses to support answers. | Policy wording; Ask Chhatri; feature N2; feature specs. |
 | **Cognee** | An open-source memory system that uses a knowledge graph (supports Ollama, Gemini, Claude). Optional in Chhatri; in-process networkx is the fallback. | Free-tier stack; ADR 0003, 0004; optional roadmap. |
+| **Confidence gate** | The slip pre-check rule "ask, don't assume": when a field is read with low confidence, the merchant is asked to confirm it or retake the photo before any check runs (H15, planned). | Feature N3; [fs-02](02-product/feature-specs/fs-02-hospital-cash-claim.md). |
 | **Conformal bound** | A statistical lower bound (approximately p10 quantile) on the expected-sales model, used to prevent false triggers on natural volatility. | Area trigger (ADR 0002); ML model card; rules.yaml. |
 | **Consent** | A merchant's explicit permission to use data for a specific purpose (e.g., "use my sales for cover underwriting"). Purpose-specific and withdrawable. | Regulatory and compliance (DPDP A22); feature N6; policy wording C11. |
 | **Consent manager** | Under DPDP (A22), a designated role that manages data collection, purpose-specific consents and deletion requests. In Chhatri's pilot, Paytm is the data fiduciary; consent is obtained at cover purchase (standing consent for settlement deduction). | DPDP roadmap; regulatory and compliance. |
 | **Contiguous** | Occurring without interruption, e.g., a merchant hospitalized for three contiguous days (20, 21, 22 Aug). | Hospital-cash claim; feature K2, N3, H5. |
+| **Counterfactual** | A line in an explanation that says what would have changed the outcome, for example why Zone 9 got nothing and what would have paid. Generated by the policy engine, never by the AI (H14, planned). | K5 explanations; [fs-09](02-product/feature-specs/fs-09-policy-engine-and-audit.md). |
 | **Data fiduciary** | Entity that decides the purpose and means of data processing. Under DPDP, Paytm is the data fiduciary for sales and slip data. | DPDP (A22); regulatory and compliance. |
 | **DLG** | Default-Loss Guarantee (DLG); an arrangement between Paytm and lender partners on loan loss coverage, with non-public terms. Not a merchant-facing promise. | Regulatory and compliance; lending; A5. |
 | **DPDP** | Digital Personal Data Protection (Act, 2023, India). Rules notified 14 Nov 2025; substantive obligations apply 14 May 2027. Requires consent, breach reporting within 72 h, data minimisation. | Regulatory and compliance; facts-and-sources.md A22, B; policy wording C11. |
@@ -48,6 +51,7 @@ This glossary defines terms used in Chhatri's product, engineering, regulatory a
 | **Exclusion** | A condition or circumstance not covered by the policy (e.g., pre-existing conditions, intentional harm). | Policy wording C7; product design. |
 | **FALLBACK** | A component's status indicating it is running in a degraded mode (e.g., in-process runner instead of n8n, deterministic template instead of Gemini). | ADR 0004, 0008; system architecture; console badges. |
 | **FDI** | Foreign Direct Investment. Not used in Chhatri's core product. |  |
+| **Feature flag** | A switch, off by default, that hides a feature until it is finished; off means the screen is hidden and the endpoint answers 404. | [Build plan](06-delivery/build-plan.md); [implementation guide](04-engineering/implementation-guide.md). |
 | **Fee** | Payment to Paytm for distributing insurance (not collected in demo; charged in pilot). | Business model; premium structure. |
 | **FIR** | Quarterly filing report (for insurance and lending). Not directly used; regulatory compliance matter. | Regulatory and compliance. |
 | **FREE-AI** | RBI's Framework for Responsible and Ethical Enablement of AI (7 sutras: Trust, People First, Innovation, Fairness, Accountability, Explainability, Resilience). Chhatri maps to its principles. | Regulatory and compliance; AI architecture; facts-and-sources.md A23. |
@@ -62,6 +66,7 @@ This glossary defines terms used in Chhatri's product, engineering, regulatory a
 | **Intent** | The merchant's stated action inferred from their message (e.g., REPORT_ILLNESS, ASK_COVERAGE, DISPUTE). Detected via a word list or Gemini. | Conversation; feature N2, N4; SPEC §13.2. |
 | **Insurance Ombudsman** | Government-appointed authority that resolves disputes between insureds and insurers (free to the merchant). Third step in the grievance ladder. | Regulatory and compliance; grievance ladder; policy wording C9. |
 | **IRDAI** | Insurance Regulatory and Development Authority of India. Regulates all insurance in India. Issues licences, master circulars and enforces standards. | Regulatory and compliance; licensing (A4). |
+| **Jargon lens** | Tap any insurance term in the mini-app to see a plain Hindi or English explanation with one example (H20, planned). | Feature N1; [copy deck](03-design/copy-deck.md). |
 | **KYC** | Know Your Customer; identity and account verification. Chhatri checks that the hospital slip patient's name matches the merchant's KYC name (85%+ match). | Regulatory and compliance; feature K2, N3; rules.yaml. |
 | **LightGBM** | A gradient-boosting machine learning library. Chhatri's expected-sales model is trained with LightGBM (quantile regression, p10/p50/p90). | ML model; forecast module; ADR 0002. |
 | **LIVE** | A component's status indicating it is using real API keys and making genuine external calls (opposite: SIMULATED, FALLBACK). | System architecture; ADR 0004; console badges; SPEC §0.1. |
@@ -76,6 +81,7 @@ This glossary defines terms used in Chhatri's product, engineering, regulatory a
 | **Mock** | A simulated implementation (e.g., a mock merchant, mock slip) used for testing without real external calls. | Testing; ADR 0009 (synthetic data). |
 | **NBFC** | Non-Banking Financial Company; lends money but cannot take deposits. Paytm's partner lenders are NBFCs or banks. | Lending; A5. |
 | **n8n** | An open-source workflow automation platform. Chhatri shows n8n as the production orchestration (holds a 30–60 s clock); the demo uses an in-process runner. | Orchestration; ADR 0008; free-tier stack; system architecture. |
+| **Next-best action** | The one clear next step shown at the end of every mini-app screen and chat reply, so the merchant never hits a dead end (H21, planned). | Features N1, N2. |
 | **OCR** | Optical Character Recognition; software that extracts text from images. Chhatri uses Gemini vision, Sarvam Vision, or Tesseract OCR (fallback) to read hospital slips. | Feature N3; AI architecture; free-tier stack. |
 | **Officer** | Chhatri's backend claims operator (persona: Rajesh, a partner insurer's employee) who reviews REFERRED cases (slips with low confidence, disputed amounts). | Product; console (K8); case queue. |
 | **Ollama** | Local LLM inference engine (open source). An optional fallback for Gemini/Sarvam in production (roadmap). | Free-tier stack (optional); AI architecture (roadmap). |
@@ -110,10 +116,11 @@ This glossary defines terms used in Chhatri's product, engineering, regulatory a
 | **STT** | Speech-to-Text; converts voice to text. N4 plan: Sarvam Saaras (LIVE when key set) with browser Web Speech API fallback (planned, 2–3 Oct). | Feature N4; AI architecture. |
 | **Tap to send** | UI affordance allowing a merchant to send a message via a button (no voice needed). Fallback for Sarvam/browser STT. | Accessibility; feature N4. |
 | **Template** | A message format filled with merchant-specific data (e.g., "Dear {merchant_name}, you were paid ₹{amount}"). Templates are deterministic and never LLM-generated for money. | Conversation; messaging; SPEC §13.2. |
-| **Tesseract** | Open-source OCR library with Hindi (hin) and English (eng) support. Planned offline fallback for slip reading (P1, 2–3 Oct). | Feature N3; free-tier stack; ADR 0003. |
+| **Tesseract** | Open-source OCR library with Hindi (hin) and English (eng) support. Planned offline fallback for slip reading (P0, Wave 2). | Feature N3; free-tier stack; ADR 0003. |
 | **Trigger** | An event that initiates a claim (e.g., area sales below 50%, merchant silent for a day). | Claim detection; K1, K2; ADR 0002. |
 | **TTS** | Text-To-Speech; converts text to audio. N4 plan: Sarvam Bulbul (LIVE when key set) with browser speechSynthesis fallback (planned, 2–3 Oct). | Feature N4; AI architecture. |
 | **Underwriter** | An insurance company that assesses risk and decides what to cover. Chhatri's partner insurer is the underwriter; Paytm is the broker/distributor. | Insurance; regulatory; A4. |
+| **Verified-by badge** | A small label on every rule, number or clause shown to a merchant or officer, naming its source (rules version and clause, sales index, alert id, KYC, slip) and its time (H13, planned). | K5, N1 receipt, N2; [fs-09](02-product/feature-specs/fs-09-policy-engine-and-audit.md). |
 | **Waiting period** | Number of days after cover purchase before a merchant can claim (7 days in Chhatri). Prevents abuse. | Feature K6; policy wording C5; rules.yaml. |
 | **Whitelist** | A list of authorized entities or IDs (e.g., demo merchants for free-tier AI). | ADR 0009; security. |
 | **Zone** | A geographic area (one of Z3, Z7, Z9, Z12 in the demo monsoon scenario). Zones trigger area claims together. | Feature K1; geo tagging; demo scenario. |
@@ -135,6 +142,7 @@ None.
 
 ## Changelog
 
+- 2026-10-02 · v1.5 · added build wave, confidence gate, counterfactual, feature flag, jargon lens, next-best action, verified-by badge; arrears check and Tesseract labelled planned
 - 2026-10-02 · v1.4 · final consistency pass against the code
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
 - 2026-10-02 · v1.2 · fact-check pass (second iteration). Refined DLG definition to clarify it is not a merchant-facing promise.

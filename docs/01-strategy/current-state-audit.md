@@ -14,7 +14,7 @@
 - Integrations are honestly labelled LIVE or SIMULATED (`GET /api/integrations` and the console header); every component defaults to a labelled simulator when its keys are unset.
 - The prototype was built 29 Sep–1 Oct 2026 (76 commits, one author; on-site work allowed). Deterministic, auditable, and well-tested.
 - Three critical gaps: the merchant-facing journey is incomplete (mini-app screens not yet visible), AI depth is low without API keys (integrations are simulated), and the circular calibration in the backtest needs honest reframing in pitch and docs.
-- The early fixes (X1–X8) are ≈10 hours of work. New features (N1–N8) are P0 (on-site) and P1 (stretch) tasks.
+- The early fixes (X1–X8) are ≈10 hours of work. Everything (N1–N8, X1–X8 and the adopted ideas) is P0 by team decision on 2 Oct, built in waves behind feature flags.
 
 ## 1. Scope and method
 
@@ -125,7 +125,7 @@ The fixes (X1–X8) are on the critical path for the final demo. The order below
 4. **X5** (0.5 h): Return 404 for unknown merchant, not KeyError. This hardens the demo against off-script inputs.
 5. **X7** (1 h): Add test for merchant-facing copy honesty (avoid promise language, verify money figures match decision facts). Run before every final commit.
 6. **X6** (2 h): Per-component Sarvam toggles and provider panel. This is a stretch if time is tight but makes the AI story more credible.
-7. **X8** (1.5 h): Guard against loan offers during alerts or open claims; cap proactive messages. This is a stretch (P1) but shows ethical product thinking.
+7. **X8** (1.5 h): Guard against loan offers during alerts or open claims; cap proactive messages. It is P0 (Wave 3) and shows ethical product thinking.
 
 **Total effort:** ≈10.5 hours of focused work. Fixable in parallel on 2 Oct evening (Ujjwal) + 3 Oct morning (on-site).
 
@@ -141,8 +141,9 @@ The fixes above are cross-referenced in [build-plan.md](../06-delivery/build-pla
 
 ## Changelog
 
+- 2026-10-02 · v1.6 · priorities updated: everything is P0, built in waves behind feature flags
 - 2026-10-02 · v1.5 · badges are LIVE or SIMULATED (FALLBACK only after X6); catalogue has 51 entries; DEMO.md references fixed
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
 - 2026-10-02 · v1.2 · logic and truth audit fixes
 - 2026-10-02 · v1.1 · fact-check pass: removed private note references; reframed critical gaps descriptively; clarified fix IDs ownership
-- 2026-10-02 · v1 · first draft, from a read of commit 86575ea and the brief review.
+- 2026-10-02 · v1 · first draft, from a read of commit 86575ea and a review of the docs.

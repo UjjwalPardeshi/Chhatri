@@ -15,9 +15,13 @@ live, on 3 October 2026 (hackathon final):
    alert and a rain band hit three zones; at 17:00 the trigger fires; 312 shops are paid at 17:04;
    the next day's loan instalment is paused at 17:05.
 2. **Personal claim on WhatsApp in Hindi** — the shop goes silent; Chhatri checks in; the merchant
-   replies by voice; sends one photo of a hospital slip; is paid the same day.
+   replies by voice; sends one photo of a hospital slip; is paid the same day. On stage this runs in
+   the console's WhatsApp-style phone simulator; live WhatsApp needs the four variables in §0.1, which
+   the team does not have.
 3. **Payout, instalment pause and audit log** — every step is written to a tamper-evident log.
-4. **Premium paid with a real Paytm link (staging)** — through the Paytm payment MCP server.
+4. **Premium paid through a Paytm payment link** — SIMULATED on stage (`https://paytm.me/sim-…`). A
+   staging link through the Paytm payment MCP server needs Paytm credentials (§0.1), which the team
+   does not have.
 5. **Three live tests** (deck slide 8): *"My loss was bigger than that."* → EXPLAINED;
    *hospital slip with a different name* → HUMAN; *"Red alert tomorrow. Cover me today."* → BLOCKED.
 
@@ -492,7 +496,7 @@ precedents from memory (§16) — when there are none the UI shows "No similar p
 
 ## 13. Conversation (`chhatri/conversation/`)
 
-13.1 Channels: WhatsApp (live) and the console phone simulator — same `ConversationService`.
+13.1 Channels: WhatsApp (live only when its variables are set, §0.1) and the console phone simulator — same `ConversationService`.
 Inbound: text, voice (→ STT), image (→ slip flow), button reply. Outbound: text (Hindi line +
 English line, as in the deck), payout card, case chip, voice note (TTS of the Hindi text), and a
 Soundbox announcement event.
@@ -648,9 +652,10 @@ used only by `GET /api/weather/now` (Mumbai rain now, shown as a LIVE widget whe
 `200 {"ok": true, "data": {"step", "status": "done"|"skipped"}}`; any non-2xx stops the n8n run.
 Workflow payloads: `payout` `{decision_id, merchant_id}`; `human-review` `{case_id, merchant_id}`;
 `follow-up` `{case_id}`. Step names: `execute_payout`, `credit_payout`, `pause_instalment`,
-`notify_merchant`, `open_case`, `notify_officer`, `check_case_sla`. Workflows: `payout` (execute_payout → pause_instalment → notify), `human-review`
-(open_case → notify officer), `follow-up` (Wait → check case SLA → notify). The in-process
-`WorkflowRunner` executes the same step list when n8n is absent. n8n never decides: every
+`notify_merchant`, `open_case`, `notify_officer`, `check_case_sla`. Workflows: `payout` (execute_payout → credit_payout → notify_merchant → pause_instalment), `human-review`
+(open_case → notify_officer), `follow-up` (check_case_sla → notify_officer, both at +24 simulated hours;
+there are no Wait nodes, the backend schedules each step at decision time + its offset, §24.5). The in-process
+`InProcessWorkflowEngine` executes the same step list when n8n is absent. n8n never decides: every
 `execute_payout` call is re-validated (decision exists, APPROVED, not executed).
 
 14.6 **Memory** (`MemoryGraph`): `remember(fact)` and `precedents(merchant_id=None, zone_id=None,

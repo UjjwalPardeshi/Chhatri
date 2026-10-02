@@ -73,6 +73,8 @@ These are upper or lower bounds that protect the insurer, the merchant, and trus
 
 ## 4. AI quality metrics
 
+**Current status (2 Oct 2026): none of these is measured yet.** Ask Chhatri (N2), slip pre-check (N3) and voice (N4) are planned, so every number in this section is a target. The labelled sets, the method and where results will appear are in the [AI evaluation plan](../04-engineering/ai-evaluation-plan.md).
+
 These measure how well the AI components perform in their specific tasks.
 
 ### Ask Chhatri (N2)
@@ -191,6 +193,8 @@ This is a **hypothesis to test in the pilot.** If lender default rates on Chhatr
 
 ## 8. Backtest findings
 
+**Read this first.** These are specification checks, not evidence about real merchants: the sales are simulated (driven by real Open-Meteo rainfall) and the trigger was calibrated to the demo numbers, so the calibration is circular by design. Real performance is what a shadow-mode pilot would measure.
+
 **Framing:** Specification validation on simulated sales and real rainfall.
 
 The backtest runs the policy engine (`rules.yaml` pilot-0.1) over simulated merchant sales (driven by real Open-Meteo rainfall, Jun–Sep 2024 and 2025) and measures how often the trigger fires and how often a real loss occurred.
@@ -256,6 +260,7 @@ Where "real drop" = simulator-defined loss of ≥40% of expected sales.
 
 ## Changelog
 
+- 2026-10-02 · v1.5 · AI metrics marked not measured yet (targets only); backtest section opens with the circular-calibration caveat
 - 2026-10-02 · v1.4 · final consistency pass against the code
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: Slip quality and field extraction metrics clarified as Sarvam Vision LIVE, Gemini Vision PLANNED
 - 2026-10-02 · v1.2 · logic and truth audit fixes

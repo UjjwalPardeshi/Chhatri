@@ -11,8 +11,8 @@
 
 - Chhatri is income cover for small merchants where the claim starts itself, decided the same day with no forms.
 - The trigger is the merchant's own sales during an alert; Paytm sees the loss and pays it with an explanation.
-- Chhatri spans insurance (claim), lending (EDI holiday) and fintech (settlement), which among the Track-2 projects we could find in public repos, is unique in combining all three verticals.
-- Positioning: *Chhatri is income cover for India's small merchants where the claim starts itself. Paytm sees the loss in the shop's own sales, pays it the same day with no forms, explains it in Hindi, and gives that day's loan instalment a holiday.*
+- Chhatri spans insurance (claim), lending (EDI holiday) and fintech (settlement), and we found no other public Track-2 project that combines all three verticals in one journey.
+- Positioning: *Chhatri is income cover for India's small merchants where the claim starts itself. Paytm sees the loss in the shop's own sales, pays it the same day with no forms, explains it in Hindi, and asks the lender to give that day's loan instalment a holiday.*
 
 ## 1. The vision
 
@@ -20,7 +20,7 @@
 
 Chhatri protects a merchant's daily income when they are unable to earn. A monsoon hits the city. The merchant's sales collapse. The loan repayment comes due. Today, Chhatri is not there: the merchant waits 30–60 days for a claim decision, submits multiple documents, and pays the loan on time, reducing their ability to stock the next day. The merchant's cash buffer disappears. The next week, they borrow at high rates from a neighbour or sell inventory below cost just to stay afloat.
 
-Chhatri changes this. When Paytm detects that the merchant's sales have dropped during a weather alert, the insurer pays them the same day—no forms, no call, no delay. The merchant's loan instalment gets a holiday for that evening. Paytm explains why in Hindi, showing every number. The merchant can now restock the next morning. The next monsoon, the merchant has a buffer and confidence in the system.
+Chhatri changes this. When Paytm detects that the merchant's sales have dropped during a weather alert, the insurer pays them the same day—no forms, no call, no delay. Chhatri asks the lender to pause that evening's loan instalment, and the lender decides. Paytm explains why in Hindi, showing every number. The merchant can now restock the next morning. The next monsoon, the merchant has a buffer and confidence in the system.
 
 This is what an umbrella should do: keep you dry when the rain falls, give you time to recover, and stay out of your way when the sun is out. Chhatri is that umbrella for the merchant's income.
 
@@ -28,11 +28,11 @@ This is what an umbrella should do: keep you dry when the rain falls, give you t
 
 ### The one-liner
 
-*Chhatri is income cover for India's small merchants where the claim starts itself. Paytm sees the loss in the shop's own sales, pays it the same day with no forms, explains it in Hindi, and gives that day's loan instalment a holiday.*
+*Chhatri is income cover for India's small merchants where the claim starts itself. Paytm sees the loss in the shop's own sales, pays it the same day with no forms, explains it in Hindi, and asks the lender to give that day's loan instalment a holiday.*
 
 छतरी छोटे भारतीय व्यापारियों के लिए आय सुरक्षा है जहां दावा स्वयं शुरू होता है। Paytm दुकान की अपनी बिक्री में नुकसान देखता है, उसी दिन बिना किसी फॉर्म के इसका भुगतान करता है, हिंदी में समझाता है, और उस दिन की ऋण किस्त को छुट्टी देता है।
 
-(Chhatri is income security for small Indian merchants where the claim starts itself. Paytm sees the loss in the shop's own sales, pays it the same day without forms, explains it in Hindi, and gives that day's loan instalment a holiday.)
+(Chhatri is income security for small Indian merchants where the claim starts itself. Paytm sees the loss in the shop's own sales, pays it the same day without forms, explains it in Hindi, and asks the lender to give that day's loan instalment a holiday.)
 
 ## 3. Why Paytm, why now
 
@@ -56,7 +56,7 @@ This is what an umbrella should do: keep you dry when the rain falls, give you t
 
 **The problem:** Weather-driven income loss hits hard. The merchant's best protection—the merchant's own cash sales data—is locked inside Paytm and never reaches the insurer. The insurer guesses from weather or area yields, which do not match Anil's shop. The claim takes 30–60 days. By then, Anil's debt has grown, and his business has lost momentum.
 
-Chhatri solves this. The insurer now sees Anil's sales, decides same-day, and his loan gets a holiday to recover.
+Chhatri solves this. The insurer now sees Anil's sales, decides same-day, and Chhatri asks his lender for an instalment holiday so he can recover.
 
 ## 5. Product principles
 
@@ -115,7 +115,7 @@ The space for parametric income cover is not empty. Riskwolf sells "claimless" i
 
 2. **Settlement-linked payout:** Paytm pays the same evening, not days later. SEWA members wait weeks (A9). Because Paytm settles merchants daily, the insurer can credit the next settlement batch and the merchant sees the money by evening. No separate payout rail, no clearing delays.
 
-3. **The EDI holiday:** Unique to merchant lending on Paytm. When the insurer pays, the merchant's loan gets a holiday. A lender on Paytm can grant it because it controls the settlement flow. The merchant keeps the full payout to restock; the lender does not lose a repayment (it is deferred, not forgiven). This is not restructuring; it is pre-agreed relief.
+3. **The EDI holiday:** Unique to merchant lending on Paytm. When the insurer pays, Chhatri asks the lender to pause the next instalment, and the lender decides. A lender on Paytm can grant it because it controls the settlement flow. The merchant keeps the full payout to restock; the lender does not lose a repayment (it is deferred, not forgiven). This is not restructuring; it is pre-agreed relief.
 
 Together, these three moves reduce the time from loss to money from 30–60 days to hours. A monsoon hits at noon. By 17:00, Anil is paid and his next day's stock is secured.
 
@@ -129,7 +129,7 @@ Chhatri is not an island. It is built on top of Paytm's existing infrastructure,
 
 - **Soundbox:** Paytm's speaker hardware in the shop broadcasts messages in Hindi. A Soundbox announcement of the payout is immediate and in the merchant's language. No SMS cost, no app-push fatigue.
 
-- **Lending:** Partner NBFCs and banks distribute loans through Paytm, repaid via EDI. The lender's decision to grant an EDI holiday is a business logic rule already in place. Chhatri requests it via API; the lender's system grants or denies it per policy.
+- **Lending:** Partner NBFCs and banks distribute loans through Paytm, repaid via EDI. The lender would decide whether to grant an EDI holiday under a rule agreed in a pilot; no lender has agreed yet, and the lender is simulated in the prototype. Chhatri requests it via API; the lender's system grants or denies it per policy.
 
 - **Insurance distribution:** Paytm Insurance Broking (IRDAI licensed, A4) distributes the product. Paytm does not underwrite; it facilitates. The partner insurer sets policy terms. Paytm operates the claims engine, consistent with the SPEC.
 
@@ -143,5 +143,6 @@ This ecosystem fit is why the idea works. Chhatri is not a new payout system or 
 
 ## Changelog
 
+- 2026-10-02 · v1.2 · EDI holiday worded as the lender's decision; uniqueness claim hedged
 - 2026-10-02 · v1.1 · final consistency pass against the code
 - 2026-10-02 · v1 · first draft.

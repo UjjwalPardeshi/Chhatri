@@ -9,6 +9,8 @@
 
 ## TL;DR
 
+- Setup for the mini-app's Tailwind CSS v4 + shadcn/ui (scoped to `frontend/src/miniapp/`), the feature flags and the Gemini and Sarvam key checks is in [implementation guide §2](implementation-guide.md) (Wave 0).
+
 - Every component is LIVE when its API key is set, otherwise SIMULATED and labelled.
 - Sarvam (free starter credits) is approved and live on 3 Oct; Gemini Flash free tier (PLANNED, N2/N3) will accept **only synthetic data** (demo merchants, sample slip images) when integrated.
 - All other integrations are free or in-process (n8n, Cognee, Open-Meteo).
@@ -250,6 +252,7 @@ Before the final demo on 3 Oct, verify:
 
 ## Changelog
 
+- 2026-10-02 · v1.6 · linked the Wave 0 setup (Tailwind and shadcn, flags, key checks) in the implementation guide
 - 2026-10-02 · v1.5 · second fact-check pass: corrected env var name GEMINI_API_KEY → GOOGLE_API_KEY to match section 2.1 and ADR 0004.
 - 2026-10-02 · v1.4 · final consistency pass against the code: corrected status column for Speech-to-text and Text-to-speech rows to show SIMULATED (canned) or LIVE with key (not FALLBACK, which only exists with X6); marked browser Web Speech API as PLANNED.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: Gemini reframed as PLANNED (N2/N3 integration pending); TL;DR and status table updated to clarify Sarvam LIVE and Gemini PLANNED; privacy rule reframed for free-tier constraint; latency target labeled as assumption not verified.

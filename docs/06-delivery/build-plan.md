@@ -2,298 +2,386 @@
 
 | | |
 |---|---|
-| Status | Draft v1 · 2 Oct 2026 |
-| Owner | Omkar Kadam and Ujjwal Pardeshi |
-| Audience | The team, judges, mentors tracking progress |
-| Related | [Risk register](risk-register.md) · [Demo runbook](demo-runbook.md) · [Current-state audit](../01-strategy/current-state-audit.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) |
+| Status | v3 · re-baselined on the afternoon of 2 Oct 2026. Wave 0 has started in the working tree and has not passed a checkpoint. Nothing else in N1–N8, X1–X8 or H13–H26 is built yet |
+| Owner | Omkar Kadam (mini-app, console, design, copy, pitch) · Ujjwal Pardeshi (backend, engine, AI adapters, evals) |
+| Audience | The two of us, and anyone tracking progress |
+| Related | [Risk register](risk-register.md) · [Demo runbook](demo-runbook.md) · [On-site checklist](on-site-checklist.md) · [Final deck and video script](final-deck-and-video-script.md) · [PRD](../02-product/prd.md) · [Implementation guide](../04-engineering/implementation-guide.md) · [Data model and API](../04-engineering/data-model-and-api.md) · [Testing and quality strategy](../04-engineering/testing-and-quality-strategy.md) · [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) · [Current-state audit](../01-strategy/current-state-audit.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) |
 
 ## TL;DR
 
-- **2 Oct (today):** Read docs and set up keys. Ujjwal builds fixes X1–X6 and backend N2–N3. Omkar builds N1 screens and policy wording. Evening: integrate, static deploy, first rehearsal.
-- **3 Oct (on-site, ~8 hours reported):** Finish N1–N4, optionally N5–N8. Freeze 90 min before demo. Run from in-process runner with true LIVE badges only.
-- **Critical path:** N1 screens (Omkar) → N1 API endpoints and mocks → demo runbook copy (Omkar) → rehearsal. Any slip here costs the full demo window.
-- **Commits:** Each person commits their own work daily under their own name. No merge conflicts; Omkar does docs, Ujjwal does code and infra.
+- **Everything is P0** (team decision, 2 Oct): N1–N8, X1–X8, H1–H26 and a console polish for the projector. We do not cut scope. We build in six waves, with two tracks in parallel, and close each wave at a checkpoint with written pass criteria.
+- **Unfinished work is hidden, never shown half-working.** Every new feature sits behind a flag that starts off. If time runs out we hide features in a fixed order ([section 7](#7-hide-order-if-time-runs-out)). That is a hide order, not a cut list.
+- **Waves:** 0 setup · 1 demo spine · 2 live AI · 3 trust and rights · 4 judge wow · 5 ship.
+- **Wave 0 has started.** The working tree already holds a flag registry (14 flags, all off), `make check-keys` and the Tailwind and shadcn scaffold for the mini-app. None of it is committed or has passed a checkpoint. CP0 reviews it, runs the suites and commits it.
+- **Two tracks.** Omkar builds the mini-app and the console on the in-browser mock. Ujjwal builds the routes, the engine changes and the AI adapters. The JSON contracts in the feature specs let both start at once, and they meet at a contract test in Wave 1.
+- **Critical path:** the X4 wording change, then the cover, claims and receipt routes, then the mini-app on live data (Wave 1), then the Gemini and Sarvam chain with labels (Wave 2), then everything that shows an AI label. The mock keeps the screens moving while the routes land.
+- **The freeze is 90 minutes before our slot, and the slot time is not announced.** This plan has no clock times. Work out the freeze the moment the slot is known ([section 8](#8-pace-the-freeze-and-the-order-of-the-day)).
+- **The honesty floor is never hidden:** the LIVE, SIMULATED and FALLBACK labels, the honest-wording test and the disclosure line.
 
-## 1. Objectives
+## 1. Where we start
 
-### 2 Oct (today)
+| Area | BUILT today (commit 86575ea) | PLANNED in this plan |
+|---|---|---|
+| Features | K1–K8: area auto-claim, hospital-cash claim, EDI holiday (an unconditional pause today), deterministic policy engine (`rules.yaml` pilot-0.1), explanations and disputes, cover purchase with the waiting period, hash-chained audit, claims-officer console | N1–N8, X1–X8, H1–H9 and H12–H26. H10 and H11 (Hindi and English) are built |
+| Backend | FastAPI and SQLite, 39 route handlers in 12 routers | The new routes in [section 3](#3-waves-and-tracks) |
+| Frontend | React 19, Vite 8, TypeScript console with plain CSS tokens, an in-browser mock backend (`npm run dev:mock`), a WhatsApp-style phone simulator | The merchant mini-app with Tailwind v4 and shadcn/ui, scoped under `.miniapp`. The console keeps its plain CSS |
+| AI | Sarvam adapters (STT, TTS, chat, vision), LIVE when `SARVAM_API_KEY` is set, labelled simulators otherwise. Intents come from word lists, and the chat model sees just the text the lists cannot classify (UNKNOWN) | Gemini free tier at the head of the chain, then Sarvam, then templates (N2) or a person (N3). Browser speech. The FALLBACK status arrives with X6 |
+| Always SIMULATED | Sales, alerts, KYC, payouts, the lender, Soundbox, WhatsApp, the Paytm link | Unchanged |
 
-- Validate all external APIs (Gemini, Sarvam, browser speech) on the demo laptop.
-- Land X1–X6 (fixes). X1 (frontend tests) is critical; X4 (EDI guard) is new product logic.
-- Complete N1 (mini-app) screens, API endpoints and backend logic. This is the judges' window into the merchant journey.
-- Write and illustrate all policy wording (docs/02-product/policy-wording-and-cis.md).
-- Build N7 (static mock-mode console and backup video) for the public-repo fallback.
-- Rehearse 3-min and 7-min cuts. Identify timing holes and bottlenecks.
+**Baseline every checkpoint must hold or improve** (commit 86575ea): backend 1,711 fast and 36 slow tests at 99.7% coverage; frontend 262 of 264 (X1 fixes the other 2); infra 118; `make demo-check` 70 of 70; Playwright e2e 21. New tests raise these counts, so a checkpoint reads "no failing test and no drop in coverage", not a fixed total.
 
-### 3 Oct (on-site)
+**Started in the working tree on 2 Oct, not committed and not yet checked at a checkpoint:**
 
-- Polish N1–N4 (especially mini-app UX, voice latency, slip pre-check flow).
-- Optionally land N5 (grievance ladder) and N6 (consent centre).
-- Stretch goal: N8 (Marathi) if time allows.
-- Freeze code 90 minutes before the first demo slot and run two final rehearsals.
-- Go to stage with in-process runner, LIVE badges only for truly live components (Gemini key set → N2/N3 LIVE; Sarvam key set → N4 LIVE; browser speech fallback always available).
-- **Key message:** "Specification validation on simulated sales with real rainfall."
+- **The flag registry.** `frontend/src/features.ts` and `backend/chhatri/features.py` list the same 14 flag names ([section 6](#6-feature-flags)). The backend reads `CHHATRI_FEATURES`, the console reads `VITE_FEATURES`, an unset list means every flag is off, and a flagged route that is off answers 404 `not_found`.
+- **`make check-keys`** (a new target, `scripts/check_keys.py`). It reports `SARVAM_API_KEY` and `GOOGLE_API_KEY` as SET or NOT SET without printing them. With a Google key it lists the Gemini models that key can call, through the free model-list call, and makes no generation call.
+- **The mini-app scaffold.** Tailwind v4 through `@tailwindcss/vite` (the 2 Oct registry check shows it lists Vite 8 as a peer, and `@tailwindcss/postcss` stays the fallback), `frontend/components.json`, shadcn files under `frontend/src/miniapp/ui/`, `MiniappRoot` and `miniapp.css`.
+- **A longer frontend test timeout** (`vitest.config.ts`, `src/test/setup.ts`). It may fix X1. That is unconfirmed until every frontend test passes.
 
-## 2. Tasks and dependencies
+## 2. Ground rules
 
-| ID | Description | Component | Owner | Est (h) | Dependency | Priority | When | DoD | Verification |
-|---|---|---|---|---|---|---|---|---|---|
-| **Setup** | | | | | | | | | |
-| SETUP-1 | Read all docs from README.md down (especially SPEC.md, ARCHITECTURE.md, DEMO.md). | docs | Both | 1.5 | — | P0 | 2 Oct 08:00–09:30 | Both understand the system and can explain it in 2 min. | "I can explain the trigger and the policy engine." (verbal check) |
-| SETUP-2 | Set up Gemini API key in `.env`. Test on `/api/merchants/{id}/ask` with a synthetic question. | infra | Ujjwal | 0.5 | SETUP-1 | P0 | 2 Oct 09:30–10:00 | Key is set, `/api/integrations` shows Gemini LIVE, test response is grounded. | `curl http://localhost:8000/api/integrations \| grep gemini` and test ask endpoint. |
-| SETUP-3 | Set up Sarvam key. Test STT, TTS, vision on demo laptop with sample slip and voice input. | infra | Ujjwal | 1 | SETUP-1, SETUP-2 | P0 | 2 Oct 10:00–11:00 | Sarvam components respond. STT latency < 3 s. TTS voice is audible. Vision extracts slip fields. | Transcript in logs, audio plays, vision response in `/api/merchants/{id}/slip-precheck`. |
-| SETUP-4 | Test browser speech recognition (hi-IN) on demo laptop. Confirm microphone and speaker. Zoom at 100%, screen ≥ 1280×720. | hardware | Both | 0.5 | — | P0 | 2 Oct 10:30–11:00 | Browser detects hi-IN, microphone input works, output audible, no zoom. | Verbal: "Speech works offline." Run e2e speech test on the demo machine. |
-| **Fixes (X1–X8)** | | | | | | | | | |
-| X1 | Fix the 2 failing frontend tests (Cases panel, Overview live-map). Run `make test-frontend` → 264/264 pass. | frontend | Ujjwal | 2 | SETUP-1 | P0 | 2 Oct 09:00–11:00 | Tests pass. Coverage ≥ 80%. | `make test-frontend` shows 264/264 pass; `git log --oneline -1` shows X1 commit by Ujjwal. |
-| X2 | Validate `published_expected_day` at claim creation (Paytm API call or simulator). Reject invalid zones. | backend | Ujjwal | 1.5 | SETUP-1 | P0 | 2 Oct 11:00–12:30 | Claim creation fails with a 400 and a clear error if the expected day is invalid or the zone is missing. | Test with a bad zone in the `/api/claims` POST; verify error response. Unit test in `test_claims.py`. |
-| X3 | Fail loudly when a zone is missing from `backend/artifacts/premiums.json`. Add a startup check. | backend | Ujjwal | 1 | SETUP-1 | P0 | 2 Oct 12:30–13:30 | Server logs show a clear error at start-up if a zone in rules.yaml is not in premiums. | Start the backend with a missing zone; verify the error is logged and the zone name is clear, not a cryptic KeyError. |
-| X4 | EDI-holiday guard: check that the loan is active, not in arrears, and holiday allowance not exhausted before requesting the lender. | backend | Ujjwal | 1.5 | SETUP-1 | P0 | 2 Oct 13:30–15:00 | Decision record includes `edi_holiday_requested: true` only if all three checks pass. If any check fails, the holiday is not requested but the claim decision is unchanged. | Unit test with three merchants (one active, one in arrears, one out of holidays). Verify decision diff. |
-| X5 | Off-script merchant (unknown ID, no KYC, not in the index) returns a clean 404, not a KeyError. | backend | Ujjwal | 1 | SETUP-1 | P0 | 2 Oct 14:00–15:00 | Return `{"error": "merchant not found", "code": "NOT_FOUND"}` with a 404. | Test `/api/merchants/bad-id/cover` and verify a 404 with a clear message, not a 500. |
-| X6 | Per-component Sarvam provider panel (proposed): implement toggles for assist, STT, TTS, slip (or stub for future). Add provider status to `/api/integrations`. | backend, frontend | Ujjwal | 3 | X1, SETUP-3 | P1 | 2 Oct 15:00–18:00, 3 Oct (if time) | `/api/integrations` includes `sarvam_providers: {assist, stt, tts, slip}` with LIVE/FALLBACK status. Console shows a provider panel (demo-mode only). | Inspect `/api/integrations`; visually inspect the console provider panel if built. X6 is a polish task; land it if X1–X5 are done by 15:00. |
-| X7 | Honest-wording test: fail if merchant-facing copy promises (guaranteed, 100%, always), shows an unsupported money figure, or says "paid" before payout exists. | backend | Ujjwal | 1.5 | SETUP-1 | P0 | 2 Oct 15:00–16:30 | New test in `test_messages.py` covers the message catalogue; all pass. | Run `pytest backend/tests/conversation/test_messages.py::test_honest_wording -v`. |
-| X8 | No-distress-offers rule: reject loan, top-up and cross-sell messages when an alert covers the zone, a claim or dispute is open. Daily message cap. | backend | Ujjwal | 2 | X4, SETUP-1 | P1 | 2 Oct 16:30–18:30, 3 Oct (if time) | Decision tree includes a `suppress_proactive_offers: true` flag. Backend logs show suppressed messages. | Unit test with two merchants (one in alert, one not). Verify the flag and the suppression. |
-| **Core product: N1 (mini-app)** | | | | | | | | | |
-| N1-screens | Design and build 6 screens: Home, Coverage, Consent+Buy, Tracker, Help, Grievance. Responsive, 375×667 min (phone). Devanagari + English toggle. | frontend | Omkar | 6 | SETUP-1 | P0 | 2 Oct 09:00–15:00 | Screens render without overflow. Links navigate. Forms accept input. Devanagari toggle works. No 404s. | Figma or code review; deploy to a live URL and test on mobile device. |
-| N1-api-routes | `/api/merchants/{id}/cover`, `/api/merchants/{id}/claims`, `/api/merchants/{id}/ask` (frontend calls). Backend returns the right shape. | backend | Ujjwal | 2 | X1, X2, X4 | P0 | 2 Oct 11:00–13:00 | Routes exist. Response envelope matches SPEC §12.1. Mocked in frontend for `npm run dev:mock`. | `curl` the routes and jq the response. Inspect frontend mock responses in `src/mocks/`. |
-| N1-copy | Write all merchant-facing text (Hindi + English) for 6 screens. One reason per step in the tracker (Detected, Checked, Decided, Paid, EDI holiday). Non-committal language (no "guaranteed"). | docs | Omkar | 2 | SETUP-1 | P0 | 2 Oct 10:00–12:00 | Copy is in `backend/chhatri/conversation/messages.py` and docs/02-product/policy-wording-and-cis.md. Each step has one plain sentence in Hindi and English. No unsupported claims. | Read the copy aloud. Check against X7 (honest-wording test). Commit by Omkar. |
-| N1-edi-text | Write the two variants of EDI-holiday text (lender grants vs insurer pays the instalment). | docs | Omkar | 0.5 | N1-copy | P0 | 2 Oct 12:00–12:30 | Text is in messages.py and the policy wording. "The lender has approved a holiday for your next instalment" vs "Your payout covers the instalment." No unilateral language. | Read aloud; verify with the K3 (EDI holiday) feature definition. |
-| N1-integration | Integrate N1 screens into the console layout. Mini-app nav, state passing, merchant selection. Test the Anil and Ramesh personas. | frontend | Omkar | 2 | N1-screens, N1-api-routes | P0 | 2 Oct 13:00–15:00 | Mini-app is accessible from the main console. Can switch merchants (Anil, Ramesh, etc.). Can replay scenarios. | Navigate through the console and manually test the N1 flow in the demo (monsoon scenario). |
-| **Core product: N2 (Ask Chhatri backend and voice)** | | | | | | | | | |
-| N2-backend | Implement `/api/merchants/{id}/ask` endpoint with Gemini ⊃ Sarvam ⊃ templates fallback. Add guardrails: grounding, clause citations, no unsupported money figures. | backend | Ujjwal | 3 | SETUP-2, X7 | P0 | 2 Oct 11:00–14:00 | Endpoint responds with `{answer, citations, provider, handoff}`. Guard rejects bad claims. Backend logs show the fallback path. Unit tests cover all three providers. | `curl` with a grounding test (e.g. "Why 1500?") and a non-grounded test (e.g. "Will I get 10000?"). Verify the guard blocks the second. |
-| N2-voice | Implement voice input (STT) and output (TTS) in the frontend. Sarvam ⊃ browser speech ⊃ text-only fallback. Latency target < 3 s. | frontend | Ujjwal | 2 | SETUP-3, N2-backend | P0 | 2 Oct 14:00–16:00 | Voice button records, STT is transcribed, backend is called, TTS plays the response. Fallback chain works without internet. | Test on demo laptop: ask "मुझे इतने ही पैसे क्यों मिले?" and verify the response is audible and grounded. |
-| **Core product: N3 (Slip reading)** | | | | | | | | | |
-| N3-backend | Implement `/api/merchants/{id}/slip-precheck` with Gemini Vision ⊃ Sarvam Vision ⊃ Tesseract fallback. Extract patient name, dates, hospital. Show a 3-item checklist (readable, name match, dates). | backend | Ujjwal | 3 | SETUP-2, SETUP-3 | P0 | 2 Oct 14:00–17:00 | Endpoint returns `{extracted, confidence, checklist_items, ready, provider}`. Pre-check happens before the hard checks. Sample slip from repo extracts correctly. | Upload sample slip from `backend/data/slips/` to `/api/merchants/{id}/slip-precheck`; verify extracted fields and checklist. |
-| N3-frontend | Build the slip-upload UX in the mini-app. Show extracted fields, checklist, and a retake button. Re-run pre-check on each upload. | frontend | Omkar | 2 | N3-backend, N1-screens | P0 | 2 Oct 15:00–17:00 | Photo input is shown as a file picker. Extracted fields are displayed with confidence badges. Checklist shows pass/fail for each item. Retake button re-uploads and updates. | Manually test the flow with a sample slip on the console. Verify the checklist clears on retake. |
-| **Core product: N4 (Voice I/O)** | | | | | | | | | |
-| N4-stt-tts | Already covered in N2-voice and X6 (provider toggles). Ensure Sarvam STT (v3/v4) and TTS (Bulbul) fall back to browser speech and text-only. | backend, frontend | Ujjwal | 1 | SETUP-3 | P0 | 2 Oct 16:00–17:00 | Both STT and TTS are tested with Sarvam live, then with Sarvam key disabled (fallback). Logs show provider used. | Test speech with key enabled, then disable `SARVAM_API_KEY` and test again. Verify fallback works offline. |
-| **Documentation and policy** | | | | | | | | | |
-| DOC-policy | Write and illustrate `docs/02-product/policy-wording-and-cis.md`: clauses C1–C12 with the full wording, exclusions, caps, waiting period, EDI, dispute SLA, consent, cancellation. Include a Customer Information Sheet (CIS). | docs | Omkar | 3 | SETUP-1 | P0 | 2 Oct 10:00–13:00 | All 12 clauses are written and consistent with rules.yaml (pilot-0.1). CIS is one page, clear language. Clause IDs C1–C12 are canonical. | Link and verify against the K1–K8 feature definitions and the policy-wording-and-cis.md structure. Run X7 test to verify no unsupported promises. |
-| DOC-other | Write `docs/01-strategy/problem-statement-analysis.md`, `current-state-audit.md`, `competitive-landscape.md`. | docs | Omkar | 4 | SETUP-1, DOC-policy | P0 | 2 Oct 13:00–17:00 | All three docs are linked and cross-reference each other. Facts are from facts-and-sources.md with IDs (A1–A25). Rival projects are named (not individuals). Tone is honest and non-disparaging. | Structure: problem-statement-analysis maps track statement to features; current-state-audit lists strengths and needed fixes (X1–X8); competitive-landscape names rival projects and credits ideas adopted (H1–H12). Omit any PII. |
-| **Demo and deployment** | | | | | | | | | |
-| N7-static-build | Build the console in mock mode (`npm run build -- --mode mock`) with a permanent SIMULATED banner. Deploy to GitHub Pages or Vercel Hobby. Test from a clean browser (no cache). | frontend, infra | Ujjwal | 1.5 | X1, N1-api-routes | P0 | 2 Oct 17:00–18:30 | `frontend/dist/` is built. GitHub Pages or Vercel is updated. The URL works and shows the monsoon scenario. The SIMULATED banner is visible. | Visit the public URL from a phone on a different network. Navigate through the monsoon scenario. |
-| X9 | API keys for live AI: Gemini and Sarvam | backend, infra | Ujjwal | 0.5 | SETUP-2, SETUP-3 | P0 | 2 Oct 10:00–11:00 (set up early) | Keys are in `.env`. The console header shows LIVE badges for Gemini and Sarvam when keys are active. With keys: Ask Chhatri and slip reading use Gemini/Sarvam APIs. Without keys: SIMULATED and labeled. | Check `curl localhost:8000/api/integrations` to confirm LIVE status for each provider. Test Ask Chhatri with a real API call (look for latency). |
-| N7-video | Record a 7-minute narrated walk-through of the console (mock mode or replay) showing all key flows: area claim, hospital-cash claim with slip, tracker, grievance, audit. | media | Omkar | 2 | N7-static-build | P0 | 2 Oct 18:00–20:00 (optional, 3 Oct if late) | Video is ≤ 7 min, shows all flows, audio is clear, uploaded to YouTube or stored locally on demo laptop. | Play it back at 1× speed; confirm all flows are visible and narration is audible. |
-| RUNBOOK-3min | Write the 3-minute demo script: hook (Anil's rainy day), live map trigger, payout, voice question, close. Cue every screenshot and number. | docs | Omkar | 1.5 | DOC-policy, N7-video | P0 | 2 Oct 19:00–20:30 | Script is in `docs/06-delivery/demo-runbook.md` with time codes, every number verified from docs/DEMO.md and docs/SPEC.md. Voice question and expected answer are scripted. | Read aloud at the planned pace; time it to 3 min ±10 s. |
-| RUNBOOK-7min | Write the 7-minute script: everything in 3-min, plus hospital-cash claim with slip reading, three test outcomes (EXPLAINED, REFERRED, BLOCKED), audit, honest backtest, pitch. | docs | Omkar | 2 | RUNBOOK-3min | P0 | 2 Oct 20:30–22:30 | Script is complete with 7-min time codes and all numbers verified. All new features (N1–N4) are covered. | Read aloud; time to 7 min ±15 s. Practise with Ujjwal once. |
-| **Rehearsal and polish** | | | | | | | | | |
-| REHEARSE-1 | First run-through: both follow the 3-min script on the dev console. Time, find bottlenecks, verify all integrations. Record or screenshot key moments. | demo | Both | 1 | RUNBOOK-3min | P0 | 2 Oct 22:30–23:30 (or 3 Oct 08:00–09:00) | Both can deliver the 3-min cut without looking at notes. Voice response time is <2 s. All numbers match. | Time it: < 3 min 10 s. Verify numbers (Z7 37%, ₹1,380, ₹58,900, 46 shops) against docs/DEMO.md. |
-| REHEARSE-2 | Second run-through: 7-min cut, with Q&A roleplay (one person is a judge). Identify weak points and polish answers. | demo | Both | 1.5 | RUNBOOK-7min | P0 | 3 Oct 09:00–10:30 (before on-site window) | 7-min cut is smooth, under 7 min 15 s. Answers to likely judge questions are ready. No "um", no hesitation on key facts. | Record this run and review for pacing. Check that every claim is hedged (e.g., "on simulated sales with real rainfall"). |
-| POLISH | Final polish on-site: update copy if any fixes land, test all integrations one more time, time the cuts, verify rehearsal video plays. Freeze code 90 min before first demo. | both | Both | 1 | REHEARSE-2 | P0 | 3 Oct 10:30–11:30 | All X1–X8 and N1–N4 are in the final build. No last-minute commits after freeze. | `git log --oneline -20` shows the last commit is >90 min before your demo slot. `make demo-check` passes. |
+1. **Waves set the order.** Work in wave order. A track may start the next wave's backend or mock work once its own tasks in the current wave are done, but a screen is never built on top of a failing checkpoint.
+2. **Flags start off.** A flag turns on when, and not before, its acceptance criteria (in its feature spec) pass, its wave checkpoint passes, and both of us agree ([section 7](#7-hide-order-if-time-runs-out) has the veto rule).
+3. **Off means absent.** A flag that is off removes the screen, and its endpoints answer 404 `not_found`. With every flag off, the console and every golden flow behave as they do today.
+4. **The honesty floor never moves.** Labels, the honest-wording test (X7), "the AI builds the case, code decides the money" and the disclosure line stay in every build.
+5. **Tests are part of each task.** The spec's "done when" names the test. Backend work starts from a failing test. Each checkpoint runs the full suites.
+6. **One owner per shared file per wave.** The shared files are `backend/chhatri/conversation/messages.py`, `backend/chhatri/api/demo/golden.py`, `frontend/src/mock/`, `docs/DEMO.md` and `scripts/tests/test_docs.py`. The X4 wording change touches all of them, so it lands at the start of Wave 1, as one change.
+7. **Free tools and synthetic data.** The accounts are the Gemini API free tier (Google AI Studio) and Sarvam free credits, and no others. Synthetic demo data, and nothing else, goes to a free-tier AI service ([ADR 0009](../04-engineering/adr/0009-synthetic-data-only-to-free-tier-ai.md)). Keys live in `.env`, which is never committed.
+8. **The other person runs the checkpoint.** At each checkpoint, the person who did not write the work runs the commands and reads the result aloud.
 
-## 3. Hour-by-hour schedule: 2 Oct (today)
+## 3. Waves and tracks
 
-**Note:** These are planning targets; actual progress will depend on dependencies and blockers. Adjust as needed to hit critical checkpoints.
+Task ids come from the feature specs, which hold the detail and the acceptance criteria. Owners follow our split of the work: Omkar builds the mini-app, console, design and copy. Ujjwal builds the backend, engine, AI adapters and evals.
 
-**Tasks shown sequentially per the Gantt chart (Section 5). X3 and X4 are sequential, not parallel; see Gantt for actual dependencies.**
-
-| Time | Ujjwal | Omkar | Notes |
+| Wave | Goal | Flags that turn on | Closes at |
 |---|---|---|---|
-| 08:00–09:30 | Read docs (SETUP-1) | Read docs (SETUP-1) | Both review SPEC.md, ARCHITECTURE.md, DEMO.md to understand the system. |
-| 09:30–10:00 | Gemini setup (SETUP-2) | — | Test Gemini key and `/api/integrations`. |
-| 10:00–11:00 | Sarvam setup + STT/TTS test (SETUP-3) | Hardware test (SETUP-4) | Ujjwal tests Sarvam on a sample slip. Omkar tests browser speech and screen on demo laptop. |
-| 11:00–13:00 | X1, X2 (frontend tests, validation) | N1-copy (tracker step reasons) | Ujjwal fixes the 2 failing frontend tests. Omkar writes merchant-facing copy. |
-| 12:30–13:30 | X3 (zone guard) | DOC-policy (start: clauses) | Ujjwal implements startup check for zone in premiums.json. Omkar starts the policy wording. |
-| 13:30–15:00 | X4 (EDI guard) | N1-integration (screens in console) | Ujjwal implements EDI-holiday guard checks. Omkar integrates mini-app screens. |
-| 15:00–16:00 | N2-backend (Ask Chhatri) | N1-integration (cont.) | Ujjwal builds grounded-LLM endpoint. Omkar continues N1 integration. |
-| 16:00–17:00 | N2-backend (cont.) + X6 (provider panel) | N1-integration (cont.) | Ujjwal continues N2, optionally starts X6. Omkar continues N1. |
-| 17:00–18:00 | N3-backend (slip pre-check) or X6 | DOC-policy (cont.) + DOC-other (start) | Ujjwal starts slip reading. Omkar continues policy and starts other docs. |
-| 18:00–19:00 | N3-backend (cont.), N4 (voice), X7 | N3-frontend (slip upload UX) + DOC-other | Ujjwal continues backend. Omkar builds the slip UI in the mini-app. |
-| 19:00–20:00 | X7, N4 (fallback chain test) | DOC-policy (final review) + N7-video (start) | Ujjwal finishes honest-wording test and voice fallback. Omkar finalizes policy and starts recording. |
-| 20:00–21:00 | Integration test: `make demo-check` passes 70/70 | DOC-other (review) + N7-video (cont.) | Ujjwal runs the full demo check. Omkar reviews other docs. |
-| 21:00–22:00 | X8 (distress-offer guard, if time) or N7-static-build | N7-video (cont.) + RUNBOOK-3min | Ujjwal optionally lands X8. Both prepare for rehearsal. |
-| 22:00–23:00 | N7-static-build (GitHub Pages / Vercel) | RUNBOOK-3min + RUNBOOK-7min (start) | Ujjwal deploys mock console. Omkar writes demo scripts. |
-| 23:00–23:59 | **Break** | RUNBOOK-7min (finish) | Ujjwal rests 1 h (will start early 3 Oct). Omkar finishes 7-min script. |
-| 23:59–00:30 | REHEARSE-1 (3-min run-through, or move to 3 Oct 08:00) | REHEARSE-1 (3-min run-through) | Both practise the 3-min cut; time it, find gaps. |
+| 0 setup | Everything later waves stand on. Nothing visible turns on | none (all registered, all off) | CP0 |
+| 1 demo spine | Anil's story end to end in the mini-app: home, tracker, receipt, cover. The lender request and its wording | `n1_miniapp`, `x4_lender_request` | CP1 |
+| 2 live AI | Slip pre-check, Ask Chhatri, voice, and the labels that make live AI honest | `n3_slip_precheck`, `n2_ask_chhatri`, `n4_voice`, `x6_provider_panel` | CP2 |
+| 3 trust and rights | Grievances, consent, the distress guard, the evaluation harness | `n5_grievances`, `n6_consents`, `x8_distress_guard`, `h25_evals` | CP3 |
+| 4 judge wow | Console polish, the trigger-to-payout moment, what-if, presenter mode, ops strip, Marathi | `h24_whatif`, `h8_ops_strip`, `console_polish`, `n8_marathi` | CP4 |
+| 5 ship | Static build, backup video, full test run, two rehearsals, freeze | the demo flag set is fixed | CP5 (freeze) |
 
-**Critical dependency:** N1-api-routes (Ujjwal, originally 11:00–13:00 in task table) logically depends on X4 completion. Since X4 now runs 13:30–15:00, N1-api-routes cannot start until X4 finishes. This blocks N1-integration (Omkar, 13:00–15:00), which waits for N1-api-routes. **X4 must finish by 13:30 to unblock N1-integration.** If X4 slips past 13:30, cascade delays threaten the rehearsal window. Monitor X4 progress closely; if it looks like it will slip, escalate or defer non-critical work (X6, X8) to free up Ujjwal's time.
+### 3.1 Wave 0 · setup
 
-**Sleep plan:** Ujjwal targets 7–8 h sleep (23:00–06:00 or 07:00, then 2–3 h cat-nap before rehearsal). Omkar targets 6–7 h; stays up for RUNBOOK and first rehearsal.
+| ID | Task | Owner | Needs | Done when |
+|---|---|---|---|---|
+| X1 | Fix the 2 failing frontend tests (Cases panel, Overview live map). A longer test timeout is in the working tree | Ujjwal | none | `make test-frontend` passes with no failing test (the baseline was 262 of 264) |
+| Flags | The flag mechanism (N1-T02, fs-07 N6-T10). STARTED: the registry is in the working tree. Left to do: review it, get its tests green, commit it, and settle which flag names the specs use ([section 6](#6-feature-flags)) | Omkar (console), Ujjwal (backend) | the [implementation guide](../04-engineering/implementation-guide.md) | AC-02 of [fs-04](../02-product/feature-specs/fs-04-merchant-mini-app.md) passes. With `CHHATRI_FEATURES` and `VITE_FEATURES` unset, every flag is off, flagged routes answer 404 `not_found`, and the console and the golden flows behave as at commit 86575ea. The backend logs the flags that are on at start-up. The console shows them once X6 lands ([fs-08 section 12.1](../02-product/feature-specs/fs-08-claims-officer-console.md)) |
+| N1-T01 | Tailwind v4 and shadcn/ui scoped to the mini-app ([fs-04 section 5](../02-product/feature-specs/fs-04-merchant-mini-app.md)). STARTED. Left to do: check it against AC-05 and AC-06, add every shadcn and 21st.dev component the mini-app needs now, and commit them, so no registry call is needed on 3 Oct | Omkar | none | AC-05 and AC-06 pass: the console tests are unchanged and the build output has no Preflight rule outside `.miniapp` |
+| N1-T03 | `AppFrame` skeleton and the standalone route, behind `n1_miniapp` | Omkar | N1-T01, Flags | AC-01, AC-03, AC-04 |
+| Keys | Key check for Gemini and Sarvam, with the quota and credit numbers written in the checkpoint log (steps below) | Ujjwal | accounts created | CP0 key criteria |
+| Safety net | Prove the static fallback today: `cd frontend && npm run build -- --mode mock`, then `npm run preview`. Note the last known good commit | Omkar | none | The built console opens and plays the monsoon replay on the in-browser mock |
 
-## 4. Hour-by-hour schedule: 3 Oct (on-site, reported ~8 hours)
+**Key check steps (Ujjwal).**
 
-**Note:** These are planning targets for an 8-hour on-site window. The exact demo slot time is not yet announced. Re-baseline this schedule at the start of work on 3 Oct, and freeze code 90 minutes before the actual slot (to be confirmed by organisers).
+1. Put `SARVAM_API_KEY` and `GOOGLE_API_KEY` in `.env` (never committed). Run `make check-keys`. It prints each key as SET or NOT SET, never the value, and with a Google key it lists the Gemini models that key can call. It makes no generation call and uses no quota. Pick the model for `GEMINI_MODEL` (name proposed in [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md)) from that list on the day, and pick one that accepts images, for the slips.
+2. Run the Sarvam smoke test: `cd backend && . .venv/bin/activate && python scripts/live_smoke.py`. It exercises every component whose keys are present, reports the rest as SKIPPED, and never prints secrets. Do not use `--send`. Note the Sarvam credit balance on its dashboard before and after.
+3. Gemini has no adapter until Wave 2, so make one text call and one image call by hand against the model you picked, for example with `curl` and `backend/data/slips/anil_admission_slip.png`. Write down the quota that Google AI Studio shows.
+4. Write the latency of each call. Targets, not measurements: a text answer in 5 s and a slip read in 10 s ([PRD section 5.1](../02-product/prd.md)), one speech call under 3 s ([fs-05 section 18](../02-product/feature-specs/fs-05-ask-chhatri.md)).
+5. Confirm with `curl -s localhost:8000/api/integrations` that the four Sarvam components read LIVE. There is no Gemini row until Wave 2.
 
-| Time | Ujjwal | Omkar | Notes |
+### 3.2 Wave 1 · demo spine
+
+Omkar builds on the mock from the start, so he never waits for a route. Ujjwal builds the real routes. The contract is the JSON in fs-04 section 6 and [data-model-and-api section 5](../04-engineering/data-model-and-api.md). They meet at N1-T21.
+
+**Ujjwal, in this order.**
+
+| # | Task | Spec | Done when |
 |---|---|---|---|
-| 07:30 | Wake, coffee, check `.env` keys | Wake, review pitch notes | Both arrive at the venue early. |
-| 08:00–09:00 | **REHEARSE-2** (7-min cut, first full run) | **REHEARSE-2** | Run the 7-min cut; time it, identify weak points. |
-| 09:00–10:00 | Polish N4 (voice latency, fallback) | Update RUNBOOK with any copy changes | If N4 is slow, optimize Sarvam provider selection. Omkar updates scripts if X1–X8 change anything. |
-| 10:00–11:00 | N5 or N6 (if time: grievance ladder or consent centre) | N5 or N6 screens (if time) | Stretch goals. If we're ahead, build grievance ladder (N5) or consent (N6). |
-| 11:00–12:00 | Final integration test on a clean laptop or docker stack | Final screenshot review | Ujjwal runs `make demo-check` on the demo machine with the right env vars. Omkar reviews all visuals. |
-| 12:00–13:00 | **FREEZE CODE** (90 min before demo, exact slot time TBD) | Polish pitch deck | **Hard stop on new commits.** Ujjwal ensures build is clean, no uncommitted changes. Omkar polishes the pitch slides if they exist. |
-| 13:00–13:30 | Start in-process runner (`CHHATRI_STACK_N8N_URL=` in `.env`) | Practice pitch | Set the backend to use in-process workflows for speed. Omkar rehearses the 3-min pitch one more time. |
-| 13:30–14:00 (approx) | **REHEARSE-3** (final 3-min run, on stage or in the demo room) | **REHEARSE-3** | Run the 3-min cut in the actual demo setup (laptop, projector, microphone). Time it, verify all integrations respond. This is a planning target; re-baseline at demo-site. |
-| (Demo window) | **DEMO #1** (3-minute cut) | — | Ujjwal operates the console. Omkar delivers the pitch (if joint) or stands by. |
-| (Demo window) | **DEMO #2** (7-minute cut, if scheduled separately) | — | Full walk-through: area claim, hospital-cash with slip, tracker, audit, business model. |
-| (Post-demo) | **Judge Q&A** | Answer Q&A | Prepared answers from `docs/06-delivery/pitch-and-judge-qa.md`. Don't overstate. Hedge regulatory claims. |
-| 16:00 onwards | Debrief, thank judges, pack | Debrief, thank judges, pack | Reflect on what worked. Do not make excuses. Credit the team and the prototype. |
+| U1.1 | **X4**, behind `x4_lender_request`. A `Lender` port and `SimulatedLender`, `HolidayRequest` records (`HR` ids), `request_holiday` with its guards, the `HOLIDAY_*` keys and notification. Rename the n8n step `pause_instalment` to `request_holiday`, then run `make n8n-workflows` | [fs-03 section 14](../02-product/feature-specs/fs-03-edi-holiday.md), [ADR 0006](../04-engineering/adr/0006-edi-holiday-is-the-lenders-decision.md), [ADR 0008](../04-engineering/adr/0008-in-process-workflows-on-stage.md) | fs-03 acceptance table passes, `make test-infra` is green |
+| U1.2 | **Coordinated string change, code side.** `golden.py`, the backend tests that pin the instalment line, and the `DEMO_MESSAGES` entry in `scripts/tests/test_docs.py`. One commit with Omkar's docs side (O1.1). How the pinned wording behaves while `x4_lender_request` is off is open question 7 | fs-03 section 8.4 | `make demo-check` passes 70 of 70 with the demo flag set, the suites pass with every flag off, `test_docs.py` is green |
+| U1.3 | **X2, X3, X5.** The claim model validates the published expected day. A missing zone price fails loudly. Every new route answers 404 `not_found` for an unknown id (the existing routes already do) | [fs-01](../02-product/feature-specs/fs-01-area-auto-claim.md), K6-T01 in [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md) | Tests for each guard, preflight reports the zone prices |
+| U1.4 | Derived cover status, `GET /api/merchants/{id}/cover`, pilot covers seeded at the zone price, the catalogue keys for cover status | K6-T02 to T04 and T06, N1-T10, N1-T14 | Contract test; Home and DEMO.md agree on the price |
+| U1.5 | `GET /api/merchants/{id}/claims` and the dispute fixes (`DISPUTE_NO_PAYOUT`, `DISPUTE_ALREADY_OPEN`, an officer can close a dispute that has no decision) | N1-T11, [fs-06 section 14](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md) | Contract test; tracker steps for AREA, PERSONAL and DISPUTE |
+| U1.6 | Extract `trigger_verdict` from `detect/triggers.py` with no behaviour change. Then H13 provenance, H14 counterfactuals and `GET /api/decisions/{decision_id}/receipt` | N1-T12, N1-T13, [fs-09 section 16](../02-product/feature-specs/fs-09-policy-engine-and-audit.md) | The 21 trigger tests still pass; one test per check code for counterfactuals |
+| U1.7 | **X7.** The honest-wording scan covers `HOLIDAY_*`, the cover keys, `CF_*` templates and source labels. Fix the `WITHIN_ANNUAL_LIMIT` label ("this policy year" to "rolling 365 days") | fs-09 section 16 | The scan passes over the whole catalogue |
 
-## 5. Critical path (Mermaid gantt)
+**Omkar.**
+
+| # | Task | Spec | Done when |
+|---|---|---|---|
+| O1.1 | **X4 docs side.** SPEC section 13.4 and section 10 wording, the DEMO.md 17:05 steps, copy-deck lines, native review of the Hindi. One commit with U1.2 | fs-03 section 8.4, [copy deck](../03-design/copy-deck.md) | `test_docs.py` is green |
+| O1.2 | API client and strict parsers. Mock parity: the three new routes, `POST /api/premium/link`, `POST /api/webhooks/paytm`, zone premiums from `premiums.json`, and the DEMO.md numbers (a mock quote for Ramesh reads ₹424.80, not ₹90) | N1-T15, N1-T16 | AC-13 on the mock |
+| O1.3 | Screens S1 to S9 in Hindi and English, with the jargon lens, the next-best-action bar and the receipt print style. The console merchant page gets its third column | N1-T17 to N1-T19 | AC-07 to AC-41 on the mock profile |
+| O1.4 | Tracker data for the REFERRED and DISPUTE paths | fs-06 section 14 | The tracker shows both paths on the mock |
+| O1.5 | The component, unit and end-to-end tests in fs-04 section 19 | N1-T20 | Coverage thresholds hold |
+
+**Shared.** N1-T21: one contract test where the mock fixtures and the backend JSON parse with the same parsers. Run it when U1.4 and U1.5 land, and again after U1.6.
+
+### 3.3 Wave 2 · live AI
+
+Build the foundation before anything else, because every AI feature stands on it. The force-fallback switch is the stage safety net, so it is part of the foundation, not an extra.
+
+**Ujjwal, in this order.**
+
+| # | Task | Spec | Done when |
+|---|---|---|---|
+| U2.1 | **Foundation.** Gemini adapters (`gemini_chat.py`, `gemini_vision.py`), the chat and reader chains with attempt logs and per-link budgets, the free-tier data gate, labels (H26), and the X6 backend: `IntegrationMode.FALLBACK`, the names `gemini_chat` and `gemini_vision`, `FallbackSwitch`, `POST /api/integrations/{component}/fallback`. Add a Gemini text and image check to `live_smoke.py` so the pre-flight covers it | N2.1, N2.10, N3.2, N3.3, [fs-08 section 9](../02-product/feature-specs/fs-08-claims-officer-console.md) | A forced component reads FALLBACK with reason FORCED on its next call, with no scenario reload |
+| U2.2 | **N3.** `Precheck` model and ids, metadata stripping, field validation and injection signals, `SlipPrecheckService`, the two routes. Red-team slip fixtures | N3.1, N3.4 to N3.7, N3.13, [fs-02](../02-product/feature-specs/fs-02-hospital-cash-claim.md) | fs-02 drills T13 to T17 pass |
+| U2.3 | **N2.** Clause extract, fact sheet, `AskService`, guard layer B, injection and scam detectors, routing that explains from the rules before any model call, the `/ask` route, `/messages` on the same service, hardening of the N2-off path | N2.2 to N2.9, N2.15, [fs-05](../02-product/feature-specs/fs-05-ask-chhatri.md) | The 28 checked examples in fs-05 section 6.3 behave as written |
+| U2.4 | **N4.** `POST /api/voice/stt` with the mention detector, `POST /api/voice/tts` with its chain | N4.1, N4.2 | AC-VOICE-01 to AC-VOICE-08 |
+
+**Omkar.**
+
+| # | Task | Spec | Done when |
+|---|---|---|---|
+| O2.1 | Provider panel UI and the label on every AI-backed bubble and on the slip reader line (X6, H26). Mock parity for the labels | fs-08 section 19 | The header chip shows FALLBACK and a "forced" chip |
+| O2.2 | N3 screens: chat card, mini-app sheet, officer evidence lines, mock parity, `SLIP_*` copy review | N3.8 to N3.12 | fs-02 section 10 states render |
+| O2.3 | N2 screens: Ask screen, clause chips, badges, next action, label, mock parity, copy review | N2.11 to N2.13 | AC-ASK-06 and AC-ASK-21 on the mock |
+| O2.4 | N4 screens: browser recognition hook, confirmation chips, recording notice | N4.3, N4.4 | AC-VOICE-04 to AC-VOICE-06 |
+| O2.5 | Help rows and next-best-action rules for the new flags | N1-T30 | AC-36 |
+
+### 3.4 Wave 3 · trust and rights
+
+**Ujjwal.** N5 backend: `cases/ladder.py`, the `Grievance` model, the respondent router, `GET` and `POST /api/merchants/{id}/grievances` ([fs-06 section 14](../02-product/feature-specs/fs-06-explanations-disputes-and-grievance.md)). N6 backend: N6-T01 to N6-T11 in [fs-07](../02-product/feature-specs/fs-07-cover-purchase-and-consent.md), including the consent routes, `GET /api/merchants/{id}/consents/activity` and `POST /api/merchants/{id}/slips/{slip_id}/forget`. X8: message kinds, suppression and the daily cap ([fs-03 section 14](../02-product/feature-specs/fs-03-edi-holiday.md)). H25: the harness, the suites and `GET /api/evals/summary` ([AI evaluation plan](../04-engineering/ai-evaluation-plan.md)). Hardening N3.14.
+
+**Omkar.** Grievance screens and mock routes. Consent screens S10 and S11, the S3 consent block, the slip upload notice, "Slip erased" in the case evidence (N6-T12 to N6-T19). The `/evals` page. The dispute button moves from the chat path to the grievance endpoint (N1-T40). Native review of the consent copy (N6-T18).
+
+**Order.** Run the evaluation harness as soon as Wave 2 closes. A red-team item that fails is a bug to fix while N5 and N6 continue.
+
+### 3.5 Wave 4 · judge wow
+
+**Ujjwal.** `replay/whatif.py` and `POST /api/whatif/area` with the test that a call changes nothing, and the shared vectors file. `GET /api/ops/summary`. The Marathi catalogue (`mr` keys) and the guard's Marathi number and promise words.
+
+**Omkar.** Projector polish: a font-token test, the contrast test, the 1280×720 overflow check. The moment card. Presenter mode. The what-if drawer. The ops strip. Source chips and the counterfactual line in the console case panel. DISPUTE button labels and holiday rows. The mock fixes for the Z3 and Z12 totals and the 123 count. Marathi review and the screenshot set. Full list: [fs-08 section 19](../02-product/feature-specs/fs-08-claims-officer-console.md).
+
+### 3.6 Wave 5 · ship
+
+| ID | Task | Owner | Done when |
+|---|---|---|---|
+| N7 | Static build with the standalone route and a deep-link fallback (N1-T60). Build it with the demo flags set, for example `VITE_FEATURES=<the flags on the card> npm run build -- --mode mock`, and serve a local copy with `npm run preview`. The repo owner deploys to GitHub Pages or any free static host. No URL is written down until one exists | Omkar builds, Ujjwal (repo owner) deploys | The local copy opens `/merchant/S-0142/app` offline and shows the same flags as the live build |
+| Video | Backup video recorded from the release candidate, stored as a local file on the demo laptop. Script: [final deck and video script](final-deck-and-video-script.md) | Omkar | The file plays with the network off |
+| Full run | `make lint`, `make test`, `make test-slow`, `make test-infra`, `make demo-check`, then `make e2e` against the running stack | Ujjwal | All green on the release candidate |
+| Rehearsals | Two rehearsals on the demo laptop (N1-T61, N6-T20), logged in the [runbook](demo-runbook.md#8-rehearsals). Rehearsal 1 decides each beat: pass or hide. Rehearsal 2 adds judge Q&A role-play | Both | Every beat passed 3 of 3 or its flag is off |
+| Demo flag set | The flags that are on for the demo, written on the card | Both | The card matches the build |
+| Freeze | The last commit on main, a local tag, `git status` clean | Ujjwal | CP5 |
+
+## 4. Dependencies
 
 ```mermaid
-gantt
-    title Build plan critical path, 2–3 Oct 2026
-    dateFormat YYYY-MM-DD HH:mm
+flowchart LR
+  subgraph W0["Wave 0 · setup"]
+    U0["Ujjwal: X1 and key check"]
+    O0["Omkar: flags, Tailwind and shadcn, safety net"]
+  end
+  CP0(["CP0"])
+  subgraph W1["Wave 1 · demo spine"]
+    U1["Ujjwal: X4 wording, X2 X3 X5 X7, cover and claims routes, H13 H14, receipt route"]
+    O1["Omkar: mini-app S1 to S9 on the mock, tracker, receipt, copy"]
+    J1["Contract test: mock and backend parse alike"]
+  end
+  CP1(["CP1"])
+  subgraph W2["Wave 2 · live AI"]
+    U2a["Ujjwal: Gemini adapters, chains, labels, X6 switch"]
+    U2b["Ujjwal: N3 pre-check, N2 Ask and guard, N4 voice routes"]
+    O2["Omkar: provider panel, slip sheet, Ask screen, voice chips"]
+  end
+  CP2(["CP2"])
+  subgraph W3["Wave 3 · trust and rights"]
+    U3["Ujjwal: N5 and N6 routes, X8, H25 harness"]
+    O3["Omkar: grievance and consent screens, evals page"]
+  end
+  CP3(["CP3"])
+  subgraph W4["Wave 4 · judge wow"]
+    U4["Ujjwal: what-if route, ops summary, Marathi catalogue"]
+    O4["Omkar: polish, moment card, what-if drawer, presenter mode, ops strip, Marathi"]
+  end
+  CP4(["CP4"])
+  subgraph W5["Wave 5 · ship"]
+    S5["Static build, backup video, full test run, two rehearsals"]
+  end
+  FRZ(["Freeze: 90 minutes before the slot, time not announced"])
 
-    section Ujjwal
-    SETUP-1 (docs)           :uj1, 2026-10-02 08:00, 1h 30m
-    SETUP-2 (Gemini)         :uj2, after uj1, 30m
-    SETUP-3 (Sarvam)         :uj3, 2026-10-02 10:00, 1h
-    X1 (frontend tests)      :crit, uj4, 2026-10-02 09:00, 2h
-    X2 (validation)          :uj5, after uj4, 1h 30m
-    X3 (zone guard)          :uj6, after uj5, 1h
-    X4 (EDI guard)           :uj7, after uj6, 1h 30m
-    N2-backend (Ask Chhatri) :crit, uj8, after uj2, 3h
-    N3-backend (slip-precheck) :crit, uj9, after uj8, 3h
-    N4 (voice)               :uj10, after uj9, 1h
-    N7-static-build          :uj11, after uj4, 1h 30m
-    Integration test         :crit, uj12, 2026-10-02 19:00, 1h
-    REHEARSE-1               :uj13, 2026-10-02 23:00, 1h
-    FREEZE (3 Oct)           :crit, uj14, 2026-10-03 12:00, 0h
-    REHEARSE-3 (demo room)   :uj15, 2026-10-03 13:30, 30m
-    DEMO                     :crit, uj16, 2026-10-03 14:00, 1h
-
-    section Omkar
-    SETUP-1 (docs)           :ok1, 2026-10-02 08:00, 1h 30m
-    SETUP-4 (hardware)       :ok2, 2026-10-02 10:30, 30m
-    N1-copy (tracker text)   :ok3, 2026-10-02 10:00, 2h
-    DOC-policy (clauses)     :crit, ok4, 2026-10-02 13:00, 4h
-    N1-integration           :crit, ok5, 2026-10-02 13:00, 2h
-    N3-frontend (slip UI)    :ok6, after ok5, 2h
-    N7-video                 :ok7, 2026-10-02 18:00, 2h
-    RUNBOOK-3min             :crit, ok8, 2026-10-02 19:00, 1h 30m
-    RUNBOOK-7min             :crit, ok9, 2026-10-02 20:30, 2h
-    REHEARSE-1               :ok10, 2026-10-02 23:00, 1h
-    REHEARSE-2 (3 Oct)       :crit, ok11, 2026-10-03 08:00, 1h
-    REHEARSE-3 (demo room)   :ok12, 2026-10-03 13:30, 30m
-    PITCH                    :crit, ok13, 2026-10-03 14:00, 1h
+  U0 --> CP0
+  O0 --> CP0
+  CP0 --> U1
+  CP0 --> O1
+  U1 --> J1
+  O1 --> J1
+  J1 --> CP1
+  U0 -->|"key check"| U2a
+  U1 -->|"receipts feed the fact sheet"| U2b
+  U2a --> U2b
+  U2a -->|"label contract"| O2
+  J1 --> O2
+  U2b --> CP2
+  O2 --> CP2
+  CP1 --> CP2
+  CP2 --> U3
+  CP2 --> O3
+  U2b -->|"slip route takes the consent gate"| U3
+  U3 --> CP3
+  O3 --> CP3
+  CP3 --> U4
+  CP3 --> O4
+  U1 -->|"trigger_verdict"| U4
+  U2a -->|"X6 and H26 labels"| O4
+  U4 --> CP4
+  O4 --> CP4
+  CP4 --> S5
+  S5 --> FRZ
 ```
 
-**Critical dependencies:**
-1. X1 (frontend tests) unblocks N1 and N7 builds.
-2. X2, X3, X4 (backend guards) unblock N1 API endpoints.
-3. N1 (screens + API + integration) is on the critical path; any slip here cascades to rehearsal.
-4. N2 and N3 backends must be done by 17:00 on 2 Oct to allow voice and slip frontend work.
-5. RUNBOOK and REHEARSE must be complete before on-site; no last-minute rewrites of the script.
-6. Code freeze 90 min before the demo is **hard**; no commits after 12:00 on 3 Oct.
+**Where the tracks depend on each other.**
 
-## 6. Integration checkpoints
+| Omkar needs from Ujjwal | When |
+|---|---|
+| Live routes for the mini-app (contract test N1-T21) | End of Wave 1 |
+| The label and fallback contract (`mode`, `provider`, `fallback_reason`) before the provider panel UI | Start of Wave 2 |
+| Route shapes for slip pre-check, Ask and voice before mock parity | Wave 2 |
+| `trigger_verdict`, then `POST /api/whatif/area`, before the what-if drawer | Wave 4 |
+| Marathi catalogue keys before the Marathi flag can turn on | Wave 4 |
 
-| Checkpoint | When | Owner | Check | Pass criteria |
+| Ujjwal needs from Omkar | When |
+|---|---|
+| The wording and docs side of the X4 change (one commit with the code side) | Start of Wave 1 |
+| Hindi copy review for each new key, and a named native reader | Each wave |
+| The shared vectors file for the what-if panel, checked against the mock | Wave 4 |
+| The demo flag set and the rehearsal log | Wave 5 |
+
+If you are blocked, pick from this list: tests against the other person's contract, mock parity, copy review, a beat drill from the [runbook](demo-runbook.md), or the docs.
+
+## 5. Checkpoints
+
+A checkpoint is a short meeting: run the commands, read the result, decide the flags, write the log. The person who did not write the work runs it.
+
+| Checkpoint | After | Run | Pass when | If it fails |
 |---|---|---|---|---|
-| **Gemini + Sarvam live** | 2 Oct 11:00 | Ujjwal | `/api/integrations` shows provider status. Response time < 3 s. | Both providers respond. Logs show no auth errors. |
-| **Frontend tests pass** | 2 Oct 13:00 | Ujjwal | `make test-frontend` → 264/264 pass. | All tests pass. Coverage ≥ 80%. |
-| **N1 API endpoints work** | 2 Oct 15:00 | Ujjwal | `/api/merchants/{id}/cover`, `/api/merchants/{id}/claims` return correct shape. | Fetch both endpoints; `jq` the response. Verify Anil and Ramesh. |
-| **N2 Ask Chhatri works** | 2 Oct 16:00 | Ujjwal | POST `/api/merchants/{id}/ask` with a grounded question. Response is cited and factual. | Ask "मुझे इतने ही पैसे क्यों मिले?" Get a response citing the decision. |
-| **N3 Slip pre-check works** | 2 Oct 17:00 | Ujjwal | POST `/api/merchants/{id}/slip-precheck` with sample slip image. Extract fields and show checklist. | Upload `backend/data/slips/sample.png`. Verify extracted name, dates, hospital. |
-| **N4 Voice fallback works** | 2 Oct 18:00 | Ujjwal | Sarvam STT/TTS fallback to browser speech and text. Latency < 3 s. | Test with Sarvam key enabled, then disabled. Verify both paths work. |
-| **`make demo-check` passes** | 2 Oct 19:00 | Ujjwal | Run `python backend/scripts/demo_check.py`. All 70 scenarios pass. | 70/70 pass. Log shows no errors. Numbers match docs/DEMO.md and docs/SPEC.md. |
-| **N1 screens in console** | 2 Oct 15:00 | Omkar | Mini-app is navigable. Can select Anil, Ramesh, etc. Tracker shows claims. | Manually navigate the monsoon scenario; verify the tracker shows detected and paid claims. |
-| **N7 static build live** | 2 Oct 18:00 | Ujjwal | GitHub Pages or Vercel URL is live. Mock-mode console loads. Monsoon scenario plays. | Visit the public URL from a phone. Load the monsoon scenario and play to trigger. |
-| **3-min rehearsal under 3:10** | 2 Oct 23:00 | Both | Deliver the 3-min cut without script. Every number matches. Voice response time < 2 s. | Time it: 3:00–3:10. Verify numbers (Z7 37%, ₹1,380, ₹4,380, ₹58,900) against docs/DEMO.md. Ask for a grounded answer. |
-| **Code builds and tests pass** | 3 Oct 11:00 | Ujjwal | Run `make test`, `make demo-check`, lint. Commit history is clean (each person's commits). | All targets pass. `git log --oneline` shows Ujjwal's and Omkar's commits separately. |
-| **Frozen build on demo machine** | 3 Oct 12:00 | Ujjwal | `git status` shows no uncommitted changes. Backend and console are built. Keys are set in `.env`. | Clean build. `make dev` starts. `/api/preflight` shows LIVE/SIMULATED statuses. |
-| **7-min rehearsal under 7:15** | 3 Oct 08:00 | Both | Full walk-through with Q&A roleplay. All integrations are live or gracefully degrade. | Time: 7:00–7:15. Every claim is hedged. No "um". Q&A answers are ready. |
+| **CP0** | Wave 0 | `make test`, `make demo-check`, `make lint`, `make check-keys`, `cd frontend && npm run test:e2e:mock`, the key check steps, the static safety net | `make test` is green with no failing frontend test. `make demo-check` passes 70 of 70. All 14 flags are registered and off, and with them off the console and the golden flows are unchanged. AC-05 and AC-06 pass (no Preflight leak, console tests unchanged). The Wave 0 files that were in the working tree are reviewed and committed. `make check-keys` shows both keys SET and lists a Gemini model that accepts images. `live_smoke.py` passes for Sarvam, and the Gemini text and image calls return. Quota and balance are in the log. The static mock build opens | Fix Tailwind scoping before anything else. If Gemini or Sarvam fail, Wave 2 slips but Wave 1 continues |
+| **CP1** | Wave 1 | `make test`, `make test-slow`, `make test-infra`, `make demo-check`, the contract test, then the 3-minute cut once with `n1_miniapp` and `x4_lender_request` on | The suites are green. `make demo-check` passes 70 of 70 with the demo flag set, and the suites also pass with every flag off. The contract test is green. In the mini-app: Anil's area claim shows five steps and reaches Paid and the lender request; the illness_mismatch claim shows REFERRED with case C-2291; a dispute shows; the receipt shows sources and a counterfactual line; Ramesh's BLOCKED quote reads ₹424.80 for 30 days at ₹14.16 a day; Hindi and English both work; unknown ids give 404 `not_found`. No offer kind exists in `nextBestAction`. Every number equals [DEMO.md](../DEMO.md) | Hide `n1_miniapp` and keep fixing. The Wave 1 routes can stay, because nothing calls them |
+| **CP2** | Wave 2 | The three suites, `make demo-check`, then the drills below with the real keys | **Ask:** every question on the rehearsed list ([runbook section 4](demo-runbook.md#4-the-new-beats-flags-pass-rule-and-fallbacks)) returns an answer or a labelled fallback, with no unsupported figure, and the guard examples behave as fs-05 section 6.3 says. **Slip:** blurry gives RETAKE; Anil's slip gives READY, then APPROVED ₹1,500; the mismatch slip gives READY, then REFERRED; the injection fixture gives NEEDS_TEAM; with the network cut, FALLBACK then NEEDS_TEAM. **Switch:** each forced component reads FALLBACK with reason FORCED, "Clear all" restores it, the "forced" chip shows, a restart clears it. **Voice:** the Sarvam path and the browser path both transcribe the sample sentence on the demo laptop, and the confirmation chips appear. **Labels:** every AI-backed reply on screen shows its mode. With the flags off, golden flows are unchanged. Latencies and quotas are in the log | Hide the failing flag by the hide order. Never keep an AI feature on without its label |
+| **CP3** | Wave 3 | The three suites, `make demo-check`, the fs-06 and fs-07 acceptance tables, the harness run | A grievance opens once on a double tap, the router names the owner, the ladder shows a clock where a source exists and nowhere else. The consent boxes gate the quote, a withdrawal stops what it says it stops, an erase removes the image and the fields, and `GET /api/audit/verify` still reads valid. The X8 suppression and cap tests pass. `/evals` shows numbers from a stored run and nothing else, or NOT MEASURED | Hide the flag. Consent and grievances are beside the story, not in it |
+| **CP4** | Wave 4 | The three suites, `make demo-check`, `make e2e` (live) with the screenshot set, a full 7-minute rehearsal | The what-if baseline equals the detector, the no-write test passes, and Z9 with an alert and three hours at 49 fires. Presenter mode keys work. No sideways scroll at 1280×720 on the five console pages. The ops strip numbers match their definitions. Marathi has a recorded native sign-off or its flag stays off | Hide the flag. After CP4 there is no new feature |
+| **CP5** | Wave 5 | `make lint`, `make test`, `make test-slow`, `make test-infra`, `make demo-check`, `make e2e`, the static copy offline, the video file | All green on the release candidate. Two rehearsals logged. The demo flag set is on the card. `git status` is clean and `.env` is untracked | Hide, revert to the last good commit, or take the fallback ladder in the [runbook](demo-runbook.md#6-contingency-ladder) |
 
-## 7. Build timeline: pre-work (through 1 Oct) vs planned for 2–3 Oct
+**Checkpoint log** (copy for each checkpoint):
 
-### Built before 2 Oct (29 Sep–1 Oct, pre-work at commit 86575ea):
-**Prototype foundation (76 commits, K1–K8):**
-- Core policy engine and decision logic (deterministic).
-- Trigger detection (area sales index, hospital silence).
-- Audit and hash-chain logging.
-- Backend tests (1,711 fast + 36 slow, 99.7% coverage).
-- Demo scenario and replay (monsoon, area claim, hospital-cash).
-- Initial Paytm and Sarvam integrations (SIMULATED in demo mode).
-- Backend demo-check (70 of 70 passing).
+```
+CP[#] · build [commit] · run by [name]
+Suites: test [ ] test-slow [ ] test-infra [ ] demo-check 70/70 [ ] e2e [ ]
+Flags on: ______________________
+Quota and balance: Gemini ______  Sarvam ______
+Latencies seen (not targets): ask __ s  slip __ s  speech __ s
+Decisions (hide / keep / fix): ______________________
+Slot time T: [not announced]  Freeze (T minus 90 min): ______
+```
 
-### Planned for 2 Oct (pre-work continuation) and 3 Oct (on-site):
-**N1–N4 (merchant journey), X1–X8 (fixes), docs and rehearsal:**
+## 6. Feature flags
 
-**Planned 2 Oct:**
-- X1–X5 fixes: frontend tests, validation guards, EDI holiday guard, 404 error handling.
-- N1 mini-app screens: Home, Coverage, Consent, Tracker, Help, Grievance.
-- N1 API routes: `/api/merchants/{id}/cover`, `/api/merchants/{id}/claims`.
-- N2 Ask Chhatri backend with the Gemini → Sarvam → templates chain.
-- N3 Slip pre-check backend and frontend UI.
-- N4 Voice (STT/TTS fallback chain).
-- Policy wording (clauses C1–C12).
-- Demo runbook and rehearsals (3-min and 7-min cuts).
-- N7 static mock-mode build for GitHub Pages.
+The flag names come from the registry in the working tree (`frontend/src/features.ts` and `backend/chhatri/features.py`, which hold the same 14 names). Some differ from names the feature specs propose, and the table says where. The [implementation guide](../04-engineering/implementation-guide.md) owns the mechanism and the final list, and wins where a name differs.
 
-**Planned 3 Oct (on-site):**
-- Polish N4 (voice latency if Sarvam is slow).
-- Complete X6 (provider panel) if time.
-- Optional N5 (grievance ladder) and N6 (consent centre).
-- Final integration test (`make demo-check` 70/70).
-- Code freeze 90 minutes before demo slot (exact time TBD).
-- Deliver 3-minute and 7-minute demos from frozen build.
+**How a flag is set.** The backend reads `CHHATRI_FEATURES` and the console reads `VITE_FEATURES`. Each is a comma or space separated list of names, and the two lists must be identical. `make dev` takes the backend list from `.env` or the shell and the console list from the shell or `frontend/.env.local`. A mock or static build takes it from the shell or `frontend/.env.mock.local` when it is built. `make up` passes `CHHATRI_FEATURES` to both. A flag changes when the backend restarts or the console is rebuilt, and at no other time, so the demo flag set is chosen before the demo and never changed during it. A name that is not a flag is ignored and logged once at start-up. A flag that is off hides the feature and makes its endpoints answer 404 `not_found`.
 
-**Judges see:** Live map, area claim trigger (at a simulated time during the demo), merchant mini-app, payout, Hindi voice explanation, tracker, audit, honest backtest. The 2–3 Oct work delivers the full merchant-facing product surface; the final build should feel complete and polished, not like a last-minute sprint.
-
-## 8. Commit hygiene
-
-- **One person, one feature:** Omkar commits doc and product-facing work (policy, personas, runbook, pitch). Ujjwal commits code (backend, frontend, infra).
-- **Conventional commits:** Each commit is `<type>: <description>`, e.g., `feat(n1): add mini-app tracker`, `fix(x1): pass frontend tests`, `docs(policy): write clause C1–C12`.
-- **Never commit `.env`:** It contains secrets. `.env.example` is in the repo; `.env` is git-ignored.
-- **No force pushes:** Keep the history clean. If a commit is wrong, revert and make a new one.
-- **Review before push:** Both review each other's PRs or commits before merging to `main`. No surprises on demo day.
-- **Tag the demo build:** After the final freeze (3 Oct 12:00), create a tag `demo-2026-10-03` so it is easy to find.
-
-## 9. Risks and contingencies
-
-See [risk-register.md](risk-register.md) for full details. Highlights:
-
-| Risk | Impact | Mitigation | Contingency |
+| Flag | Gates | On in | Off means |
 |---|---|---|---|
-| Sarvam API is rate-limited or down on 3 Oct | Voice and slip reading fail; only deterministic fallback. | Test on demo laptop now (2 Oct). Monitor Sarvam dashboard. Have browser Web Speech API (hi-IN) and Tesseract ready. Note: browser Web Speech API requires a network connection (it is not offline). | Fallback to browser Web Speech API (hi-IN, requires network) or tap-to-send chips for speech input. For slip reading, use Tesseract (local, offline). N4 and N3 are still available via fallback. |
-| Gemini returns a non-grounded answer (e.g., "yes, you'll get ₹10,000") | Guard catches it, but it looks like a bug on stage. | Run X7 (honest-wording test). Build a grounding evals set. Test edge cases. | If a bad answer slips through during rehearsal, rerun the same question. If it is consistent, investigate and fix before on-site. |
-| Frontend N1 screens are not responsive on the demo projector (1920×1080, 100% zoom) | Mini-app is hard to read or overflows. | Test on demo laptop at 1920×1080. Adjust CSS if needed. | Use the fallback video (N7) to show the mini-app instead of live. Or zoom the browser to 85% (not ideal, but usable). |
-| A last-minute X1–X8 fix breaks something | Regression; tests fail. | Each fix comes with its own unit test. Run `make test` after every commit. | Revert the commit. Investigate after the demo. Do not ship a broken build. |
-| The code is frozen but a critical bug is found 30 min before demo | No time to fix and test. | Do one final run-through on 3 Oct 08:00–10:00 before freeze. If a bug is found, decide: fix and retest (add 30 min), or skip that feature. | Have the fallback video and the static mock-mode demo ready. Pivot to those if the live build is broken. |
+| `n1_miniapp` | The frame, the standalone route `/merchant/:id/app`, the third column. Tracker, receipt, jargon lens, next-best-action bar (N1, H1–H3, H13, H14, H20, H21) | Wave 1 | The merchant page is today's two-column page |
+| `x4_lender_request` | The lender request that replaces the instalment pause: `request_holiday`, the `HOLIDAY_*` messages, the tracker's lender step (X4) | Wave 1 | The instalment step and its wording behave as at commit 86575ea |
+| `n3_slip_precheck` | The pre-check sheet and the two slip routes (N3, H15, H16) | Wave 2 | The chat photo behaves as today |
+| `n2_ask_chhatri` | The Ask screen, `POST /api/merchants/{id}/ask`, the model path in `/messages` (N2, H17, H19). fs-05 proposes `ask_chhatri` | Wave 2 | Help row hidden |
+| `n4_voice` | The mic, `POST /api/voice/stt`, `POST /api/voice/tts`, the confirmation chips (N4, H18). fs-05 proposes `voice` | Wave 2 | Mic hidden |
+| `x6_provider_panel` | The panel, the FALLBACK tone, the switch, the route (X6, H26 on the console) | Wave 2 | The header shows LIVE and SIMULATED as today |
+| `n5_grievances` | The ladder, the router, the routes, the Help row (N5, H22) | Wave 3 | The dispute uses the chat path |
+| `n6_consents` | The consent centre, the S3 consent block, the routes, the gates (N6, H23) | Wave 3 | S3 shows a one-line notice, and the gates are open |
+| `x8_distress_guard` | Message kinds, suppression, the daily cap (X8) | Wave 3 | No guard (no offer message exists) |
+| `h25_evals` | The `/evals` page and `GET /api/evals/summary` (H25). The [AI evaluation plan](../04-engineering/ai-evaluation-plan.md) calls it `evals` | Wave 3, and with a stored run | Page hidden |
+| `h24_whatif` | The what-if drawer and `POST /api/whatif/area` | Wave 4 | Button hidden |
+| `h8_ops_strip` | The ops strip and `GET /api/ops/summary` (H8) | Wave 4 | Strip hidden |
+| `console_polish` | Presenter mode (the toggle, the keys, the type step-up) and the trigger-to-payout moment card. [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) names these `presenter_mode` and `moment_card` | Wave 4 | Toggle and card absent. `?presenter=1` notes work as today |
+| `n8_marathi` | The Marathi option | Wave 4, after native review | Option hidden. `?lang=mr` shows Hindi |
 
-## 10. Cut list (if late)
+**Not flagged:** the fixes X2, X3, X5 and X7, and the console additions (source chips, counterfactual line, DISPUTE labels, holiday rows). They are guards, wording and displays of data that already exists, and a flag would double the golden expectations. If one fails its checkpoint, revert its commit. [fs-03](../02-product/feature-specs/fs-03-edi-holiday.md) puts X4 and X8 behind flags without naming them. The registry names them `x4_lender_request` and `x8_distress_guard`.
 
-If we fall behind, drop in this order:
+## 7. Hide order if time runs out
 
-1. **X6** (per-component Sarvam toggles and provider panel): Nice-to-have polish. Sarvam on/off still works.
-2. **X8** (no-distress-offers rule): A future protection; not critical for the demo.
-3. **N5** (grievance ladder): Still visible in the audit and policy wording. Can be explained verbally.
-4. **N6** (consent centre): Explained in the policy and shown as a future roadmap.
-5. **N7 backup video** (recorded walkthrough): The static mock-mode build is the fallback.
-6. **N8** (Marathi): English + Hindi is enough for the demo.
-7. **DOC-other** (competitive landscape): Omkar keeps it but it is not presented on stage.
+Everything is P0, so nothing is cut. A feature that is not finished at its checkpoint is hidden by taking its flag out of both lists and restarting, in this order, from the top of the table down.
 
-**Never cut:**
-- X1–X5 (core fixes).
-- N1–N4 (merchant journey: mini-app, Ask Chhatri, slip reading, voice).
-- N2 backend (grounded LLM with guardrails).
-- N3 backend and frontend (slip extraction and pre-check).
-- DOC-policy (policy wording; required for pitch and Judge Q&A).
-- RUNBOOK and REHEARSE (the script and timing).
+| # | Hide | Why this place |
+|---|---|---|
+| 1 | `n8_marathi` | It needs a native reader who may not be found. Copy shown unreviewed would hurt more than a missing option |
+| 2 | `h25_evals` | A number reaches the page from a stored run and from nowhere else. No run, no page |
+| 3 | `x8_distress_guard` | No offer message exists, so an off guard shows nothing. An unfinished cap could suppress a golden message, so it stays off until tested |
+| 4 | `h8_ops_strip` | Console polish |
+| 5 | `console_polish` | The presenter loses comfort and the moment card, not content. The Overview launchers still hold the storm at 17:06 |
+| 6 | `n6_consents` | Beside the story. The S3 notice line remains |
+| 7 | `h24_whatif` | A judge draw, but the "Why Zone 9 got nothing" panel still tells the story |
+| 8 | `n5_grievances` | The "resolve" stage of the track. The chat dispute and the officer case remain |
+| 9 | `n4_voice` | The most failure-prone part. The voice chips (BUILT) remain |
+| 10 | `n2_ask_chhatri` | The rules answer "why this amount" without it |
+| 11 | `n3_slip_precheck` | The BUILT chat photo path remains |
+| 12 | `x6_provider_panel` | **Hide it when 9, 10 and 11 are all off, and not before.** No AI reply may show without its label |
+| 13 | `x4_lender_request` | The BUILT instalment step answers as today. The script then drops the lender-decides line and says what the screen says (the [runbook](demo-runbook.md#4-the-new-beats-flags-pass-rule-and-fallbacks) has both versions) |
+| 14 | `n1_miniapp` | Last. With it off, `/merchant/S-0142` is today's page, with the same numbers |
 
-## 11. Success metrics for completion
+**The honesty floor is never hidden:** the LIVE, SIMULATED and FALLBACK labels, the X7 test, the disclosure line, the audit chain.
 
-- [ ] `make test` passes (backend ≥ 80%, frontend all).
-- [ ] `make demo-check` passes 70/70.
-- [ ] `make lint` passes (ruff check and format).
-- [ ] All 5 golden-number scenarios (monsoon, illness, illness_mismatch, buy_cover, and one more) replay correctly with numbers matching docs/DEMO.md and docs/SPEC.md.
-- [ ] The 3-minute demo runs on the demo laptop under 3:10 and every number is correct.
-- [ ] The 7-minute demo runs under 7:15 and all features (area claim, hospital-cash, slip, tracker, audit, backtest) are demonstrated.
-- [ ] Every merchant-facing message is factually correct and not over-promised (X7 test passes).
-- [ ] Both Omkar and Ujjwal can explain the system and the business model.
-- [ ] The code is clean, commits are by the right person, and the build is frozen 90 minutes before demo.
+**Veto rule.** Either of us can veto showing a feature. Showing needs both. Ujjwal judges whether a backend feature is safe to run. Omkar judges whether a screen is fit to show.
+
+**How to hide.** (1) Both agree. (2) Take the flag out of `CHHATRI_FEATURES` and `VITE_FEATURES` and restart `make dev`, or rebuild the static copy. (3) Check that the backend start-up line lists the flags on the card. (4) Re-run `make demo-check` and the affected beat. (5) Mark the beat in the [runbook](demo-runbook.md#4-the-new-beats-flags-pass-rule-and-fallbacks) as using its fallback. (6) Write it in the checkpoint log.
+
+## 8. Pace, the freeze and the order of the day
+
+### 8.1 The freeze
+
+- **Freeze = 90 minutes before the start of our slot (T).** The organisers have not announced T. Ask at check-in on 3 Oct. When T is known, write T and the freeze at the top of the checkpoint log.
+- **Wave 5 needs time before the freeze.** Estimate, for planning: about three hours (video 1 h, static build and checks 30 min, full test run 20 min, two rehearsals 1 h, slack 10 min). Replace it with your own number at CP4. Wave 5 must start no later than the freeze minus that number. Whatever is not at its checkpoint then is hidden by the order in section 7.
+- **No new feature after CP4.** After CP4: fixes and polish, nothing else.
+- **At the freeze:** the last commit is on main, tagged locally, `git status` is clean. After it, the one change allowed is a crash hotfix: a reproduced crash or a failing test, both of us agree, then `make demo-check` again. A hotfix that changes what the screen shows is said aloud in the disclosure if the video was recorded before it.
+
+### 8.2 The order of the day
+
+| Phase | When | Waves | Leave the phase when |
+|---|---|---|---|
+| A | The rest of 2 Oct | 0 and 1, then the start of 2 if time allows | CP1 has passed, or you must sleep. Then write down where each track stopped |
+| B | 3 Oct, on arrival | Venue checks ([on-site checklist](on-site-checklist.md)). Ask for T | The checks are done and T is known |
+| C | 3 Oct, on-site build | 2, then 3, then 4 | CP4 has passed, or the Wave 5 start time is reached |
+| D | 3 Oct, ship | 5 | The freeze |
+| E | After the freeze | The pre-flight at T minus 60 and T minus 30, then the demo | |
+
+Phase A is a target, not a promise. If CP1 has not passed when you must stop, Wave 1 continues at the start of 3 Oct and the hide order covers the tail.
+
+### 8.3 Sleep
+
+A tired mistake in Wave 1 costs more than a hidden feature in Wave 4. Both of us sleep before the on-site day, and stop when a checkpoint would no longer be reliable. The on-site day needs both of us sharp for the rehearsals and the demo.
+
+## 9. Commit hygiene
+
+- **Development stays on main** (team decision, 2 Oct). Commit often. No pushes from the working session. The repo owner decides when to publish, and N7 needs that step.
+- **Each person commits their own work under their own name.** Check `git config user.name` and `git config user.email` on each laptop before committing anything. The public git log credits every commit to its author.
+- **Conventional commits:** `<type>: <description>`, for example `feat(n1): add the claim tracker`, `fix(x1): pass the frontend tests`, `docs(runbook): add the what-if beat`. Types: feat, fix, refactor, docs, test, chore, perf, ci.
+- **Never commit `.env`.** `.env.example` is in the repo, and `.env` is git-ignored.
+- **No force pushes, no history rewrites.** If a commit is wrong, revert it and commit again.
+- **After each passed checkpoint,** tag the commit locally (`cp0` to `cp5`) so "revert to the last good build" is one command.
+
+## 10. Definition of done for the build
+
+- [ ] `make test` passes (backend coverage at least 80%, no failing frontend test).
+- [ ] `make test-slow` and `make test-infra` pass.
+- [ ] `make demo-check` passes 70 of 70. The four scenarios (monsoon, illness, illness_mismatch, buy_cover) and the three live tests (EXPLAINED, HUMAN, BLOCKED) replay with numbers matching [DEMO.md](../DEMO.md).
+- [ ] `make lint` passes.
+- [ ] Every merchant-facing string passes the honest-wording test (X7).
+- [ ] Every AI-backed reply on screen shows its mode, provider and reason (H26).
+- [ ] The 3-minute and 7-minute cuts run on the demo laptop, and each beat passed 3 of 3 or is hidden.
+- [ ] The demo flag set is written on the card and matches the build.
+- [ ] The static copy opens offline, and the backup video plays from a local file.
+- [ ] Both of us can explain every flag that is on, and the hide order.
 
 ## Open questions
 
-1. **What if Sarvam is rate-limited during the demo?** Should we pre-load cached responses for hero moments, or rely on the browser Web Speech API fallback for STT and Tesseract for slip reading? Owner: Ujjwal Pardeshi.
-2. **Should the 3-minute demo be run separately or back-to-back with the 7-minute demo?** This affects the rehearsal schedule and the judges' timetable. Owner: Omkar Kadam.
-3. **Which metrics are most important to measure during the demo (latency, accuracy, user sentiment)?** For the post-hackathon pilot plan. Owner: Omkar Kadam.
+1. **How do two laptops share commits if nobody pushes?** Decision 5 says commits, with no pushes. Options: one shared working tree, patches exchanged with `git format-patch`, or the repo owner pushes a private branch. Owner: Ujjwal Pardeshi.
+2. **Who is the native reader** for the Hindi copy (each wave) and the Marathi (Wave 4)? Owner: Omkar Kadam.
+3. **Flag names.** The registry names `n2_ask_chhatri`, `n4_voice`, `h25_evals` and `console_polish`, where fs-05 proposes `ask_chhatri` and `voice`, the AI evaluation plan `evals`, and fs-08 `presenter_mode` and `moment_card`. Which texts change to match the registry? Owner: Omkar Kadam and Ujjwal Pardeshi.
+4. **When is the slot announced,** and does the organiser allow a short run in the demo room? Owner: Omkar Kadam.
+5. **Is there a second laptop** that can hold the frozen build as the backup machine ([on-site checklist](on-site-checklist.md))? Owner: Ujjwal Pardeshi.
+6. **Which free static host** will the repo owner use for N7? Owner: Ujjwal Pardeshi.
+7. **Pinned wording while `x4_lender_request` is off.** fs-03 section 8.4 replaces the three `INSTALMENT_PAUSED` lines in one coordinated change. With a flag, does the catalogue keep both sets of lines, and which set do `golden.py`, DEMO.md and `test_docs.py` pin for the demo? Owner: Ujjwal Pardeshi.
+8. **Who reviews and commits the Wave 0 files** that are already in the working tree (the flag registry, `check-keys`, the mini-app scaffold, the test timeout)? CP0 needs an owner for each. Owner: Omkar Kadam for the console files, Ujjwal Pardeshi for the backend and scripts.
+9. **The label of a forced component.** fs-05 and the copy deck call a forced reply SIMULATED with reason `FORCED`. fs-08 and the [data model](../04-engineering/data-model-and-api.md) call it FALLBACK with reason `FORCED`. This plan, the runbook and the on-site checklist follow FALLBACK, because the panel and the reply label must agree. Owner: Ujjwal Pardeshi, with the fs-05 owner.
 
 ## Changelog
 
-- 2026-10-02 · v2 · final consistency pass against the code: retitled section 7 to clarify pre-work (29 Sep–1 Oct) vs planned for 2–3 Oct; changed "before 2 Oct" build claims to "planned for 2 Oct" per truth sheet (N1–N8, X1–X8 are PLANNED not built); fixed browser Web Speech API fallback language from en-IN to hi-IN and added network connection requirement; changed demo slot times from specific (14:00, 14:30) to planning targets (re-baseline on-site); removed "open source" references in favor of "public".
+- 2026-10-02 · v3 · re-baselined from the afternoon of 2 Oct, with the flag names and mechanism taken from the registry in the working tree (14 flags, `CHHATRI_FEATURES` and `VITE_FEATURES`), the Wave 0 pieces already started (registry, `make check-keys`, mini-app scaffold, test timeout) shown as started and unchecked, and the key check rewritten around `make check-keys`: six waves with two parallel tracks, task ids from the feature specs, a dependency graph replacing the clock-time gantt, checkpoints CP0 to CP5 with pass criteria, the feature-flag table, the hide order and veto rule, and a freeze rule with no clock times. Removed the hour-by-hour tables and the old priority labels. Fixed the key check (there is no Gemini row until Wave 2), the Tesseract fallback (not in the Wave 2 chain), the old N1 dependency on X4 (the mini-app builds on the mock), the scenario count (four scenarios and three live tests), and the commit rules (own name, no pushes)
+- 2026-10-02 · v2 · final consistency pass against the code: retitled section 7 to clarify pre-work (29 Sep–1 Oct) vs planned for 2–3 Oct; changed "before 2 Oct" build claims to "planned for 2 Oct" (N1–N8, X1–X8 are PLANNED not built); fixed browser Web Speech API fallback language from en-IN to hi-IN and added network connection requirement; changed the assumed demo slot times to planning targets (to re-baseline on-site); replaced the older repository wording with "public".
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned
-- 2026-10-02 · v1.2 · logic and truth audit fixes: adjusted schedule to show X3 and X4 sequential durations (12:30–13:30 and 13:30–15:00), added critical dependency note explaining N1-api-routes blocking on X4 completion.
-- 2026-10-02 · v1.1 · fact-check pass: fixed X4 description to avoid incorrect outcome names, replaced private BRIEF references with public doc references (DEMO.md, SPEC.md, policy-wording-and-cis.md).
-- 2026-10-02 · v1 · first draft: hourly schedule, tasks, critical path, integration checkpoints, cuts, risks.
+- 2026-10-02 · v1.2 · logic and truth audit fixes: adjusted the schedule to show X3 and X4 one after the other, and added a dependency note on X4 (superseded in v3).
+- 2026-10-02 · v1.1 · fact-check pass: fixed X4 description to avoid incorrect outcome names, pointed to public docs (DEMO.md, SPEC.md, policy-wording-and-cis.md) instead.
+- 2026-10-02 · v1 · initial draft: hourly schedule, tasks, critical path, integration checkpoints, cuts, risks.

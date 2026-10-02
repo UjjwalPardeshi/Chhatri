@@ -5,92 +5,118 @@
 | Status | Accepted |
 | Owner | Ujjwal Pardeshi |
 | Date | 2026-10-02 |
-| Related | [SPEC §4](../../SPEC.md) · [SPEC §9.6](../../SPEC.md) · [DEMO.md](../../DEMO.md) · [Facts and sources (A8, A14)](../../01-strategy/facts-and-sources.md) |
+| Related | [SPEC §4.3, §6.3, §6.4, §7.4, §8, §18](../../SPEC.md) · [fs-01 area auto-claim](../../02-product/feature-specs/fs-01-area-auto-claim.md) · [fs-08 console (what-if panel)](../../02-product/feature-specs/fs-08-claims-officer-console.md) · [ML model card](../ml-model-card.md) · [Backtest report](../../../backend/artifacts/backtest/report.md) · [DEMO.md](../../DEMO.md) · [Facts and sources (A8, A14, D)](../../01-strategy/facts-and-sources.md) |
 
 ## TL;DR
 
-The trigger for area income cover combines three signals: a zone's **hourly sales index** (actual ÷ expected, from live Paytm data and a LightGBM model) below **50% for 3 consecutive hours**, **below the model's conformal lower bound**, and **during a red or orange weather alert**. At least 20 shops in the zone must be in the index. This replaces weather-only triggers (basis-risk problem, A8) and individual-shop logic (collusion risk). It measures loss from the merchant's own data.
+An area claim starts when a **zone**, not a shop, shows a sales collapse that an alert explains. At every hour boundary the detector checks each zone and fires when all of these hold:
+
+- a RAIN or CIVIC alert, already issued, is valid for the whole 3-hour window;
+- each of the 3 hourly sales indices (actual ÷ expected) is below 50%;
+- the 3-hour window index is below the zone's **conformal lower bound**;
+- at least 20 covered shops are in the index;
+- the zone has not fired already that day.
+
+Expected sales come from a LightGBM quantile model. This keeps the idea behind the weather-index literature (A8) and replaces a weather-only trigger with the merchants' own sales. **Every sale, every alert and every "real drop" in the backtest is simulated, and the calibration is circular by design** (section "Honest limits"). The decision is about the shape of the rule. It does not claim the rule has been measured on real merchants.
 
 ## Context
 
-**Basis risk:** parametric income cover for gig workers and SMEs exists (Riskwolf, SEWA, A14); it triggers on weather or area-level proxies. Clarke et al. (2012, A8) found a one-in-three chance of no payout even when area-average yield was totally lost. Chhatri's trigger is designed to reduce this gap: instead of weather alone, it watches **the merchant's actual sales during the alert** and compares them to an expected baseline.
+**Basis risk.** Weather-index insurance can fail to pay when the loss is real. Clarke et al. (2012, A8) studied 270 weather-index crop products and found roughly a one-in-three chance of no payout even when the area-average yield was totally lost. Parametric income cover for gig workers, farmers and small businesses already exists (Riskwolf, A14, with an Indian subsidiary since 2024). Chhatri's idea is to watch the merchants' own sales inside the payments app, during an alert, instead of the weather alone.
 
-**Why not individual shop triggers?** A merchant can claim a loss by simply not using the terminal for a day. An area-level index means one shop cannot fake a loss; it must match the zone's pattern.
+**Why a zone, not a shop.** A shop can show a "loss" by not using its terminal. One shop cannot move a zone's index, and the 20-shop quorum stops a thin zone from firing on noise.
 
-**Model calibration:** the expected-sales model (LightGBM, quantile regression) predicts p10, p50, p90 for each shop on each day. The trigger uses p50 as the baseline and the conformal lower bound (approximately p10 in backtest) as the floor. Simulated sales (driven by real rainfall, 2024–2025) are used to train and backtest (facts-and-sources.md §D, circular calibration disclosed openly); post-launch, the model will be retrained with production merchant data.
+**Why three conditions.** The alert says what caused the drop, and keeps ordinary slow days out (Z9 on the demo day: 61% with no alert, no payout, by design). The 50% floor sets the size of the drop. The lower bound says the drop is outside normal volatility for that zone.
+
+**The model.** Three LightGBM boosters, one per quantile (P10, P50, P90), predict each shop's expected sales for each hour. Zone and shop type are features, with the hour, weekday, festival flag, month, the shop's trailing normal-week level and its usual share of the day in that hour. Training uses normal days only: days with an alert, bandh days and closure days are left out (SPEC §7.1, §7.2). The trigger uses P50 as "expected". The zone lower bound is not a P10. It is the ⌊(n+1)·0.025⌋-th smallest 3-hour window index (1-based, an integer percent, half up) over the held-out normal zone-days, a one-sided 2.5% conformal rank (`backend/chhatri/forecast/calibrate.py`, SPEC §7.4). With fewer than 39 windows the rank is 0, so no bound can be certified, the stored bound is 0%, and no trigger can fire in that zone. The bounds are stored per zone in `backend/artifacts/model/manifest.json` (`lower_bound_pct`: Z3 89, Z7 92, Z9 90, Z12 78 on the demo day; across all 24 zones they run from 47 to 94).
 
 ## Decision
 
-**Trigger logic** (backend/chhatri/detect/triggers.py, rules.yaml, K1):
+**Trigger rule** (`backend/chhatri/detect/triggers.py`, `evaluate_hour`; values in `backend/chhatri/policy/rules.yaml`, version `pilot-0.1`). At hour boundary t the window is [t − 3 h, t). All comparisons are strictly less than.
 
-1. Every hour, calculate the zone's **area sales index** = Σ(actual sales in shops with recent activity) ÷ Σ(expected sales on that hour).
-2. Check three conditions in parallel for the **last 3 consecutive hours**:
-   - Index < 50%.
-   - Index < model's conformal lower bound (p10 estimate, approx.).
-   - A red or orange alert covers the zone (from Open-Meteo, cached or live).
-3. All three must be true for at least one "window" of 3 consecutive hours.
-4. At least **20 shops** must be in the index (to prevent small-zone noise).
-5. If triggered, an area claim is created; the policy engine (`evaluate_area_claim`) decides approval for each covered shop.
+| Condition | Rule | Source of the value |
+|---|---|---|
+| Alert | A RAIN or CIVIC alert for the zone, issued by t, is valid for the whole window. The alert's kind matters, its level (YELLOW, ORANGE, RED) does not | `TRIGGER_ALERT_KINDS` in `triggers.py` |
+| Floor | Each of the 3 hourly indices is below 50 | `area.index_floor_pct` |
+| Bound | The 3-hour window index is below the zone's lower bound | `manifest.json` |
+| Quorum | At least 20 shops are in the index | `area.min_shops_in_index` |
+| Once a day | The zone has not triggered for that day | `already_triggered` set of (zone, day) |
 
-**Payout logic** (rules.yaml):
+**The index** is Σ actual ÷ Σ expected over the zone's covered merchants (those with a cover) that are scheduled open in at least one hour of the window, as an integer percent, half up. Merchants who closed that day stay in the index, exactly as at calibration time, so calibration and detection scores are exchangeable (`backend/chhatri/detect/area_index.py`, `backend/chhatri/forecast/calibrate.py`).
 
-- Amount = 0.5 × expected_day × (1 − index%), capped at ₹2,500 per shop per day.
-- Example (demo): zone Z7, index 37%, expected ₹4,380/day → 0.5 × ₹4,380 × 63% = ₹1,380.
+**What a trigger is.** An `AreaTrigger` record with the hourly indices, the window index, the bound, the shop count and the alert id. It is not a payment. Each covered shop's claim is then decided by the policy engine (`evaluate_area_claim`, nine HARD checks, [fs-01](../../02-product/feature-specs/fs-01-area-auto-claim.md)). Per shop the payout is ½ × the published expected day × the drop %, rounded to the rupee and capped at ₹2,500, where drop % = 100 − window index (`backend/chhatri/policy/amounts.py`, `area_breakdown`).
 
-**Conformal bound:** the model's lower quantile (p10) is used as a threshold to avoid false triggers on volatility.
+**Demo day (monsoon, Tue 19 Aug 2025).** Z7 has hourly indices 35, 39 and 37, window 37 (below its bound 92), 46 shops and alert `A-20250818-01`, so it fires with a 63% drop. Anil (S-0142) has an expected Tuesday of ₹4,380, so ½ × ₹4,380 × 63% = ₹1,380. Z3 (window 38, bound 89, 141 shops) and Z12 (47, bound 78, 125 shops) fire too. Z9 (window 61, no alert) shows `slow_day`.
+
+**Zone statuses** the map shows: `triggered`, `no_data`, `watch`, `slow_day`, `normal` (rules in the `triggers.py` docstring).
+
+**Guards outside the trigger.** The shop's cover must have been bought before the alert was issued (`COVER_BEFORE_ALERT`) and its premium prepaid (`PREMIUM_PREPAID`), both HARD checks in the policy engine. A new cover always starts after the 7-day waiting period, and a quote taken while an alert is valid, or issued and starting within 72 hours (`cover.alert_lookahead_hours`), is marked BLOCKED for an immediate start (SPEC §9.5).
+
+**One rule, several readers (PLANNED).** Wave 1 extracts the conditions into a pure `trigger_verdict` ([fs-09](../../02-product/feature-specs/fs-09-policy-engine-and-audit.md) section 9.5) that the detector, the H14 counterfactual and the what-if panel (fs-08, `POST /api/whatif/area`) all call, so no threshold is copied.
 
 ## Alternatives considered
 
-1. **Weather-only trigger (rejected):** Red alert → automatic area payout. Pro: simple; no sales data dependency. Con: basis risk (A8); many false positives; merchants uninsured on non-rainy days.
-
-2. **Individual-shop sales drops (rejected):** Any shop with sales below 40% of expected is paid. Pro: personalised. Con: a merchant can fake it by not selling; no area signal; higher claim count and moral hazard.
-
-3. **Hybrid with late-alert check (considered):** Trigger on sales, then verify alert was issued ≥12 hours before the drop (to rule out false alerts). Con: adds latency; makes the alert a legal prerequisite; more rigid.
+1. **Weather-only trigger (rejected).** An alert or a rain total pays every shop of the zone. It is simple and needs no sales data. It carries the basis risk of A8, and in the simulated backtest it paid 287 of 336 payouts with no real drop (85%) and could not see non-rain shocks.
+2. **Individual-shop sales drop (rejected).** Any shop below some share of expected sales is paid. A shop can fake it, there is no area signal, and it has no quorum.
+3. **Sales-only trigger with no alert (rejected).** Slow days would pay. A slow day is not a loss event the product covers, so the alert is part of the rule.
+4. **Minimum alert lead time (considered, not built).** Require the alert to be issued some time before the drop, so an alert issued after the loss cannot trigger. It would make the alert's timing a prerequisite and is not in `rules.yaml`. The built rule needs the alert issued by the evaluation time and valid for the whole window. The 72-hour look-ahead applies to cover purchase, not to the trigger.
 
 ## Consequences
 
-**Positive:**
+**Positive**
 
-- **Basis-risk reduction:** the trigger watches actual sales, not weather proxies, so it matches loss to cover more often (backtest: 60% of real drops paid vs 33% for weather-only; A8).
-- **Area-level immunity:** one merchant's absence does not trigger a payout; the whole zone must show a loss.
-- **Model grounding:** the expected-sales model can be retrained with real data post-launch (roadmap).
-- **Transparent:** the formula, threshold and data sources are audited and explained to merchants (K5).
+- One shop cannot fake a zone's index, and a thin zone cannot fire.
+- Each condition is a number a merchant or judge can read. The explanation and the Z9 note show them today, and the receipt and the what-if panel (both PLANNED) will too.
+- Deterministic: the same seed gives the same triggers and ids (`backend/tests/replay/test_determinism.py`, the 21 tests of `backend/tests/detect/test_triggers.py`).
 
-**Negative:**
+**Negative**
 
-- **Complexity:** three conditions and a lookback window add code and test surface.
-- **Model dependency:** the trigger relies on expected-sales predictions; a bad model = bad trigger. Mitigate with evals and post-launch monitoring (roadmap).
-- **Simulated training data:** current model is trained on simulated sales (facts-and-sources.md §D); post-launch, the model can be retrained with real merchant sales data for improvement (roadmap).
+- Model dependency: a poor expected-sales model gives a poor trigger. The serving model's held-out P10–P90 band covers 78.2% of cells against 80% nominal (`coverage_p10_p90` in `manifest.json`), measured on simulated days.
+- The thresholds are published, on the Policy page and the map legend, and the what-if panel (PLANNED) will show them too. Gaming is limited by the zone-level index, the quorum and the per-shop checks, not by secrecy.
+- A zone whose bound is at or below the 50% floor is governed by the bound, and a zone with too few calibration windows cannot fire at all.
 
-**Risks:**
+**Risks**
 
-- **Circular calibration:** simulation parameters are tuned to reproduce the demo's numbers; this is not evidence of real performance. Mitigated by saying so openly (see the errata in [current-state-audit.md](../../01-strategy/current-state-audit.md)).
-- **Threshold gaming:** once merchants know the 50% threshold, they may manage sales around it. Mitigate by not publicizing exact thresholds; auditing sales patterns; working with a compliance team post-launch.
-- **Alert timing:** if an alert is issued late (e.g., after the sales drop), the trigger will not fire. Mitigate with a 72-hour look-ahead during cover purchase (K6); a future roadmap could use forecasted alerts.
+- **Circular calibration** (next section).
+- **Alert timing.** Alerts in the simulation come from a perfect forecast. A real feed is later and noisier, and an alert issued after the drop would not trigger.
+- **Alert level.** Policy wording C2 says "Red alert". The code accepts a RAIN or CIVIC alert of any level. Wording and rule need aligning with the insurer.
+
+## Honest limits
+
+The numbers below are why the backtest is "specification validation on simulated sales and real rainfall" and nothing stronger.
+
+1. **The demo day is scripted and tuned.** `backend/chhatri/pipeline/day_search.py` scales the scripted storm so the 14:00 to 17:00 window index is exactly 37, 38 and 47% in Z7, Z3 and Z12, and makes Z9 show 61% on its slow day. The demo numbers show the engine's arithmetic. They are not a finding. The tuning knobs are in `backend/artifacts/calibration.json`.
+2. **The "real drops" are the simulator's own shocks.** Sales come from `backend/chhatri/sim/sales.py` driven by real Open-Meteo rainfall. The shocks are defined in `sim/disruptions.py`: rain impact, fictional city-wide bandhs on 10 Sep 2024 and 9 Sep 2025 (sales down 75% all day), and slow days (1.5% of zone-days, down 25% to 45%, only without an alert). A real drop is a zone-day whose loss against the simulator's own no-shock sales (`sim/truth.py`) is at least 40% (`REAL_DROP_LOSS` in `backend/chhatri/backtest/config.py`). The backtest's 148 real drops are 50 rain, 48 bandh and 50 slow-day zone-days.
+3. **Alerts are simulated with a perfect forecast.** ORANGE from 30 mm and RED from 60 mm of trailing 3-hour rain, issued 60 minutes ahead; civic alerts issued at 19:00 the evening before a bandh (`sim/alerts.py`).
+4. **The bound is calibrated on simulated normal days.** Its 97.5% statement holds inside the simulator only.
+5. **The headline mixes causes.** Chhatri paid 89 of 148 real drops (60%) against 49 of 148 (33%) for weather-only. On the 50 rain drops weather-only paid 47 and Chhatri paid 41. Chhatri's total comes from the 48 bandh drops, which a rain trigger cannot see (it paid all 48, weather-only paid none), and from paying less when nothing happened (36 of 125 payouts without a real drop, against 287 of 336). The 50 slow-day drops count as misses for Chhatri by design, because a slow day with no alert is not a loss event the cover pays.
+6. **Premiums use the same losses.** They are priced as expected loss ÷ (1 − 0.35) from the simulated losses they are then compared with, so each zone's loss ratio is about 65% by construction and in-sample.
+
+What the backtest does show is that the rule pays when its conditions hold and not otherwise, and what each candidate rule would have paid in this simulated world. The console's Backtest page is to carry a caveat line to the same effect (fs-08 section 13.3).
 
 ## How we will know it was right
 
-**Signals:**
-
-1. Backtest shows the trigger pays simulated drops more often than weather-only (specification validation shows 60% vs 33%, fact D).
-2. No zone's conformal bound is violated (model recalibration catches drift).
-3. Merchants can reproduce the ₹1,380 payout from the demo's index (37%), expected (₹4,380) and formula (facts-and-sources.md, section D).
-4. The trigger fires deterministically on the same scenario seed; no randomness in alert matching or index calculation.
-5. A partner insurer accepts the trigger as meeting the basis-risk criterion in product underwriting.
+1. The same seed gives the same triggers, ids and audit hashes (`test_two_independent_monsoon_replays_to_the_end_are_identical`).
+2. A merchant can rebuild ₹1,380 from the numbers shown: 63% drop, ₹4,380 expected day, half (`test_anil_is_paid_1380_with_the_spec_explanation` and `test_trigger_numbers` in `backend/tests/test_golden_numbers.py`; `scripts/tests/test_docs.py` pins the same strings in DEMO.md).
+3. A shadow phase in a pilot: run the rule on real merchant sales and a real alert feed before any money moves, and compare it with the losses merchants report.
+4. The bound is re-fitted on real normal days and checked for coverage on held-out real windows.
+5. A partner insurer accepts the trigger against its own basis-risk criterion.
 
 ## Follow-ups
 
-- **Task:** Post-launch, train the model on production merchant sales data (roadmap).
-- **Task:** Implement alert look-ahead enforcement during cover purchase (K6, X7 test).
-- **Task:** Monitor false positive and false negative rates in the pilot and adjust the 50% threshold.
+- Extract `trigger_verdict` (wave 1) and use it in the what-if panel (wave 4).
+- Add the caveat line to the Backtest page (wave 4, fs-08).
+- Align the alert-level wording (C2) with the rule, with the insurer.
+- Pilot: shadow phase, then refit the model and the bounds on real data.
 
 ## Open questions
 
-1. Does the partner insurer require the conformal bound to be formally validated (e.g., with a coverage test), or is p10 a sufficient proxy? Owner: Ujjwal Pardeshi.
-2. Should the trigger consider seasonal sales patterns (e.g., festival spikes) or stick to daily baselines? Owner: Ujjwal Pardeshi.
+1. Does the partner insurer require the bound to be validated with a formal coverage test, or is the conformal rank enough? Owner: Ujjwal Pardeshi.
+2. Should the trigger model seasonal spikes (the simulator has a Ganesh Chaturthi uplift) or stay with the daily baseline? Owner: Ujjwal Pardeshi.
+3. Should the rule require "Red alert" as C2 says, or any alert level as built? Owner: Omkar Kadam, with the insurer.
 
 ## Changelog
 
+- 2026-10-02 · v3 · circular calibration spelled out (scripted demo day, simulator-defined real drops, perfect-forecast alerts, same-simulator bound, mixed-cause headline); conformal bound described as the 2.5% rank, not P10; alert is any RAIN or CIVIC level; index over covered scheduled-open shops; sales and alerts are simulated (only the rainfall is the real Open-Meteo record); the "do not publish thresholds" mitigation is removed; real file paths and test names
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; ADR correctly describes the area sales index trigger and its backtest validation.
 - 2026-10-02 · v1.1 · fact-check pass: clarified that sales data is simulated for demo; reframed backtest results as specification validation; disclosed circular calibration openly; noted post-launch model retraining with production data.
 - 2026-10-02 · v1 · first draft.

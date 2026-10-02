@@ -9,28 +9,29 @@
 
 ## TL;DR
 
-These ADRs document the key architectural, product and technical decisions in Chhatri. Each record covers the decision, why it was chosen, alternatives considered and signals to know it was right. All decisions are **Accepted** as of 2 Oct 2026.
+These ADRs document the key architectural, product and technical decisions in Chhatri. Each record covers the decision, why it was chosen, alternatives considered and signals to know it was right. All decisions are **Accepted** as of 2 Oct 2026. Accepting a decision is not evidence that its code exists: each ADR says what is BUILT today and what is PLANNED, and the summaries below repeat that split.
 
 ## ADRs
 
 | ADR | Title | Decider | Status | Summary |
 |---|---|---|---|---|
-| 0001 | Policy engine is the only payout authority | Ujjwal Pardeshi | Accepted | Code, not AI, produces all APPROVED decisions; the policy engine is the single enforcement point (SPEC §0.2). |
-| 0002 | Area sales index trigger | Ujjwal Pardeshi | Accepted | A zone-level sales index below 50% for 3 hours, below the model's quantile bound, and during an alert, with ≥20 shops, replaces weather-only triggers and measures loss from the merchant's live data. |
-| 0003 | Free AI provider chain | Ujjwal Pardeshi | Accepted | Gemini Flash free tier (PLANNED N2/N3) → Sarvam credits (LIVE) → deterministic templates; Tesseract for OCR (PLANNED P1); Cognee and n8n kept optional (roadmap). |
-| 0004 | LIVE / SIMULATED / FALLBACK labels | Ujjwal Pardeshi | Accepted | Every component reports its status at startup and in the console header; simulated data is never presented as live. |
-| 0005 | Mini-app inside the console | Omkar Kadam | Accepted | A phone-sized merchant mini-app, "Chhatri in Paytm for Business", beside the WhatsApp simulator (N1); not a separate PWA or WhatsApp-only. |
-| 0006 | EDI holiday is the lender's decision | Omkar Kadam | Accepted | Chhatri requests pre-agreed EDI holidays; the lender's rule decides (active loan, not in arrears, allowance available); reframed from "instalment pause" (K3). |
-| 0007 | Hospital-cash framing | Omkar Kadam | Accepted | Personal claims are reframed as hospital-cash income claims that demonstrate the health insurance track example end to end, not a separate family health assistant. |
-| 0008 | In-process workflows on stage | Ujjwal Pardeshi | Accepted | The in-process workflow runner is used for the demo and the console; n8n is shown as the production orchestration (it holds the 30–60 s clock). |
-| 0009 | Synthetic data only to free-tier AI | Ujjwal Pardeshi | Accepted | Demo merchants, sample slips and simulated sales are sent to Gemini free tier and Sarvam; never real personal data, to comply with terms and privacy rules. |
+| 0001 | Policy engine is the only payout authority | Ujjwal Pardeshi | Accepted | BUILT. Code, not AI, produces every APPROVED decision; the policy engine is the single enforcement point and the payout step refuses anything else (SPEC §0.2). |
+| 0002 | Area sales index trigger | Ujjwal Pardeshi | Accepted | BUILT. A zone-level index (actual ÷ expected sales) below 50% in each of 3 hours and below the zone's conformal lower bound, during a RAIN or CIVIC alert, with at least 20 shops, replaces a weather-only trigger. All sales and alerts are simulated, and the backtest is a specification check. |
+| 0003 | Free AI provider chain | Ujjwal Pardeshi | Accepted | One ordered chain per AI need, ending in something deterministic. BUILT: the Sarvam links (live only with `SARVAM_API_KEY`) and the simulators. PLANNED (Wave 2): the Gemini links, the FALLBACK label and the switches. Tesseract is a later link, not in Wave 2. |
+| 0004 | LIVE / SIMULATED / FALLBACK labels | Ujjwal Pardeshi | Accepted | BUILT: 15 components report LIVE or SIMULATED in the console header, and nothing simulated is shown as live. PLANNED (X6, Wave 2): the FALLBACK state and a demo switch. |
+| 0005 | Mini-app inside the console | Omkar Kadam | Accepted | PLANNED (N1, Wave 1). A phone-sized merchant mini-app, "Chhatri in Paytm for Business", in a third column beside the WhatsApp simulator and as a standalone route. Tailwind v4 and shadcn are scoped to it. Not an iframe, a separate PWA or WhatsApp-only. |
+| 0006 | EDI holiday is the lender's decision | Omkar Kadam | Accepted | Chhatri requests a pre-agreed EDI holiday and the lender decides. Today the simulated lender always grants with no check. X4 (Wave 1) adds the lender's rule (active loan, not in arrears, allowance left, in the scheme) and the lender-decides wording. |
+| 0007 | Hospital-cash framing | Omkar Kadam | Accepted | BUILT as K2. Personal claims are hospital-cash income claims that walk the health insurance track example end to end, not a separate family health assistant. The slip pre-check and voice check-in are PLANNED. |
+| 0008 | In-process workflows on stage | Ujjwal Pardeshi | Accepted | BUILT. The in-process runner drives the stage demo (n8n badge SIMULATED). With n8n LIVE the replay clock holds about 30 to 60 seconds at 17:00 while 312 payout runs go through n8n. |
+| 0009 | Synthetic data only to free-tier AI | Ujjwal Pardeshi | Accepted | Only synthetic data goes to AI services on free tiers or credits. Today that holds because the whole prototype is synthetic. The `CHHATRI_DATA_IS_SYNTHETIC` gate (name proposed) is PLANNED (Wave 2). |
 
 ## Open questions
 
-None.
+Each ADR lists its own open questions.
 
 ## Changelog
 
+- 2026-10-02 · v2.1 · summaries rewritten to match the corrected ADRs: BUILT and PLANNED split for each, Tesseract is a later link (the old "PLANNED P1" is gone), ADR 0002 no longer says "live data" (all data is simulated), ADR 0006 notes that today's lender always grants, ADR 0008 and 0009 match their rewrites. The earlier "no changes needed" claim in v2 was wrong.
 - 2026-10-02 · v2 · final consistency pass against the code: no changes needed; all ADRs correctly describe TODAY vs PLAN and use accepted status appropriately.
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: ADR 0003 summary updated to show Gemini PLANNED status, Sarvam LIVE, and Tesseract PLANNED.
 - 2026-10-02 · v1 · initial index of nine ADRs.
