@@ -3,7 +3,7 @@
  * play/pause, speed (1–120 simulated minutes per real second), step, seek HH:MM, reset, the
  * "Slow near payout" switch, and the scrubber with the scenario's chapters underneath.
  */
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
 import { isHhmm, MAX_SPEED, MIN_SPEED } from '../../api/endpoints'
@@ -13,8 +13,11 @@ import { useLive } from '../../state/live'
 import { useSlowNearPayout, type SlowNearPayout } from '../../state/useSlowNearPayout'
 import { Icon } from '../common/Icon'
 import { InlineError } from '../common/Status'
+import { Feature } from '../common/Feature'
 import { ClockLabel } from './ClockLabel'
+import { PresenterKeysButton } from './PresenterControls'
 import { Scrubber } from './Scrubber'
+import { usePresenterKeys } from './usePresenterKeys'
 
 export { clockParts, splitClockLabel } from './ClockLabel'
 
@@ -96,6 +99,15 @@ function Transport({ clock, busy, speed, slow, onSpeed }: TransportProps) {
   const { replay } = useLive()
   /** Phones fold speed, steps, seek and reset into a "More" popover (CSS shows it inline elsewhere); a seek or reset closes it. */
   const [moreOpen, setMoreOpen] = useState(false)
+  /** Esc closes the menu, wherever it shows (phones always, presenter mode on any screen). */
+  useEffect(() => {
+    if (!moreOpen) return undefined
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [moreOpen])
   return (
     <fieldset className="transport" aria-label="Replay controls">
       <button type="button" className="btn btn--primary transport__play" disabled={busy} aria-label={clock.running ? 'Pause' : 'Play'} onClick={() => void (clock.running ? replay('pause') : replay('play', speed))}>
@@ -105,6 +117,9 @@ function Transport({ clock, busy, speed, slow, onSpeed }: TransportProps) {
       <button type="button" className="btn btn--icon transport__more-toggle" aria-expanded={moreOpen} aria-controls="transport-more" aria-label="More replay controls" onClick={() => setMoreOpen((v) => !v)}>
         <Icon name="more" size={16} />
       </button>
+      <Feature name="console_polish">
+        <PresenterKeysButton />
+      </Feature>
       <div id="transport-more" className="transport__more" data-open={moreOpen}>
         <label className="speed">
           <span className="visually-hidden">Speed (simulated minutes per second)</span>
@@ -159,9 +174,10 @@ export function ControlBar() {
   const [dismissed, setDismissed] = useState<typeof replayError>(null)
   const busy = replayBusy !== null
   const slow = useSlowNearPayout(clock, replay, busy)
+  const speed = clock ? (picked?.server === clock.speed ? picked.speed : clock.speed) : 0
+  usePresenterKeys({ clock, busy, speed, slow, replay })
 
   if (!clock) return <div className="control-bar control-bar--empty">Waiting for the replay clock…</div>
-  const speed = picked?.server === clock.speed ? picked.speed : clock.speed
 
   const changeScenario = async (name: ScenarioName) => {
     await replay('load', name)

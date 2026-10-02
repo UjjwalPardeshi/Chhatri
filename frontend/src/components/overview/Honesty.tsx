@@ -14,10 +14,10 @@ function LiveCount() {
   const { integrations, integrationsError } = useLive()
   if (integrationsError) return <span className="tier__now">Live status unavailable right now.</span>
   if (!integrations) return <span className="tier__now">Checking what is live…</span>
-  const { live, simulated } = integrationCounts(integrations)
+  const { live, simulated, fallback } = integrationCounts(integrations)
   return (
     <span className="tier__now num">
-      Right now: {live} live, {simulated} simulated.
+      Right now: {live} live, {simulated} simulated{fallback > 0 ? `, ${fallback} fallback` : ''}.
     </span>
   )
 }

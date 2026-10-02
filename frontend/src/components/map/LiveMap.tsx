@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AttributionControl, MapContainer, useMap } from 'react-leaflet'
 
 import type { MerchantDetail, StateSnapshot, ZoneSnapshot } from '../../api/types'
+import type { TriggerRule } from '../../lib/rules'
 import { hhmm } from '../../lib/time'
 import { basemap } from '../../state/tileStatus'
 import { useLatest } from '../../state/useLatest'
@@ -138,6 +139,8 @@ type Props = {
   snapshot: StateSnapshot
   merchant: MerchantDetail | null
   selected: string | null
+  /** The published trigger rule for the legend (fs-08 13.2); null until `GET /api/policy` has answered. */
+  rule?: TriggerRule | null
   onSelectZone: (zoneId: string) => void
   onOpenMerchant: (merchantId: string) => void
 }
@@ -153,7 +156,7 @@ function useLabels(geo: MapGeo, snapshot: StateSnapshot, merchant: MerchantDetai
   }, [snapshot.zones, snapshot.rain_band, centroids, merchant, selected, day])
 }
 
-export function LiveMap({ geo, snapshot, merchant, selected, onSelectZone, onOpenMerchant }: Props) {
+export function LiveMap({ geo, snapshot, merchant, selected, rule = null, onSelectZone, onOpenMerchant }: Props) {
   const [offline, setOffline] = useState<TileFailure | null>(null)
   const [tilesShown, setTilesShown] = useState(false)
   const compact = useMediaQuery(COMPACT_QUERY)
@@ -188,7 +191,7 @@ export function LiveMap({ geo, snapshot, merchant, selected, onSelectZone, onOpe
       </MapContainer>
       <StatusChip status={alertStatus(snapshot.zones, snapshot.clock)} />
       <NorthArrow />
-      <Legend patterns={LIVE_PATTERNS} />
+      <Legend patterns={LIVE_PATTERNS} rule={rule} />
       {offline ? <OfflineNote reason={offline} /> : null}
     </div>
   )

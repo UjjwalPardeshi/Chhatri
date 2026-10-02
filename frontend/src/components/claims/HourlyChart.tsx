@@ -21,16 +21,17 @@ const GRID_STEPS_PAISE: readonly number[] = [10_000, 20_000, 50_000, 100_000, 20
 
 export type LowRun = { from: number; to: number; label: string }
 
-function isLow(r: Rows[number]): boolean {
-  return r.expected_paise > 0 && r.actual_paise * PCT < r.expected_paise * INDEX_FLOOR_PCT
+function isLow(r: Rows[number], floorPct: number): boolean {
+  return r.expected_paise > 0 && r.actual_paise * PCT < r.expected_paise * floorPct
 }
 
 /** The longest run of hours whose actual sales were below the floor share of expected. */
-export function lowRun(rows: Rows): LowRun | null {
+/** `floorPct` is the published policy floor (area.index_floor_pct); the constant only stands in until the policy has loaded. */
+export function lowRun(rows: Rows, floorPct: number = INDEX_FLOOR_PCT): LowRun | null {
   let best: { from: number; to: number } | null = null
   let start = -1
   for (let i = 0; i <= rows.length; i += 1) {
-    const low = i < rows.length && isLow(rows[i])
+    const low = i < rows.length && isLow(rows[i], floorPct)
     if (low && start === -1) start = i
     if (!low && start !== -1) {
       if (best === null || i - 1 - start > best.to - best.from) best = { from: start, to: i - 1 }
@@ -39,7 +40,7 @@ export function lowRun(rows: Rows): LowRun | null {
   }
   if (best === null) return null
   const silent = rows.slice(best.from, best.to + 1).every((r) => r.actual_paise === 0)
-  return { ...best, label: silent ? 'No payments' : `Below ${INDEX_FLOOR_PCT}% of expected` }
+  return { ...best, label: silent ? 'No payments' : `Below ${floorPct}% of expected` }
 }
 
 export function gridStep(max: number): number | null {
@@ -54,8 +55,8 @@ export function gridLines(max: number): number[] {
 }
 
 /** The band's tag when the band is too narrow for the words. */
-export function shortRunLabel(run: LowRun): string {
-  return run.label === 'No payments' ? '₹0' : `<${INDEX_FLOOR_PCT}%`
+export function shortRunLabel(run: LowRun, floorPct: number = INDEX_FLOOR_PCT): string {
+  return run.label === 'No payments' ? '₹0' : `<${floorPct}%`
 }
 
 /** "06:00–22:00 totals" for rows from 06:00 to 21:00. */
@@ -65,11 +66,11 @@ export function totalsLabel(rows: Rows): string {
   return first && last ? `${hhmm(first)}–${nextHour(hhmm(last))} totals` : 'totals'
 }
 
-export function HourlyChart({ rows }: { rows: Rows }) {
+export function HourlyChart({ rows, floorPct = INDEX_FLOOR_PCT }: { rows: Rows; floorPct?: number }) {
   const max = Math.max(1, ...rows.map((r) => Math.max(r.expected_paise, r.actual_paise)))
   const expected = rows.reduce((sum, r) => sum + r.expected_paise, 0)
   const actual = rows.reduce((sum, r) => sum + r.actual_paise, 0)
-  const run = lowRun(rows)
+  const run = lowRun(rows, floorPct)
   const colPct = PCT / Math.max(1, rows.length)
   return (
     <figure className="ev-chart">
@@ -85,7 +86,7 @@ export function HourlyChart({ rows }: { rows: Rows }) {
           <span className="ev-chart__band" style={{ left: `${run.from * colPct}%`, width: `${(run.to - run.from + 1) * colPct}%` }}>
             <span className="ev-chart__band-label" title={run.label}>
               <span className="ev-chart__band-long">{run.label}</span>
-              <span className="ev-chart__band-short">{shortRunLabel(run)}</span>
+              <span className="ev-chart__band-short">{shortRunLabel(run, floorPct)}</span>
             </span>
           </span>
         ) : null}

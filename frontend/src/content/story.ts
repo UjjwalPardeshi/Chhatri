@@ -5,8 +5,10 @@
  * instalment, ₹1,500 personal payout, case C-2291.
  */
 import type { Message, MessageKind, PayoutCard } from '../api/types'
+import { isFeatureEnabled } from '../features'
 import { MSG, type Bilingual } from './catalogue'
 import { DEMO_MERCHANT } from './deck'
+import { HOLIDAY } from './holiday'
 
 const MONSOON_DAY = '2025-08-19'
 const ILLNESS_DAY = '2025-08-21'
@@ -82,6 +84,11 @@ export const HERO_THREAD: readonly Message[] = [
 
 export const RAIN_SOUNDBOX: Message = message({ id: 'r4', day: MONSOON_DAY, at: '17:04', kind: 'SOUNDBOX', text: MSG.soundbox(STORY.areaAmount) })
 
+/** The 17:05 instalment line: the lender's grant once the lender decides (x4_lender_request), else the BUILT pause line. */
+export function instalmentLine(features: string | undefined = import.meta.env.VITE_FEATURES): Bilingual {
+  return isFeatureEnabled('x4_lender_request', features) ? HOLIDAY.granted(STORY.instalment, 'tomorrow') : MSG.instalmentPaused(STORY.instalment)
+}
+
 export type Journey = { key: 'rain' | 'illness' | 'questions'; title: string; subtitle: string; now: string; thread: readonly Message[]; soundbox: Message | null }
 
 /** Deck slide 7: the three journeys, in the order the deck tells them. */
@@ -94,7 +101,7 @@ export const JOURNEYS: readonly Journey[] = [
     thread: [
       message({ id: 'r1', day: MONSOON_DAY, at: '17:04', kind: 'TEXT', text: MSG.areaPayoutIntro(STORY.nameHi, STORY.nameEn, STORY.drop) }),
       message({ id: 'r2', day: MONSOON_DAY, at: '17:04', kind: 'PAYOUT_CARD', card: areaCard() }),
-      message({ id: 'r3', day: MONSOON_DAY, at: '17:05', kind: 'TEXT', text: MSG.instalmentPaused(STORY.instalment) }),
+      message({ id: 'r3', day: MONSOON_DAY, at: '17:05', kind: 'TEXT', text: instalmentLine() }),
     ],
     soundbox: RAIN_SOUNDBOX,
   },

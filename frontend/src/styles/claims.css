@@ -177,6 +177,7 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 12px 0;
@@ -306,4 +307,33 @@
   .actions__note {
     flex: 1 1 100%;
   }
+}
+
+.counterfactual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: var(--fs-sm);
+}
+
+.counterfactual__note {
+  font-size: var(--fs-2xs);
+}
+
+.holiday-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 8px 0 0;
+  font-size: var(--fs-sm);
+}
+
+.actions__hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-sm);
 }

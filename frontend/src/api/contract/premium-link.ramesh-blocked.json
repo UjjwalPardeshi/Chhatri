@@ -1,0 +1,81 @@
+{
+  "name": "premium-link.ramesh-blocked",
+  "description": "Ramesh asks for a quote at Mon 18 Aug 18:00, after the alert was issued: BLOCKED, starts 25 August, 30 days of Z3 premium (₹424.80), a simulated link.",
+  "scenario": "buy_cover",
+  "at": "18:00",
+  "setup": [],
+  "request": {
+    "method": "POST",
+    "path": "/api/premium/link",
+    "body": {
+      "merchant_id": "S-0907"
+    },
+    "auth": "officer"
+  },
+  "exact": [
+    "data.quote.id",
+    "data.quote.merchant_id",
+    "data.quote.outcome",
+    "data.quote.requested_at",
+    "data.quote.starts_on",
+    "data.quote.premium_per_day_paise",
+    "data.quote.premium_per_day_label",
+    "data.quote.first_payment_paise",
+    "data.quote.first_payment_label",
+    "data.quote.days_prepaid",
+    "data.quote.reason_en",
+    "data.quote.reason_hi",
+    "data.quote.blocking_alert_id",
+    "data.premium.id",
+    "data.premium.merchant_id",
+    "data.premium.amount_paise",
+    "data.premium.amount_label",
+    "data.premium.method",
+    "data.premium.covers_from",
+    "data.premium.covers_to",
+    "data.premium.status",
+    "data.premium.link_id",
+    "data.premium.link_url",
+    "data.premium.source",
+    "data.premium.created_at",
+    "data.premium.paid_at"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "quote": {
+          "id": "Q-000001",
+          "merchant_id": "S-0907",
+          "outcome": "BLOCKED",
+          "requested_at": "2025-08-18T18:00:00+05:30",
+          "starts_on": "2025-08-25",
+          "premium_per_day_paise": 1416,
+          "premium_per_day_label": "₹14.16",
+          "first_payment_paise": 42480,
+          "first_payment_label": "₹424.80",
+          "days_prepaid": 30,
+          "reason_en": "New cover starts after the waiting period",
+          "reason_hi": "नया कवर वेटिंग पीरियड के बाद शुरू होता है",
+          "blocking_alert_id": "A-20250818-01"
+        },
+        "premium": {
+          "id": "PR-000001",
+          "merchant_id": "S-0907",
+          "amount_paise": 42480,
+          "amount_label": "₹424.80",
+          "method": "PAYMENT_LINK",
+          "covers_from": "2025-08-25",
+          "covers_to": "2025-09-23",
+          "status": "PENDING",
+          "link_id": "sim-7BFFBE",
+          "link_url": "https://paytm.me/sim-7BFFBE",
+          "source": "simulated",
+          "created_at": "2025-08-18T18:00:00+05:30",
+          "paid_at": null
+        }
+      }
+    }
+  }
+}

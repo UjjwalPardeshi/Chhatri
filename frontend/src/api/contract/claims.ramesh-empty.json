@@ -1,0 +1,27 @@
+{
+  "name": "claims.ramesh-empty",
+  "description": "A merchant with no claims gets an empty list and meta.total 0.",
+  "scenario": "buy_cover",
+  "at": "18:00",
+  "setup": [],
+  "request": {
+    "method": "GET",
+    "path": "/api/merchants/S-0907/claims"
+  },
+  "exact": [
+    "meta.total",
+    "meta.offset"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": [],
+      "meta": {
+        "total": 0,
+        "limit": 0,
+        "offset": 0
+      }
+    }
+  }
+}

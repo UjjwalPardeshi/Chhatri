@@ -1,0 +1,66 @@
+/* The /evals page (H25). Plain CSS on the console tokens, like the other pages. */
+.eval-banner {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--amber-solid);
+  border-radius: 6px;
+  background: var(--card);
+  font-size: var(--fs-sm);
+}
+
+.eval-run {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--fs-sm);
+}
+
+.eval-providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eval-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.eval-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eval-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+}
+
+.eval-metric__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.eval-metric__title {
+  font-weight: 600;
+}
+
+.eval-metric__value {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,26 @@
+{
+  "name": "receipt.unknown-decision",
+  "description": "A well-formed decision id that does not exist is 404 not_found.",
+  "scenario": "monsoon",
+  "at": "17:05",
+  "setup": [],
+  "request": {
+    "method": "GET",
+    "path": "/api/decisions/D-999999/receipt"
+  },
+  "exact": [
+    "ok",
+    "error.code",
+    "error.message"
+  ],
+  "response": {
+    "status": 404,
+    "body": {
+      "ok": false,
+      "error": {
+        "code": "not_found",
+        "message": "decision D-999999 not found"
+      }
+    }
+  }
+}

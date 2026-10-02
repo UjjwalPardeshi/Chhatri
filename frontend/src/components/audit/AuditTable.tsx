@@ -8,7 +8,7 @@ import { useState, type CSSProperties } from 'react'
 
 import type { AuditEntry } from '../../api/types'
 import { Icon } from '../common/Icon'
-import { groupByMinute, isMoneyAction } from './auditGroups'
+import { actionName, groupByMinute, isMoneyAction } from './auditGroups'
 
 export const HASH_CHARS = 10
 /** Checks after a verify arrive one row at a time for the first rows only. */
@@ -19,6 +19,7 @@ type RowProps = { entry: AuditEntry; index: number; hover: string | null; onHove
 
 function Row({ entry, index, hover, onHover, verified }: RowProps) {
   const style = { '--i': Math.min(index, STAGGER_ROWS) } as CSSProperties
+  const name = actionName(entry)
   return (
     <tr className="audit-row" data-money={isMoneyAction(entry.action)} onMouseEnter={() => onHover(entry.hash)} onMouseLeave={() => onHover(null)}>
       <td className="num audit-row__seq" data-label="#">
@@ -34,6 +35,12 @@ function Row({ entry, index, hover, onHover, verified }: RowProps) {
       </td>
       <td className="mono audit-row__action" data-label="Action">
         {entry.action}
+        {name ? (
+          <>
+            {' '}
+            <span className="muted">{name}</span>
+          </>
+        ) : null}
       </td>
       <td data-label="Subject">
         {entry.subject_type} <span className="mono">{entry.subject_id}</span>

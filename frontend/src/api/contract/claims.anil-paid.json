@@ -1,0 +1,139 @@
+{
+  "name": "claims.anil-paid",
+  "description": "Anil at 17:05 of the monsoon replay: one AREA claim, all five steps done.",
+  "scenario": "monsoon",
+  "at": "17:05",
+  "setup": [],
+  "request": {
+    "method": "GET",
+    "path": "/api/merchants/S-0142/claims"
+  },
+  "exact": [
+    "meta.total",
+    "data.0.claim_id",
+    "data.0.disputed_claim_id",
+    "data.0.kind",
+    "data.0.claim_at",
+    "data.0.zone_id",
+    "data.0.trigger_id",
+    "data.0.decision_id",
+    "data.0.outcome",
+    "data.0.amount_paise",
+    "data.0.amount_label",
+    "data.0.case_id",
+    "data.0.case_status",
+    "data.0.due_by",
+    "data.0.resolution",
+    "data.0.steps.0.name",
+    "data.0.steps.0.status",
+    "data.0.steps.0.result",
+    "data.0.steps.0.at",
+    "data.0.steps.0.reason_en",
+    "data.0.steps.0.reason_hi",
+    "data.0.steps.0.reason_code",
+    "data.0.steps.1.name",
+    "data.0.steps.1.status",
+    "data.0.steps.1.result",
+    "data.0.steps.1.at",
+    "data.0.steps.1.reason_en",
+    "data.0.steps.1.reason_hi",
+    "data.0.steps.1.reason_code",
+    "data.0.steps.2.name",
+    "data.0.steps.2.status",
+    "data.0.steps.2.result",
+    "data.0.steps.2.at",
+    "data.0.steps.2.reason_en",
+    "data.0.steps.2.reason_hi",
+    "data.0.steps.2.reason_code",
+    "data.0.steps.3.name",
+    "data.0.steps.3.status",
+    "data.0.steps.3.result",
+    "data.0.steps.3.at",
+    "data.0.steps.3.reason_en",
+    "data.0.steps.3.reason_hi",
+    "data.0.steps.3.reason_code",
+    "data.0.steps.4.name",
+    "data.0.steps.4.status",
+    "data.0.steps.4.result",
+    "data.0.steps.4.at",
+    "data.0.steps.4.reason_en",
+    "data.0.steps.4.reason_hi",
+    "data.0.steps.4.reason_code"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": [
+        {
+          "claim_id": "CL-000142",
+          "disputed_claim_id": null,
+          "kind": "AREA",
+          "claim_at": "2025-08-19T17:00:00+05:30",
+          "zone_id": "Z7",
+          "trigger_id": "E-Z7-20250819",
+          "decision_id": "D-000142",
+          "outcome": "APPROVED",
+          "amount_paise": 138000,
+          "amount_label": "₹1,380",
+          "steps": [
+            {
+              "name": "Detected",
+              "status": "completed",
+              "result": null,
+              "at": "2025-08-19T17:00:00+05:30",
+              "reason_hi": "अलर्ट के दौरान आपके इलाके की बिक्री 63% गिरी।",
+              "reason_en": "Your area's sales fell 63% during the alert.",
+              "reason_code": null
+            },
+            {
+              "name": "Checked",
+              "status": "completed",
+              "result": null,
+              "at": "2025-08-19T17:00:00+05:30",
+              "reason_hi": "सभी 9 जाँचें पास हुईं।",
+              "reason_en": "All 9 checks passed.",
+              "reason_code": null
+            },
+            {
+              "name": "Decided",
+              "status": "completed",
+              "result": "APPROVED",
+              "at": "2025-08-19T17:00:00+05:30",
+              "reason_hi": "आपके भुगतान का हिसाब: ₹4,380 का 63% = ₹2,759.40; उसका आधा = ₹1,380",
+              "reason_en": "How your payout was worked out: ½ × ₹4,380 × 63% = ₹1,380",
+              "reason_code": null
+            },
+            {
+              "name": "Paid",
+              "status": "completed",
+              "result": null,
+              "at": "2025-08-19T17:04:00+05:30",
+              "reason_hi": "आज के सेटलमेंट के साथ जमा",
+              "reason_en": "Credited with today's settlement",
+              "reason_code": null
+            },
+            {
+              "name": "EDI holiday",
+              "status": "completed",
+              "result": "GRANTED",
+              "at": "2025-08-19T17:05:00+05:30",
+              "reason_hi": "कल की ₹600 की किस्त रोक दी गई है।",
+              "reason_en": "Tomorrow's ₹600 instalment is paused.",
+              "reason_code": null
+            }
+          ],
+          "case_id": null,
+          "case_status": null,
+          "due_by": null,
+          "resolution": null
+        }
+      ],
+      "meta": {
+        "total": 1,
+        "limit": 1,
+        "offset": 0
+      }
+    }
+  }
+}

@@ -4,11 +4,14 @@ import { Link, NavLink, useLocation } from 'react-router'
 
 import type { ScenarioName, StateSnapshot } from '../../api/types'
 import { DEMO_MERCHANT } from '../../content/deck'
+import { isFeatureEnabled } from '../../features'
 import { useLive } from '../../state/live'
+import { Feature } from '../common/Feature'
 import { Brand } from './Brand'
 import { ConnectionPill } from './ConnectionPill'
 import { SCENARIO_OPTIONS } from './ControlBar'
 import { IntegrationBadges } from './IntegrationBadges'
+import { PresentButton } from './PresenterControls'
 import { SoundToggle } from './SoundToggle'
 
 /** Room left of the active link when it is scrolled into view on a phone. */
@@ -53,6 +56,7 @@ export function Header({ openCases }: { openCases: number }) {
     { to: '/audit', label: 'Audit' },
     { to: '/backtest', label: 'Backtest' },
     { to: '/policy', label: 'Policy' },
+    ...(isFeatureEnabled('h25_evals') ? [{ to: '/evals', label: 'Evals' }] : []),
   ]
   return (
     <header className="app-header">
@@ -73,6 +77,9 @@ export function Header({ openCases }: { openCases: number }) {
       </nav>
       <div className="app-header__right">
         <ConnectionPill />
+        <Feature name="console_polish">
+          <PresentButton />
+        </Feature>
         <IntegrationBadges />
         <SoundToggle />
       </div>

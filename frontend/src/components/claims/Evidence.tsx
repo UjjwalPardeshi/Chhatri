@@ -8,6 +8,7 @@ import { useState } from 'react'
 import type { CaseEvidence } from '../../api/types'
 import { dayLabel } from '../../lib/time'
 import { Icon } from '../common/Icon'
+import { ModeChip } from '../common/ModeChip'
 import { HourlyChart } from './HourlyChart'
 import { NAME_SCORE_MIN } from './labels'
 import { SlipLightbox } from './SlipLightbox'
@@ -27,6 +28,14 @@ function SlipBlock({ evidence }: { evidence: CaseEvidence }) {
     ['Document', slip.document_type ?? 'unknown'],
     ['Read confidence', `${Math.round(slip.confidence * 100)}% (${slip.source})`],
   ]
+  const label = slip.mode ? (
+    <tr key="reader">
+      <th scope="row">Slip reader</th>
+      <td>
+        <ModeChip label={slip} />
+      </td>
+    </tr>
+  ) : null
   return (
     <div className="slip-evidence">
       <button type="button" className="slip-evidence__img" aria-label="Open the slip large" onClick={() => setOpen(true)}>
@@ -45,6 +54,7 @@ function SlipBlock({ evidence }: { evidence: CaseEvidence }) {
                 <td>{v}</td>
               </tr>
             ))}
+            {label}
             <tr>
               <th scope="row">KYC name</th>
               <td>{evidence.kyc_name ?? '—'}</td>
@@ -68,7 +78,7 @@ function SlipBlock({ evidence }: { evidence: CaseEvidence }) {
   )
 }
 
-export function Evidence({ evidence }: { evidence: CaseEvidence }) {
+export function Evidence({ evidence, floorPct }: { evidence: CaseEvidence; floorPct?: number }) {
   const precedents = evidence.precedents ?? []
   return (
     <section className="evidence" aria-label="Evidence">
@@ -89,7 +99,7 @@ export function Evidence({ evidence }: { evidence: CaseEvidence }) {
           ))}
         </p>
       ) : null}
-      {evidence.expected_vs_actual && evidence.expected_vs_actual.length > 0 ? <HourlyChart rows={evidence.expected_vs_actual} /> : null}
+      {evidence.expected_vs_actual && evidence.expected_vs_actual.length > 0 ? <HourlyChart rows={evidence.expected_vs_actual} floorPct={floorPct} /> : null}
       <div className="precedents">
         <h4>Similar past cases</h4>
         {precedents.length === 0 ? (

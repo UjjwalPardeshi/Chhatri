@@ -5,6 +5,7 @@
  */
 import type { BacktestReport, IntegrationStatus, MerchantSummary, PolicyView } from '../api/types'
 import backtestReport from './data/backtest.json'
+import zonePrices from './data/premiums.json'
 
 export type MockMerchant = MerchantSummary & {
   owner_name_hi: string
@@ -16,6 +17,17 @@ export type MockMerchant = MerchantSummary & {
   expected_day_paise: number
   instalment_paise: number | null
   premium_per_day_paise: number
+}
+
+/** The SPEC §9.1 minimum a day (₹2) for a zone that premiums.json does not price, like the backend. */
+const MIN_PREMIUM_PER_DAY_PAISE = 200
+
+/**
+ * The daily premium of a zone in paise: a copy of `backend/artifacts/premiums.json` (Z7 ₹18.62, Z3 ₹14.16), so a mock
+ * quote reads what the product quotes (DEMO.md: Ramesh pays ₹424.80 for 30 days), not a flat ₹3 a day.
+ */
+export function zonePremiumPaise(zoneId: string): number {
+  return (zonePrices as Readonly<Record<string, number>>)[zoneId] ?? MIN_PREMIUM_PER_DAY_PAISE
 }
 
 export const ANIL: MockMerchant = Object.freeze({
@@ -36,7 +48,7 @@ export const ANIL: MockMerchant = Object.freeze({
   language: 'hi',
   expected_day_paise: 438_000,
   instalment_paise: 60_000,
-  premium_per_day_paise: 300,
+  premium_per_day_paise: zonePremiumPaise('Z7'),
 })
 
 export const RAMESH: MockMerchant = Object.freeze({
@@ -57,7 +69,7 @@ export const RAMESH: MockMerchant = Object.freeze({
   language: 'hi',
   expected_day_paise: 612_000,
   instalment_paise: null,
-  premium_per_day_paise: 300,
+  premium_per_day_paise: zonePremiumPaise('Z3'),
 })
 
 export const MERCHANTS: Readonly<Record<string, MockMerchant>> = Object.freeze({ [ANIL.id]: ANIL, [RAMESH.id]: RAMESH })
@@ -70,7 +82,7 @@ export const MOCK_OFFICER_ID = 'officer'
 
 const MOCK_DETAIL = 'mock console backend'
 
-export const INTEGRATIONS: readonly IntegrationStatus[] = Object.freeze([
+const BASE_INTEGRATIONS: readonly IntegrationStatus[] = Object.freeze([
   { name: 'sarvam_stt', mode: 'SIMULATED', detail: `Saaras speech-to-text: deterministic simulator (${MOCK_DETAIL})` },
   { name: 'sarvam_tts', mode: 'SIMULATED', detail: `Bulbul voice: browser speech (hi-IN) stands in (${MOCK_DETAIL})` },
   { name: 'sarvam_chat', mode: 'SIMULATED', detail: `Rule-based intents only (${MOCK_DETAIL})` },
@@ -86,21 +98,42 @@ export const INTEGRATIONS: readonly IntegrationStatus[] = Object.freeze([
   { name: 'payout_rail', mode: 'SIMULATED', detail: 'Always simulated: settlement rail, 4 min' },
   { name: 'lender', mode: 'SIMULATED', detail: 'Always simulated: NBFC partner instalment pause' },
   { name: 'kyc', mode: 'SIMULATED', detail: 'Always simulated: KYC names from the demo city' },
+  { name: 'gemini_chat', mode: 'SIMULATED', detail: `Gemini chat: no key in the static demo (${MOCK_DETAIL})` },
+  { name: 'gemini_vision', mode: 'SIMULATED', detail: `Gemini slip reader: no key in the static demo (${MOCK_DETAIL})` },
 ])
 
+/** Components with a fallback path (fs-08 9.2); the mock can force only the lender, which is already simulated. */
+export const MOCK_FORCEABLE: ReadonlySet<string> = new Set(['lender'])
+const MOCK_PROVIDER: Readonly<Record<string, string>> = { sarvam_chat: 'mock', gemini_chat: 'mock', sarvam_tts: 'browser' }
+const MOCK_REASON: Readonly<Record<string, string>> = { sarvam_chat: 'MOCK_BACKEND', sarvam_vision: 'MOCK_BACKEND', sarvam_stt: 'MOCK_BACKEND', gemini_chat: 'MOCK_BACKEND', gemini_vision: 'MOCK_BACKEND' }
+
+/** The rows the mock serves: every component SIMULATED, the lender FORCED to FALLBACK while its switch is on (fs-08 9.7). */
+export function integrationRows(lenderForced: boolean): IntegrationStatus[] {
+  return BASE_INTEGRATIONS.map((row) => {
+    const forced = row.name === 'lender' && lenderForced
+    const base = { ...row, provider: MOCK_PROVIDER[row.name] ?? 'simulated', model: null, fallback_reason: MOCK_REASON[row.name] ?? null, switchable: MOCK_FORCEABLE.has(row.name), forced, last_call: null }
+    return forced ? { ...base, mode: 'FALLBACK' as const, detail: 'Simulated lender (NBFC partner), not answering: forced for the demo', provider: 'simulated', fallback_reason: 'FORCED' } : base
+  })
+}
+
+export const INTEGRATIONS: readonly IntegrationStatus[] = Object.freeze(integrationRows(false))
+
+/** The pilot rules (`rules.yaml`, SPEC §9.1) with their real shape, so the mock reads its numbers from one place. */
+export const POLICY_RULES = Object.freeze({
+  version: RULES_VERSION,
+  payout_share: 0.5,
+  area: { index_floor_pct: 50, consecutive_hours: 3, min_shops_in_index: 20, daily_cap_rupees: 2500 },
+  personal: { daily_cap_rupees: 1500, max_auto_days: 3, name_match_min_score: 85, slip_confidence_min: 0.8 },
+  cover: { waiting_period_days: 7, alert_lookahead_hours: 72 },
+  annual_limit_rupees: 30000,
+  dispute_sla_hours: 24,
+  payout_rail_delay_minutes: 4,
+  instalment_pause_delay_minutes: 5,
+  premium: { loading: 0.35, min_per_day_rupees: 2, first_payment_days: 30 },
+})
+
 export const POLICY: PolicyView = Object.freeze({
-  rules: {
-    version: RULES_VERSION,
-    payout_share: 0.5,
-    area: { index_floor_pct: 50, consecutive_hours: 3, min_shops_in_index: 20, daily_cap_rupees: 2500 },
-    personal: { daily_cap_rupees: 1500, max_auto_days: 3, name_match_min_score: 85, slip_confidence_min: 0.8 },
-    cover: { waiting_period_days: 7, alert_lookahead_hours: 72 },
-    annual_limit_rupees: 30000,
-    dispute_sla_hours: 24,
-    payout_rail_delay_minutes: 4,
-    instalment_pause_delay_minutes: 5,
-    premium: { loading: 0.35, min_per_day_rupees: 2, first_payment_days: 30 },
-  },
+  rules: POLICY_RULES,
   authority: [
     { case: 'Area drop during an alert, index clear', alone: 'Pays', human: 'Only if the merchant disputes' },
     { case: 'Personal claim, slip matches name and dates', alone: 'Pays up to the daily cap', human: 'Anything above the cap' },

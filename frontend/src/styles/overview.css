@@ -94,7 +94,7 @@
 
 .ov-source {
   margin-top: var(--sp-6);
-  color: var(--faint);
+  color: var(--muted);
   font-size: var(--fs-xs);
 }
 

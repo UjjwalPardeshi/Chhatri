@@ -1,0 +1,26 @@
+{
+  "name": "cover.unknown-merchant",
+  "description": "A well-formed merchant id that is not in the city is 404 not_found.",
+  "scenario": "monsoon",
+  "at": "17:05",
+  "setup": [],
+  "request": {
+    "method": "GET",
+    "path": "/api/merchants/S-9999/cover"
+  },
+  "exact": [
+    "ok",
+    "error.code",
+    "error.message"
+  ],
+  "response": {
+    "status": 404,
+    "body": {
+      "ok": false,
+      "error": {
+        "code": "not_found",
+        "message": "merchant S-9999 not found"
+      }
+    }
+  }
+}

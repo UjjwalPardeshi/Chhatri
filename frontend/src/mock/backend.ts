@@ -8,6 +8,7 @@ import type { ClockState, ScenarioName, SseEvent, SseEventMap, SseEventType } fr
 import { hhmm, weekdayDayLabel } from '../lib/time'
 import { onHour } from './area'
 import { silentCheckin } from './conversation'
+import { MockHttpError } from './http'
 import { MockRuntime } from './runtime'
 import { hhmmOf, SCENARIOS } from './scenarios'
 import { clockView, hexesView, zoneSnapshot, type MockGeo } from './views'
@@ -20,17 +21,7 @@ const EVENT_LOG_LIMIT = 5_000
 const HOUR = 60
 const MS_PER_SECOND = 1_000
 
-export class MockHttpError extends Error {
-  readonly code: string
-  readonly status: number
-  readonly fields: Record<string, string>
-  constructor(code: string, message: string, status: number, fields: Record<string, string> = {}) {
-    super(message)
-    this.code = code
-    this.status = status
-    this.fields = fields
-  }
-}
+export { MockHttpError }
 
 type Listener = (event: SseEvent) => void
 export type BackendOptions = { wallClock?: () => string; tickMs?: number }
@@ -99,11 +90,18 @@ export class MockBackend {
   }
 
   load(name: string): ClockState {
-    if (!(name in SCENARIOS)) throw new MockHttpError('VALIDATION_ERROR', 'Unknown scenario', 422, { scenario: 'unknown scenario' })
+    if (!(name in SCENARIOS)) throw new MockHttpError('validation_error', 'invalid request', 422, { scenario: 'unknown scenario' })
     this.stopTimer()
+    const lenderForced = this.rt.lenderForced // the fallback switch is process-wide: a load keeps it (fs-08 9.4)
     this.rt = this.createRuntime(name as ScenarioName, this.rt.speed)
+    this.rt.lenderForced = lenderForced
     this.start()
     return this.clock
+  }
+
+  /** The X6 switch for the lender: takes effect on the next holiday request, with no reload. */
+  setLenderForced(forced: boolean): void {
+    this.rt.lenderForced = forced
   }
 
   reset(): ClockState {
@@ -112,7 +110,7 @@ export class MockBackend {
 
   play(speed: number): ClockState {
     if (!Number.isFinite(speed) || speed < 1 || speed > 120) {
-      throw new MockHttpError('VALIDATION_ERROR', 'Invalid input', 422, { speed: 'must be between 1 and 120' })
+      throw new MockHttpError('validation_error', 'invalid request', 422, { speed: 'must be between 1 and 120' })
     }
     this.rt.speed = speed
     if (this.rt.minute >= this.rt.scenario.endMin) return this.tick()
@@ -130,7 +128,7 @@ export class MockBackend {
   /** Like the backend engine (replay/engine.py), a step or a seek pauses the replay first. */
   step(minutes: number): ClockState {
     if (!Number.isInteger(minutes) || minutes < 1) {
-      throw new MockHttpError('VALIDATION_ERROR', 'Invalid input', 422, { minutes: 'must be a whole number ≥ 1' })
+      throw new MockHttpError('validation_error', 'invalid request', 422, { minutes: 'must be a whole number ≥ 1' })
     }
     this.rt.running = false
     this.stopTimer()
@@ -143,7 +141,7 @@ export class MockBackend {
     const s = this.rt.scenario
     const target = match ? Number(match[1]) * HOUR + Number(match[2]) : Number.NaN
     if (!(target >= s.startMin && target <= s.endMin)) {
-      throw new MockHttpError('VALIDATION_ERROR', 'Invalid input', 422, { to: `must be between ${hhmmOf(s.startMin)} and ${hhmmOf(s.endMin)}` })
+      throw new MockHttpError('validation_error', 'invalid request', 422, { to: `must be between ${hhmmOf(s.startMin)} and ${hhmmOf(s.endMin)}` })
     }
     this.rt.running = false
     this.stopTimer()

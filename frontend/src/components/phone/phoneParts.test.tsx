@@ -1,12 +1,13 @@
 /** Merchant phone parts (SPEC §13.4 COVER_BLOCKED / COVER_LINK, §20 "Merchant phone", deck slides 1 and 7). */
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Message } from '../../api/types'
 import { ANIL } from '../../mock/fixtures'
 import { testBackend } from '../../mock/testkit'
 import { merchantDetailView } from '../../mock/views'
+import { PresenterProvider } from '../../state/presenter'
 import { coverLink, coverOffer } from './coverOffer'
 import { MerchantPanel, PRESENTER_STEPS } from './MerchantPanel'
 import { BURST_MINUTES, burstScrollTop } from './useThreadScroll'
@@ -70,13 +71,21 @@ describe('merchant panel', () => {
     expect(screen.getByText(PRESENTER_STEPS.buy_cover[0])).toBeTruthy()
   })
 
-  it('opens the presenter notes from ?presenter=1', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    window.sessionStorage.clear()
+  })
+
+  it('opens the presenter notes while presenter mode is on (usePresenter().on)', () => {
+    vi.stubEnv('VITE_FEATURES', 'console_polish')
     const backend = testBackend()
     const anil = merchantDetailView(backend.runtime, ANIL)
     backend.dispose()
     render(
       <MemoryRouter initialEntries={['/merchant/S-0142?presenter=1']}>
-        <MerchantPanel merchant={anil} scenario="monsoon" />
+        <PresenterProvider>
+          <MerchantPanel merchant={anil} scenario="monsoon" />
+        </PresenterProvider>
       </MemoryRouter>,
     )
     expect(screen.getByRole('button', { name: 'Hide presenter notes' }).getAttribute('aria-expanded')).toBe('true')

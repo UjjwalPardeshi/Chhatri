@@ -4,7 +4,6 @@
  * by name; any other photo is unreadable (SLIP_READABLE UNSURE ⇒ REFERRED, "slip unclear → human").
  */
 import type { Check, SlipEvidence } from '../api/types'
-import { formatInr } from '../lib/money'
 import { MSG, type Bilingual } from './catalogue'
 import { announceSoundbox } from './area'
 import { openReviewCase } from './cases'
@@ -122,8 +121,8 @@ export function payPersonal(rt: MockRuntime, merchant: MockMerchant, decision: P
       rt.addFeed('payout', `${payout.amount_label} credited to ${merchant.shop_name} with the settlement`, { merchant_id: merchant.id })
       rt.setKpis({ total_paid_paise: rt.kpis.total_paid_paise + payout.amount_paise, shops_paid: rt.kpis.shops_paid + 1 })
     },
-    onPaused: () => {
-      rt.send(merchant.id, { kind: 'TEXT', text: MSG.instalmentPaused(formatInr(merchant.instalment_paise ?? 0)) })
+    onPaused: (text) => {
+      rt.send(merchant.id, { kind: 'TEXT', text })
       rt.setKpis({ instalments_paused: rt.kpis.instalments_paused + 1 })
     },
   })

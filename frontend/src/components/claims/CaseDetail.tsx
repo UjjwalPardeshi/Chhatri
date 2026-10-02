@@ -10,13 +10,16 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import type { ApiError } from '../../api/client'
-import type { Case, Decision } from '../../api/types'
+import type { Case, Decision, Receipt } from '../../api/types'
 import { actorLabel, isOfficer } from '../../lib/actors'
 import { dayLabel, hhmm, hhmmAfter, minutesBetween, slaState } from '../../lib/time'
 import { InlineError } from '../common/Status'
 import { caseHeadline, referralDecision } from './caseSummary'
 import { Checks } from './Checks'
+import { CounterfactualLine } from './CounterfactualLine'
 import { Evidence } from './Evidence'
+import { HolidayRow } from './HolidayRow'
+import { DISPUTE_COPY, sourcesByCode } from './receiptParts'
 import { CASE_KIND_LABELS, CASE_STATUS_TONES, OUTCOME_TONES } from './labels'
 import { WhyHuman } from './WhyHuman'
 
@@ -104,14 +107,16 @@ function Actions({ item, officerReady, onDecide, delayMinutes, now }: ActionsPro
     }
   }
   if (item.status !== 'OPEN') return <Resolution item={item} delayMinutes={delayMinutes} now={now} />
+  const dispute = item.kind === 'DISPUTE'
   return (
     <div className="actions">
+      {dispute ? <p className="actions__hint">{DISPUTE_COPY.hint}</p> : null}
       <input className="input actions__note" placeholder="Note for the audit log (optional)" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} aria-label="Officer note" />
       <button type="button" className="btn btn--approve btn--lg" disabled={!officerReady || busy !== null} onClick={() => void run(true)}>
-        {busy === 'approve' ? 'Approving…' : 'Approve'}
+        {busy === 'approve' ? 'Approving…' : dispute ? DISPUTE_COPY.confirm : 'Approve'}
       </button>
       <button type="button" className="btn btn--decline btn--lg" disabled={!officerReady || busy !== null} onClick={() => void run(false)}>
-        {busy === 'decline' ? 'Declining…' : 'Decline'}
+        {busy === 'decline' ? 'Declining…' : dispute ? DISPUTE_COPY.reject : 'Decline'}
       </button>
     </div>
   )
@@ -139,13 +144,18 @@ type Props = {
   delayMinutes?: number | null
   /** The policy engine's REFERRED decision that an officer decision supersedes (GET /api/decisions/{id}). */
   referral?: Decision | null
+  /** The decision receipt (GET /api/decisions/{id}/receipt): sources, counterfactual and the lender's answer. Null when it is not there. */
+  receipt?: Receipt | null
+  receiptLoading?: boolean
+  /** The published policy floor (area.index_floor_pct) for the hourly chart. */
+  floorPct?: number
 }
 
 function decisionTitle(decision: Decision): string {
   return isOfficer(decision.decided_by) ? 'Officer decision' : 'Policy engine decision'
 }
 
-export function CaseDetail({ item, now, officerReady, actionError, onDecide, onDismissError, delayMinutes = null, referral = null }: Props) {
+export function CaseDetail({ item, now, officerReady, actionError, onDecide, onDismissError, delayMinutes = null, referral = null, receipt = null, receiptLoading = false, floorPct }: Props) {
   const sla = slaState(item.due_by, now)
   const reason = referralDecision(item.decision, referral)
   const earlier = reason && reason.id !== item.decision?.id ? reason : null
@@ -167,15 +177,17 @@ export function CaseDetail({ item, now, officerReady, actionError, onDecide, onD
       <CaseSummary item={item} referral={referral} />
       {earlier ? <DecisionBlock decision={earlier} title={decisionTitle(earlier)} /> : null}
       {item.decision ? <DecisionBlock decision={item.decision} title={decisionTitle(item.decision)} /> : null}
+      {receipt ? <CounterfactualLine counterfactuals={receipt.counterfactuals} /> : null}
+      <HolidayRow edi={receipt?.edi} />
       {reason ? <WhyHuman decision={reason} evidence={item.evidence} /> : null}
       {actionError ? <InlineError error={actionError} onDismiss={onDismissError} /> : null}
       <Actions item={item} officerReady={officerReady} onDecide={onDecide} delayMinutes={delayMinutes} now={now} />
       {!officerReady && item.status === 'OPEN' ? <p className="muted">Officer token unavailable: approvals need the demo session (GET /api/session).</p> : null}
-      <Evidence evidence={item.evidence} />
+      <Evidence evidence={item.evidence} floorPct={floorPct} />
       {item.decision && item.decision.checks.length > 0 ? (
         <section aria-label="Checks">
           <h3>Checks · rules {item.decision.rules_version}</h3>
-          <Checks checks={item.decision.checks} />
+          <Checks checks={item.decision.checks} sources={receipt ? sourcesByCode(receipt) : undefined} sourcesLoading={receiptLoading} />
         </section>
       ) : null}
     </article>

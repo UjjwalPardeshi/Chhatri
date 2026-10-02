@@ -4,6 +4,8 @@
  * [40, 100] clamp to the end colours. Null (no data) is neutral grey.
  */
 
+import type { TriggerRule } from './rules'
+
 export type ColourStop = { pct: number; hex: string }
 
 export const SCALE_RED = '#b91c1c'
@@ -19,11 +21,16 @@ export const COLOUR_STOPS: readonly ColourStop[] = Object.freeze([
   { pct: 100, hex: SCALE_GREEN },
 ])
 
-/** The area trigger floor (rules.yaml area.index_floor_pct, SPEC §8.2) drawn as the sparkline rule. */
+/**
+ * The demo rules' trigger floor (rules.yaml area.index_floor_pct, SPEC §8.2), still read by the feed's watch title and the
+ * evidence chart. The legend and the sparkline do not use it: they read the published rule (`triggerRule`, lib/rules.ts).
+ */
 export const INDEX_FLOOR_PCT = 50
 
-/** The trigger floor shown in the legend: "Pays below 50% for 3 h, with alert" (SPEC §8.2, §20). */
-export const LEGEND_RULE = `Pays below ${INDEX_FLOOR_PCT}% for 3 h, with alert`
+/** The legend's rule line from the published trigger rule: "Pays below 50% for 3 h, with alert" (SPEC §8.2, §20). */
+export function legendRule(rule: Pick<TriggerRule, 'floorPct' | 'hours'>): string {
+  return `Pays below ${rule.floorPct}% for ${rule.hours} h, with alert`
+}
 
 function parseHex(hex: string): [number, number, number] {
   const value = Number.parseInt(hex.slice(1), 16)

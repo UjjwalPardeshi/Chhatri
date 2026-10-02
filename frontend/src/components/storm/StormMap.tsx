@@ -10,6 +10,7 @@ import { useRef, type CSSProperties } from 'react'
 
 import stormMap from '../../content/stormMap.json'
 import { indexColour } from '../../lib/colour'
+import type { TriggerRule } from '../../lib/rules'
 import { Icon } from '../common/Icon'
 import { Legend, MapPatternDefs, NorthArrow } from '../map/overlays'
 import type { Point, StormLabel, StormMapData } from './stormMapData'
@@ -38,6 +39,8 @@ const WATER: readonly { name: string; at: Point }[] = [
   { name: 'Harbour', at: [705, 470] },
 ]
 const RAIN_CAPTION = 'Heavy rain band · since 14:00'
+/** Deck slide 6 states the payout rule as story copy: the Overview is a recorded replay, so it draws the demo rule, not GET /api/policy. */
+const DECK_RULE: TriggerRule = Object.freeze({ floorPct: 50, hours: 3 })
 const PCT = 100
 
 type Positioned = CSSProperties & Record<`--${string}`, string>
@@ -155,7 +158,7 @@ export function StormMap({ data = STORM_MAP, when }: { data?: StormMapData; when
         <NorthArrow />
       </div>
       {/* Over the map's corner on wide frames, a strip under the map on narrow ones (storm.css). */}
-      <Legend patterns={PATTERNS} />
+      <Legend patterns={PATTERNS} rule={DECK_RULE} />
     </figure>
   )
 }

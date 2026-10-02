@@ -1,0 +1,168 @@
+/*
+ * The X6 provider panel and the H26 mode chip (fs-08 section 9, design system 11). FALLBACK is orange with a triangle
+ * and the word, never colour alone. Tokens only (tokens.css).
+ */
+.integrations-summary__seg--fallback {
+  gap: 4px;
+  border-left: 1px solid rgb(255 255 255 / 14%);
+  color: var(--fallback-on-navy);
+  letter-spacing: 0.02em;
+}
+
+.integrations-summary__seg--fallback strong {
+  color: var(--fallback-on-navy);
+}
+
+.integrations-summary__seg--forced {
+  border-left: 1px solid rgb(255 255 255 / 14%);
+  background: var(--fallback-soft);
+  color: var(--fallback);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.integration--fallback .integration__dot {
+  background: var(--fallback);
+}
+
+.integration--fallback .integration__mode {
+  background: var(--fallback-soft);
+  color: var(--fallback);
+}
+
+.integrations-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.provider-list {
+  display: block;
+}
+
+.provider-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--sp-2);
+  align-items: center;
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-xs);
+}
+
+.provider-row__name {
+  font-weight: 500;
+}
+
+.provider-row__detail,
+.provider-row__who,
+.provider-row__reason,
+.provider-row__call,
+.provider-row__why {
+  grid-column: 1;
+  color: var(--muted);
+}
+
+.provider-row--fallback .provider-row__reason {
+  color: var(--fallback);
+}
+
+.provider-row__switch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  grid-column: 2;
+  grid-row: 3 / span 3;
+  gap: 2px;
+}
+
+.provider-row__why {
+  grid-column: auto;
+  max-width: 150px;
+  font-size: var(--fs-2xs);
+  text-align: right;
+}
+
+.provider-switch,
+.provider-clear {
+  min-height: 30px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.provider-switch[aria-pressed='true'] {
+  border-color: var(--fallback);
+  background: var(--fallback-soft);
+  color: var(--fallback);
+}
+
+.provider-switch:disabled,
+.provider-clear:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.provider-error {
+  margin: var(--sp-1) 0;
+  color: var(--fallback);
+  font-size: var(--fs-xs);
+}
+
+.provider-flags {
+  margin: var(--sp-2) 0 0;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+
+.mode-chip-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.mode-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--grey-soft);
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.mode-chip--live {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+.mode-chip--fallback {
+  background: var(--fallback-soft);
+  color: var(--fallback);
+}
+
+.mode-chip__details {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  text-decoration: underline;
+}
+
+.mode-chip__line {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}

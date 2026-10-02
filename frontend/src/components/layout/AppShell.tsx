@@ -3,9 +3,13 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 
 import { useLive, useLiveEvent } from '../../state/live'
+import { OpsProvider } from '../../state/ops'
+import { PresenterProvider, usePresenter } from '../../state/presenter'
+import { Feature } from '../common/Feature'
 import { ControlBar } from './ControlBar'
 import { Footer } from './Footer'
 import { Header } from './Header'
+import { OPS_STRIP_PATHS, OpsStrip } from './OpsStrip'
 
 function useOpenCaseCount(): number {
   const { api, snapshot } = useLive()
@@ -26,17 +30,36 @@ function useOpenCaseCount(): number {
   return count
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+function Frame({ children }: { children: ReactNode }) {
   const openCases = useOpenCaseCount()
   const { pathname } = useLocation()
+  const { on: presenting } = usePresenter()
   /** The Overview tells the story; the replay controls belong to the live pages. */
   const overview = pathname === '/'
   return (
-    <div className={`app ${overview ? 'app--overview' : ''}`}>
-      <Header openCases={openCases} />
-      {overview ? null : <ControlBar />}
-      <main className="app-main">{children}</main>
-      <Footer />
-    </div>
+    <OpsProvider active={OPS_STRIP_PATHS.includes(pathname)}>
+      <div className={`app ${overview ? 'app--overview' : ''}`} data-presenter={presenting ? 'on' : undefined}>
+        <Header openCases={openCases} />
+        {overview ? null : (
+          <Feature name="h8_ops_strip" fallback={<ControlBar />}>
+            <div className="app-controls">
+              <ControlBar />
+              {/* On /live the strip is a band over the map column (Live.tsx), so the right panel keeps its height. */}
+              {pathname === '/live' ? null : <OpsStrip />}
+            </div>
+          </Feature>
+        )}
+        <main className="app-main">{children}</main>
+        <Footer />
+      </div>
+    </OpsProvider>
+  )
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <PresenterProvider>
+      <Frame>{children}</Frame>
+    </PresenterProvider>
   )
 }

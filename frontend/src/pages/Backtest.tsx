@@ -12,6 +12,9 @@ import { targetLossRatio } from '../lib/rules'
 import { useLive } from '../state/live'
 import { useAsync } from '../state/useAsync'
 
+/** Copy deck `console.backtest.caveat` (fs-08 13.3, proposed wording: review with the insurer before it ships). */
+export const BACKTEST_CAVEAT = "The model's range is calibrated on simulated sales, so this backtest tests the rule, not accuracy on real shops."
+
 function Report({ report, target }: { report: BacktestReport; target: number | null }) {
   const pair = triggerPair(report)
   return (
@@ -23,6 +26,7 @@ function Report({ report, target }: { report: BacktestReport; target: number | n
           <ProofFacts chhatri={pair.chhatri} personal={report.personal} />
         </section>
       ) : null}
+      <p className="backtest-caveat">{BACKTEST_CAVEAT}</p>
       <div className="backtest-grid">
         <section className="card section">
           <h2>Every measure</h2>

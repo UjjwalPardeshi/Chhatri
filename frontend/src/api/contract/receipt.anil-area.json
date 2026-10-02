@@ -1,0 +1,551 @@
+{
+  "name": "receipt.anil-area",
+  "description": "The receipt of Anil's area payout (flags off: no lender block). Sources on every fact and check, one verified counterfactual.",
+  "scenario": "monsoon",
+  "at": "17:05",
+  "setup": [],
+  "request": {
+    "method": "GET",
+    "path": "/api/decisions/D-000142/receipt"
+  },
+  "exact": [
+    "data.decision.id",
+    "data.decision.claim_id",
+    "data.decision.merchant_id",
+    "data.decision.outcome",
+    "data.decision.amount_paise",
+    "data.decision.amount_label",
+    "data.decision.rules_version",
+    "data.decision.decided_at",
+    "data.decision.decided_by",
+    "data.decision.supersedes",
+    "data.decision.referral_reason",
+    "data.explanation.formula_en",
+    "data.explanation.formula_hi",
+    "data.explanation.clause",
+    "data.explanation.facts.0.key",
+    "data.explanation.facts.0.value",
+    "data.counterfactuals.0.kind",
+    "data.counterfactuals.0.verified",
+    "data.counterfactuals.0.text_en",
+    "data.counterfactuals.0.text_hi",
+    "data.counterfactuals.0.result.amount_paise",
+    "data.counterfactuals.0.result.amount_label",
+    "data.payout.id",
+    "data.payout.status",
+    "data.payout.amount_label",
+    "data.payout.credited_at",
+    "data.edi",
+    "data.case",
+    "data.audit.verify_path",
+    "data.grievance.dispute_allowed",
+    "data.grievance.ladder",
+    "data.grievance.first_step_hours",
+    "data.checks.0.code",
+    "data.checks.0.severity",
+    "data.checks.0.status",
+    "data.checks.0.clause",
+    "data.checks.0.erased",
+    "data.checks.1.code",
+    "data.checks.1.severity",
+    "data.checks.1.status",
+    "data.checks.1.clause",
+    "data.checks.1.erased",
+    "data.checks.2.code",
+    "data.checks.2.severity",
+    "data.checks.2.status",
+    "data.checks.2.clause",
+    "data.checks.2.erased",
+    "data.checks.3.code",
+    "data.checks.3.severity",
+    "data.checks.3.status",
+    "data.checks.3.clause",
+    "data.checks.3.erased",
+    "data.checks.4.code",
+    "data.checks.4.severity",
+    "data.checks.4.status",
+    "data.checks.4.clause",
+    "data.checks.4.erased",
+    "data.checks.5.code",
+    "data.checks.5.severity",
+    "data.checks.5.status",
+    "data.checks.5.clause",
+    "data.checks.5.erased",
+    "data.checks.6.code",
+    "data.checks.6.severity",
+    "data.checks.6.status",
+    "data.checks.6.clause",
+    "data.checks.6.erased",
+    "data.checks.7.code",
+    "data.checks.7.severity",
+    "data.checks.7.status",
+    "data.checks.7.clause",
+    "data.checks.7.erased",
+    "data.checks.8.code",
+    "data.checks.8.severity",
+    "data.checks.8.status",
+    "data.checks.8.clause",
+    "data.checks.8.erased"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "decision": {
+          "id": "D-000142",
+          "claim_id": "CL-000142",
+          "merchant_id": "S-0142",
+          "outcome": "APPROVED",
+          "amount_paise": 138000,
+          "amount_label": "₹1,380",
+          "rules_version": "pilot-0.1",
+          "decided_at": "2025-08-19T17:00:00+05:30",
+          "decided_by": "policy-engine",
+          "supersedes": null,
+          "referral_reason": null
+        },
+        "explanation": {
+          "formula_en": "½ × ₹4,380 × 63% = ₹1,380",
+          "formula_hi": "₹4,380 का 63% = ₹2,759.40; उसका आधा = ₹1,380",
+          "clause": "C4",
+          "facts": [
+            {
+              "key": "expected_day",
+              "label_en": "Your usual Tuesday",
+              "value": "₹4,380",
+              "sources": [
+                {
+                  "kind": "FORECAST",
+                  "label": "Your usual day, worked out from your past sales",
+                  "ref": "forecast:S-0142:2025-08-19",
+                  "as_of": "2025-08-19T17:00:00+05:30",
+                  "origin": "SIMULATED",
+                  "clause": "C4"
+                }
+              ]
+            },
+            {
+              "key": "area_index",
+              "label_en": "Area index",
+              "value": "37%",
+              "sources": [
+                {
+                  "kind": "SALES_INDEX",
+                  "label": "Area sales index",
+                  "ref": "trigger:E-Z7-20250819",
+                  "as_of": "2025-08-19T17:00:00+05:30",
+                  "origin": "SIMULATED",
+                  "clause": "C2"
+                },
+                {
+                  "kind": "ALERT",
+                  "label": "IMD-style nowcast · simulated",
+                  "ref": "alert:A-20250818-01",
+                  "as_of": "2025-08-18T17:30:00+05:30",
+                  "origin": "SIMULATED",
+                  "clause": "C2"
+                }
+              ]
+            },
+            {
+              "key": "drop_pct",
+              "label_en": "Area drop",
+              "value": "63%",
+              "sources": [
+                {
+                  "kind": "SALES_INDEX",
+                  "label": "Area sales index",
+                  "ref": "trigger:E-Z7-20250819",
+                  "as_of": "2025-08-19T17:00:00+05:30",
+                  "origin": "SIMULATED",
+                  "clause": "C2"
+                },
+                {
+                  "kind": "ALERT",
+                  "label": "IMD-style nowcast · simulated",
+                  "ref": "alert:A-20250818-01",
+                  "as_of": "2025-08-18T17:30:00+05:30",
+                  "origin": "SIMULATED",
+                  "clause": "C2"
+                }
+              ]
+            },
+            {
+              "key": "share",
+              "label_en": "Chhatri pays",
+              "value": "half",
+              "sources": [
+                {
+                  "kind": "RULES",
+                  "label": "Chhatri rules pilot-0.1",
+                  "ref": "rules:pilot-0.1:payout_share",
+                  "as_of": null,
+                  "origin": "CONFIG",
+                  "clause": "C4"
+                }
+              ]
+            },
+            {
+              "key": "cap",
+              "label_en": "Most paid for one day",
+              "value": "₹2,500",
+              "sources": [
+                {
+                  "kind": "RULES",
+                  "label": "Chhatri rules pilot-0.1",
+                  "ref": "rules:pilot-0.1:area.daily_cap_rupees",
+                  "as_of": null,
+                  "origin": "CONFIG",
+                  "clause": "C4"
+                }
+              ]
+            },
+            {
+              "key": "amount",
+              "label_en": "Amount",
+              "value": "₹1,380",
+              "sources": [
+                {
+                  "kind": "RULES",
+                  "label": "Chhatri rules pilot-0.1",
+                  "ref": "decision:D-000142",
+                  "as_of": "2025-08-19T17:00:00+05:30",
+                  "origin": "CONFIG",
+                  "clause": "C4"
+                }
+              ]
+            }
+          ]
+        },
+        "checks": [
+          {
+            "code": "COVER_IN_FORCE",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Cover in force",
+            "detail_en": "Cover active since 17 Mar 2025.",
+            "observed": "Active cover from 17 Mar 2025",
+            "required": "Active cover starting on or before 19 Aug 2025",
+            "clause": "C5",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "COVER",
+                "label": "Your cover record",
+                "ref": "cover:CV-0142",
+                "as_of": "2025-03-10T11:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C5"
+              },
+              {
+                "kind": "RULES",
+                "label": "Chhatri rules pilot-0.1",
+                "ref": "rules:pilot-0.1:cover.waiting_period_days",
+                "as_of": null,
+                "origin": "CONFIG",
+                "clause": "C5"
+              }
+            ]
+          },
+          {
+            "code": "PREMIUM_PREPAID",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Premium prepaid",
+            "detail_en": "Premium received in advance through 22 Aug 2025.",
+            "observed": "Prepaid through 22 Aug 2025",
+            "required": "Prepaid through 19 Aug 2025 or later",
+            "clause": "C6",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "PREMIUM",
+                "label": "Your premium payment",
+                "ref": "premium:CV-0142",
+                "as_of": "2025-03-10T11:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C6"
+              },
+              {
+                "kind": "COVER",
+                "label": "Your cover record",
+                "ref": "cover:CV-0142",
+                "as_of": "2025-03-10T11:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C6"
+              }
+            ]
+          },
+          {
+            "code": "COVER_BEFORE_ALERT",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Cover bought before the alert",
+            "detail_en": "Cover was bought before alert A-20250818-01 was issued.",
+            "observed": "Bought 10 Mar 2025 11:00",
+            "required": "Bought before 18 Aug 2025 17:30",
+            "clause": "C5",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "COVER",
+                "label": "Your cover record",
+                "ref": "cover:CV-0142",
+                "as_of": "2025-03-10T11:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C5"
+              },
+              {
+                "kind": "ALERT",
+                "label": "IMD-style nowcast · simulated",
+                "ref": "alert:A-20250818-01",
+                "as_of": "2025-08-18T17:30:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C5"
+              }
+            ]
+          },
+          {
+            "code": "ALERT_ACTIVE",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Alert active for the whole window",
+            "detail_en": "Red rain alert covers the whole window.",
+            "observed": "A-20250818-01 19 Aug 2025 14:00–19 Aug 2025 20:00",
+            "required": "Alert for Z7 19 Aug 2025 14:00–17:00",
+            "clause": "C2",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "ALERT",
+                "label": "IMD-style nowcast · simulated",
+                "ref": "alert:A-20250818-01",
+                "as_of": "2025-08-18T17:30:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C2"
+              },
+              {
+                "kind": "SALES_INDEX",
+                "label": "Area sales index",
+                "ref": "trigger:E-Z7-20250819",
+                "as_of": "2025-08-19T17:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C2"
+              }
+            ]
+          },
+          {
+            "code": "INDEX_QUORUM",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Enough shops in the area index",
+            "detail_en": "46 covered, open shops form the area index (20 needed).",
+            "observed": "46 shops",
+            "required": "At least 20 shops",
+            "clause": "C2",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "SALES_INDEX",
+                "label": "Area sales index",
+                "ref": "trigger:E-Z7-20250819",
+                "as_of": "2025-08-19T17:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C2"
+              },
+              {
+                "kind": "RULES",
+                "label": "Chhatri rules pilot-0.1",
+                "ref": "rules:pilot-0.1:area.min_shops_in_index",
+                "as_of": null,
+                "origin": "CONFIG",
+                "clause": "C2"
+              }
+            ]
+          },
+          {
+            "code": "BELOW_FLOOR",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Every hour below the floor",
+            "detail_en": "Sales stayed below 50% of expected in each of the 3 hours.",
+            "observed": "35% · 39% · 37%",
+            "required": "All 3 hours below 50%",
+            "clause": "C2",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "SALES_INDEX",
+                "label": "Area sales index",
+                "ref": "trigger:E-Z7-20250819",
+                "as_of": "2025-08-19T17:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C2"
+              },
+              {
+                "kind": "RULES",
+                "label": "Chhatri rules pilot-0.1",
+                "ref": "rules:pilot-0.1:area.index_floor_pct",
+                "as_of": null,
+                "origin": "CONFIG",
+                "clause": "C2"
+              },
+              {
+                "kind": "RULES",
+                "label": "Chhatri rules pilot-0.1",
+                "ref": "rules:pilot-0.1:area.consecutive_hours",
+                "as_of": null,
+                "origin": "CONFIG",
+                "clause": "C2"
+              }
+            ]
+          },
+          {
+            "code": "BELOW_MODEL_RANGE",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Drop below the model's range",
+            "detail_en": "Area sales at 37% are below the model's range (92%).",
+            "observed": "37% of expected",
+            "required": "Below 92% (bottom of the model's range)",
+            "clause": "C2",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "SALES_INDEX",
+                "label": "Area sales index",
+                "ref": "trigger:E-Z7-20250819",
+                "as_of": "2025-08-19T17:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C2"
+              },
+              {
+                "kind": "ZONE_BOUND",
+                "label": "Usual range for your area",
+                "ref": "zone-bound:Z7",
+                "as_of": null,
+                "origin": "CONFIG",
+                "clause": "C2"
+              }
+            ]
+          },
+          {
+            "code": "NOT_ALREADY_PAID",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Not already paid",
+            "detail_en": "No earlier area payout for 19 Aug 2025.",
+            "observed": "Not paid",
+            "required": "No area payout yet for 19 Aug 2025",
+            "clause": "C7",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "PAYOUT_HISTORY",
+                "label": "Your earlier payouts",
+                "ref": "payouts:S-0142",
+                "as_of": "2025-08-19T17:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C7"
+              }
+            ]
+          },
+          {
+            "code": "WITHIN_ANNUAL_LIMIT",
+            "severity": "HARD",
+            "status": "PASS",
+            "label_en": "Within the annual limit",
+            "detail_en": "₹1,380 of the ₹30,000 yearly limit.",
+            "observed": "₹0 paid + ₹1,380 = ₹1,380",
+            "required": "At most ₹30,000 in 365 days",
+            "clause": "C4",
+            "erased": false,
+            "sources": [
+              {
+                "kind": "PAYOUT_HISTORY",
+                "label": "Your earlier payouts",
+                "ref": "payouts:S-0142",
+                "as_of": "2025-08-19T17:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C4"
+              },
+              {
+                "kind": "RULES",
+                "label": "Chhatri rules pilot-0.1",
+                "ref": "rules:pilot-0.1:annual_limit_rupees",
+                "as_of": null,
+                "origin": "CONFIG",
+                "clause": "C4"
+              }
+            ]
+          }
+        ],
+        "counterfactuals": [
+          {
+            "id": "CF-1",
+            "kind": "AMOUNT_SENSITIVITY",
+            "actionable": false,
+            "changes": [
+              {
+                "check_code": null,
+                "field": "drop_pct",
+                "observed": "63",
+                "needed": "64"
+              }
+            ],
+            "result": {
+              "outcome": "APPROVED",
+              "amount_paise": 140200,
+              "amount_label": "₹1,402"
+            },
+            "verified": true,
+            "text_en": "One more point of area drop would have added about ₹22.",
+            "text_hi": "इलाके की गिरावट एक प्रतिशत और होती, तो लगभग ₹22 और जुड़ते।",
+            "sources": [
+              {
+                "kind": "SALES_INDEX",
+                "label": "Area sales index",
+                "ref": "trigger:E-Z7-20250819",
+                "as_of": "2025-08-19T17:00:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C2"
+              },
+              {
+                "kind": "ALERT",
+                "label": "IMD-style nowcast · simulated",
+                "ref": "alert:A-20250818-01",
+                "as_of": "2025-08-18T17:30:00+05:30",
+                "origin": "SIMULATED",
+                "clause": "C2"
+              }
+            ]
+          }
+        ],
+        "payout": {
+          "id": "P-000142",
+          "status": "CREDITED",
+          "amount_label": "₹1,380",
+          "credited_at": "2025-08-19T17:04:00+05:30"
+        },
+        "edi": null,
+        "case": null,
+        "audit": {
+          "seq": 146,
+          "hash_short": "63136970e975",
+          "verify_path": "/api/audit/verify"
+        },
+        "grievance": {
+          "dispute_allowed": true,
+          "ladder": [
+            "PAYTM_DISPUTE",
+            "INSURER_GRO",
+            "BIMA_BHAROSA",
+            "OMBUDSMAN"
+          ],
+          "first_step_hours": 24
+        }
+      }
+    }
+  }
+}

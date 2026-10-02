@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MockBackend } from '../mock/backend'
 import { testBackend } from '../mock/testkit'
 import { renderApp } from '../test/renderApp'
+import { BACKTEST_CAVEAT } from './Backtest'
 
 let backend: MockBackend
 beforeEach(() => {
@@ -42,6 +43,15 @@ describe('Backtest and Policy', () => {
     renderApp('/backtest', backend)
     expect(await screen.findByRole('heading', { name: 'Would Chhatri have paid the real losses?' })).toBeTruthy()
     expect((await screen.findAllByText(/simulated sales · real Open-Meteo rainfall/)).length).toBeGreaterThan(0)
+  })
+
+  it('says under the hero that the backtest tests the rule, not accuracy on real shops (fs-08 13.3)', async () => {
+    renderApp('/backtest', backend)
+    const line = await screen.findByText(BACKTEST_CAVEAT)
+    expect(BACKTEST_CAVEAT).toBe("The model's range is calibrated on simulated sales, so this backtest tests the rule, not accuracy on real shops.")
+    const hero = document.querySelector('.backtest-hero')
+    expect(hero).toBeTruthy()
+    expect(hero?.nextElementSibling).toBe(line)
   })
 
   it('shows the policy with the live tests', async () => {

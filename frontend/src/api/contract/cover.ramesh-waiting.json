@@ -1,0 +1,75 @@
+{
+  "name": "cover.ramesh-waiting",
+  "description": "Ramesh after the simulated payment: WAITING until 25 August, prepaid through 23 September (30 days).",
+  "scenario": "buy_cover",
+  "at": "18:00",
+  "setup": [
+    {
+      "method": "POST",
+      "path": "/api/premium/link",
+      "body": {
+        "merchant_id": "S-0907"
+      },
+      "auth": "officer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks/paytm",
+      "body": {
+        "link_id": "sim-7BFFBE",
+        "status": "TXN_SUCCESS",
+        "txn_id": "SIM-sim-7BFFBE"
+      }
+    }
+  ],
+  "request": {
+    "method": "GET",
+    "path": "/api/merchants/S-0907/cover"
+  },
+  "exact": [
+    "data.merchant_id",
+    "data.cover_id",
+    "data.status",
+    "data.status_text_en",
+    "data.status_text_hi",
+    "data.purchased_at",
+    "data.starts_on",
+    "data.prepaid_through",
+    "data.premium_per_day_label",
+    "data.premium_due",
+    "data.annual_limit_label",
+    "data.amount_claimed_label",
+    "data.amount_remaining_label",
+    "data.alert_active"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "merchant_id": "S-0907",
+        "cover_id": "CV-S-0907-20250825",
+        "status": "WAITING",
+        "status_text_hi": "आपका कवर 25 अगस्त से शुरू होगा।",
+        "status_text_en": "Your cover starts on 25 August.",
+        "zone_id": "Z3",
+        "zone_name": "Worli · Lower Parel",
+        "purchased_at": "2025-08-18T18:00:00+05:30",
+        "starts_on": "2025-08-25",
+        "prepaid_through": "2025-09-23",
+        "waiting_period_days": 7,
+        "premium_per_day_paise": 1416,
+        "premium_per_day_label": "₹14.16",
+        "premium_due": false,
+        "annual_limit_paise": 3000000,
+        "annual_limit_label": "₹30,000",
+        "amount_claimed_paise": 0,
+        "amount_claimed_label": "₹0",
+        "amount_remaining_paise": 3000000,
+        "amount_remaining_label": "₹30,000",
+        "alert_active": false,
+        "alert_id": null
+      }
+    }
+  }
+}

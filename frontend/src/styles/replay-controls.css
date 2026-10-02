@@ -130,7 +130,7 @@
 }
 
 .seek__input::placeholder {
-  color: var(--faint);
+  color: var(--muted);
   letter-spacing: 0.04em;
 }
 
@@ -215,7 +215,7 @@
 
 .scrubber__edge {
   margin-top: -3px;
-  color: var(--faint);
+  color: var(--muted);
   font-size: var(--fs-2xs);
 }
 
@@ -360,6 +360,39 @@
     flex-wrap: wrap;
     margin-left: 0;
   }
+}
+
+/*
+ * Quiet controls (fs-08 12.1): in presenter mode speed, steps, seek and reset fold under "More" on any screen, in the
+ * popover the phone layout already uses. The scenario picker, clock, Play or Pause, scrubber, chapters and
+ * "Slow near payout" stay in the bar.
+ */
+.app[data-presenter='on'] .transport__more-toggle {
+  display: inline-flex;
+}
+
+.app[data-presenter='on'] .transport__more {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: var(--sp-4);
+  z-index: var(--z-popover);
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 560px;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+}
+
+.app[data-presenter='on'] .transport__more[data-open='true'] {
+  display: flex;
+  animation: pop-in var(--dur-ui) var(--ease-out);
+  transform-origin: top right;
 }
 
 /* Phones: one row of controls (scenario, play, More) and the clock on one line below. */

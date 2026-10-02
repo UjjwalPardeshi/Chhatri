@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { COLOUR_STOPS, indexColour, legendGradient, LEGEND_RULE, NO_DATA_COLOUR, SCALE_AMBER, SCALE_GREEN, SCALE_RED } from './colour'
+import { COLOUR_STOPS, indexColour, legendGradient, legendRule, NO_DATA_COLOUR, SCALE_AMBER, SCALE_GREEN, SCALE_RED } from './colour'
 
 describe('deck colour scale (SPEC §20): 40% red → 70% amber → 100%+ green', () => {
   it('pins the three named stops', () => {
@@ -32,6 +32,10 @@ describe('deck colour scale (SPEC §20): 40% red → 70% amber → 100%+ green',
 
   it('builds the legend gradient from the same stops', () => {
     expect(legendGradient()).toBe(`linear-gradient(90deg, ${SCALE_RED} 0%, #d6603a 25%, ${SCALE_AMBER} 50%, #e7d38b 75%, ${SCALE_GREEN} 100%)`)
-    expect(LEGEND_RULE).toBe('Pays below 50% for 3 h, with alert')
+  })
+
+  it('words the legend rule from the published trigger rule, not from a constant', () => {
+    expect(legendRule({ floorPct: 50, hours: 3 })).toBe('Pays below 50% for 3 h, with alert')
+    expect(legendRule({ floorPct: 45, hours: 4 })).toBe('Pays below 45% for 4 h, with alert')
   })
 })

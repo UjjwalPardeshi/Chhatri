@@ -4,54 +4,36 @@
  * Inputs are validated like the real API: ids, JSON bodies, officer bearer token, upload type/size
  * by magic bytes (SPEC §21).
  */
-import type { CaseStatus, ListMeta, Message, VoiceDemoKey } from '../api/types'
-import { enabledFeatures } from '../features'
-import { MockBackend, MockHttpError } from './backend'
+import type { CaseStatus, Message, VoiceDemoKey } from '../api/types'
+import { enabledFeatures, isFeatureEnabled } from '../features'
+import { MockHttpError } from './backend'
 import { CaseError, officerDecide } from './cases'
 import { inboundPhoto, inboundText, inboundVoiceDemo, inboundVoiceUpload, VOICE_DEMOS } from './conversation'
-import { BACKTEST, INTEGRATIONS, MERCHANTS, MOCK_OFFICER_TOKEN, POLICY, type MockMerchant } from './fixtures'
+import { ASK_ROUTES } from './ask'
+import { CONSENT_ROUTES } from './endpoints/consents'
+import { COVER_ROUTES } from './endpoints/cover'
+import { EVALS_ROUTES } from './endpoints/evals'
+import { GRIEVANCE_ROUTES } from './endpoints/grievances'
+import { OPS_ROUTES } from './endpoints/ops'
+import { PREMIUM_ROUTES } from './endpoints/premium'
+import { PRECHECK_ROUTES } from './precheckRoutes'
+import { RECEIPT_ROUTES } from './endpoints/receipt'
+import { TRACKER_ROUTES } from './endpoints/tracker'
+import { WHATIF_ROUTES } from './endpoints/whatif'
+import { BACKTEST, integrationRows, MERCHANTS, MOCK_OFFICER_TOKEN, POLICY } from './fixtures'
+import { bodyField, invalid, merchantParam, notFound, ok, requireOfficer, type Handler, type Route, type RouteContext, type RouteResult } from './http'
 import { SAMPLE_SLIPS } from './personal'
 import { GENESIS_HASH } from './runtime'
 import { canonicalJson, sha256Hex } from './sha256'
 import { merchantDetailView, merchantSummaries, snapshotView, zonePanelView } from './views'
 
-export type RouteContext = {
-  params: string[]
-  query: URLSearchParams
-  body: unknown
-  form: FormData | null
-  headers: Headers
-  backend: MockBackend
-}
-export type RouteResult = { data: unknown; meta?: ListMeta }
-type Handler = (ctx: RouteContext) => RouteResult | Promise<RouteResult>
-type Route = { method: string; pattern: RegExp; handler: Handler }
+export type { RouteContext, RouteResult } from './http'
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 const MAX_TEXT_CHARS = 1_000
 const DEFAULT_AUDIT_LIMIT = 100
 const MAX_AUDIT_LIMIT = 500
 const CASE_STATUSES: readonly CaseStatus[] = ['OPEN', 'APPROVED', 'DECLINED', 'CLOSED']
-
-const ok = (data: unknown, meta?: ListMeta): RouteResult => ({ data, meta })
-const notFound = (what: string) => new MockHttpError('NOT_FOUND', `${what} not found`, 404)
-const invalid = (field: string, reason: string) => new MockHttpError('VALIDATION_ERROR', 'Invalid input', 422, { [field]: reason })
-
-function bodyField(body: unknown, name: string): unknown {
-  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[name] : undefined
-}
-
-function merchantParam(ctx: RouteContext): MockMerchant {
-  const merchant = MERCHANTS[ctx.params[0]]
-  if (!merchant) throw notFound(`Merchant ${ctx.params[0]}`)
-  return merchant
-}
-
-function requireOfficer(ctx: RouteContext): void {
-  if (ctx.headers.get('Authorization') !== `Bearer ${MOCK_OFFICER_TOKEN}`) {
-    throw new MockHttpError('UNAUTHORIZED', 'Officer token missing or invalid', 401)
-  }
-}
 
 /** Magic-byte sniffing (SPEC §21): PNG, JPEG, WebP. */
 export function sniffImage(bytes: Uint8Array): string | null {
@@ -63,7 +45,7 @@ export function sniffImage(bytes: Uint8Array): string | null {
 }
 
 function objectUrl(blob: Blob): string {
-  if (typeof URL.createObjectURL !== 'function') throw new MockHttpError('INTERNAL', 'Object URLs are not supported here', 500)
+  if (typeof URL.createObjectURL !== 'function') throw new MockHttpError('internal', 'Object URLs are not supported here', 500)
   return URL.createObjectURL(blob)
 }
 
@@ -127,7 +109,7 @@ function decideCase(approve: boolean): Handler {
     requireOfficer(ctx)
     const rt = ctx.backend.runtime
     const found = rt.cases.find((c) => c.id === ctx.params[0])
-    if (!found) throw notFound(`Case ${ctx.params[0]}`)
+    if (!found) throw notFound(`case ${ctx.params[0]}`)
     const note = bodyField(ctx.body, 'note')
     try {
       return ok(officerDecide(rt, MERCHANTS[found.merchant_id], found.id, approve, typeof note === 'string' ? note : ''))
@@ -173,9 +155,24 @@ function replay(action: (ctx: RouteContext) => unknown): Handler {
   return (ctx) => ok(action(ctx))
 }
 
+/** X6 switch (card 4.5): flag-gated, officer-only; only the lender can be forced in the static demo (fs-08 9.7). */
+const setFallback: Handler = (ctx) => {
+  if (!isFeatureEnabled('x6_provider_panel')) throw notFound('route')
+  requireOfficer(ctx)
+  const rows = integrationRows(ctx.backend.runtime.lenderForced)
+  const row = rows.find((r) => r.name === ctx.params[0])
+  if (!row) throw notFound(`component ${ctx.params[0]}`)
+  const force = bodyField(ctx.body, 'force')
+  if (typeof force !== 'boolean') throw invalid('force', 'must be true or false')
+  if (force && !row.switchable) throw new MockHttpError('conflict', 'this component cannot be forced', 409)
+  if (row.name === 'lender') ctx.backend.setLenderForced(force)
+  return ok(integrationRows(ctx.backend.runtime.lenderForced).find((r) => r.name === row.name))
+}
+
 export const ROUTES: readonly Route[] = [
   { method: 'GET', pattern: /^\/api\/health$/, handler: () => ok({ status: 'ok', version: 'mock-console', seed: 20251019, features: enabledFeatures() }) },
-  { method: 'GET', pattern: /^\/api\/integrations$/, handler: () => ok(INTEGRATIONS) },
+  { method: 'GET', pattern: /^\/api\/integrations$/, handler: (c) => ok(integrationRows(c.backend.runtime.lenderForced)) },
+  { method: 'POST', pattern: /^\/api\/integrations\/([a-z_]+)\/fallback$/, handler: setFallback },
   { method: 'GET', pattern: /^\/api\/session$/, handler: () => ok({ officer_token: MOCK_OFFICER_TOKEN }) },
   { method: 'GET', pattern: /^\/api\/preflight$/, handler: () => ok([{ name: 'mock', ok: true, detail: 'Mock console backend' }]) },
   { method: 'GET', pattern: /^\/api\/geo\/zones$/, handler: (c) => ok(c.backend.geo.zones) },
@@ -186,7 +183,7 @@ export const ROUTES: readonly Route[] = [
     pattern: /^\/api\/zones\/(Z\d+)$/,
     handler: (c) => {
       const zone = c.backend.zones.find((z) => z.id === c.params[0])
-      if (!zone) throw notFound(`Zone ${c.params[0]}`)
+      if (!zone) throw notFound(`zone ${c.params[0]}`)
       return ok(zonePanelView(c.backend.runtime, zone))
     },
   },
@@ -209,7 +206,7 @@ export const ROUTES: readonly Route[] = [
     pattern: /^\/api\/cases\/(C-\d+)$/,
     handler: (c) => {
       const found = c.backend.runtime.cases.find((x) => x.id === c.params[0])
-      if (!found) throw notFound(`Case ${c.params[0]}`)
+      if (!found) throw notFound(`case ${c.params[0]}`)
       return ok(found)
     },
   },
@@ -220,7 +217,7 @@ export const ROUTES: readonly Route[] = [
     pattern: /^\/api\/decisions\/(D-\d+)$/,
     handler: (c) => {
       const found = c.backend.runtime.decisions.find((d) => d.id === c.params[0])
-      if (!found) throw notFound(`Decision ${c.params[0]}`)
+      if (!found) throw notFound(`decision ${c.params[0]}`)
       return ok(found)
     },
   },
@@ -228,6 +225,17 @@ export const ROUTES: readonly Route[] = [
   { method: 'GET', pattern: /^\/api\/audit\/verify$/, handler: verifyAudit },
   { method: 'GET', pattern: /^\/api\/policy$/, handler: () => ok(POLICY) },
   { method: 'GET', pattern: /^\/api\/backtest$/, handler: () => ok(BACKTEST) },
+  ...COVER_ROUTES,
+  ...TRACKER_ROUTES,
+  ...RECEIPT_ROUTES,
+  ...PREMIUM_ROUTES,
+  ...PRECHECK_ROUTES,
+  ...OPS_ROUTES,
+  ...WHATIF_ROUTES,
+  ...ASK_ROUTES,
+  ...GRIEVANCE_ROUTES,
+  ...CONSENT_ROUTES,
+  ...EVALS_ROUTES,
 ]
 
 export function matchRoute(method: string, path: string): { handler: Handler; params: string[] } | null {

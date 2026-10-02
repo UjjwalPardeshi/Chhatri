@@ -3,7 +3,7 @@
  * replay writes one line per zone for the same event (three triggers, three credits, three sets
  * of paused instalments). Same-minute, same-type lines about different zones fold into one row
  * (even when other types interleave within that minute),
- * "Loan instalments paused · Z3 56 · Z7 18 · Z12 50", so the feed shows the story, not a list.
+ * "Loan instalments paused · Z3 50 · Z7 19 · Z12 54", so the feed shows the story, not a list.
  * Each part keeps the line's key figure (a rupee amount, a percentage or a leading count); the
  * full original lines stay available as the row's tooltip.
  */
@@ -11,13 +11,15 @@ import type { FeedItem } from '../../api/types'
 import { INDEX_FLOOR_PCT } from '../../lib/colour'
 
 /** Titles for the folded rows, by feed type (types without a title are never folded). */
-export const GROUP_TITLES: Readonly<Record<string, string>> = Object.freeze({
-  trigger: 'Area triggers fired',
-  decision: 'Area payouts approved',
-  payout: 'Area payouts credited',
-  instalment: 'Loan instalments paused',
-  watch: `Below ${INDEX_FLOOR_PCT}% of expected, alert active`,
-})
+export function groupTitles(floorPct: number = INDEX_FLOOR_PCT): Readonly<Record<string, string>> {
+  return {
+    trigger: 'Area triggers fired',
+    decision: 'Area payouts approved',
+    payout: 'Area payouts credited',
+    instalment: 'Loan instalments paused',
+    watch: `Below ${floorPct}% of expected, alert active`,
+  }
+}
 
 /**
  * How a folded part reads, by feed type, so every figure carries its unit: "56 in Z3" (paused
@@ -63,9 +65,9 @@ function byZone(a: FeedItem, b: FeedItem): number {
   return (a.zone_id ?? '').localeCompare(b.zone_id ?? '', 'en', { numeric: true })
 }
 
-function toRow(bucket: readonly FeedItem[]): FeedRow {
+function toRow(bucket: readonly FeedItem[], titles: Readonly<Record<string, string>>): FeedRow {
   const first = bucket[0]
-  const title = GROUP_TITLES[first.type]
+  const title = titles[first.type]
   const zones = new Set(bucket.map((i) => i.zone_id))
   const foldable = bucket.length > 1 && title !== undefined && bucket.every((i) => i.zone_id) && zones.size === bucket.length
   if (!foldable) return { kind: 'item', key: `${first.id}-${first.at}`, at: first.at, type: first.type, text: first.text_en }
@@ -99,10 +101,12 @@ function buckets(sorted: readonly FeedItem[]): FeedItem[][] {
 }
 
 /** Newest first; same-minute, same-type lines about different zones are folded (module doc). */
-export function feedRows(items: readonly FeedItem[]): FeedRow[] {
+/** The watch title reads the published floor (`floorPct`), never a copied number. */
+export function feedRows(items: readonly FeedItem[], floorPct: number = INDEX_FLOOR_PCT): FeedRow[] {
+  const titles = groupTitles(floorPct)
   const sorted = items.toSorted((a, b) => Date.parse(b.at) - Date.parse(a.at) || b.id - a.id)
   return buckets(sorted).flatMap((bucket) => {
-    const row = toRow(bucket)
-    return row.kind === 'group' || bucket.length === 1 ? [row] : bucket.map((i) => toRow([i]))
+    const row = toRow(bucket, titles)
+    return row.kind === 'group' || bucket.length === 1 ? [row] : bucket.map((i) => toRow([i], titles))
   })
 }

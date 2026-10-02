@@ -71,9 +71,9 @@ export function streamMark(stream: StreamStatus): { text: string; tone: 'live' |
   return stream === 'open' ? { text: 'streaming', tone: 'live' } : { text: 'reconnecting', tone: 'down' }
 }
 
-export function EventFeed({ items }: { items: readonly FeedItem[] }) {
+export function EventFeed({ items, floorPct }: { items: readonly FeedItem[]; floorPct?: number }) {
   const { stream } = useLive()
-  const rows = feedRows(items)
+  const rows = feedRows(items, floorPct)
   const listRef = useRef<HTMLOListElement>(null)
   const hidden = useHiddenCount(listRef, rows.map((r) => r.key).join('|'))
   const mark = streamMark(stream)

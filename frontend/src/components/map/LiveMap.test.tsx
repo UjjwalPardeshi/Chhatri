@@ -91,7 +91,7 @@ function renderMap(props: Partial<Parameters<typeof LiveMap>[0]> = {}) {
   const onSelectZone = vi.fn<(zoneId: string) => void>()
   const onOpenMerchant = vi.fn<(merchantId: string) => void>()
   const geo = { zones: backend.geo.zones as FeatureCollection, hexes: backend.geo.hexes as FeatureCollection }
-  const view = render(<LiveMap geo={geo} snapshot={snapshot} merchant={anil} selected="Z7" onSelectZone={onSelectZone} onOpenMerchant={onOpenMerchant} {...props} />)
+  const view = render(<LiveMap geo={geo} snapshot={snapshot} merchant={anil} selected="Z7" rule={{ floorPct: 50, hours: 3 }} onSelectZone={onSelectZone} onOpenMerchant={onOpenMerchant} {...props} />)
   return { ...view, onSelectZone, onOpenMerchant }
 }
 

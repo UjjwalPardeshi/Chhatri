@@ -29,6 +29,8 @@ export type LiveValue = {
   stream: StreamStatus
   integrations: IntegrationStatus[] | null
   integrationsError: ApiError | null
+  /** X6: force (`true`) or release (`false`) a component's fallback path, then re-read the rows. Rejects with the API error. */
+  setFallback: (component: string, force: boolean) => Promise<void>
   officerReady: boolean
   sessionError: ApiError | null
   sound: SoundManager
@@ -118,8 +120,26 @@ function useStaticInfo(api: Api) {
   const [integrationsError, setIntegrationsError] = useState<ApiError | null>(null)
   const [officerReady, setOfficerReady] = useState(false)
   const [sessionError, setSessionError] = useState<ApiError | null>(null)
+  const loadIntegrations = useCallback(
+    () =>
+      api.integrations().then(
+        (rows) => {
+          setIntegrations(rows)
+          setIntegrationsError(null)
+        },
+        (reason: unknown) => setIntegrationsError(toApiError(reason)),
+      ),
+    [api],
+  )
+  const setFallback = useCallback(
+    async (component: string, force: boolean) => {
+      await api.setFallback(component, force)
+      await loadIntegrations()
+    },
+    [api, loadIntegrations],
+  )
   useEffect(() => {
-    api.integrations().then(setIntegrations, (reason: unknown) => setIntegrationsError(toApiError(reason)))
+    void loadIntegrations()
     api.session().then(
       (session) => {
         api.client.setOfficerToken(session.officer_token)
@@ -127,8 +147,8 @@ function useStaticInfo(api: Api) {
       },
       (reason: unknown) => setSessionError(toApiError(reason)),
     )
-  }, [api])
-  return { integrations, integrationsError, officerReady, sessionError }
+  }, [api, loadIntegrations])
+  return { integrations, integrationsError, setFallback, officerReady, sessionError }
 }
 
 type Props = { api: Api; mock: boolean; children: ReactNode }

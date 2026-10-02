@@ -20,13 +20,29 @@ describe('legend', () => {
     const { container } = render(
       <>
         <MapPatternDefs prefix="t" />
-        <Legend patterns="t" />
+        <Legend patterns="t" rule={{ floorPct: 50, hours: 3 }} />
       </>,
     )
     expect(container.querySelector('#t-hatch')).toBeTruthy()
     expect(container.querySelector('#t-stipple')).toBeTruthy()
     expect(container.querySelector('.map-legend__tick--floor')?.textContent).toBe('50%')
     expect(container.querySelector('.map-legend__keys')?.textContent).toBe('Heavy rainNo shops')
+  })
+
+  it('words the rule and places the floor from the published trigger rule (fs-08 13.2)', () => {
+    const { container } = render(<Legend patterns="t" rule={{ floorPct: 45, hours: 4 }} />)
+    expect(container.querySelector('.map-legend__rule')?.getAttribute('title')).toBe('Pays below 45% for 4 h, with alert')
+    expect(container.querySelector('.map-legend__rule')?.textContent).toBe('Pays below 45% for 4 h, with alert')
+    expect(container.querySelector('.map-legend__tick--floor')?.textContent).toBe('45%')
+    expect((container.querySelector('.map-legend__floor') as HTMLElement).style.left).toBe(`${legendPct(45)}%`)
+  })
+
+  it('draws the ramp and no rule while the rules are unknown, rather than guessing a floor', () => {
+    const { container } = render(<Legend patterns="t" rule={null} />)
+    expect(container.querySelector('.map-legend__rule')).toBeNull()
+    expect(container.querySelector('.map-legend__floor')).toBeNull()
+    expect(container.querySelector('.map-legend__tick--floor')).toBeNull()
+    expect(container.querySelector('.map-legend__ticks')?.textContent).toBe('40%70%100%+')
   })
 })
 

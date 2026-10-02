@@ -61,11 +61,25 @@ describe('Claims', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  it('reads the receipt: a Source column of chips with the origin word and the counterfactual note', async () => {
+    await referMismatch()
+    renderApp('/claims', backend)
+    const detail = await screen.findByRole('article', { name: 'Case C-2291' })
+    expect(await within(detail).findByRole('columnheader', { name: 'Source' })).toBeTruthy()
+    const chips = await waitFor(() => {
+      const found = detail.querySelectorAll('.source-chip')
+      expect(found.length).toBeGreaterThan(0)
+      return [...found]
+    })
+    expect(chips.every((c) => /SIMULATED|CONFIG|LIVE/.test(c.textContent ?? ''))).toBe(true)
+    expect(detail.textContent?.toLowerCase()).not.toContain('verified by')
+  })
+
   it('drops a case link from another run instead of showing an error', async () => {
     await referMismatch()
     renderApp('/claims?case=C-9999', backend)
     expect(await screen.findByRole('article', { name: 'Case C-2291' })).toBeTruthy()
-    expect(screen.queryByText(/NOT_FOUND/)).toBeNull()
+    expect(screen.queryByText(/not_found/)).toBeNull()
   })
 
   it('declines a dispute from a deep link', async () => {
@@ -75,7 +89,7 @@ describe('Claims', () => {
     renderApp('/claims?case=C-2291', backend)
     const detail = await screen.findByRole('article', { name: 'Case C-2291' })
     expect(within(detail).getByText('Dispute')).toBeTruthy()
-    const decline = within(detail).getByRole('button', { name: 'Decline' })
+    const decline = within(detail).getByRole('button', { name: 'Reject dispute' })
     await waitFor(() => expect((decline as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(decline)
     expect(await screen.findByText(/Dispute declined by a claims officer/)).toBeTruthy()
@@ -91,7 +105,7 @@ describe('Claims', () => {
     await api.client.post('/api/cases/C-2291/approve', { note: '' }, false).catch(() => undefined)
     backend.runtime.cases = backend.runtime.cases.map((c) => ({ ...c, status: 'DECLINED' as const }))
     fireEvent.click(approve)
-    expect(await screen.findByText(/\[CONFLICT\]/)).toBeTruthy()
+    expect(await screen.findByText(/\[conflict\]/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
   })
 })

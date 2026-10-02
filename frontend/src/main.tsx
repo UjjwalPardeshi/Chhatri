@@ -10,6 +10,7 @@ import { unknownFeatures } from './features'
 import './styles/tokens.css'
 import './styles/base.css'
 import './styles/shell.css'
+import './styles/provider-panel.css'
 import './styles/replay-controls.css'
 import './styles/live-map.css'
 import './styles/live-panel.css'
@@ -25,6 +26,8 @@ import './styles/overview-demo.css'
 import './styles/overview-tech.css'
 import './styles/overview-value.css'
 import './styles/storm.css'
+import './styles/ops-strip.css'
+import './styles/whatif.css'
 
 async function resolveFetch(mock: boolean): Promise<FetchLike> {
   if (!mock) return window.fetch.bind(window)

@@ -6,12 +6,25 @@ import type { MockBackend } from '../mock/backend'
 import { testBackend } from '../mock/testkit'
 import { renderApp } from '../test/renderApp'
 
+/** The frame's chunk: this runs once, when something first imports it. The flag-off test below must stay before the flag-on one. */
+const frameChunk = vi.hoisted(() => vi.fn<() => void>())
+vi.mock('../miniapp/shell/AppFrame', async (importOriginal) => {
+  frameChunk()
+  return importOriginal()
+})
+
+/** Gives a lazy chunk the time it would need to arrive, so a test can say it never did. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 400))
+
 let backend: MockBackend
 beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   backend = testBackend()
 })
-afterEach(() => backend.dispose())
+afterEach(() => {
+  backend.dispose()
+  vi.unstubAllEnvs()
+})
 
 describe('Merchant phone', () => {
   it('shows the monsoon payout card, answers "why" by voice and opens a dispute case', async () => {
@@ -65,5 +78,34 @@ describe('Merchant phone', () => {
     const blocked = within(screen.getByTestId('cover-blocked'))
     expect(blocked.getByText('Blocked')).toBeTruthy()
     expect(blocked.getByText(/^Paytm link sent for ₹[\d,.]+ \(₹[\d,.]+ a day\)$/)).toBeTruthy()
+  })
+
+  it('has no frame while n1_miniapp is off, and never requests the frame chunk', async () => {
+    renderApp('/merchant/S-0142', backend)
+    expect(await screen.findByText('Paytm · Chhatri')).toBeTruthy()
+    await settle()
+    expect(screen.queryByTestId('app-frame')).toBeNull()
+    expect(document.querySelector('.phone--app')).toBeNull()
+    expect(document.querySelector('.merchant-page')?.classList.contains('merchant-page--app')).toBe(false)
+    expect(frameChunk).not.toHaveBeenCalled()
+  })
+
+  it('puts the mini-app frame between the phone and the panel while n1_miniapp is on', async () => {
+    vi.stubEnv('VITE_FEATURES', 'n1_miniapp')
+    renderApp('/merchant/S-0142?lang=en', backend)
+    const frame = await screen.findByTestId('app-frame')
+    expect(frameChunk).toHaveBeenCalledTimes(1)
+    const page = document.querySelector('.merchant-page') as HTMLElement
+    expect(page.classList.contains('merchant-page--app')).toBe(true)
+    const phone = page.querySelector('.phone:not(.phone--app)') as HTMLElement
+    const panel = await waitFor(() => {
+      const found = page.querySelector('.merchant-panel')
+      if (!found) throw new Error('the panel has not loaded yet')
+      return found
+    })
+    expect(phone.compareDocumentPosition(frame) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(frame.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByTestId('app-root').classList.contains('miniapp')).toBe(true)
+    expect(screen.getByTestId('app-open-fullscreen').getAttribute('href')).toBe('/merchant/S-0142/app?lang=en')
   })
 })

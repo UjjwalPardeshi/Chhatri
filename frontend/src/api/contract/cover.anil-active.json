@@ -1,0 +1,63 @@
+{
+  "name": "cover.anil-active",
+  "description": "Anil at 17:05 of the monsoon replay: ACTIVE, the zone price, the alert in force and the paid claim.",
+  "scenario": "monsoon",
+  "at": "17:05",
+  "setup": [],
+  "request": {
+    "method": "GET",
+    "path": "/api/merchants/S-0142/cover"
+  },
+  "exact": [
+    "data.merchant_id",
+    "data.cover_id",
+    "data.status",
+    "data.status_text_en",
+    "data.status_text_hi",
+    "data.zone_id",
+    "data.zone_name",
+    "data.purchased_at",
+    "data.starts_on",
+    "data.prepaid_through",
+    "data.waiting_period_days",
+    "data.premium_per_day_paise",
+    "data.premium_per_day_label",
+    "data.premium_due",
+    "data.annual_limit_label",
+    "data.amount_claimed_paise",
+    "data.amount_claimed_label",
+    "data.amount_remaining_label",
+    "data.alert_active",
+    "data.alert_id"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "merchant_id": "S-0142",
+        "cover_id": "CV-0142",
+        "status": "ACTIVE",
+        "status_text_hi": "आपका कवर चालू है। प्रीमियम 22 अगस्त तक जमा है।",
+        "status_text_en": "Your cover is active. Premium is paid through 22 August.",
+        "zone_id": "Z7",
+        "zone_name": "Parel · Lalbaug",
+        "purchased_at": "2025-03-10T11:00:00+05:30",
+        "starts_on": "2025-03-17",
+        "prepaid_through": "2025-08-22",
+        "waiting_period_days": 7,
+        "premium_per_day_paise": 1862,
+        "premium_per_day_label": "₹18.62",
+        "premium_due": false,
+        "annual_limit_paise": 3000000,
+        "annual_limit_label": "₹30,000",
+        "amount_claimed_paise": 138000,
+        "amount_claimed_label": "₹1,380",
+        "amount_remaining_paise": 2862000,
+        "amount_remaining_label": "₹28,620",
+        "alert_active": true,
+        "alert_id": "A-20250818-01"
+      }
+    }
+  }
+}

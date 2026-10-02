@@ -40,7 +40,7 @@ describe('control bar', () => {
     await waitFor(() => expect(clockText()).toContain('17:05'))
     fireEvent.change(seek, { target: { value: '23:59' } })
     fireEvent.click(screen.getByRole('button', { name: 'Seek' }))
-    expect(await screen.findByText(/VALIDATION_ERROR/)).toBeTruthy()
+    expect(await screen.findByText(/validation_error/i)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
     await screen.findByRole('button', { name: 'Pause' })
@@ -96,6 +96,19 @@ describe('header', () => {
     const { api } = await import('../../mock/testkit').then((m) => m.testApi(backend))
     await api.sendText('S-0142', 'मेरा नुकसान ज़्यादा हुआ।')
     await waitFor(() => expect(document.querySelector('.app-nav__count')?.textContent).toBe('1'))
+  })
+
+  it('x6_provider_panel: a forced lender shows the FALLBACK segment and the "forced" chip (fs-08 section 20)', async () => {
+    vi.stubEnv('VITE_FEATURES', 'x6_provider_panel')
+    backend.runtime.lenderForced = true
+    renderApp('/policy', backend)
+    const summary = await screen.findByRole('button', { name: /live · .* simulated · 1 fallback · forced/ })
+    expect(summary.querySelector('.integrations-summary__seg--fallback')?.textContent).toContain('1 fallback')
+    expect(summary.querySelector('.integrations-summary__seg--forced')?.textContent).toBe('forced')
+    fireEvent.click(summary)
+    const kyc = document.querySelector('[data-name="kyc"] button') as HTMLButtonElement
+    expect(kyc.disabled).toBe(true)
+    vi.unstubAllEnvs()
   })
 
   it('shows the reconnecting pill during an outage', async () => {

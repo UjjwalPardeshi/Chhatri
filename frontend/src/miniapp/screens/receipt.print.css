@@ -1,0 +1,67 @@
+/*
+ * The receipt on paper (fs-04 10.5, AC-30, AC-06). Everything is inside `@media print` and under `.miniapp`, so the
+ * console is never touched, and it uses no `!important`. In print the app bar, the next-best bar, the tab bar and the
+ * toast host are hidden, the frame stops clipping and uses the width of the page (the phone column is for the screen),
+ * and the header line `receipt.print.header` (hidden on screen) prints at the top. The document runs in two columns,
+ * with the wide blocks (numbers, checks, the counterfactual, the clauses, the way up) across both, so a receipt of a
+ * clean decision fits one A4 page. Buttons carry `print:hidden` themselves, and a block is never split across pages.
+ * The root rule repeats `.miniapp` once to outrank the `h-full w-full` utilities, which are not in a cascade layer.
+ */
+@media print {
+  .miniapp.miniapp {
+    overflow: visible;
+    contain: none;
+    height: auto;
+    width: 100vw;
+    max-width: none;
+    margin-left: calc((100% - 100vw) / 2);
+  }
+  .miniapp > div {
+    display: block;
+    height: auto;
+  }
+  .miniapp > div > main,
+  .miniapp > div > div:not([data-testid]) {
+    overflow: visible;
+    height: auto;
+  }
+  .miniapp [data-testid='app-appbar'],
+  .miniapp [data-testid='app-nba'],
+  .miniapp [data-testid='app-tabbar'],
+  .miniapp [data-testid='app-toast-host'] {
+    display: none;
+  }
+  .miniapp [data-testid='screen-receipt'] {
+    gap: 8px;
+    padding: 0;
+  }
+  .miniapp [data-testid='receipt-document'] {
+    box-shadow: none;
+    padding: 12px;
+    gap: 8px;
+  }
+  .miniapp [data-testid='receipt-document'] > dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 24px;
+  }
+  .miniapp [data-testid='receipt-document'] > dl > div {
+    padding-block: 4px;
+    gap: 2px;
+    break-inside: avoid;
+  }
+  .miniapp [data-testid='receipt-sources'],
+  .miniapp [data-testid='receipt-checks-row'],
+  .miniapp [data-testid='receipt-what-changes'],
+  .miniapp [data-testid='receipt-clauses'],
+  .miniapp [data-testid='receipt-disagree'],
+  .miniapp [data-testid='receipt-formula-row'] {
+    grid-column: 1 / -1;
+  }
+  .miniapp [data-testid='receipt-sources'] ul,
+  .miniapp [data-testid='receipt-grievance-path'] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 24px;
+  }
+}

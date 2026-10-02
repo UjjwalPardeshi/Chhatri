@@ -15,7 +15,7 @@ import { CaseDetail } from '../components/claims/CaseDetail'
 import { CaseQueue } from '../components/claims/CaseQueue'
 import { isStaleRequest, pickCase, queueOrder, runKey, type CaseFilter, type RunCases } from '../components/claims/selection'
 import { AsyncView, Loading } from '../components/common/Status'
-import { railDelayMinutes } from '../lib/rules'
+import { railDelayMinutes, triggerRule } from '../lib/rules'
 import { useLive, useLiveEvent } from '../state/live'
 import { toApiError, useAsync } from '../state/useAsync'
 import { useSettle } from '../state/useSettle'
@@ -53,6 +53,9 @@ export default function Claims() {
   const detail = useAsync((signal) => (selected ? api.caseDetail(selected, signal) : Promise.resolve(null)), [api, selected, version, run])
   const supersedes = detail.data?.id === selected ? (detail.data?.decision?.supersedes ?? null) : null
   const referral = useAsync((signal) => (supersedes ? api.decision(supersedes, signal) : Promise.resolve(null)), [api, supersedes])
+  const decisionId = detail.data?.id === selected ? (detail.data?.decision?.id ?? null) : null
+  /** H13/H14/X4: the receipt of the case's decision. A missing receipt only leaves its parts out. */
+  const receipt = useAsync((signal) => (decisionId ? api.receipt(decisionId, signal) : Promise.resolve(null)), [api, decisionId, version, run])
   const settle = useSettle()
   const actionError = failure && failure.caseId === selected ? failure.error : null
   const stale = isStaleRequest(requested, list.data, run)
@@ -103,6 +106,9 @@ export default function Claims() {
                   officerReady={officerReady}
                   actionError={actionError}
                   delayMinutes={railDelayMinutes(policy.data?.rules)}
+                  receipt={receipt.data?.decision.id === item.decision?.id ? receipt.data : null}
+                  receiptLoading={receipt.loading && receipt.data?.decision.id !== item.decision?.id}
+                  floorPct={triggerRule(policy.data?.rules)?.floorPct}
                   referral={referral.data?.id === item.decision?.supersedes ? referral.data : null}
                   onDecide={(approve, note) => decide(item, approve, note)}
                   onDismissError={() => setFailure(null)}

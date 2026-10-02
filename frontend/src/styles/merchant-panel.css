@@ -206,7 +206,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--faint);
+  color: var(--muted);
   font-size: var(--fs-xs);
 }
 
@@ -312,7 +312,7 @@
 }
 
 .soundbox-device__sim {
-  color: var(--faint);
+  color: var(--muted);
   letter-spacing: 0.06em;
 }
 

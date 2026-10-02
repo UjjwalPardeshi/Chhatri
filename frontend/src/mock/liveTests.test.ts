@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { MockBackend } from './backend'
 import { officerDecide } from './cases'
-import { inboundPhoto, inboundText, inboundVoiceDemo, inboundVoiceUpload, simulatedLinkUrl } from './conversation'
+import { inboundPhoto, inboundText, inboundVoiceDemo, inboundVoiceUpload } from './conversation'
 import { MERCHANTS } from './fixtures'
 import { testBackend } from './testkit'
 
@@ -130,8 +130,8 @@ describe('BLOCKED', () => {
     expect(inbound).toMatchObject({ direction: 'INBOUND', text_hi: null, text_en: 'Red alert tomorrow. Cover me today.' })
     expect(blocked.text_hi).toBe('नया कवर वेटिंग पीरियड के बाद शुरू होता है — 25 अगस्त से। कल के अलर्ट पर यह लागू नहीं होगा।')
     expect(blocked.text_en).toBe("New cover starts after the waiting period — from 25 August. It won't apply to tomorrow's alert.")
-    expect(link.text_en).toMatch(/^To buy cover for later, pay ₹90 \(₹3\/day\) here: https:\/\/paytm\.me\/sim-[0-9A-F]{6}$/)
-    expect(link.text_en).toContain(simulatedLinkUrl('S-0907', 9_000, 'PR-000001'))
+    expect(link.text_en).toBe('To buy cover for later, pay ₹424.80 (₹14.16/day) here: https://paytm.me/sim-7BFFBE')
+    expect(link.text_hi).toBe('आगे के लिए कवर लेना हो तो ₹424.80 (₹14.16/दिन) यहाँ भरें: https://paytm.me/sim-7BFFBE')
   })
 
   it('does not sell a covered merchant a second cover', () => {

@@ -41,7 +41,8 @@ describe('Overview page', () => {
       expect(storm.getByText(value)).toBeTruthy()
     }
     expect(storm.getByText('312')).toBeTruthy()
-    expect(storm.getByText('4 min')).toBeTruthy()
+    // the KPI keeps its unit in a quiet span of its own, so the whole "4 min" is the value's text content
+    expect(storm.getByText((_, element) => element?.classList.contains('kpi__value') === true && element.textContent === '4 min')).toBeTruthy()
     expect(storm.getByText(/Why Zone 9 got nothing/)).toBeTruthy()
 
     const journeys = within(section('What the merchant sees'))
@@ -61,7 +62,7 @@ describe('Overview page', () => {
     expect(await proof.findByText(/^60%/)).toBeTruthy()
     expect(proof.getByText('simulated sales · real Open-Meteo rainfall')).toBeTruthy()
     const tech = section('Technology')
-    await waitFor(() => expect(tech.querySelectorAll('[data-mode="SIMULATED"]').length).toBe(15))
+    await waitFor(() => expect(tech.querySelectorAll('[data-mode="SIMULATED"]').length).toBe(17))
     expect(within(tech).getByText('The only layer that can approve a payout')).toBeTruthy()
   })
 

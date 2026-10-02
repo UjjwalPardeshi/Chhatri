@@ -3,14 +3,14 @@
  * by side (payouts with the decision formula, §4.3 published numbers, or for a cover bought after
  * an alert the BLOCKED result with its start date, §13.6), the "What happened" stepper, then the
  * shop's file across the full width: cover, the Chhatri rider premium, loan and expected day. The
- * presenter's script stays folded away at the bottom unless asked for (`?presenter=1`).
+ * presenter's script stays folded away at the bottom unless asked for (presenter mode, `?presenter=1`).
  */
 import { useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router'
 
 import type { MerchantDetail, ScenarioName } from '../../api/types'
 import { dayLabel, hhmm } from '../../lib/time'
 import { actorLabel } from '../../lib/actors'
+import { usePresenter } from '../../state/presenter'
 import { Icon } from '../common/Icon'
 import type { CoverOffer } from './coverOffer'
 import type { HappenedStep } from './whatHappened'
@@ -92,8 +92,8 @@ function Money({ merchant, offer }: { merchant: MerchantDetail; offer: CoverOffe
 }
 
 function PresenterNotes({ scenario }: { scenario: ScenarioName }) {
-  const [params] = useSearchParams()
-  const [open, setOpen] = useState(params.get('presenter') === '1')
+  const presenter = usePresenter()
+  const [open, setOpen] = useState(presenter.on)
   return (
     <div className="presenter">
       <button type="button" className="presenter__toggle" aria-expanded={open} aria-controls="presenter-notes" onClick={() => setOpen((v) => !v)}>

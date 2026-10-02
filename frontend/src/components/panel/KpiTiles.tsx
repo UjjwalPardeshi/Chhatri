@@ -18,6 +18,17 @@ function Counted({ value }: { value: number }) {
   return <>{useCountUp(value).toLocaleString('en-IN')}</>
 }
 
+/** "4 min" as a big number with a quiet unit: at the presenter's 44 px the whole of "4 min" would not fit its cell. */
+function Minutes({ minutes }: { minutes: number | null }) {
+  if (minutes === null) return <>—</>
+  return (
+    <>
+      {minutes}
+      <span className="kpi__unit"> min</span>
+    </>
+  )
+}
+
 export function KpiTiles({ kpis }: { kpis: KpiFigures }) {
   const tiles = [
     { key: 'zones', value: <Counted value={kpis.zones_triggered} />, raw: String(kpis.zones_triggered), caption: 'zones triggered', title: null },
@@ -30,7 +41,7 @@ export function KpiTiles({ kpis }: { kpis: KpiFigures }) {
     },
     {
       key: 'ttm',
-      value: triggerToMoney(kpis),
+      value: <Minutes minutes={kpis.trigger_to_money_min} />,
       raw: triggerToMoney(kpis),
       caption: 'trigger to money',
       title: kpis.instalments_paused === undefined ? null : `${kpis.instalments_paused} loan instalments paused`,

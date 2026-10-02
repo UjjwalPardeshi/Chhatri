@@ -9,9 +9,10 @@ import { formatInr } from '../lib/money'
 import { hhmm, weekdayDayLabel } from '../lib/time'
 import { ZONE_PAYOUTS } from './area'
 import { PAYOUT_RAIL_DELAY_MIN } from './claims'
+import { deriveCover, storedCover } from './endpoints/cover'
 import { LENDER_NAME, MERCHANTS, type MockMerchant } from './fixtures'
 import type { MockRuntime } from './runtime'
-import { addDays, hhmmOf, hourlyIndex, isoAt, isoPlusMinutes } from './scenarios'
+import { hhmmOf, hourlyIndex, isoAt, isoPlusMinutes } from './scenarios'
 import {
   alertFor,
   alertValidAt,
@@ -159,17 +160,24 @@ export function zonePanelView(rt: MockRuntime, zone: ZoneMeta): ZonePanel {
   }
 }
 
+/** The console's cover line: the stored cover (Anil's seeded pilot cover, or one bought through a link), priced by zone. */
+function coverBlock(rt: MockRuntime, merchantId: string, perDayPaise: number): MerchantDetail['cover'] {
+  const cover = storedCover(rt, merchantId)
+  if (cover === null) return null
+  const { status } = deriveCover(cover, rt.nowIso.slice(0, 10))
+  return { status, starts_on: cover.starts_on, prepaid_through: cover.prepaid_through ?? cover.starts_on, premium_per_day_label: formatInr(cover.premium_per_day_paise ?? perDayPaise) }
+}
+
 export function merchantDetailView(rt: MockRuntime, merchant: MockMerchant): MerchantDetail {
   const { owner_first_en: _first, kyc_name: _kyc, expected_day_paise, instalment_paise, premium_per_day_paise, ...summary } = merchant
   return {
     ...summary,
-    cover: merchant.covered
-      ? { status: 'ACTIVE', starts_on: '2025-06-01', prepaid_through: addDays(rt.scenario.day, 1), premium_per_day_label: formatInr(premium_per_day_paise) }
-      : null,
+    cover: coverBlock(rt, merchant.id, premium_per_day_paise),
     loan: instalment_paise === null ? null : { daily_instalment_label: formatInr(instalment_paise), lender_name: LENDER_NAME },
     expected_today_label: formatInr(expected_day_paise),
     payouts: rt.payouts.filter((p) => p.merchant_id === merchant.id),
     decisions: rt.decisions.filter((d) => d.merchant_id === merchant.id),
+    holiday_requests: rt.holidayRequests.filter((r) => r.merchant_id === merchant.id).map(({ merchant_id: _owner, ...row }) => row),
   }
 }
 

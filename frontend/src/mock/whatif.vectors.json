@@ -1,0 +1,583 @@
+{
+ "source": "written from backend chhatri.detect.triggers.trigger_verdict (fs-09 section 9.5, fs-08 section 11.4); read by backend/tests/replay/test_whatif_vectors.py and by the mock's what-if tests",
+ "rules": {
+  "index_floor_pct": 50,
+  "consecutive_hours": 3,
+  "min_shops_in_index": 20
+ },
+ "notes": [
+  "alert: NONE, RAIN, CIVIC or HEATWAVE. RAIN and CIVIC stand for an alert issued by the evaluation hour and valid for the whole window; HEATWAVE is a real kind the rule ignores.",
+  "hourly_index_pct holds exactly consecutive_hours values, oldest first; null is an hour with nothing expected.",
+  "Compare verdicts, not window decimals: the backend weights hours by the zone's expected sales, the mock weighs them equally, so window_index_pct may differ by one point. Every vector is chosen so that it does not change a condition or the verdict.",
+  "expected.conditions are the five trigger conditions, met or not. expected.status is the detector's zone status."
+ ],
+ "vectors": [
+  {
+   "name": "Z9 as it was at 17:00: no alert, hours 59 58 67",
+   "inputs": {
+    "alert": "NONE",
+    "hourly_index_pct": [
+     59,
+     58,
+     67
+    ],
+    "window_index_pct": 61,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "slow_day",
+    "hours_below": 0,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": false,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "Z9 with a rain alert and every hour at 49",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     49,
+     49,
+     49
+    ],
+    "window_index_pct": 49,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": true,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "Z7 as it was at 17:00",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     35,
+     39,
+     37
+    ],
+    "window_index_pct": 37,
+    "lower_bound_pct": 92,
+    "shops_in_index": 46,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": true,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "Z3 as it was at 17:00",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     39,
+     37,
+     37
+    ],
+    "window_index_pct": 38,
+    "lower_bound_pct": 89,
+    "shops_in_index": 141,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": true,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "Z12 as it was at 17:00",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     48,
+     45,
+     48
+    ],
+    "window_index_pct": 47,
+    "lower_bound_pct": 78,
+    "shops_in_index": 125,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": true,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "an hour at exactly 50 does not count",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     50,
+     40,
+     40
+    ],
+    "window_index_pct": 43,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "watch",
+    "hours_below": 2,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "an hour at 49 counts",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     49,
+     40,
+     40
+    ],
+    "window_index_pct": 43,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": true,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "the newest hour at 50 leaves no hour below in a row",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     40,
+     40,
+     50
+    ],
+    "window_index_pct": 43,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "normal",
+    "hours_below": 0,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "a heatwave alert does not count",
+   "inputs": {
+    "alert": "HEATWAVE",
+    "hourly_index_pct": [
+     49,
+     49,
+     49
+    ],
+    "window_index_pct": 49,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "slow_day",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": false,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "a civic alert counts",
+   "inputs": {
+    "alert": "CIVIC",
+    "hourly_index_pct": [
+     30,
+     30,
+     30
+    ],
+    "window_index_pct": 30,
+    "lower_bound_pct": 80,
+    "shops_in_index": 25,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": true,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "no alert, every hour low: a slow day, not a loss event",
+   "inputs": {
+    "alert": "NONE",
+    "hourly_index_pct": [
+     40,
+     40,
+     40
+    ],
+    "window_index_pct": 40,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "slow_day",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": false,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "19 shops in the index is below the quorum",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     40,
+     40,
+     40
+    ],
+    "window_index_pct": 40,
+    "lower_bound_pct": 90,
+    "shops_in_index": 19,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "no_data",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": false,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "20 shops in the index is enough",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     40,
+     40,
+     40
+    ],
+    "window_index_pct": 40,
+    "lower_bound_pct": 90,
+    "shops_in_index": 20,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": true,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "no covered shop in the zone",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     null,
+     null,
+     null
+    ],
+    "window_index_pct": null,
+    "lower_bound_pct": 0,
+    "shops_in_index": 0,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "no_data",
+    "hours_below": 0,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": false,
+     "SHOPS_QUORUM": false,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "a trigger earlier today blocks a second one",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     40,
+     40,
+     40
+    ],
+    "window_index_pct": 40,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": true
+   },
+   "expected": {
+    "fires": false,
+    "status": "triggered",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": false
+    }
+   }
+  },
+  {
+   "name": "a lower bound under the window: the window is not below it",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     40,
+     40,
+     40
+    ],
+    "window_index_pct": 40,
+    "lower_bound_pct": 30,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "watch",
+    "hours_below": 3,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": true,
+     "WINDOW_BELOW_BOUND": false,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "one hour with nothing expected is never below the floor",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     null,
+     40,
+     40
+    ],
+    "window_index_pct": 40,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "watch",
+    "hours_below": 2,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "an alert and one hour below the floor is a watch",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     60,
+     55,
+     40
+    ],
+    "window_index_pct": 52,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "watch",
+    "hours_below": 1,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "an alert and no hour below the floor is normal",
+   "inputs": {
+    "alert": "RAIN",
+    "hourly_index_pct": [
+     80,
+     80,
+     80
+    ],
+    "window_index_pct": 80,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "normal",
+    "hours_below": 0,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": true,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": true,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "no alert and a good day is normal",
+   "inputs": {
+    "alert": "NONE",
+    "hourly_index_pct": [
+     100,
+     100,
+     100
+    ],
+    "window_index_pct": 100,
+    "lower_bound_pct": 90,
+    "shops_in_index": 62,
+    "already_triggered_today": false
+   },
+   "expected": {
+    "fires": false,
+    "status": "normal",
+    "hours_below": 0,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": false,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": false,
+     "SHOPS_QUORUM": true,
+     "FIRST_TRIGGER_TODAY": true
+    }
+   }
+  },
+  {
+   "name": "a zone that triggered today stays triggered, whatever else fails",
+   "inputs": {
+    "alert": "NONE",
+    "hourly_index_pct": [
+     95,
+     95,
+     95
+    ],
+    "window_index_pct": 95,
+    "lower_bound_pct": 90,
+    "shops_in_index": 5,
+    "already_triggered_today": true
+   },
+   "expected": {
+    "fires": false,
+    "status": "triggered",
+    "hours_below": 0,
+    "conditions": {
+     "ALERT_COVERS_WINDOW": false,
+     "HOURS_BELOW_FLOOR": false,
+     "WINDOW_BELOW_BOUND": false,
+     "SHOPS_QUORUM": false,
+     "FIRST_TRIGGER_TODAY": false
+    }
+   }
+  }
+ ]
+}

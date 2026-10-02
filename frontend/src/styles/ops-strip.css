@@ -1,0 +1,203 @@
+/*
+ * H8 ops strip (fs-08 10.1): a slim band of five buttons under the control bar on /live and /claims. Type is on the
+ * scale tokens, so presenter mode steps it up with the rest of the console. A changed value flashes by colour only
+ * (a transition, so reduced motion keeps the colour change and loses the movement).
+ */
+.ops-strip {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  min-height: 40px;
+  padding: 4px var(--gutter);
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.ops-strip--error,
+.ops-strip__note {
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.ops-strip--error [role='alert'] {
+  color: var(--red);
+  font-weight: 500;
+}
+
+.ops-cell {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: var(--sp-2);
+  padding: 2px var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  transition:
+    background-color 700ms ease,
+    border-color 120ms ease;
+}
+
+.ops-cell:hover:not(:disabled) {
+  border-color: var(--faint);
+}
+
+.ops-cell:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.ops-cell[data-changed='true'] {
+  background: var(--blue-soft);
+  transition-duration: 0ms;
+}
+
+.ops-cell__label {
+  flex: 0 0 100%;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  line-height: 1.2;
+}
+
+.ops-cell__value {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.ops-cell__sub {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.ops-cell[data-tone='warn'] .ops-cell__sub {
+  color: var(--amber-ink);
+}
+
+.ops-cell[data-tone='overdue'] {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+}
+
+.ops-cell[data-tone='overdue'] .ops-cell__sub,
+.ops-cell[data-tone='overdue'] .ops-cell__value {
+  color: var(--red);
+}
+
+.ops-pop {
+  position: absolute;
+  margin: 0;
+  color: inherit;
+  top: calc(100% + 4px);
+  right: var(--gutter);
+  z-index: var(--z-popover);
+  min-width: 260px;
+  padding: var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-sm);
+}
+
+.ops-pop__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+
+.ops-pop__close {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+.ops-pop__rows {
+  margin: 0;
+}
+
+.ops-pop__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 3px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.ops-pop__row dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .ops-strip {
+    overflow-x: auto;
+  }
+
+  .ops-cell {
+    flex: 0 0 auto;
+  }
+}
+
+/* The control bar and the strip share the grid's controls row (the strip is on only with the h8_ops_strip flag). */
+.app-controls {
+  grid-area: controls;
+  min-width: 0;
+}
+
+/* On /live the strip is a band over the map column only (design system open question 3), so the right panel keeps
+ * its full height and the Z9 note stays in view at 1280×720. The panel spans both rows. */
+.home:has(> .home__strip) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.home__strip {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.home:has(> .home__strip) > .home__map {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.home:has(> .home__strip) > .home__panel {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.home__strip .ops-strip {
+  padding: 0;
+  background: none;
+  border-bottom: 0;
+}
+
+.home__strip .ops-pop {
+  right: 0;
+}
+
+@media (max-width: 900px) {
+  .home:has(> .home__strip) {
+    grid-template-rows: none;
+  }
+
+  .home__strip,
+  .home:has(> .home__strip) > .home__map,
+  .home:has(> .home__strip) > .home__panel {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}

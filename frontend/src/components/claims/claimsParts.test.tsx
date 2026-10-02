@@ -39,6 +39,12 @@ describe('hourly chart', () => {
     expect(lowRun([hour(9, 100, 100)])).toBeNull()
   })
 
+  it('reads the policy floor instead of 50', () => {
+    const rows = [hour(9, 100, 55), hour(10, 100, 58), hour(11, 100, 90)]
+    expect(lowRun(rows)).toBeNull()
+    expect(lowRun(rows, 60)).toEqual({ from: 0, to: 1, label: 'Below 60% of expected' })
+  })
+
   it('picks a round gridline under the tallest bar', () => {
     expect(gridStep(48_000)).toBe(20_000)
     expect(gridStep(100_000)).toBe(100_000)

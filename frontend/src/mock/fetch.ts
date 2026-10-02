@@ -57,7 +57,7 @@ async function readBody(init: RequestInit | undefined): Promise<{ body: unknown;
   try {
     return { body: JSON.parse(raw) as unknown, form: null }
   } catch {
-    throw new MockHttpError('VALIDATION_ERROR', 'Body must be JSON', 400)
+    throw new MockHttpError('validation_error', 'invalid request', 422, { body: 'invalid JSON' })
   }
 }
 
@@ -69,7 +69,7 @@ export function createMockFetch(backend: MockBackend): FetchLike {
     const headers = new Headers(init?.headers)
     if (method === 'GET' && url.pathname === '/api/stream') return streamResponse(backend, headers, init?.signal ?? undefined)
     const route = matchRoute(method, url.pathname)
-    if (!route) return envelope(404, { ok: false, error: { code: 'NOT_FOUND', message: `No route for ${method} ${url.pathname}` } })
+    if (!route) return envelope(404, { ok: false, error: { code: 'not_found', message: 'not found' } })
     try {
       const { body, form } = await readBody(init)
       const result = await route.handler({ params: route.params, query: url.searchParams, body, form, headers, backend })
@@ -80,7 +80,7 @@ export function createMockFetch(backend: MockBackend): FetchLike {
         return envelope(error.status, { ok: false, error: { code: error.code, message: error.message, ...fields } })
       }
       console.error('[mock] handler failed', error)
-      return envelope(500, { ok: false, error: { code: 'INTERNAL', message: 'Mock backend error' } })
+      return envelope(500, { ok: false, error: { code: 'internal', message: 'internal error' } })
     }
   }
 }

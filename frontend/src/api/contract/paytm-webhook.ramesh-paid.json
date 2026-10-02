@@ -1,0 +1,39 @@
+{
+  "name": "paytm-webhook.ramesh-paid",
+  "description": "The simulated paid callback for Ramesh's link: the premium is marked paid.",
+  "scenario": "buy_cover",
+  "at": "18:00",
+  "setup": [
+    {
+      "method": "POST",
+      "path": "/api/premium/link",
+      "body": {
+        "merchant_id": "S-0907"
+      },
+      "auth": "officer"
+    }
+  ],
+  "request": {
+    "method": "POST",
+    "path": "/api/webhooks/paytm",
+    "body": {
+      "link_id": "sim-7BFFBE",
+      "status": "TXN_SUCCESS",
+      "txn_id": "SIM-sim-7BFFBE"
+    }
+  },
+  "exact": [
+    "data.status",
+    "data.link_id"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "paid",
+        "link_id": "sim-7BFFBE"
+      }
+    }
+  }
+}

@@ -7,11 +7,13 @@
  */
 import type { AreaTrigger } from '../api/types'
 import { formatInr } from '../lib/money'
+import { hhmm } from '../lib/time'
 import { MSG } from './catalogue'
-import { areaExplanation, check, decide, INSTALMENT_PAUSE_DELAY_MIN, PAYOUT_RAIL_DELAY_MIN, schedulePayout } from './claims'
-import { MERCHANTS, type MockMerchant } from './fixtures'
+import { areaExplanation, check, decide, holidaysGranted, INSTALMENT_PAUSE_DELAY_MIN, PAYOUT_RAIL_DELAY_MIN, schedulePayout } from './claims'
+import { storedCover } from './endpoints/cover'
+import { MERCHANTS, POLICY_RULES, type MockMerchant } from './fixtures'
 import type { MockRuntime } from './runtime'
-import { hhmmOf, hourlyIndex, isoAt } from './scenarios'
+import { hourlyIndex, isoAt } from './scenarios'
 import {
   alertCoversWindow,
   alertFor,
@@ -27,11 +29,11 @@ import {
 
 const HOUR = 60
 
-/** Calibrated zone payout totals and loans for the monsoon triggers (SPEC §17.2: Z7 = ₹58,900). */
+/** Zone payout totals and loans for the monsoon triggers, as the live backend plays them (₹4,25,420 over 312 shops, 123 instalments; Z7 = ₹58,900, SPEC §17.2). */
 export const ZONE_PAYOUTS: Readonly<Record<string, { totalPaise: number; loans: number }>> = Object.freeze({
-  Z7: { totalPaise: 5_890_000, loans: 18 },
-  Z3: { totalPaise: 17_982_000, loans: 56 },
-  Z12: { totalPaise: 13_465_000, loans: 50 },
+  Z7: { totalPaise: 5_890_000, loans: 19 },
+  Z3: { totalPaise: 20_671_900, loans: 50 },
+  Z12: { totalPaise: 15_980_100, loans: 54 },
 })
 
 export function zoneNumber(zoneId: string): string {
@@ -132,33 +134,62 @@ function scheduleZoneTotals(rt: MockRuntime, zone: ZoneMeta, payouts: { totalPai
   rt.schedule(decided + INSTALMENT_PAUSE_DELAY_MIN, 'pause_zone', () => {
     const totals = rt.zoneTotals.get(zone.id)
     if (!totals) throw new Error(`zone totals missing for ${zone.id}`)
-    rt.zoneTotals.set(zone.id, { ...totals, paused: payouts.loans })
-    rt.setKpis({ instalments_paused: rt.kpis.instalments_paused + payouts.loans })
-    rt.addFeed('instalment', `${payouts.loans} loan instalments paused in ${zone.id} · lender notified`, { zone_id: zone.id })
+    const granted = holidaysGranted(rt, payouts.loans)
+    rt.zoneTotals.set(zone.id, { ...totals, paused: granted })
+    rt.setKpis({ instalments_paused: rt.kpis.instalments_paused + granted })
+    if (granted < payouts.loans) rt.addFeed('holiday', `${payouts.loans} holiday requests got no answer from the lender in ${zone.id} · the instalments stay due`, { zone_id: zone.id })
+    else rt.addFeed('instalment', `${payouts.loans} loan instalments paused in ${zone.id} · lender notified`, { zone_id: zone.id })
   })
 }
 
-function areaChecks(trigger: AreaTrigger) {
-  const hourly = trigger.hourly_index_pct.map((p) => `${p}%`).join(', ')
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "2025-03-17" to "17 Mar 2025", the way the backend's check text writes a date. */
+function shortDate(iso: string): string {
+  const [year, month, day] = iso.slice(0, 10).split('-').map(Number)
+  return `${day} ${SHORT_MONTHS[month - 1]} ${year}`
+}
+
+const shortDateTime = (iso: string): string => `${shortDate(iso)} ${hhmm(iso)}`
+
+/**
+ * The nine HARD checks of an area claim, in the backend's order and wording (`policy/checks.py`), with the values of
+ * the mock's own records. Anil's cover facts are the seeded pilot cover's, so the console and the receipt agree.
+ */
+function areaChecks(rt: MockRuntime, merchant: MockMerchant, trigger: AreaTrigger) {
+  const cover = storedCover(rt, merchant.id)
+  const alert = alertFor(rt.scenario, trigger.zone_id, trigger.fired_at)
+  const hourly = trigger.hourly_index_pct.map((p) => `${p}%`).join(' · ')
+  const event = trigger.window_end.slice(0, 10)
+  const through = cover?.prepaid_through ? shortDate(cover.prepaid_through) : 'not paid'
+  const window = `${shortDateTime(trigger.window_start)}–${hhmm(trigger.window_end)}`
+  const alertSpan = alert ? `${alert.id} ${shortDateTime(alert.valid_from)}–${shortDateTime(alert.valid_to)}` : 'no alert'
   return [
-    check('COVER_IN_FORCE', 'HARD', 'PASS', 'Cover active', 'ACTIVE since 1 Jun 2025', 'ACTIVE on event date'),
-    check('PREMIUM_PREPAID', 'HARD', 'PASS', 'Premium prepaid', 'prepaid through 20 Aug 2025', '≥ 19 Aug 2025'),
-    check('COVER_BEFORE_ALERT', 'HARD', 'PASS', 'Cover bought before the alert', 'bought 1 Jun 2025', 'before 18 Aug 17:30'),
-    check('ALERT_ACTIVE', 'HARD', 'PASS', 'Alert valid over the window', `${trigger.alert_id} · 14:00–20:00`, `${hhmmOf(14 * HOUR)}–${hhmmOf(17 * HOUR)}`),
-    check('INDEX_QUORUM', 'HARD', 'PASS', 'Enough shops in the index', `${trigger.shops_in_index} shops`, `≥ ${MIN_SHOPS_IN_INDEX}`),
-    check('BELOW_FLOOR', 'HARD', 'PASS', 'Each hour below the floor', hourly, `< ${INDEX_FLOOR_PCT}% each hour`),
-    check('BELOW_MODEL_RANGE', 'HARD', 'PASS', "Below the model's range", `${trigger.index_pct}%`, `< ${trigger.lower_bound_pct}%`),
-    check('NOT_ALREADY_PAID', 'HARD', 'PASS', 'Not already paid', 'no payout today', 'none'),
-    check('WITHIN_ANNUAL_LIMIT', 'HARD', 'PASS', 'Within the annual limit', '₹0 paid this year', '≤ ₹30,000'),
+    check('COVER_IN_FORCE', 'HARD', 'PASS', 'Cover in force', `ACTIVE since ${cover ? shortDate(cover.starts_on) : 'never'}`, 'ACTIVE on event date', 'Cover was active on the event date.'),
+    check('PREMIUM_PREPAID', 'HARD', 'PASS', 'Premium prepaid', `Prepaid through ${through}`, `Prepaid through ${shortDate(event)} or later`, `Premium received in advance through ${through}.`),
+    check('COVER_BEFORE_ALERT', 'HARD', 'PASS', 'Cover bought before the alert', `Bought ${cover ? shortDate(cover.purchased_at) : 'never'}`, `Before ${alert ? shortDateTime(alert.issued_at) : 'the alert'}`, 'Cover was bought before the alert was issued.'),
+    check('ALERT_ACTIVE', 'HARD', 'PASS', 'Alert active for the whole window', alertSpan, `Alert for ${trigger.zone_id} ${window}`, `${alert ? `${alert.level.charAt(0)}${alert.level.slice(1).toLowerCase()} ${alert.kind.toLowerCase()} alert` : 'The alert'} covers the whole window.`),
+    check('INDEX_QUORUM', 'HARD', 'PASS', 'Enough shops in the index', `${trigger.shops_in_index} shops`, `At least ${MIN_SHOPS_IN_INDEX} shops`, `${trigger.shops_in_index} shops are in the zone index.`),
+    check('BELOW_FLOOR', 'HARD', 'PASS', 'Every hour below the floor', hourly, `All ${WINDOW_HOURS} hours below ${INDEX_FLOOR_PCT}%`, `Sales stayed below ${INDEX_FLOOR_PCT}% of expected in each of the ${WINDOW_HOURS} hours.`),
+    check('BELOW_MODEL_RANGE', 'HARD', 'PASS', "Below the model's range", `${trigger.index_pct}%`, `Below ${trigger.lower_bound_pct}%`, "The window index is below the zone's lower bound."),
+    check('NOT_ALREADY_PAID', 'HARD', 'PASS', 'Not already paid', 'No payout today', 'None', 'No payout for this merchant, date and kind.'),
+    check('WITHIN_ANNUAL_LIMIT', 'HARD', 'PASS', 'Within the annual limit', `${formatInr(0)} paid this year`, `At most ${formatInr(POLICY_RULES.annual_limit_rupees * 100)}`, 'Paid in the rolling year plus this amount stays within the limit.'),
   ]
 }
 
+/**
+ * Anil's claim, decision and payout are number 142, as in the backend: it decides the zones in order, and the 141
+ * shops of Z3 come first (data-model 5.1, fs-03). The mock decides only the demo merchant, so it moves its counters on.
+ */
+const DEMO_RECORD_NUMBER = 142
+
 function decideDemoMerchant(rt: MockRuntime, merchant: MockMerchant, trigger: AreaTrigger): void {
+  for (const prefix of ['CL', 'D', 'P']) rt.advanceIds(prefix, DEMO_RECORD_NUMBER - 1)
   const claimId = rt.nextId('CL')
   const decision = decide(rt, {
     claimId,
     merchantId: merchant.id,
-    checks: areaChecks(trigger),
+    checks: areaChecks(rt, merchant, trigger),
     explanation: areaExplanation(rt.scenario.day, merchant.expected_day_paise, trigger.drop_pct),
     decidedBy: 'policy-engine',
     referral: null,
@@ -169,8 +200,8 @@ function decideDemoMerchant(rt: MockRuntime, merchant: MockMerchant, trigger: Ar
       rt.send(merchant.id, { kind: 'PAYOUT_CARD', text: null, card: { amount_label: payout.amount_label, subtitle_hi: MSG.payoutCard.hi, subtitle_en: MSG.payoutCard.en, badge: MSG.payoutCard.badge } })
       announceSoundbox(rt, merchant, payout.amount_label)
     },
-    onPaused: () => {
-      rt.send(merchant.id, { kind: 'TEXT', text: MSG.instalmentPaused(formatInr(merchant.instalment_paise ?? 0)) })
+    onPaused: (text) => {
+      rt.send(merchant.id, { kind: 'TEXT', text })
     },
   })
 }

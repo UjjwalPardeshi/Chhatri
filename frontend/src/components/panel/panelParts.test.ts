@@ -22,14 +22,21 @@ function summary(row: FeedRow): string {
   return row.kind === 'group' ? `${row.title}: ${row.parts.map((p) => `${p.zone} ${p.figure}`).join(', ')}` : row.text
 }
 
+const watch = (zone: string, id: number) => ({ id, at: '2025-08-19T16:00:00+05:30', type: 'watch', text_en: `${zone} below 60% of expected for 2 h · alert active`, zone_id: zone }) as FeedItem
+
 describe('feed grouping', () => {
+  it('words the watch title from the published floor, not a copied 50', () => {
+    const rows = feedRows([watch('Z3', 1), watch('Z7', 2)], 60)
+    expect(rows[0]).toMatchObject({ kind: 'group', title: 'Below 60% of expected, alert active' })
+  })
+
   it('folds the per-zone lines of one minute into story rows, newest first', () => {
     const rows = feedRows(snapshot.feed).slice(0, 5).map(summary)
     expect(rows).toEqual([
-      'Loan instalments paused: Z3 56, Z7 18, Z12 50',
-      'Area payouts credited: Z3 ₹1,79,820, Z7 ₹58,900, Z12 ₹1,34,650',
+      'Loan instalments paused: Z3 50, Z7 19, Z12 54',
+      'Area payouts credited: Z3 ₹2,06,719, Z7 ₹58,900, Z12 ₹1,59,801',
       'Soundbox at Anil\'s Tea Stall: "Paytm par ₹1,380 prapt hue — Chhatri se"',
-      'Area payouts approved: Z3 ₹1,79,820, Z7 ₹58,900, Z12 ₹1,34,650',
+      'Area payouts approved: Z3 ₹2,06,719, Z7 ₹58,900, Z12 ₹1,59,801',
       'Area triggers fired: Z3 38%, Z7 37%, Z12 47%',
     ])
   })

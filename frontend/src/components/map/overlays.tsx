@@ -5,7 +5,8 @@
  * zone labels are placed around them.
  */
 import type { ClockState, ZoneSnapshot } from '../../api/types'
-import { COLOUR_STOPS, INDEX_FLOOR_PCT, LEGEND_RULE, legendGradient } from '../../lib/colour'
+import { COLOUR_STOPS, legendGradient, legendRule } from '../../lib/colour'
+import type { TriggerRule } from '../../lib/rules'
 import { hhmm } from '../../lib/time'
 import { Icon } from '../common/Icon'
 import type { TileFailure } from './basemap'
@@ -64,19 +65,27 @@ export function legendPct(value: number): number {
   return ((Math.min(last, Math.max(first, value)) - first) / (last - first)) * PCT
 }
 
+type LegendProps = {
+  patterns: string
+  /** The published trigger rule; null while it is unknown, and the legend then draws the ramp with no floor and no rule line. */
+  rule: TriggerRule | null
+}
+
 /**
  * The deck legend (slide 6, SPEC §20 "Pays below 50% for 3 h, with alert"): the colour ramp with
- * the 50% payout floor marked on it, the live-window caption (B3: map values are the live 3-hour
- * window), and swatches for the rain band hatch and land without shops.
+ * the payout floor marked on it, the live-window caption (B3: map values are the live 3-hour
+ * window), and swatches for the rain band hatch and land without shops. The floor and the rule
+ * line come from the published rules (fs-08 13.2), never from a constant.
  */
-export function Legend({ patterns }: { patterns: string }) {
+export function Legend({ patterns, rule }: LegendProps) {
   const first = COLOUR_STOPS[0].pct
   const middle = COLOUR_STOPS[Math.floor(COLOUR_STOPS.length / 2)].pct
   const last = COLOUR_STOPS[COLOUR_STOPS.length - 1].pct
-  const [rulePays, ruleRest] = LEGEND_RULE.split(' for ')
+  const text = rule ? legendRule(rule) : null
+  const [rulePays, ruleRest] = text ? text.split(' for ') : ['', '']
   const ticks = [
     { pct: legendPct(first), text: `${first}%`, floor: false },
-    { pct: legendPct(INDEX_FLOOR_PCT), text: `${INDEX_FLOOR_PCT}%`, floor: true },
+    ...(rule ? [{ pct: legendPct(rule.floorPct), text: `${rule.floorPct}%`, floor: true }] : []),
     { pct: legendPct(middle), text: `${middle}%`, floor: false },
     { pct: legendPct(last), text: `${last}%+`, floor: false },
   ]
@@ -86,7 +95,7 @@ export function Legend({ patterns }: { patterns: string }) {
         Sales vs expected <span className="map-legend__caption">live 3-hour window</span>
       </p>
       <span className="map-legend__bar" style={{ background: legendGradient() }}>
-        <span className="map-legend__floor" style={{ left: `${legendPct(INDEX_FLOOR_PCT)}%` }} />
+        {rule ? <span className="map-legend__floor" style={{ left: `${legendPct(rule.floorPct)}%` }} /> : null}
       </span>
       <span className="map-legend__ticks num">
         {ticks.map((t) => (
@@ -95,9 +104,11 @@ export function Legend({ patterns }: { patterns: string }) {
           </span>
         ))}
       </span>
-      <p className="map-legend__rule" title={LEGEND_RULE}>
-        <strong>{rulePays}</strong> for {ruleRest}
-      </p>
+      {text ? (
+        <p className="map-legend__rule" title={text}>
+          <strong>{rulePays}</strong> for {ruleRest}
+        </p>
+      ) : null}
       <p className="map-legend__keys">
         <span className="map-legend__key">
           <svg className="map-legend__swatch" viewBox="0 0 14 10" aria-hidden="true" focusable="false">

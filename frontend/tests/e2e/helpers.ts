@@ -26,10 +26,15 @@ export const GOLDEN = Object.freeze({
   z9: "Why Zone 9 got nothing: its sales fell to 61% on a day with no weather alert. That's a slow day, not a loss event, so Chhatri doesn't pay.",
 })
 
+/** The flags of the console under test (playwright.config.ts passes E2E_FEATURES to the mock as VITE_FEATURES). */
+export const E2E_FEATURES: readonly string[] = (process.env.E2E_FEATURES ?? '').split(/[\s,]+/).filter((name) => name !== '')
+const LENDER_DECIDES = E2E_FEATURES.includes('x4_lender_request')
+
 /** SPEC §13.4 English lines the demo shows on Anil's and Ramesh's phones. */
 export const LINES = Object.freeze({
   intro: 'Anil ji, heavy rain cut your area\'s sales by 63% today.',
-  paused: "Tomorrow's ₹600 instalment is paused.",
+  /** The 17:05 line: the lender's grant once the lender decides (E2E_FEATURES has x4_lender_request), else the BUILT pause. */
+  paused: LENDER_DECIDES ? "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty." : "Tomorrow's ₹600 instalment is paused.",
   explain: 'Your usual Tuesday: ₹4,380. Your area fell 63%. Chhatri pays half the lost sales.',
   disputeAck: "Okay, I'm sending this to our team. You'll hear back within 24 hours.",
   slipToHuman: "Thank you. The name on the slip doesn't match your KYC, so our team will check it. You'll hear back within 24 hours.",

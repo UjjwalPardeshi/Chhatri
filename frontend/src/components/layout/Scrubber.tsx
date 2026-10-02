@@ -38,6 +38,11 @@ function placedChapters(clock: ClockState): Placed[] {
   })
 }
 
+/** The scenario's chapters that sit on the track, left to right: what the scrubber labels and what keys 1 to 4 jump to. */
+export function chaptersOnTrack(clock: ClockState): Chapter[] {
+  return placedChapters(clock).map((placed) => placed.chapter)
+}
+
 /** Measured label positions (px) for the current chapters and track width. */
 function useLabelLefts(chapters: readonly Placed[]) {
   const areaRef = useRef<HTMLDivElement>(null)

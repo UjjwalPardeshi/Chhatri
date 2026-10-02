@@ -8,19 +8,23 @@ import type {
   AreaTrigger,
   AuditEntry,
   Case,
+  CoverQuote,
   Decision,
   FeedItem,
+  HolidayRequest,
   InstalmentPause,
   Kpis,
   Message,
   MessageKind,
   Payout,
   PayoutCard,
+  PremiumPayment,
   SseEventMap,
   SseEventType,
 } from '../api/types'
 import { formatInr } from '../lib/money'
 import type { Bilingual } from './catalogue'
+import type { StoredCover } from './endpoints/cover'
 import { isoAt, type ScenarioDef } from './scenarios'
 import { canonicalJson, sha256Hex } from './sha256'
 import type { ZoneMeta } from './zones'
@@ -35,6 +39,9 @@ type Job = { at: number; seq: number; name: string; run: () => void }
 export type ZoneTotals = { shops: number; decidedMin: number; paidPaise: number; creditedAt: string | null; paused: number }
 
 export type Conversation = { checkinSent: boolean; illnessReported: boolean; claimId: string | null }
+
+/** A holiday request as the mock keeps it: the API row plus the merchant it belongs to (the row is served under that merchant). */
+export type MockHolidayRequest = HolidayRequest & { merchant_id: string }
 
 export type OutboundSpec = {
   kind: MessageKind
@@ -55,6 +62,10 @@ export class MockRuntime {
   decisions: Decision[] = []
   payouts: Payout[] = []
   pauses: InstalmentPause[] = []
+  /** Every EDI holiday request and the lender's answer (X4); grants also have a pause. Empty while the flag is off. */
+  holidayRequests: MockHolidayRequest[] = []
+  /** True while the lender component is forced to FALLBACK (card 4.5): the mock lender then gives no answer. */
+  lenderForced = false
   messages: Message[] = []
   cases: Case[] = []
   audit: AuditEntry[] = []
@@ -62,6 +73,12 @@ export class MockRuntime {
   triggers: AreaTrigger[] = []
   explanations: Record<string, string> = {}
   zoneTotals = new Map<string, ZoneTotals>()
+  /** Covers bought through a payment link during this load; the seeded pilot covers live in `endpoints/cover.ts`. */
+  covers = new Map<string, StoredCover>()
+  quotes: CoverQuote[] = []
+  premiums: PremiumPayment[] = []
+  /** Paytm transaction ids already handled, so a repeated paid callback is a `duplicate` and changes nothing. */
+  paidTransactions = new Set<string>()
   conversations = new Map<string, Conversation>()
   kpis: Kpis = { zones_triggered: 0, shops_paid: 0, trigger_to_money_min: null, total_paid_paise: 0, total_paid_label: formatInr(0), instalments_paused: 0 }
   private jobs: Job[] = []
@@ -93,6 +110,14 @@ export class MockRuntime {
     const next = (this.counters.get(prefix) ?? 0) + 1
     this.counters.set(prefix, next)
     return `${prefix}-${String(next).padStart(6, '0')}`
+  }
+
+  /**
+   * Moves a prefix's counter on, so the next id is `lastUsed + 1` (it never moves back). The monsoon replay numbers
+   * Anil's claim, decision and payout 142, as the backend does after the 141 shops of Z3 (data-model 5.1).
+   */
+  advanceIds(prefix: string, lastUsed: number): void {
+    this.counters.set(prefix, Math.max(this.counters.get(prefix) ?? 0, lastUsed))
   }
 
   nextCaseId(): string {

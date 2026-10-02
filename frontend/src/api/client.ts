@@ -95,8 +95,8 @@ export class ApiClient {
     return { items: result.data, meta: result.meta }
   }
 
-  async post<T>(path: string, body: unknown = {}, auth = false): Promise<T> {
-    return (await this.send<T>('POST', path, { body, auth })).data
+  async post<T>(path: string, body: unknown = {}, auth = false, signal?: AbortSignal): Promise<T> {
+    return (await this.send<T>('POST', path, { body, auth, signal })).data
   }
 
   async postForm<T>(path: string, form: FormData): Promise<T> {

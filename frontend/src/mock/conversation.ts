@@ -4,15 +4,13 @@
  * BUY_COVER → COVER_BLOCKED + COVER_LINK, anything else → FALLBACK_HELP. Rule-based, deterministic.
  */
 import type { MessageMeta, VoiceDemoKey } from '../api/types'
-import { formatInr } from '../lib/money'
 import { dateEn, MSG, type Bilingual } from './catalogue'
 import { openDisputeCase } from './cases'
+import { requestCover } from './endpoints/premium'
 import { MERCHANTS, type MockMerchant } from './fixtures'
 import { submitSlip } from './personal'
 import type { MockRuntime } from './runtime'
 import { addDays } from './scenarios'
-import { sha256Hex } from './sha256'
-import { alertFor } from './zones'
 
 export type Intent = 'WHY_AMOUNT' | 'DISPUTE_AMOUNT' | 'REPORT_ILLNESS' | 'BUY_COVER' | 'GREETING' | 'UNKNOWN'
 
@@ -36,18 +34,6 @@ export const VOICE_DEMOS: Readonly<Record<VoiceDemoKey, Bilingual & { hi: string
 })
 
 const DEVANAGARI = /[ऀ-ॿ]/
-const COVER_WAITING_DAYS = 7
-const FIRST_PAYMENT_DAYS = 30
-const LOOKAHEAD_MS = 72 * 3_600_000
-
-/** SPEC §14.3: simulated links look like `https://paytm.me/sim-XXXXXX` (deterministic code). */
-export const SIM_LINK_PREFIX = 'https://paytm.me/sim-'
-const SIM_CODE_LENGTH = 6
-
-export function simulatedLinkUrl(merchantId: string, amountPaise: number, premiumId: string): string {
-  const code = sha256Hex(`${merchantId}|${amountPaise}|${premiumId}`).slice(0, SIM_CODE_LENGTH).toUpperCase()
-  return `${SIM_LINK_PREFIX}${code}`
-}
 
 function merchantOrThrow(merchantId: string): MockMerchant {
   const merchant = MERCHANTS[merchantId]
@@ -143,24 +129,18 @@ function reportIllness(rt: MockRuntime, merchant: MockMerchant): void {
   reply(rt, merchant, MSG.askSlip)
 }
 
-/** SPEC §9.5: a new cover always starts after the waiting period; BLOCKED when an alert looms. */
+/**
+ * SPEC §9.5: a new cover always starts after the waiting period; BLOCKED when an alert looms. The quote and the
+ * simulated link are the same ones `POST /api/premium/link` makes (`endpoints/premium.ts`), as in the backend.
+ */
 function quoteCover(rt: MockRuntime, merchant: MockMerchant): void {
   if (merchant.covered) {
     reply(rt, merchant, MSG.fallbackHelp)
     return
   }
-  const alert = alertFor(rt.scenario, merchant.zone_id, rt.nowIso)
-  const now = Date.parse(rt.nowIso)
-  const blocked = alert !== null && (now < Date.parse(alert.valid_to) && Date.parse(alert.valid_from) < now + LOOKAHEAD_MS)
-  const startsOn = addDays(rt.scenario.day, COVER_WAITING_DAYS)
-  const firstPayment = merchant.premium_per_day_paise * FIRST_PAYMENT_DAYS
-  const linkId = rt.nextId('PR')
-  const url = simulatedLinkUrl(merchant.id, firstPayment, linkId)
-  rt.record('policy-engine', 'cover.quoted', 'merchant', merchant.id, { outcome: blocked ? 'BLOCKED' : 'OK', starts_on: startsOn, first_payment_paise: firstPayment })
-  rt.addFeed('cover', `${merchant.shop_name} asked for cover: ${blocked ? 'BLOCKED (waiting period)' : 'quoted'} · starts ${dateEn(startsOn)}`, { merchant_id: merchant.id })
-  if (blocked) reply(rt, merchant, MSG.coverBlocked(startsOn))
-  rt.record('system', 'premium.link_created', 'premium', linkId, { amount_paise: firstPayment, source: 'SIMULATED' })
-  reply(rt, merchant, MSG.coverLink(formatInr(firstPayment), formatInr(merchant.premium_per_day_paise), url))
+  const { quote, premium } = requestCover(rt, merchant)
+  if (quote.outcome === 'BLOCKED') reply(rt, merchant, MSG.coverBlocked(quote.starts_on))
+  if (premium?.link_url) reply(rt, merchant, MSG.coverLink(quote.first_payment_label, quote.premium_per_day_label, premium.link_url))
 }
 
 /** Scenario hook (SPEC §8.3): silent-shop check-in at 11:20 on the illness days. */

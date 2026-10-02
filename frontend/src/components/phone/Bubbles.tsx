@@ -10,6 +10,7 @@ import type { Message } from '../../api/types'
 import { clipDuration, hhmm } from '../../lib/time'
 import { useLive } from '../../state/live'
 import { Icon } from '../common/Icon'
+import { ModeChip } from '../common/ModeChip'
 import { coverLink } from './coverOffer'
 import { linkify } from './linkify'
 import { spokenText, voiceAudioUrl, voiceSeconds, voiceSourceLabel, type VoiceSourceLabel } from './messages'
@@ -181,6 +182,7 @@ export function MessageBubble({ message }: { message: Message }) {
         {message.kind === 'VOICE' ? <VoiceBubble message={message} /> : null}
         {message.kind === 'IMAGE' ? <ImageBubble message={message} /> : null}
         {message.kind !== 'VOICE' && message.kind !== 'IMAGE' ? <Lines message={message} /> : null}
+        {!mine && message.meta.mode ? <ModeChip label={message.meta} /> : null}
         <div className="bubble__foot">
           {speakable ? <SpokenFoot message={message} /> : null}
           <Stamp message={message} />

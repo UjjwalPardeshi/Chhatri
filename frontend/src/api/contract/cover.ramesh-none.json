@@ -1,0 +1,59 @@
+{
+  "name": "cover.ramesh-none",
+  "description": "Ramesh (no cover record) after the alert was issued: NONE, the price his zone would pay, nulls for dates and amounts.",
+  "scenario": "buy_cover",
+  "at": "18:00",
+  "setup": [],
+  "request": {
+    "method": "GET",
+    "path": "/api/merchants/S-0907/cover"
+  },
+  "exact": [
+    "data.merchant_id",
+    "data.cover_id",
+    "data.status",
+    "data.status_text_en",
+    "data.status_text_hi",
+    "data.zone_id",
+    "data.zone_name",
+    "data.purchased_at",
+    "data.starts_on",
+    "data.prepaid_through",
+    "data.premium_per_day_paise",
+    "data.premium_per_day_label",
+    "data.annual_limit_paise",
+    "data.amount_claimed_paise",
+    "data.alert_active",
+    "data.alert_id"
+  ],
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "merchant_id": "S-0907",
+        "cover_id": null,
+        "status": "NONE",
+        "status_text_hi": "अभी कवर नहीं है",
+        "status_text_en": "No cover yet",
+        "zone_id": "Z3",
+        "zone_name": "Worli · Lower Parel",
+        "purchased_at": null,
+        "starts_on": null,
+        "prepaid_through": null,
+        "waiting_period_days": 7,
+        "premium_per_day_paise": 1416,
+        "premium_per_day_label": "₹14.16",
+        "premium_due": false,
+        "annual_limit_paise": null,
+        "annual_limit_label": null,
+        "amount_claimed_paise": null,
+        "amount_claimed_label": null,
+        "amount_remaining_paise": null,
+        "amount_remaining_label": null,
+        "alert_active": false,
+        "alert_id": null
+      }
+    }
+  }
+}

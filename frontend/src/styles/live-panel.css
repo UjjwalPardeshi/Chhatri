@@ -42,8 +42,16 @@
   font-size: var(--fs-xl);
 }
 
-.zone-card__sub {
+.zone-card__subrow {
+  display: flex;
   flex-basis: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.zone-card__sub {
+  min-width: 0;
   color: var(--muted);
   font-size: var(--fs-xs);
 }
@@ -141,15 +149,15 @@
   top: -6px;
   left: calc(100% + 4px);
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   line-height: 1;
 }
 
 .spark__ticks {
   display: flex;
   gap: 5px;
-  color: var(--faint);
-  font-size: 10px;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
   line-height: 1;
 }
 
@@ -189,6 +197,106 @@
   transition-duration: 120ms;
 }
 
+/*
+ * The trigger-to-payout moment (fs-08 13.4): one compact card on top of the panel while the replay is inside the slow
+ * window. The line says the beat in words; the track carries the chapter ticks and a cursor at the replay clock.
+ */
+.moment {
+  flex: none;
+  padding: 8px 14px 6px;
+  border-left: 4px solid var(--blue);
+  animation: fade-in var(--dur-ui) var(--ease-out);
+}
+
+.moment[data-state='credited'],
+.moment[data-state='instalments'] {
+  border-left-color: var(--green);
+}
+
+.moment__line {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  animation: fade-in var(--dur-ui) var(--ease-out);
+}
+
+.moment__line strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.moment__track {
+  position: relative;
+  height: 6px;
+  margin-top: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--grey-soft);
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 4%);
+}
+
+.moment__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(11 99 201 / 70%), var(--blue));
+  transform-origin: left center;
+  transition: transform 300ms linear;
+}
+
+.moment__tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ink-3);
+}
+
+.moment__tick[data-passed='true'] {
+  background: var(--navy);
+}
+
+.moment__cursor {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border: 3px solid var(--blue);
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 4px rgb(11 99 201 / 35%);
+  transform: translateY(-50%);
+  transition: left 300ms linear;
+}
+
+.moment__labels {
+  position: relative;
+  height: 16px;
+  margin-top: 5px;
+}
+
+.moment__label {
+  position: absolute;
+  top: 0;
+  color: var(--ink-3);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.moment__label[data-align='end'] {
+  right: 0;
+  transform: none;
+}
+
+.moment__label[data-passed='true'] {
+  color: var(--blue);
+}
+
 /* KPI strip: one card, three equal cells, the number over its label (labels never wrap word by word). */
 .kpis {
   display: grid;
@@ -215,10 +323,18 @@
 
 .kpi__value {
   flex: none;
-  font-size: 32px;
+  font-size: var(--fs-3xl);
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.kpi__unit {
+  color: var(--muted);
+  font-size: var(--fs-md);
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .kpi__caption {
@@ -261,6 +377,33 @@
   border-left-color: var(--line-strong);
   box-shadow: none;
   color: var(--muted);
+}
+
+/*
+ * Presenter mode steps the type up one rung and the two-column panel has no height to spare at 1280×720, yet the moment
+ * card, the zone, the numbers and the slow-day note must all be on screen at once at 17:04. The spacing gives back what
+ * the larger type took (e2e: smoke.spec.ts, "the right panel shows the moment card and the whole slow-day note").
+ */
+@media (min-width: 901px) {
+  .app[data-presenter='on'] .home__panel {
+    gap: 8px;
+  }
+
+  .app[data-presenter='on'] .moment {
+    padding: 6px 14px 4px;
+  }
+
+  .app[data-presenter='on'] .zone-card {
+    padding: 10px 16px 8px;
+  }
+
+  .app[data-presenter='on'] .zone-card__row {
+    padding: 3px 8px;
+  }
+
+  .app[data-presenter='on'] .kpi {
+    padding: 8px 14px;
+  }
 }
 
 /* Event feed */
@@ -383,7 +526,7 @@
 
 .feed__part + .feed__part::before {
   margin-right: 6px;
-  color: var(--faint);
+  color: var(--muted);
   content: '·';
 }
 
@@ -515,10 +658,6 @@
 @media (max-width: 600px) {
   .home {
     padding: 10px var(--sp-4) var(--sp-4);
-  }
-
-  .kpi__value {
-    font-size: 32px;
   }
 
   /* Phones: the map keeps its height and the payout toast becomes a banner under it. */

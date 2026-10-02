@@ -40,7 +40,7 @@
 
 .verify--ok {
   background: var(--green-soft);
-  color: var(--green);
+  color: var(--green-ink);
 }
 
 .verify--bad {
@@ -183,6 +183,12 @@
 
 .backtest-hero .proof__facts {
   margin-top: var(--sp-6);
+}
+
+/* One honesty line under the hero: what this backtest does and does not show. */
+.backtest-caveat {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
 }
 
 .backtest-grid {

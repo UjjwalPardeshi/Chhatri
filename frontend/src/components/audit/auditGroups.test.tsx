@@ -4,12 +4,12 @@ import { describe, expect, it } from 'vitest'
 
 import type { AuditEntry } from '../../api/types'
 import { AuditTable } from './AuditTable'
-import { groupByMinute, isMoneyAction } from './auditGroups'
+import { actionName, groupByMinute, isMoneyAction } from './auditGroups'
 
 const entry = (seq: number, hhmm: string, action: string): AuditEntry =>
-  ({ seq, at: `2025-08-19T${hhmm}:00+05:30`, actor: 'system', action, subject_type: 'x', subject_id: `X-${seq}`, hash: `h${seq}`.padEnd(64, '0'), prev_hash: `h${seq - 1}`.padEnd(64, '0') }) as AuditEntry
+  ({ seq, at: `2025-08-19T${hhmm}:00+05:30`, actor: 'system', action, subject_type: 'x', subject_id: `X-${seq}`, data: {}, hash: `h${seq}`.padEnd(64, '0'), prev_hash: `h${seq - 1}`.padEnd(64, '0') }) as AuditEntry
 
-const NEWEST_FIRST = [entry(3, '17:05', 'instalment.paused'), entry(2, '17:04', 'payout.credited'), entry(1, '17:04', 'message.sent')]
+const NEWEST_FIRST = [entry(3, '17:05', 'instalment.pause'), entry(2, '17:04', 'payout.credited'), entry(1, '17:04', 'message.sent')]
 
 describe('audit groups', () => {
   it('groups entries by simulated minute in the order shown', () => {
@@ -22,8 +22,33 @@ describe('audit groups', () => {
 
   it('marks money actions', () => {
     expect(isMoneyAction('payout.credited')).toBe(true)
-    expect(isMoneyAction('instalment.paused')).toBe(true)
+    expect(isMoneyAction('instalment.pause')).toBe(true)
     expect(isMoneyAction('message.sent')).toBe(false)
+  })
+
+  it('names the lender’s request and answer, and says so when there was no answer (X4)', () => {
+    expect(actionName(entry(1, '17:05', 'instalment.holiday_request'))).toBe('Lender asked')
+    expect(actionName({ ...entry(2, '17:05', 'instalment.holiday_decision'), data: { decision: 'GRANTED' } })).toBe('Lender answered')
+    expect(actionName({ ...entry(2, '17:05', 'instalment.holiday_decision'), data: { decision: 'REFUSED', reason_code: 'IN_ARREARS' } })).toBe('Lender answered')
+    expect(actionName({ ...entry(2, '17:05', 'instalment.holiday_decision'), data: { decision: 'NO_RESPONSE' } })).toBe('Lender did not answer')
+    expect(actionName(entry(3, '17:05', 'instalment.pause'))).toBeNull()
+    expect(actionName(entry(4, '17:04', 'payout.credited'))).toBeNull()
+  })
+
+  it('marks only the pause itself as an instalment that moved, not the ask or the answer (X4)', () => {
+    expect(isMoneyAction('instalment.pause')).toBe(true)
+    expect(isMoneyAction('instalment.holiday_request')).toBe(false)
+    expect(isMoneyAction('instalment.holiday_decision')).toBe(false)
+    expect(isMoneyAction('instalment.holiday_skipped')).toBe(false)
+  })
+
+  it('shows the plain name beside the raw action in the table and marks one money row', () => {
+    const entries = [entry(3, '17:05', 'instalment.pause'), entry(2, '17:05', 'instalment.holiday_decision'), entry(1, '17:05', 'instalment.holiday_request')]
+    const { container } = render(<AuditTable entries={entries} verified={0} />)
+    expect(screen.getByText('Lender asked')).toBeTruthy()
+    expect(screen.getByText('Lender answered')).toBeTruthy()
+    expect(container.querySelectorAll('[data-money="true"]')).toHaveLength(1)
+    expect(screen.getByText('instalment.holiday_request', { exact: false })).toBeTruthy()
   })
 
   it('links a hash to the next entry’s previous hash on hover and checks rows after a verify', () => {

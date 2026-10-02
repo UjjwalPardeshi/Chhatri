@@ -4,11 +4,12 @@
  * happened" steps beside it.
  * A launcher from the Overview can pass a `hint` (useLaunch) to highlight the chip to tap next.
  */
-import { useCallback, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'react-router'
 
 import { assertMerchantId } from '../api/endpoints'
 import type { Message, VoiceDemoKey } from '../api/types'
+import { Feature } from '../components/common/Feature'
 import { ErrorState, InlineError, Loading } from '../components/common/Status'
 import { Composer, type ComposerActions } from '../components/phone/Composer'
 import { MerchantPanel } from '../components/phone/MerchantPanel'
@@ -19,6 +20,7 @@ import { SoundboxDevice } from '../components/phone/SoundboxDevice'
 import { SoundboxStrip } from '../components/phone/SoundboxStrip'
 import { happenedSteps } from '../components/phone/whatHappened'
 import { ApiError } from '../api/client'
+import { isFeatureEnabled } from '../features'
 import { useLive, useLiveEvent } from '../state/live'
 import { toApiError, useAsync } from '../state/useAsync'
 import type { LaunchNavState } from '../state/useLaunch'
@@ -26,6 +28,9 @@ import { useMerchant } from '../state/useMerchant'
 import { useSettle } from '../state/useSettle'
 
 const PULSE_MS = 2_400
+
+/** The mini-app frame (card 3.7): its chunk is requested only when the flag n1_miniapp is on and this page renders it. */
+const AppFrame = lazy(() => import('../miniapp/shell/AppFrame'))
 
 function validId(raw: string | undefined): string | null {
   try {
@@ -128,8 +133,13 @@ function MerchantView({ merchantId }: { merchantId: string }) {
   )
   const soundbox = <SoundboxDevice message={announcement} announcing={conversation.pulse} />
   return (
-    <div className="merchant-page">
+    <div className={isFeatureEnabled('n1_miniapp') ? 'merchant-page merchant-page--app' : 'merchant-page'}>
       <Phone now={snapshot?.clock.now ?? ''} messages={chatMessages(conversation.messages)} status={status} footer={footer} />
+      <Feature name="n1_miniapp">
+        <Suspense fallback={<div className="phone phone--app" aria-busy="true" />}>
+          <AppFrame merchantId={merchantId} />
+        </Suspense>
+      </Feature>
       {merchant.data ? (
         <MerchantPanel
           merchant={merchant.data}

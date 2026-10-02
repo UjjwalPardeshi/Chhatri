@@ -113,7 +113,7 @@ function officerDecision(rt: MockRuntime, previous: Decision, approve: boolean):
 const DISPUTE_CONFIRMED = 'Payout confirmed by a claims officer'
 const DISPUTE_REJECTED = 'Dispute declined by a claims officer'
 
-const DECLINE_REASON = {
+export const DECLINE_REASON = {
   hi: 'पर्ची पर नाम आपके KYC से मेल नहीं खाता, इसलिए यह दावा मंज़ूर नहीं हो सका।',
   en: "The name on the slip doesn't match your KYC, so this claim can't be approved.",
 }
@@ -122,8 +122,8 @@ export type OfficerOutcome = { decision: Decision | null; case: Case }
 
 export function officerDecide(rt: MockRuntime, merchant: MockMerchant, caseId: string, approve: boolean, note: string): OfficerOutcome {
   const current = rt.cases.find((c) => c.id === caseId)
-  if (!current) throw new CaseError('NOT_FOUND', `Case ${caseId} not found`, 404)
-  if (current.status !== 'OPEN') throw new CaseError('CONFLICT', `Case ${caseId} is already ${current.status}`, 409)
+  if (!current) throw new CaseError('not_found', `case ${caseId} not found`, 404)
+  if (current.status !== 'OPEN') throw new CaseError('conflict', `case ${caseId} is already ${current.status}`, 409)
   const officer = `officer:${MOCK_OFFICER_ID}`
   let decision = current.decision
   if (current.kind === 'PERSONAL_CLAIM_REVIEW' && current.decision?.outcome === 'REFERRED') {

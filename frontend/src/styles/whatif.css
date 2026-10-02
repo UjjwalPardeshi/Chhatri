@@ -1,0 +1,207 @@
+/*
+ * H24 what-if drawer (fs-08 11): it takes the place of the right panel's cards while it is open (the panel keeps its
+ * width and its scroll), so the page never needs a second column. Type is on the scale tokens.
+ */
+.home__panel[data-whatif='open'] > :not(.whatif) {
+  display: none;
+}
+
+.whatif-open {
+  align-self: flex-start;
+}
+
+/* The button sits at the end of the zone card's ward line (fs-08 11), so it costs the right panel no row of its own. */
+.zone-card__action {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.zone-card__action .whatif-open {
+  height: auto;
+  min-height: 0;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+
+.whatif {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-sm);
+}
+
+.whatif__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.whatif__head h2 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.whatif__readonly {
+  align-self: flex-start;
+  margin: 0;
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-pill);
+  background: var(--demo-soft);
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.whatif__evaluated,
+.whatif__rules,
+.whatif__loading {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.whatif__link {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.whatif__error {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius-sm);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.whatif__controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.whatif__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.whatif__field legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.whatif__choices {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.whatif__choices .btn[aria-pressed='true'] {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.whatif__slider {
+  position: relative;
+}
+
+.whatif__slider input[type='range'] {
+  width: 100%;
+  margin: 0;
+}
+
+/* The 50% floor: a thin mark on the track, placed by --floor (the floor's share of the slider's range). */
+.whatif__slider::after {
+  content: '';
+  position: absolute;
+  left: var(--floor);
+  bottom: 20px;
+  width: 2px;
+  height: 14px;
+  background: var(--red);
+  pointer-events: none;
+}
+
+.whatif__floor {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+
+.whatif__check {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.whatif__conditions {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+}
+
+.whatif__conditions th,
+.whatif__conditions td {
+  padding: 4px var(--sp-1);
+  border-top: 1px solid var(--line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.whatif__conditions thead th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.whatif__conditions tbody th {
+  font-weight: 500;
+}
+
+.whatif__conditions td[data-met='true'] .whatif__mark {
+  color: var(--green);
+}
+
+.whatif__conditions td[data-met='false'] .whatif__mark {
+  color: var(--red);
+}
+
+.whatif__conditions tr[data-flip='true'] {
+  background: var(--blue-soft);
+}
+
+.whatif__result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+}
+
+.whatif__result[data-fires='true'] strong {
+  color: var(--green-ink);
+}
+
+.whatif__result[data-fires='false'] strong {
+  color: var(--ink-2);
+}
+
+.whatif__result strong {
+  font-size: var(--fs-md);
+}
+
+.whatif__example {
+  margin: 0;
+  font-weight: 500;
+}

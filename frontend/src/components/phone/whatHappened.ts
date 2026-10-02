@@ -2,12 +2,19 @@
  * "What happened" for one merchant (SPEC §17.2 monsoon timeline, §13 INSTALMENT_PAUSED, §19.2
  * MerchantDetail): the steps the demo narrates, read from data the page already has. The latest
  * decision (17:00 "Decision APPROVED"), its payout (17:04 "₹1,380 credited") and the instalment
- * pause message (17:05 "Tomorrow's ₹600 instalment paused"). Steps appear only once they happen.
+ * (17:05). With the lender deciding the holiday (X4) that is two steps, "Lender asked" and the
+ * lender's answer, read from `holiday_requests`; before that, the instalment pause message
+ * ("Tomorrow's ₹600 instalment paused"). Steps appear only once they happen.
  */
-import type { MerchantDetail, Message } from '../../api/types'
+import type { HolidayRequest, MerchantDetail, Message } from '../../api/types'
+import { HOLIDAY_REASONS } from '../../content/holiday'
 import { actorLabel } from '../../lib/actors'
+import { weekdayDayLabel } from '../../lib/time'
 
-export type HappenedStep = { key: 'decision' | 'payout' | 'pause'; at: string; title: string; detail: string | null; tone: 'blue' | 'green' | 'amber' | 'red' }
+export type HappenedStep = { key: 'decision' | 'payout' | 'asked' | 'answered' | 'pause'; at: string; title: string; detail: string | null; tone: 'blue' | 'green' | 'amber' | 'red' }
+
+/** What the steps read: the decision, the payout and, once the lender is asked, its requests (absent or empty: the BUILT pause). */
+type Happened = Pick<MerchantDetail, 'decisions' | 'payouts'> & Partial<Pick<MerchantDetail, 'holiday_requests'>>
 
 /**
  * The English INSTALMENT_PAUSED line (SPEC §13.4): "Tomorrow's {instalment} instalment is paused.";
@@ -38,6 +45,27 @@ function pauseStep(messages: readonly Message[]): HappenedStep | null {
   return { key: 'pause', at: message.created_at, title: `${match[1]}’s ${match[2]} instalment paused`, detail: 'lender notified', tone: 'blue' }
 }
 
-export function happenedSteps(merchant: Pick<MerchantDetail, 'decisions' | 'payouts'>, messages: readonly Message[]): HappenedStep[] {
-  return [decisionStep(merchant), payoutStep(merchant), pauseStep(messages)].filter((s): s is HappenedStep => s !== null)
+function askedStep(request: HolidayRequest): HappenedStep {
+  const due = weekdayDayLabel(request.instalment_date)
+  return { key: 'asked', at: request.requested_at, title: 'Lender asked', detail: `to pause the ${request.instalment_label} instalment due ${due}`, tone: 'blue' }
+}
+
+/** The lender's answer in its own terms; no answer is said as no answer, never as a pause. Null until it has answered. */
+function answeredStep(request: HolidayRequest): HappenedStep | null {
+  const at = request.decided_at
+  if (request.status === 'REQUESTED' || at === null) return null
+  if (request.status === 'GRANTED') return { key: 'answered', at, title: 'Lender answered', detail: 'paused · moved to the end of the loan, no penalty', tone: 'blue' }
+  if (request.status === 'NO_RESPONSE') return { key: 'answered', at, title: 'Lender did not answer', detail: 'the instalment stays due · the payout is not affected', tone: 'amber' }
+  const reason = request.reason_code === null ? null : HOLIDAY_REASONS[request.reason_code].en
+  return { key: 'answered', at, title: 'Lender answered', detail: reason === null ? 'could not pause' : `could not pause · ${reason}`, tone: 'amber' }
+}
+
+function instalmentSteps(merchant: Happened, messages: readonly Message[]): HappenedStep[] {
+  const request = merchant.holiday_requests?.at(-1)
+  const steps = request ? [askedStep(request), answeredStep(request)] : [pauseStep(messages)]
+  return steps.filter((s): s is HappenedStep => s !== null)
+}
+
+export function happenedSteps(merchant: Happened, messages: readonly Message[]): HappenedStep[] {
+  return [decisionStep(merchant), payoutStep(merchant), ...instalmentSteps(merchant, messages)].filter((s): s is HappenedStep => s !== null)
 }

@@ -50,7 +50,7 @@ describe('monsoon at 17:00', () => {
 describe('monsoon at 17:05', () => {
   it('pays 312 shops in 4 minutes and pauses instalments at 17:05', () => {
     const rt = at('17:05').runtime
-    expect(rt.kpis).toMatchObject({ zones_triggered: 3, shops_paid: 312, trigger_to_money_min: 4, instalments_paused: 124 })
+    expect(rt.kpis).toMatchObject({ zones_triggered: 3, shops_paid: 312, trigger_to_money_min: 4, instalments_paused: 123 })
     const anil = rt.payouts.filter((p) => p.merchant_id === 'S-0142')
     expect(anil).toHaveLength(1)
     expect(anil[0]).toMatchObject({ amount_label: '₹1,380', status: 'CREDITED', credited_at: '2025-08-19T17:04:00+05:30', rail: 'Paytm settlement (simulated)' })
