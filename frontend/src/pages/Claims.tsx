@@ -81,7 +81,7 @@ export default function Claims() {
     <div className="claims">
       <aside className="claims__queue card">
         <header className="claims__queue-head">
-          <h2>Claims queue</h2>
+          <h1>Claims queue</h1>
           <fieldset className="segmented" aria-label="Filter cases">
             {FILTERS.map((f) => (
               <button key={f.value} type="button" aria-pressed={filter === f.value} className={filter === f.value ? 'is-on' : ''} onClick={() => setFilter(f.value)}>

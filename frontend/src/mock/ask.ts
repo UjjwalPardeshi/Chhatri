@@ -63,7 +63,7 @@ const latestPaid = (rt: MockRuntime, merchantId: string) => {
 function whyAmount(rt: MockRuntime, merchantId: string): Draft {
   const decision = latestPaid(rt, merchantId)
   const ex = decision?.explanation
-  if (!decision || !ex) return help('WHY_AMOUNT')
+  if (!decision || !ex) return noPayout('WHY_AMOUNT')
   const facts = moneyFacts({ rt, merchant: merchantById(merchantId), decision }).map((f): AskFact => ({ ...f, label_hi: f.label_en }))
   return { intent: 'WHY_AMOUNT', lines: { hi: ex.formula_hi, en: ex.formula_en }, clauses: [{ id: 'C4.1', title: 'Payout formula' }], facts, next: 'SEE_CLAIM' }
 }
@@ -72,13 +72,19 @@ function help(intent: AskIntent): Draft {
   return { intent, lines: fixed('FALLBACK_HELP'), clauses: [], facts: [], next: 'ASK_AGAIN' }
 }
 
+/** No paid decision yet: the honest line of the backend (DISPUTE_NO_PAYOUT), never the circular help line. */
+function noPayout(intent: AskIntent): Draft {
+  const line = MSG.disputeNoPayout
+  return { intent, lines: { hi: line.hi ?? line.en, en: line.en }, clauses: [{ id: 'C9', title: 'Disputes' }], facts: [], next: 'SEE_CLAIM' }
+}
+
 function handoff(): Draft {
   return { intent: 'UNKNOWN', lines: fixed('ASK_HANDOFF'), clauses: [], facts: [], next: 'TALK_TO_TEAM', handoff: true }
 }
 
 function dispute(rt: MockRuntime, merchantId: string, question: string): Draft {
   const decision = latestPaid(rt, merchantId)
-  if (!decision) return help('DISPUTE_AMOUNT')
+  if (!decision) return noPayout('DISPUTE_AMOUNT')
   const { opened, already } = openOrFindDispute(rt, merchantById(merchantId), question, decision)
   const ack = already ? MSG.disputeAlreadyOpen(opened.id) : MSG.disputeAck
   return { intent: 'DISPUTE_AMOUNT', lines: { hi: `${ack.hi}\n${MSG.caseChip(opened.id).hi ?? MSG.caseChip(opened.id).en}`, en: `${ack.en}\n${MSG.caseChip(opened.id).en}` }, clauses: [{ id: 'C9', title: 'Disputes' }], facts: [], next: 'TRACK_CASE', caseId: opened.id }

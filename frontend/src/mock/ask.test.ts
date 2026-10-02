@@ -33,6 +33,14 @@ describe('POST /api/merchants/{id}/ask', () => {
     expect(answer.answer_en).not.toMatch(/[ऀ-ॿ]/)
   })
 
+  it('says honestly that no payout exists yet when there is no paid decision, not the circular help line', async () => {
+    const api = await setup('09:00')
+    const answer = await api.ask('S-0142', { question: 'Why did I get this amount?', lang: 'en' })
+    expect(answer.answer).toContain('No payout has been made on your account yet')
+    expect(answer.answer).not.toContain('You can ask')
+    expect(answer.next_action.kind).toBe('SEE_CLAIM')
+  })
+
   it('answers in English when asked to', async () => {
     const api = await setup()
     const answer = await api.ask('S-0142', { question: 'Why did I get this amount?', lang: 'en' })

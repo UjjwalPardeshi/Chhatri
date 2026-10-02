@@ -29,12 +29,17 @@ export const GOLDEN = Object.freeze({
 /** The flags of the console under test (playwright.config.ts passes E2E_FEATURES to the mock as VITE_FEATURES). */
 export const E2E_FEATURES: readonly string[] = (process.env.E2E_FEATURES ?? '').split(/[\s,]+/).filter((name) => name !== '')
 const LENDER_DECIDES = E2E_FEATURES.includes('x4_lender_request')
+/** E2E_FEATURES unset means the flags are whatever the server (live project) or the build says, so either 17:05 line is right. */
+const FLAGS_KNOWN = process.env.E2E_FEATURES !== undefined
+const PAUSED_BUILT = "Tomorrow's ₹600 instalment is paused."
+const PAUSED_LENDER = "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty."
+const PAUSED_EITHER = /Tomorrow's ₹600 instalment is paused\.|Your lender has paused tomorrow's ₹600 instalment\. It moves to the end of your loan with no penalty\./
 
 /** SPEC §13.4 English lines the demo shows on Anil's and Ramesh's phones. */
 export const LINES = Object.freeze({
   intro: 'Anil ji, heavy rain cut your area\'s sales by 63% today.',
-  /** The 17:05 line: the lender's grant once the lender decides (E2E_FEATURES has x4_lender_request), else the BUILT pause. */
-  paused: LENDER_DECIDES ? "Your lender has paused tomorrow's ₹600 instalment. It moves to the end of your loan with no penalty." : "Tomorrow's ₹600 instalment is paused.",
+  /** The 17:05 line: the lender's grant once the lender decides (E2E_FEATURES has x4_lender_request), else the BUILT pause; either one when E2E_FEATURES is unset. */
+  paused: !FLAGS_KNOWN ? PAUSED_EITHER : LENDER_DECIDES ? PAUSED_LENDER : PAUSED_BUILT,
   explain: 'Your usual Tuesday: ₹4,380. Your area fell 63%. Chhatri pays half the lost sales.',
   disputeAck: "Okay, I'm sending this to our team. You'll hear back within 24 hours.",
   slipToHuman: "Thank you. The name on the slip doesn't match your KYC, so our team will check it. You'll hear back within 24 hours.",

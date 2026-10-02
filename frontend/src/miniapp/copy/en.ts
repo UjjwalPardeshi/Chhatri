@@ -525,6 +525,8 @@ export const en = {
   'slip.err.limit': 'Several photos have been sent already. Please send the slip to our team.',
   // Rights screens: titles of N5 and N6 (copy deck 13.1, 14.4 and 14.5); the rest is in copy/rights.ts
   'grv.title': 'Complaints and escalation',
+  'grv.error.no_decision': 'There is no payout or decision on your account yet, so there is nothing to complain about here. Your claim tracker shows where things stand.',
+  'grv.error.no_review': 'No claim of yours is waiting for review right now.',
   'consent.title': 'My data and consent',
   'activity.title': 'What was used',
 } as const

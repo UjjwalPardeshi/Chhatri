@@ -29,7 +29,10 @@ function topicHint(state: unknown): GrievanceTopic | null {
 }
 
 function failureText(error: unknown, lang: 'hi' | 'en' | 'mr'): string {
-  return error instanceof ApiError && error.status === 409 ? tr('grv.error.conflict', lang) : t('error.generic', lang)
+  if (error instanceof ApiError && error.status === 409) return tr('grv.error.conflict', lang)
+  if (error instanceof ApiError && error.status === 422 && 'decision_id' in error.fields) return t('grv.error.no_decision', lang)
+  if (error instanceof ApiError && error.status === 422 && 'topic' in error.fields && error.fields.topic.includes('review')) return t('grv.error.no_review', lang)
+  return t('error.generic', lang)
 }
 
 export function Grievances() {

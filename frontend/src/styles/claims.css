@@ -21,7 +21,7 @@
   padding: 12px 14px;
 }
 
-.claims__queue-head h2 {
+.claims__queue-head h1 {
   font-size: var(--fs-md);
 }
 

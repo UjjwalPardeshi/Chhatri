@@ -108,6 +108,18 @@ describe('a new complaint', () => {
   })
 })
 
+describe('a complaint with nothing to complain about yet', () => {
+  it('says in plain words that there is no decision, instead of a generic error', async () => {
+    await open()
+    fireEvent.click(screen.getByTestId('grv-new'))
+    fireEvent.click(await screen.findByTestId('grv-topic-CLAIM_DECLINED'))
+    fireEvent.change(screen.getByTestId('grv-text'), { target: { value: 'Why was I not paid?' } })
+    fireEvent.click(screen.getByTestId('grv-send'))
+    expect(await screen.findByText(/nothing to complain about here/)).toBeTruthy()
+    expect(screen.queryByText('Something went wrong. Try again.')).toBeNull()
+  })
+})
+
 describe('the ladder', () => {
   it('shows our claims officer with a clock, the other steps locked and marked SIMULATED or self-filed, and one line about the demo', async () => {
     await open('?lang=en&screen=grievances', dispute)

@@ -27,6 +27,12 @@ describe('Claims', () => {
     expect(await screen.findByText('No case selected')).toBeTruthy()
   })
 
+  it('has one h1, the queue heading', async () => {
+    renderApp('/claims', backend)
+    await screen.findByText('No case selected')
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Claims queue'])
+  })
+
   it('approves a referred mismatch claim and shows the officer decision inline', async () => {
     await referMismatch()
     renderApp('/claims', backend)

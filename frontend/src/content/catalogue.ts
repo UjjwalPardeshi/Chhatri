@@ -68,6 +68,10 @@ export const MSG = {
     hi: `आपका सवाल पहले से हमारी टीम के पास है। केस ${caseId} देखिए।`,
     en: `Your question is already with our team. See case ${caseId}.`,
   }),
+  disputeNoPayout: {
+    hi: 'हमारी टीम ने आपका सवाल देखा। आपके खाते में अभी कोई भुगतान नहीं हुआ है, इसलिए बदलने के लिए कोई रकम नहीं है। आपके दावों के ट्रैकर में कारण दिखता है।',
+    en: 'Our team looked at your question. No payout has been made on your account yet, so there is no amount to change. Your claim tracker shows why.',
+  } as Bilingual,
   caseChip: (caseId: string): Bilingual => ({ hi: null, en: `Sent to a claims officer · case ${caseId}` }),
   coverBlocked: (startsOn: string): Bilingual => ({
     hi: `नया कवर वेटिंग पीरियड के बाद शुरू होता है — ${dateHi(startsOn)} से। कल के अलर्ट पर यह लागू नहीं होगा।`,
