@@ -81,7 +81,7 @@ describe('MiniappRoot', () => {
     expect(button.dataset.slot).toBe('button')
     expect(button.classList.contains('inline-flex')).toBe(true)
     expect(button.classList.contains('bg-primary')).toBe(true)
-    expect(root?.classList.contains('overflow-hidden')).toBe(true)
+    expect(root?.classList.contains('h-full')).toBe(true) // the clip, stacking context and container come from the scoped base
   })
 
   it.each(IN_FLOW)('renders the %s component inside the .miniapp scope', (slot, element) => {
@@ -102,7 +102,7 @@ function OpenDialog() {
 }
 
 describe('portals', () => {
-  it('mounts a Dialog inside the .miniapp scope so the shadcn variables apply', () => {
+  it('mounts a Dialog inside the .miniapp scope where the theme names resolve', () => {
     const { container } = render(
       <MiniappRoot>
         <OpenDialog />
@@ -124,7 +124,7 @@ describe('portals', () => {
     )
     const sheet = screen.getByRole('dialog')
     expect(container.querySelector('.miniapp')?.contains(sheet)).toBe(true)
-    expect(sheet.dataset.side).toBe('bottom')
+    expect(sheet.classList.contains('bottom-0')).toBe(true)
   })
 
   it('mounts a Tooltip inside the .miniapp scope', () => {

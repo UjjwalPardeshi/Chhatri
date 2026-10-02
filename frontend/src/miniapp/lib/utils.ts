@@ -1,2 +1,2 @@
-/** Class-name helper at the path components.json names, so `shadcn add` (and 21st.dev components) resolve it. */
-export { cn } from 'cn'
+/** The path components.json names for `cn`, so components added later (shadcn, 21st.dev) get the mini-app's instance. */
+export { cn } from './cn'

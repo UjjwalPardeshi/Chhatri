@@ -1,58 +1,115 @@
-/*
- * Tailwind CSS v4 + shadcn/ui for the merchant mini-app only (ADR 0005; implementation guide, Wave 0).
- *
- *  1. No preflight: only the theme and utilities layers are imported, so nothing resets the console.
- *  2. Class detection is limited to this folder (source(none) + @source "./"), test files excluded: a
- *     word in a test would otherwise ship as a utility (miniappBuild.test.ts checks the compiled CSS).
- *  3. Utilities are marked important so they beat the console's un-layered element rules
- *     (button, a, :focus-visible) inside the mini-app.
- *  4. Every shadcn token and base style lives under .miniapp, never :root, html, body or *.
- *  5. What Tailwind emits globally stays inert for the console. Its theme variables sit in the theme
- *     layer, so the console's un-layered tokens win a name clash (--ease-in-out). Its keyframes are
- *     un-layered, so a name the console also defines (pulse) is renamed: mini-pulse.
- *  6. Reduced motion: a layered !important beats the console's un-layered !important rule (base.css), so
- *     the important utilities would keep animating. For !important an earlier layer wins, so the base
- *     layer restates that rule for .miniapp (miniappCss.test.ts keeps the two identical).
- */
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities) source(none) important;
-@source "./";
-@source not "./**/*.test.{ts,tsx}";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+/* frontend/src/miniapp/miniapp.css: the one Tailwind entry. Imported by the mini-app entry, after the console CSS. */
+@layer theme;
+@import 'tailwindcss/theme.css' layer(theme); /* theme variables, no preflight */
+@import 'tailwindcss/utilities.css' source(none); /* utilities (unlayered) with class detection switched off ... */
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css'; /* custom variants data-open, data-closed, data-checked for Radix's data-state. Its one selector rule is the inert .shimmer */
+@source './'; /* ... except this folder: src/miniapp */
+@source not './**/*.test.{ts,tsx}'; /* a word in a test never ships as a utility */
 
-/* Light only: dark: variants apply under a .dark ancestor, which the mini-app never renders. */
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *)); /* light theme: dark: classes in vendored code never match */
 
 @theme inline {
-  --font-sans: var(--font);
-  --font-heading: var(--font);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --animate-pulse: mini-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* The names mapped below are all that exist. A class from another palette fails loudly instead of drifting. */
+  --color-*: initial;
+  --radius-*: initial;
+  --font-*: initial;
+  --ease-*: initial;
+  --shadow-*: initial;
+  --breakpoint-*: initial; /* no viewport variants (sm: md: lg:): the mini-app uses container queries (@xs: @sm:) */
 
+  /* shadcn semantic names -> console tokens. No new :root variables for shadcn. */
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --color-card: var(--card);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--blue);
+  --color-primary-foreground: var(--on-navy);
+  --color-secondary: var(--paper-2);
+  --color-secondary-foreground: var(--ink-2);
+  --color-muted: var(--paper-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--blue-soft); /* shadcn "accent" is a hover surface, not the console --accent */
+  --color-accent-foreground: var(--blue);
+  --color-destructive: var(--red);
+  --color-destructive-foreground: var(--on-navy);
+  --color-border: var(--line);
+  --color-input: var(--field-border); /* control outlines need 3:1 */
+  --color-ring: var(--focus);
+
+  /* Brand and text */
+  --color-navy: var(--navy);
+  --color-on-navy: var(--on-navy);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line-strong: var(--line-strong);
+  --color-white: var(--on-navy);
+  --color-black: var(--navy); /* scrims such as bg-black/50 use navy */
+
+  /* Status: solid = fill with white text, soft = tint, ink = text on the tint */
+  --color-paid: var(--paid);
+  --color-paid-soft: var(--paid-soft);
+  --color-paid-ink: var(--green-ink);
+  --color-decided: var(--decided);
+  --color-decided-soft: var(--blue-soft);
+  --color-referred: var(--referred);
+  --color-referred-soft: var(--referred-soft);
+  --color-referred-ink: var(--referred-ink);
+  --color-blocked: var(--blocked);
+  --color-blocked-soft: var(--blocked-soft);
+  --color-live: var(--live);
+  --color-live-soft: var(--live-soft);
+  --color-live-ink: var(--green-ink);
+  --color-demo: var(--demo);
+  --color-demo-soft: var(--demo-soft);
+  --color-fallback: var(--fallback);
+  --color-fallback-soft: var(--fallback-soft);
+
+  /* Radius: the console ladder (controls 6, cards 10, panels 16) under shadcn's names */
+  --radius-sm: 4px;
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-card);
+  --radius-xl: var(--radius-card);
+  --radius-2xl: var(--radius-panel);
+
+  /* Type: same pixel sizes as the console, shadcn names */
+  --font-sans: var(--font);
+  --font-hindi: var(--font-hi);
+  --font-code: var(--font-mono);
+  --font-weight-semibold: 700; /* Ubuntu ships 300/400/500/700 */
+  --text-2xs: var(--fs-2xs);
+  --text-xs: var(--fs-xs);
+  --text-caption: var(--fs-sm);
+  --text-sm: var(--fs-base);
+  --text-md: var(--fs-md);
+  --text-base: 16px;
+  --text-field: 16px; /* text-field: iOS Safari zooms into inputs below 16px */
+  --text-lg: var(--fs-lg);
+  --text-xl: var(--fs-xl);
+  --text-2xl: var(--fs-2xl);
+  --text-3xl: var(--fs-3xl);
+  --text-4xl: var(--fs-4xl);
+
+  --spacing: 4px; /* p-4 = 16px = --sp-4 */
+
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 6%);
+  --shadow-sm: var(--shadow);
+  --shadow-md: var(--shadow);
+  --shadow-lg: 0 10px 40px rgb(15 23 42 / 18%);
+
+  --ease-ui: var(--ease-out);
+  --ease-move: var(--ease-in-out);
+
+  /* Keyframe names are global. The console already defines `spin` and `pulse` (opacity 1 to 0.35), and Tailwind's own would replace them. */
+  --animate-spin: mini-spin 1s linear infinite;
+  --animate-pulse: mini-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  @keyframes mini-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   @keyframes mini-pulse {
     50% {
       opacity: 0.5;
@@ -60,72 +117,58 @@
   }
 }
 
-.miniapp {
-  --background: var(--paper);
-  --foreground: var(--ink);
-  /* --card is the console's own white (tokens.css); it is not redefined here. */
-  --card-foreground: var(--ink);
-  --popover: var(--card);
-  --popover-foreground: var(--ink);
-  --primary: var(--blue);
-  --primary-foreground: #ffffff;
-  --secondary: var(--blue-soft);
-  --secondary-foreground: var(--blue);
-  --muted: var(--paper-2);
-  --muted-foreground: var(--ink-3);
-  --accent: var(--blue-soft);
-  --accent-foreground: var(--blue);
-  --destructive: var(--red);
-  --border: var(--line);
-  --input: var(--line-strong);
-  /* Focus rings need 3:1 on white; the console's --accent (#38a3e8) is about 2.8:1, --blue is above 5:1. */
-  --ring: var(--blue);
-  --radius: 10px;
+/* Motion durations from the console tokens (Tailwind has no duration theme namespace) */
+@utility duration-press {
+  --tw-duration: var(--dur-press);
+  transition-duration: var(--dur-press);
+}
+@utility duration-ui {
+  --tw-duration: var(--dur-ui);
+  transition-duration: var(--dur-ui);
+}
+@utility duration-reveal {
+  --tw-duration: var(--dur-reveal);
+  transition-duration: var(--dur-reveal);
 }
 
-/* A scoped subset of Tailwind's preflight, for shadcn components. */
-@layer base {
-  .miniapp,
-  .miniapp *,
-  .miniapp *::before,
-  .miniapp *::after {
-    border: 0 solid;
-    border-color: var(--border);
-    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
-  }
-  .miniapp {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: var(--font);
-  }
-  .miniapp :where(button, input, select, textarea) {
-    font: inherit;
-    letter-spacing: inherit;
-    color: inherit;
-    border-radius: 0;
-    background-color: transparent;
-  }
-  .miniapp :where(ul, ol, menu) {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .miniapp :where(img, svg) {
-    display: block;
-    vertical-align: middle;
-  }
-  /* Note 6: the console's reduced-motion rule, restated where it outranks the important utilities. */
-  @media (prefers-reduced-motion: reduce) {
-    .miniapp,
-    .miniapp *,
-    .miniapp *::before,
-    .miniapp *::after {
-      animation-duration: 1ms !important;
-      animation-iteration-count: 1 !important;
-      animation-delay: 0ms !important;
-      transition-duration: 1ms !important;
-      transition-delay: 0ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
+/* Scoped base (zero specificity: the console and every utility win). Replaces the preflight. */
+:where(.miniapp) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  contain: layout; /* confines position:fixed overlays to the phone frame */
+  container-type: inline-size; /* @xs: and @sm: variants measure the frame, not the viewport */
+}
+:where(.miniapp, .miniapp *) {
+  border-color: var(--line);
+}
+:where(.miniapp) :where(button, input, select, textarea) {
+  background-color: transparent;
+  border: 0 solid;
+  border-radius: 0;
+  padding: 0;
+}
+:where(.miniapp) :where(img, svg, video, canvas) {
+  display: block;
+  vertical-align: middle;
+}
+:where(.miniapp) :where(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit;
+  font-weight: inherit;
+}
+:where(.miniapp) :where(ul, ol) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+:where(.miniapp) :where(figure, blockquote, dl, dd) {
+  margin: 0;
+}
+:where(.miniapp) [hidden] {
+  display: none !important;
+}
+:where(.miniapp) :lang(hi),
+:where(.miniapp) :lang(mr) {
+  line-height: 1.6;
+  letter-spacing: 0;
 }

@@ -176,78 +176,29 @@ Team decision, 2 Oct: the mini-app uses **Tailwind CSS v4 and shadcn/ui**, scope
 
 ### 5.1 Scoping rules
 
-1. No Tailwind in console files. The mini-app lives in `frontend/src/miniapp/` (screens, `ui/` for generated shadcn files, `lib/`, `copy/`). Nothing in the console imports from it except the route and page glue.
-2. Tailwind v4 through `@tailwindcss/vite`. The CSS entry is `frontend/src/miniapp/miniapp.css`, imported by the mini-app root and nowhere else.
-3. **No global reset.** Import the theme and utilities layers, and nothing else. Never `@import "tailwindcss"`, which includes Preflight.
-4. **Class detection is limited to the mini-app folder:** `source(none)` plus an explicit `@source` for `frontend/src/miniapp`.
-5. **Theme mapped to existing CSS variables:** `--mini-*` aliases declared under `.miniapp`, each pointing at a console token (table below). Tailwind's default colour palette is cleared.
-6. **shadcn base styles scoped under `.miniapp`.** Nothing is declared on `:root`, `body` or `*`.
-7. Console CSS is unlayered, so it outranks layered utilities. Utilities use the `important` import flag, and a small unlayered mini-preflight (every selector prefixed `.miniapp`) resets just what the console's `base.css` sets on bare elements: headings, links, buttons, lists.
-8. Radix portals (Sheet, Toast, dialogs) mount inside `.miniapp` through a `container` from React context. Generated shadcn files are edited once for this and for the 44 px sizes.
+1. No Tailwind in console files. The mini-app lives in `frontend/src/miniapp/` (screens, `ui/` for the shadcn files, `lib/`, `copy/`). Nothing in the console imports from it except the route and page glue.
+2. Tailwind v4 through `@tailwindcss/vite`. The one CSS entry is `frontend/src/miniapp/miniapp.css`, imported by `MiniappRoot` and nowhere else.
+3. **No global reset.** Import the theme and the utilities only. Never `@import "tailwindcss"`, which includes Preflight.
+4. **Class detection is limited to the mini-app folder:** `source(none)` plus `@source './'`, with test files excluded.
+5. **Theme mapped straight onto the console tokens** in `@theme inline`. The default palette, radii, fonts, easings, shadows and breakpoints are cleared, so a class outside the mapping produces no CSS. No variables are declared for shadcn.
+6. **Utilities are un-layered, without `important`.** The mini-app CSS loads after the console CSS, so a utility class beats a console element rule, and the console's `!important` reduced-motion rule still wins.
+7. **A zero-specificity base, `:where(.miniapp …)`,** replaces Preflight for what the components rely on: form controls, media, headings and lists. It also makes the root a stacking context, a clip, a containing block for fixed overlays and a container for `@xs:` and `@sm:`.
+8. Radix portals (Sheet, dialogs, popovers, tooltips) mount inside `.miniapp` through `useMiniappPortalContainer()`. The generated shadcn files were edited once for this, for the 44 and 48 px sizes and to drop dead classes (implementation guide, Wave 0 step 7).
 9. 21st.dev components are added through the shadcn CLI and live in `frontend/src/miniapp/ui/` too. Concrete picks per role are in the [design system](../../03-design/design-system.md).
 
-Entry file (verified in a scratch build on 2 Oct 2026 with Vite 8.3: the built CSS had no Preflight rules, no utility used outside the mini-app folder, and every utility carried `!important`):
-
-```css
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities) source(none) important;
-@source "./";
-
-@theme {
-  --color-*: initial;                       /* no default palette */
-}
-@theme inline {                             /* utilities read the aliases directly */
-  --color-background: var(--mini-background);
-  --color-foreground: var(--mini-foreground);
-  --color-primary: var(--mini-primary);
-  --color-primary-foreground: var(--mini-primary-foreground);
-  --color-muted: var(--mini-muted);
-  --color-muted-foreground: var(--mini-muted-foreground);
-  --color-accent: var(--mini-accent);
-  --color-border: var(--mini-border);
-  --radius-lg: var(--mini-radius);
-}
-.miniapp {                                  /* aliases of console tokens */
-  --mini-background: var(--paper);
-  --mini-foreground: var(--ink);
-  --mini-primary: var(--blue);
-  --mini-primary-foreground: #fff;
-  --mini-muted: var(--paper-2);
-  --mini-muted-foreground: var(--muted);
-  --mini-accent: var(--blue-soft);
-  --mini-border: var(--line);
-  --mini-radius: 10px;
-}
-.miniapp *, .miniapp ::before, .miniapp ::after { border-color: var(--mini-border); }
-```
-
-The mini-preflight and the complete alias list are written in Wave 0 beside this entry. The alias table:
-
-| shadcn token | Alias under `.miniapp` | Console token |
-|---|---|---|
-| background, foreground | `--mini-background`, `--mini-foreground` | `--paper`, `--ink` |
-| card | `--mini-card` | `--card` |
-| primary, primary-foreground | `--mini-primary`, `--mini-primary-foreground` | `--blue`, white |
-| secondary, muted (surface) | `--mini-secondary`, `--mini-muted` | `--paper-2` |
-| muted-foreground | `--mini-muted-foreground` | `--muted` (a text colour in the console) |
-| accent (hover surface), accent-foreground | `--mini-accent`, `--mini-accent-foreground` | `--blue-soft`, `--blue` |
-| destructive | `--mini-destructive` | `--red` |
-| border, input | `--mini-border`, `--mini-input` | `--line`, `--line-strong` |
-| ring | `--mini-ring` | `--blue` (the console's `--accent` is about 2.8:1 on white by calculation, below the 3:1 a focus ring needs) |
-| radius | `--mini-radius` | `--radius` (10 px) |
-| success, warning | `--mini-success`, `--mini-warning` | `--green`, `--amber` |
+The entry file is [`frontend/src/miniapp/miniapp.css`](../../../frontend/src/miniapp/miniapp.css). [Design system section 13](../../03-design/design-system.md#13-theme-mapping-tailwind-to-tokenscss) explains each part and lists every theme name the mini-app may use (sections 13.2 and 13.3).
 
 ### 5.2 Collisions to guard
 
 | # | Collision | Rule |
 |---|---|---|
-| 1 | shadcn `--muted`, `--accent` and `--radius` clash with console tokens of the same name (and `--muted` and `--accent` mean other things there) | Never declare the shadcn names; use `--mini-*` |
-| 2 | Console CSS is unlayered; layered utilities lose to it | `important` on utilities; mini-preflight unlayered and prefixed |
-| 3 | Console rules on bare elements (`h1` to `h4`, `a`, `button`) in `base.css` | Mini-preflight resets them under `.miniapp` |
+| 1 | shadcn's `--muted`, `--accent` and `--radius` have console tokens of the same name that mean other things | Never declare them. `@theme inline` maps the theme names straight onto console tokens (`--color-muted-foreground: var(--muted)`) |
+| 2 | Console CSS is unlayered; layered utilities lose to it | Utilities are un-layered too and load later, so a class beats an element rule. No `important`: a layered `!important` would beat the console's reduced-motion rule |
+| 3 | Console rules on bare elements (`h1` to `h4`, `a`, `button`) in `base.css` | The `:where(.miniapp)` base resets heading size and weight; utilities on the element style links and buttons |
 | 4 | Class names in both systems: console `.table`, `.card`, `.btn`, `.badge`, `.muted`, `.stack`, `.eyebrow`; Tailwind utility `table` | No bare console class names in mini-app markup, except `num` (tabular numerals) and `hi` (Devanagari font). Never use the `table` utility |
-| 5 | Theme variables with the same name in both: `--radius-sm`, `--radius-lg`, `--shadow-lg`, `--ease-out`, `--ease-in-out`, `--font-mono` | `@theme inline` defines every radius, shadow and easing the mini-app uses as an alias, so a console token never changes a utility |
-| 6 | The console's global `:focus-visible` uses `--accent` | `.miniapp :focus-visible` uses `--mini-ring` |
+| 5 | Theme variables with the same name in both: `--radius-sm`, `--radius-lg`, `--shadow-lg`, `--ease-out`, `--ease-in-out`, `--font-mono` | The theme is `inline`, so a utility holds its value directly; the built-CSS test asserts that no custom property is declared by both |
+| 6 | The console's global `:focus-visible` uses `--accent` | `--accent` is never redefined inside the frame; shadcn components draw a `ring` in `--focus` (`--blue`) |
+| 7 | Keyframes are global: the console defines `spin` and `pulse` | The mini-app's copies are renamed `mini-spin` and `mini-pulse` |
 | 7 | Console `.btn` is 32 px high; touch targets need 44 px | Mini-app buttons are shadcn `Button` with an `h-11` default. No `.btn` |
 | 8 | Portals escape `.miniapp` | `container` from context; the frame is the containing block |
 | 9 | Marathi in `mr-IN` formatting defaults to Devanagari digits | Use the `-u-nu-latn` locale extension for money and dates (Section 13) |
@@ -870,7 +821,7 @@ Tests are table-driven: one case per rule id, one per priority conflict, and a t
 - **Fallback chain per string:** `mr` to `hi` to `en`. Hindi and English must be complete: a unit test fails on a missing key. Marathi may be incomplete; the test prints the measured count of Marathi keys, and S9 shows "Some text is shown in Hindi." while any key falls back.
 - **Strings from the backend** (`text_hi`, `text_en`, `reason_hi`, `reason_en`) have no Marathi until the message catalogue gains `mr` (Wave 4, Ujjwal). Until then they show in Hindi. The case chip (CASE_CHIP) has no Hindi line, so it shows English in Hindi and Marathi.
 - **Numbers and dates:** Indian grouping and ASCII digits in every language, using the `-u-nu-latn` locale extension (the default Marathi format uses Devanagari digits). Money shows the API's `*_label` as given.
-- **Fonts:** Ubuntu with Noto Sans Devanagari, already self-hosted. The `.hi` helper class and `lang="hi"` select the Devanagari font; the mini-preflight adds `lang="mr"`.
+- **Fonts:** Ubuntu with Noto Sans Devanagari, already self-hosted. The `.hi` helper class and `lang="hi"` select the Devanagari font; the scoped base gives `lang="hi"` and `lang="mr"` text a line height of 1.6 and no letter spacing.
 - No audit event is written for a language change.
 
 ## 14. Merchant-facing copy
@@ -994,7 +945,7 @@ The badge shows the plain label in the selected language. `data-status` carries 
 ### 16.3 Accessibility (WCAG 2.2 AA target)
 
 - Touch targets at least 44×44 px inside `.miniapp` (shadcn defaults are smaller; sizes are overridden once).
-- Text contrast at least 4.5:1; focus ring uses `--mini-ring`.
+- Text contrast at least 4.5:1; focus ring uses `--focus` (`ring` in the theme).
 - The bottom bar is a `nav` with three links and `aria-current="page"`, because it changes the URL.
 - The stepper is an ordered list with `aria-current="step"`; status changes are announced through a polite live region.
 - Sheets trap focus, close on Esc and return focus. Motion respects `prefers-reduced-motion`.
@@ -1020,7 +971,7 @@ Test data: scenario `monsoon` at 17:05 simulated unless stated, merchant S-0142,
 - **AC-03 Standalone.** Given a 390×844 viewport, when I open `/merchant/S-0142/app`, then no console header renders, `app-root` fills the viewport and `app-tabbar` has three links.
 - **AC-04 URL state.** Given Home, when I tap `app-tab-claims`, then the URL has `screen=claims`; when I press Back, then it has `screen=home` and `screen-home` shows.
 - **AC-05 Isolation.** Given the mini-app chunk is loaded, when I read the computed style of `.btn`, `h2`, `.table`, `.card` and `.badge` on `/claims`, then the values equal those without the chunk.
-- **AC-06 Build output.** Given a production build, when the CSS is inspected, then it holds no Preflight rule outside `.miniapp`, every utility is `!important`, and a class that console code alone uses is absent.
+- **AC-06 Build output.** Given a production build, when the CSS is inspected, then it holds no Preflight rule outside `.miniapp`, no utility with `!important` (the `[hidden]` rule is the one exception), and a class that console code alone uses is absent.
 
 **Home**
 
@@ -1084,7 +1035,7 @@ Owners: Omkar = mini-app; Ujjwal = backend and engine. Task ids use the prefix N
 
 | Task | Wave | Owner | What | Done when |
 |---|---|---|---|---|
-| N1-T01 | 0 | Omkar | Tailwind v4 and shadcn scoped setup (Section 5): packages, Vite plugin, `components.json`, `@/` alias, `miniapp.css`, mini-preflight | AC-05 and AC-06 pass; console tests unchanged |
+| N1-T01 | 0 | Omkar | Tailwind v4 and shadcn scoped setup (Section 5): packages, Vite plugin, `components.json`, `@/` alias, `miniapp.css` with the scoped `:where(.miniapp)` base | AC-05 and AC-06 pass; console tests unchanged |
 | N1-T02 | 0 | Omkar | Feature flags and the flags in Section 4.6 registered (mechanism per the implementation guide) | AC-02 |
 | N1-T03 | 0 | Omkar | `AppFrame` three-column merchant page; standalone route outside `AppShell`; URL-state hook; portal container context; nav bar; empty screens behind `n1_miniapp` | AC-01, AC-03, AC-04 |
 | N1-T10 | 1 | Ujjwal | `GET /api/merchants/{id}/cover`: derived status, `NONE`, `status_text_*` from the catalogue, `alert_id` | Contract test |
@@ -1114,7 +1065,7 @@ Frontend coverage thresholds (lines 90, statements 90, functions 85, branches 80
 | Unit | Vitest, happy-dom | `nextBestAction` (one case per rule and per conflict, no offer kind); tracker model and strict parsers (AREA never REFERRED, steps per situation); copy fallback chain; Indian grouping and `-u-nu-latn` digits; glossary ids and example numbers; sourced-value rule (H13); rules numbers read from `/api/policy` |
 | Component | Vitest, Testing Library | Every screen in all six states with mock fixtures; `AppFrame` and flags; jargon sheet focus trap |
 | Contract | Vitest and pytest | Mock fixtures and backend JSON parse with the same parsers |
-| Build output | Script after `vite build` | No Preflight rule outside `.miniapp`; every utility `!important`; a class that console code alone uses is absent |
+| Build output | `src/miniapp/builtCss.test.ts` (Vite build in Vitest) | No Preflight rule outside `.miniapp`; no utility with `!important`; a class that console code alone uses is absent |
 | Isolation | Playwright | Computed styles of console elements equal with and without the mini-app chunk (AC-05) |
 | End to end | Playwright, project `mock` | `miniapp-shell`, `miniapp-area-claim`, `miniapp-referred`, `miniapp-dispute`, `miniapp-buy-blocked`, `miniapp-receipt-print`, `miniapp-language` |
 | Live smoke | Playwright, project `live` | One spec: Home, tracker and receipt for Anil against a running backend |

@@ -10,7 +10,7 @@ The claims console for Chhatri (docs/SPEC.md §20). It has seven pages:
 - **Backtest** (`/backtest`)
 - **Policy** (`/policy`)
 
-It is built with React 19, react-router 7, Leaflet 1.9 and Vite 8. Styling is plain CSS using the deck's design tokens. The Ubuntu and Noto Sans Devanagari fonts are self-hosted from `public/fonts`, so the console makes no requests to external font servers.
+It is built with React 19, react-router 7, Leaflet 1.9 and Vite 8. The console is styled with plain CSS using the deck's design tokens. The merchant mini-app (`src/miniapp`) uses Tailwind CSS v4 and shadcn/ui scoped to its own `.miniapp` root, mapped onto the same tokens (ADR 0005, design system section 13). The Ubuntu and Noto Sans Devanagari fonts are self-hosted from `public/fonts`, so the console makes no requests to external font servers.
 
 ## Scripts (binding decision B7)
 

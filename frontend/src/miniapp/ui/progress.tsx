@@ -1,5 +1,5 @@
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "@/miniapp/lib/cn"
 import { Progress as ProgressPrimitive } from "radix-ui"
 
 function Progress({

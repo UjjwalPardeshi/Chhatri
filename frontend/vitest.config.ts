@@ -24,7 +24,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text-summary', 'text'],
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/main.tsx', 'src/vite-env.d.ts', 'src/mock/data/**'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/main.tsx', 'src/vite-env.d.ts', 'src/mock/data/**', 'src/miniapp/ui/**'],
       thresholds: { lines: 90, statements: 90, functions: 85, branches: 80 },
     },
   },

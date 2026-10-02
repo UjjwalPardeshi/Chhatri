@@ -966,7 +966,7 @@ These edits are for the 17 files generated on 2 Oct 2026. Every later `shadcn ad
 
 ### 13.1 The entry file
 
-`frontend/src/miniapp/miniapp.css` is the one Tailwind entry. The mini-app imports it after the console CSS. It was built and checked as described in section 12.4, and compiled again over the 17 generated files of the working tree, which added the `shadcn/tailwind.css` import and the `mini-pulse` rename (section 12.10).
+`frontend/src/miniapp/miniapp.css` is the one Tailwind entry, built in Wave 0. The mini-app imports it after the console CSS. The block below is its text; the file also excludes test files from class detection, and renames both keyframes the console defines (`mini-spin`, `mini-pulse`).
 
 ```mermaid
 flowchart LR
@@ -985,6 +985,7 @@ flowchart LR
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css'; /* custom variants data-open, data-closed, data-checked for Radix's data-state. Its one selector rule is the inert .shimmer */
 @source './'; /* ... except this folder: src/miniapp */
+@source not './**/*.test.{ts,tsx}'; /* a word in a test never ships as a utility */
 
 @custom-variant dark (&:where(.dark, .dark *)); /* light theme: dark: classes in vendored code never match */
 
@@ -1081,8 +1082,14 @@ flowchart LR
   --ease-ui: var(--ease-out);
   --ease-move: var(--ease-in-out);
 
-  /* Keyframe names are global. The console already defines `pulse` (opacity 1 to 0.35) and Tailwind's own would replace it. */
+  /* Keyframe names are global. The console already defines `spin` and `pulse` (opacity 1 to 0.35), and Tailwind's own would replace them. */
+  --animate-spin: mini-spin 1s linear infinite;
   --animate-pulse: mini-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  @keyframes mini-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   @keyframes mini-pulse {
     50% {
       opacity: 0.5;
@@ -1238,7 +1245,7 @@ The console's `a` rule (blue, underline on hover), `button` rule (pointer cursor
 | Build output | A script after `vite build` | No Preflight rule outside `.miniapp`. No utility with `!important` (the `[hidden]` rule is the one exception). No `.table`, `.card`, `.btn` or `.badge` rule from Tailwind. The unscoped selectors allowed are the `@layer properties` fallback, the `@property` rules and the inert `.shimmer` of `shadcn/tailwind.css`. A class that console code alone uses is absent |
 | Isolation | Playwright | Computed styles of `.btn`, `h2`, `.table`, `.card` and `.badge` on `/claims` are equal with and without the mini-app chunk (AC-05) |
 | Reduced motion | Playwright with `reducedMotion: 'reduce'` | A mini-app element with `animate-in duration-ui` computes a duration of 1 ms or less |
-| Unmapped classes | Vitest with `@tailwindcss/node` and `@tailwindcss/oxide` | The entry file is compiled, and each candidate that the scanner finds in `src/miniapp` is built. A candidate with a utility prefix (`bg-`, `text-`, `rounded`, `font-`, `ease-`, `sm:` and so on) that adds no CSS fails the test. It found `rounded-4xl`, `ease-in-out`, `font-heading` and the `sm:` and `md:` classes in the 17 generated files, and nothing after the edits of section 12.10 |
+| Unmapped classes | Vitest with `@tailwindcss/node` and `@tailwindcss/oxide` (`src/miniapp/unmappedClasses.test.ts`) | The entry file is compiled, and each candidate that the scanner finds in `src/miniapp` is built. A candidate with a utility prefix (`bg-`, `text-`, `rounded`, `font-`, `ease-`, `sm:` and so on) that adds no CSS fails the test. It found `rounded-4xl`, `ease-in-out`, `font-heading` and the `sm:` and `md:` classes in the 17 generated files, and nothing after the edits of section 12.10 |
 | Keyframe names | Vitest | No `@keyframes` name in the built mini-app CSS equals one in `src/styles/*.css` (the console has `pulse` and `spin`, among others), except `spin`, whose body is the same in Tailwind |
 | Contrast | Vitest | The closed list of text and background pairs of sections 2 and 11 stays at 4.5:1 or more, and the borders of controls at 3:1 or more |
 | Tokens in use | Vitest | Console CSS has no raw `font-size` outside the allow-list (fs-08 section 13.1), and the mini-app source has no raw colour |
@@ -1247,7 +1254,7 @@ The console's `a` rule (blue, underline on hover), `button` rule (pointer cursor
 
 ## Open questions
 
-1. **Sync fs-04 with the measured recipe.** fs-04 sections 5.1, 5.2 and 19 still say `important` utilities, `--mini-*` aliases, `translateZ(0)` and "every utility `!important`" (section 12.9). Owner: Omkar Kadam.
+1. **Resolved 2 Oct: fs-04 synced with the measured recipe.** fs-04 sections 5.1, 5.2 and 19 now describe un-layered utilities, the `@theme inline` mapping and the `:where(.miniapp)` base.
 2. **Widen the presenter scope.** fs-08 section 12.1 scopes the type step to the page roots, which leaves 11 px chrome text. This document recommends adding `.app-header`, `.control-bar` and `.app-footer`, and `max(0.92em, var(--fs-2xs))` for `.mono` (section 8.1). Owner: Omkar Kadam.
 3. **Where the ops strip and the moment card go.** Section 8.1 measures that the right panel has 16 px to spare in presenter mode, so fs-08's band and its panel-top card both push the Z9 note out of view. Proposed: a band over the map column and a card over the map (screens and flows sections 9.2 and 9.6). Decide at the W4 rehearsal. Owner: Omkar Kadam.
 4. **Marathi type check.** Check the longest strings on the venue laptop at 354 px and 320 px, and have a native speaker review the copy (W4). Owner: Omkar Kadam.

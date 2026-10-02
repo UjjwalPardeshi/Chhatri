@@ -503,23 +503,17 @@ What each part is for:
 
 **correction · global keyframes.** Keyframes are global even when utilities are not. The design system's entry makes Tailwind emit `@keyframes spin` and `@keyframes pulse` for `animate-spin` (the busy icon) and `animate-pulse` (the skeleton). The console already defines both in `frontend/src/styles/base.css`, and the mini-app CSS loads later, so its `pulse` (opacity 1 to 0.5) would replace the console's (1 to 0.35) on the merchant page, where the recording dot and the live panel use it. The fix is the block at the end of the file below: own names, emitted only when used. The built-CSS test asserts that no keyframes name is shared with the console.
 
-```css
-{{MINIAPP_CSS}}
-```
+The file as built: [`frontend/src/miniapp/miniapp.css`](../../frontend/src/miniapp/miniapp.css). Besides the text of section 13.1 it excludes test files from class detection (`@source not './**/*.test.{ts,tsx}'`), so a word in a test never ships as a utility.
 
 #### Step 6 · The root, the class helper and the portal container
 
-```tsx
-{{MINIAPP_ROOT}}
-```
+The file as built: [`frontend/src/miniapp/MiniappRoot.tsx`](../../frontend/src/miniapp/MiniappRoot.tsx).
 
 `MiniappRoot` is the `.miniapp` element. Its height comes from the frame (card 3.7). Radix portals (dialogs, sheets, popovers, tooltips) render into it through `useMiniappPortalContainer()`, so they stay inside the frame, where the theme names resolve and `contain: layout` confines them.
 
 **correction · `cn` and the custom text sizes.** The stock `cn` reads `text-caption` and `text-field` as colours, so `cn('text-caption', 'text-paid-ink')` returns `'text-paid-ink'` and the size is lost (checked on 2 Oct: also `cn('text-field', 'text-foreground')`). One instance that knows the mini-app's sizes fixes it, and our own components and the generated files both import it:
 
-```ts
-{{CN_TS}}
-```
+The file as built: [`frontend/src/miniapp/lib/cn.ts`](../../frontend/src/miniapp/lib/cn.ts). `lib/utils.ts` re-exports it, so a component added later through the `utils` alias (shadcn or 21st.dev) gets the same instance.
 
 #### Step 7 · Add the components, then edit each once
 
@@ -568,9 +562,7 @@ After the edits, `src/miniapp/ui/` passes `npm run lint` with `--deny-warnings`,
 
 The build-output test is the one that needs care, and it was run on 2 Oct (53 test files, 308 tests, typecheck and `oxlint --deny-warnings` all clean in the scratch copy). Two things in it are not obvious. Tailwind scans every file under `src/miniapp`, test files included, so the words that are Tailwind utility names and console class names are built from parts (`word('tab', 'le')`) and never typed in a test. And the test was also run broken on purpose: a `table` in a mini-app file, and a missing keyframe rename, both failed it.
 
-```ts
-{{BUILT_CSS_TEST}}
-```
+The file as built: [`frontend/src/miniapp/builtCss.test.ts`](../../frontend/src/miniapp/builtCss.test.ts).
 
 **Bundle size.** Record the CSS and JS sizes of `npm run build` before and after, in the checkpoint log. No target is set.
 
@@ -609,7 +601,36 @@ The build-output test is the one that needs care, and it was run on 2 Oct (53 te
 The script for check 3 is standard-library Python plus Pillow, which the backend already has. It reads the key through `scripts/check_keys.py`, sends the key in a header and never prints it, and it strips the metadata from the sample slip first: the committed PNG carries a text chunk (`chhatri:slip`) that holds its answer key, and only the picture should go to a provider ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md); card 4.2 strips it in code). Run it from the repo root as `MODEL=<name> backend/.venv/bin/python - < the-script`. It was run against a stubbed network in this pass to check that the request has the header, the text part, the image part and no `chhatri` chunk.
 
 ```python
-{{GEMINI_SNIPPET}}
+import base64, io, json, os, sys, time, urllib.request
+from pathlib import Path
+
+sys.path.insert(0, "scripts")
+import check_keys  # reads GOOGLE_API_KEY from the environment or .env, never prints it
+from PIL import Image
+
+MODEL = os.environ["MODEL"]  # a name that `make check-keys` printed; for the image call, one that accepts images
+key = check_keys.key_value("GOOGLE_API_KEY", os.environ, check_keys.read_dotenv(Path(".env"))).strip()
+assert key, "GOOGLE_API_KEY is not set"
+url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
+
+
+def call(parts):
+    body = json.dumps({"contents": [{"parts": parts}]}).encode()
+    request = urllib.request.Request(url, body, {"x-goog-api-key": key, "Content-Type": "application/json"})
+    started = time.perf_counter()
+    with urllib.request.urlopen(request, timeout=30) as response:
+        data = json.load(response)
+    return data["candidates"][0]["content"]["parts"][0]["text"], round(time.perf_counter() - started, 1)
+
+
+print("text :", call([{"text": "Reply with the single word OK."}]))
+slip = Image.open("backend/data/slips/anil_admission_slip.png")
+clean = Image.frombytes(slip.mode, slip.size, slip.tobytes())  # drops the PNG text chunk that holds the answer key
+buffer = io.BytesIO()
+clean.save(buffer, "PNG")
+ask = "Read this hospital slip. Reply with the patient name and the admission date only."
+image = {"inline_data": {"mime_type": "image/png", "data": base64.b64encode(buffer.getvalue()).decode()}}
+print("image:", call([{"text": ask}, image]))
 ```
 
 **Targets, not measurements** (from the [PRD](../02-product/prd.md) and fs-05): a text answer in 5 s, a slip read in 10 s, one speech call under 3 s. Write down what you see. If it is slower, the plan does not change here: the per-link budgets of card 4.1 decide what the app does about it.

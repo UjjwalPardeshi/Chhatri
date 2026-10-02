@@ -24,7 +24,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-leaflet": "^5.0.0",
-    "react-router": "^7.18.4"
+    "react-router": "^7.18.4",
+    "sonner": "2.0.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
