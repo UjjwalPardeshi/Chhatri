@@ -13,6 +13,8 @@ COPY . .
 # Optional basemap template (a keyed CARTO URL, SPEC §20). Empty: the console probes keyless CARTO and
 # falls back to the designed no-tile map. A build ARG is in the environment of RUN, where Vite reads it.
 ARG VITE_TILE_URL=""
+# Feature flags that are on in the console (Wave 0; names in src/features.ts), e.g. "n1_miniapp,n2_ask_chhatri".
+ARG VITE_FEATURES=""
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.30-alpine

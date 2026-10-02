@@ -14,6 +14,9 @@ export default defineConfig({
     // (a full parallel run on a busy laptop or runner). The limit is a safety net, not a performance gate;
     // setup.ts keeps the Testing Library wait below it so a missing element fails with its DOM dump.
     testTimeout: 30_000,
+    // Every feature flag starts off, whatever the shell or frontend/.env.local hold for `make dev`; a test turns
+    // one on with vi.stubEnv (the backend's test settings pin CHHATRI_FEATURES the same way).
+    env: { VITE_FEATURES: '' },
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,

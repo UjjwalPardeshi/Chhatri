@@ -357,8 +357,8 @@ export type BacktestReport = {
   notes: string[]
 }
 
-/** GET /api/health, /api/session, /api/preflight (SPEC §19). */
-export type Health = { status: string; version: string; seed: number }
+/** GET /api/health, /api/session, /api/preflight (SPEC §19). `features`: the sorted names of the flags that are on. */
+export type Health = { status: string; version: string; seed: number; features: string[] }
 export type Session = { officer_token: string }
 export type PreflightItem = { name: string; ok: boolean; detail: string }
 

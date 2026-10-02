@@ -6,6 +6,7 @@ import App from './App'
 import { ApiClient, type FetchLike } from './api/client'
 import { createApi } from './api/endpoints'
 import { isMockMode } from './config'
+import { unknownFeatures } from './features'
 import './styles/tokens.css'
 import './styles/base.css'
 import './styles/shell.css'
@@ -36,6 +37,8 @@ async function resolveFetch(mock: boolean): Promise<FetchLike> {
 async function boot(): Promise<void> {
   const root = document.getElementById('root')
   if (!root) throw new Error('#root element missing')
+  const unknown = unknownFeatures(import.meta.env.VITE_FEATURES)
+  if (unknown.length > 0) console.warn('[features] VITE_FEATURES names unknown flags (ignored):', unknown.join(', '))
   const mock = isMockMode(window.location.search, import.meta.env.VITE_MOCK)
   try {
     const api = createApi(new ApiClient(await resolveFetch(mock)))

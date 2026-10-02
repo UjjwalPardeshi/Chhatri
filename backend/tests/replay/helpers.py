@@ -46,6 +46,7 @@ def offline_settings(var_dir: Path, **overrides: Any) -> Settings:
         "chhatri_data_dir": DATA_DIR,
         "chhatri_internal_secret": SecretStr(INTERNAL_SECRET),
         "chhatri_officer_token": SecretStr(OFFICER_TOKEN),
+        "chhatri_features": "",
         "sarvam_api_key": None,
         "whatsapp_access_token": None,
         "whatsapp_phone_number_id": None,

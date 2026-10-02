@@ -92,11 +92,46 @@ def test_compose_services_ports_and_n8n(repo_root: Path) -> None:
     assert services["frontend"]["depends_on"]["backend"]["condition"] == "service_healthy"
 
 
-def test_console_basemap_is_a_documented_build_argument(repo_root: Path) -> None:
-    """VITE_TILE_URL (a keyed tile URL, SPEC §20) reaches the frontend build; empty = no-tile map."""
+def test_console_build_arguments_are_documented(repo_root: Path) -> None:
+    """VITE_TILE_URL (a keyed tile URL, SPEC §20) and VITE_FEATURES (Wave 0 flags) reach the frontend build."""
     build = _compose(repo_root)["services"]["frontend"]["build"]
-    assert build["args"] == {"VITE_TILE_URL": "${VITE_TILE_URL:-}"}
-    assert re.search(r"^# VITE_TILE_URL=$", (repo_root / ".env.example").read_text(encoding="utf-8"), re.M)
+    assert build["args"] == {
+        "VITE_TILE_URL": "${VITE_TILE_URL:-}",
+        "VITE_FEATURES": "${VITE_FEATURES:-${CHHATRI_FEATURES:-}}",
+    }
+    example = (repo_root / ".env.example").read_text(encoding="utf-8")
+    assert re.search(r"^# VITE_TILE_URL=$", example, re.M)
+    assert re.search(r"^# VITE_FEATURES=", example, re.M)
+    assert re.search(r"^# CHHATRI_FEATURES=$", example, re.M)
+
+
+def _resolved(repo_root: Path, tmp_path: Path, extra: str) -> dict[str, Any]:
+    env_file = tmp_path / "features.env"
+    env_file.write_text(f"CHHATRI_INTERNAL_SECRET=abc123\n{extra}", encoding="utf-8")
+    result = _config(repo_root, env_file)
+    assert result.returncode == 0, result.stderr
+    doc: dict[str, Any] = json.loads(result.stdout)
+    return doc
+
+
+def test_one_features_setting_turns_flags_on_in_the_backend_and_the_console_build(
+    repo_root: Path, tmp_path: Path
+) -> None:
+    doc = _resolved(repo_root, tmp_path, "CHHATRI_FEATURES=n1_miniapp,n2_ask_chhatri\n")
+    assert doc["services"]["backend"]["environment"]["CHHATRI_FEATURES"] == "n1_miniapp,n2_ask_chhatri"
+    assert doc["services"]["frontend"]["build"]["args"]["VITE_FEATURES"] == "n1_miniapp,n2_ask_chhatri"
+
+
+def test_the_console_flags_can_differ_from_the_backend_flags(repo_root: Path, tmp_path: Path) -> None:
+    doc = _resolved(repo_root, tmp_path, "CHHATRI_FEATURES=n1_miniapp\nVITE_FEATURES=console_polish\n")
+    assert doc["services"]["backend"]["environment"]["CHHATRI_FEATURES"] == "n1_miniapp"
+    assert doc["services"]["frontend"]["build"]["args"]["VITE_FEATURES"] == "console_polish"
+
+
+def test_every_flag_is_off_when_nothing_is_set(repo_root: Path, tmp_path: Path) -> None:
+    doc = _resolved(repo_root, tmp_path, "")
+    assert doc["services"]["backend"]["environment"].get("CHHATRI_FEATURES") is None  # passed only when set
+    assert doc["services"]["frontend"]["build"]["args"]["VITE_FEATURES"] == ""
 
 
 def test_compose_config_validates_and_resolves(repo_root: Path, tmp_path: Path) -> None:

@@ -14,6 +14,7 @@ from chhatri.api.ports import AppStatePort, RuntimePort
 from chhatri.api.security import RateLimiter, bearer_token, secret_matches
 from chhatri.config import Settings
 from chhatri.domain.models import Merchant
+from chhatri.features import FEATURE_NAMES, is_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ __all__ = [
     "get_state",
     "merchant_or_404",
     "rate_limit",
+    "require_feature",
     "require_internal",
     "require_officer",
 ]
@@ -106,6 +108,27 @@ def rate_limit(group: str) -> Callable[[Request], Awaitable[None]]:
             )
 
     dependency.__name__ = f"rate_limit_{group}"
+    return dependency
+
+
+def require_feature(name: str) -> Callable[[Settings], Awaitable[None]]:
+    """Dependency factory: 404 ``not_found`` while the flag ``name`` is off (Wave 0; ``chhatri.features``).
+
+    The answer is the one an unknown path gets, and it is raised before the body is validated, so a request
+    the route would accept, or one whose body fails validation, cannot tell the route exists. Routing and
+    JSON decoding run before any dependency, though: a wrong method still answers 405, a malformed JSON body
+    422, and the route stays in /openapi.json. A name that is not a flag raises ``ValueError`` when the route
+    is defined, not on the first request.
+    """
+    if name not in FEATURE_NAMES:
+        raise ValueError(f"unknown feature flag {name!r}")
+
+    async def dependency(settings: SettingsDep) -> None:
+        if not is_enabled(name, settings):
+            logger.debug("feature flag %s is off; answering 404", name)
+            raise ApiError(404, "not found")
+
+    dependency.__name__ = f"require_feature_{name}"
     return dependency
 
 

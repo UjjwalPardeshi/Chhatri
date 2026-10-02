@@ -84,6 +84,7 @@ def make_settings(*, omit: tuple[str, ...] = (), **overrides: Any) -> Settings:
         "chhatri_officer_token": SecretStr(OFFICER_TOKEN),
         "chhatri_internal_secret": SecretStr(INTERNAL_SECRET),
         "chhatri_demo_mode": True,
+        "chhatri_features": "",
         "chhatri_console_origin": CONSOLE_ORIGIN,
         "chhatri_data_dir": DATA_DIR,
         "sarvam_api_key": None,

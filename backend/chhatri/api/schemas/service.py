@@ -43,11 +43,12 @@ WorkflowStep = Literal[
 
 
 class Health(Schema):
-    """GET /api/health (SPEC §19)."""
+    """GET /api/health (SPEC §19). ``features``: the sorted names of the feature flags that are on (Wave 0)."""
 
     status: Literal["ok"]
     version: str = Field(min_length=1)
     seed: int
+    features: list[str]
 
 
 class Session(Schema):

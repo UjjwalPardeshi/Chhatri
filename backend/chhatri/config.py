@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     chhatri_internal_secret: SecretStr = Field(default_factory=lambda: SecretStr(secrets.token_urlsafe(24)))
     chhatri_demo_mode: bool = True  # console receives the officer token automatically in demo mode
     chhatri_log_level: str = "INFO"
+    # Feature flags (Wave 0): comma-separated names from chhatri.features.FEATURE_NAMES; empty = all off.
+    chhatri_features: str = ""
 
     # Sarvam (SPEC §14.1)
     sarvam_api_key: SecretStr | None = None

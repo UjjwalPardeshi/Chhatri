@@ -9,7 +9,10 @@ import { sniffImage } from './routes'
 import { testApi } from './testkit'
 
 let backend: MockBackend
-afterEach(() => backend?.dispose())
+afterEach(() => {
+  backend?.dispose()
+  vi.unstubAllEnvs()
+})
 
 function setup() {
   const kit = testApi()
@@ -21,6 +24,7 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])
 
 describe('mock routes', () => {
   it('serves the static routes', async () => {
+    vi.stubEnv('VITE_FEATURES', '')
     const { api } = setup()
     expect((await api.integrations()).every((i) => i.mode === 'SIMULATED')).toBe(true)
     expect(await api.session()).toEqual({ officer_token: MOCK_OFFICER_TOKEN })
@@ -29,8 +33,14 @@ describe('mock routes', () => {
     expect((await api.policy()).authority).toHaveLength(4)
     expect((await api.backtest()).label).toBe('simulated sales · real Open-Meteo rainfall')
     expect((await api.merchants('')).meta).toEqual({ total: 2, limit: 2, offset: 0 })
-    expect(await api.client.get('/api/health')).toMatchObject({ status: 'ok' })
+    expect(await api.client.get('/api/health')).toEqual({ status: 'ok', version: 'mock-console', seed: 20251019, features: [] })
     expect(await api.client.get('/api/preflight')).toEqual([{ name: 'mock', ok: true, detail: 'Mock console backend' }])
+  })
+
+  it('lists the console feature flags that are on in /api/health, sorted, like the backend', async () => {
+    vi.stubEnv('VITE_FEATURES', 'n2_ask_chhatri, n1_miniapp, typo')
+    const { api } = setup()
+    expect(await api.client.get('/api/health')).toMatchObject({ status: 'ok', features: ['n1_miniapp', 'n2_ask_chhatri'] })
   })
 
   it('drives the replay and returns clock states', async () => {

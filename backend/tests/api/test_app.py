@@ -46,6 +46,7 @@ def test_version_when_package_metadata_is_missing(monkeypatch: pytest.MonkeyPatc
 async def test_health_reports_version_and_seed(client: AsyncClient, app: FastAPI) -> None:
     health = data_of(await client.get("/api/health"), Health)
     assert (health.status, health.version, health.seed) == ("ok", app.version, 20251019)
+    assert health.features == []  # every feature flag is off unless CHHATRI_FEATURES names it
 
 
 async def test_lifespan_builds_state_and_loads_monsoon_paused(

@@ -5,6 +5,7 @@
  * by magic bytes (SPEC §21).
  */
 import type { CaseStatus, ListMeta, Message, VoiceDemoKey } from '../api/types'
+import { enabledFeatures } from '../features'
 import { MockBackend, MockHttpError } from './backend'
 import { CaseError, officerDecide } from './cases'
 import { inboundPhoto, inboundText, inboundVoiceDemo, inboundVoiceUpload, VOICE_DEMOS } from './conversation'
@@ -173,7 +174,7 @@ function replay(action: (ctx: RouteContext) => unknown): Handler {
 }
 
 export const ROUTES: readonly Route[] = [
-  { method: 'GET', pattern: /^\/api\/health$/, handler: () => ok({ status: 'ok', version: 'mock-console', seed: 20251019 }) },
+  { method: 'GET', pattern: /^\/api\/health$/, handler: () => ok({ status: 'ok', version: 'mock-console', seed: 20251019, features: enabledFeatures() }) },
   { method: 'GET', pattern: /^\/api\/integrations$/, handler: () => ok(INTEGRATIONS) },
   { method: 'GET', pattern: /^\/api\/session$/, handler: () => ok({ officer_token: MOCK_OFFICER_TOKEN }) },
   { method: 'GET', pattern: /^\/api\/preflight$/, handler: () => ok([{ name: 'mock', ok: true, detail: 'Mock console backend' }]) },

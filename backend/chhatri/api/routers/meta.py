@@ -12,6 +12,7 @@ from chhatri.api.deps import RuntimeDep, SettingsDep, StateDep
 from chhatri.api.envelope import ok, ok_list
 from chhatri.api.errors import ApiError
 from chhatri.clock import IST, SystemClock, floor_hour
+from chhatri.features import enabled_features
 from chhatri.integrations.base import IntegrationError
 from chhatri.replay import views
 
@@ -27,8 +28,19 @@ HEALTH_STATUS: Final = "ok"
 
 @router.get("/health")
 async def health(request: Request, settings: SettingsDep) -> dict[str, Any]:
-    """``{status, version, seed}`` (SPEC §19). Never needs a loaded scenario."""
-    return ok({"status": HEALTH_STATUS, "version": request.app.version, "seed": settings.chhatri_seed})
+    """``{status, version, seed, features}`` (SPEC §19). Never needs a loaded scenario.
+
+    ``features`` is the sorted list of feature flags that are on, so a presenter can compare it with the
+    console's list before a demo (``chhatri.features``).
+    """
+    return ok(
+        {
+            "status": HEALTH_STATUS,
+            "version": request.app.version,
+            "seed": settings.chhatri_seed,
+            "features": sorted(enabled_features(settings)),
+        }
+    )
 
 
 @router.get("/integrations")

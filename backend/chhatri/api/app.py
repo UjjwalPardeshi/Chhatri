@@ -30,6 +30,7 @@ from chhatri.api.security import RateLimiter
 from chhatri.api.sse import StreamHub
 from chhatri.api.whatsapp_inbox import WhatsAppInbox
 from chhatri.config import Settings, get_settings
+from chhatri.features import FEATURE_NAMES, enabled_features, unknown_features
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,20 @@ def _announce_officer_token(settings: Settings) -> None:
         )
 
 
+def _announce_features(settings: Settings) -> None:
+    """Wave 0: one start-up line with the flags that are on, and a warning for names that are not flags."""
+    on = [name for name in FEATURE_NAMES if name in enabled_features(settings)]
+    logger.info("feature flags on: %s", ", ".join(on) if on else "none")
+    unknown = unknown_features(settings.chhatri_features)
+    if unknown:
+        logger.warning("CHHATRI_FEATURES names unknown flags (ignored): %s", ", ".join(unknown))
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     _announce_officer_token(settings)
+    _announce_features(settings)
     if getattr(app.state, "chhatri", None) is None:
         state = await asyncio.to_thread(build_default_state, settings)
         app.state.chhatri = state

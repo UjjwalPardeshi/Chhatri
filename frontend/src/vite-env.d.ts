@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string
   /** Optional basemap template overriding CARTO Positron (e.g. a keyed CARTO URL). */
   readonly VITE_TILE_URL?: string
+  /** Comma separated feature flags that are on, e.g. "n1_miniapp,n2_ask_chhatri"; default none (src/features.ts). */
+  readonly VITE_FEATURES?: string
 }
 
 interface ImportMeta {

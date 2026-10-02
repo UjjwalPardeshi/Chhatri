@@ -35,6 +35,7 @@ services:
       CHHATRI_OFFICER_TOKEN:
       CHHATRI_DEMO_MODE: ${CHHATRI_DEMO_MODE:-true}
       CHHATRI_LOG_LEVEL: ${CHHATRI_LOG_LEVEL:-INFO}
+      CHHATRI_FEATURES:
       SARVAM_API_KEY:
       SARVAM_CHAT_MODEL:
       SARVAM_STT_MODEL:
@@ -73,6 +74,8 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_TILE_URL: ${VITE_TILE_URL:-}
+        # Console feature flags (Wave 0): one CHHATRI_FEATURES setting turns a flag on in both places.
+        VITE_FEATURES: ${VITE_FEATURES:-${CHHATRI_FEATURES:-}}
     image: chhatri-frontend:local
     restart: unless-stopped
     ports:
