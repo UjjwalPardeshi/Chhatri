@@ -12,7 +12,7 @@ const FLAG_ON = (process.env.E2E_FEATURES ?? '').split(',').map((name) => name.t
 test.skip(!FLAG_ON, 'the mini-app is behind n1_miniapp: run with E2E_FEATURES=n1_miniapp')
 
 const PROPS = ['color', 'background-color', 'font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'margin-top', 'margin-bottom', 'border-top-width', 'border-top-color', 'border-radius', 'box-shadow', 'display', 'text-transform']
-const SELECTORS = ['.btn', 'h2', '.table', '.card', '.badge']
+const SELECTORS = ['.btn', 'h1', '.table', '.card', '.badge']
 
 type Styles = Record<string, Record<string, string> | null>
 
@@ -44,7 +44,7 @@ async function openClaims(page: Page): Promise<void> {
 test('the console keeps its computed styles on /claims after the mini-app chunk has loaded', async ({ page }) => {
   await page.goto('/claims?lang=en')
   await expect(page.locator('.app')).toBeVisible()
-  await expect(page.locator('h2').first()).toBeVisible()
+  await expect(page.locator('h1').first()).toBeVisible()
   const before = await consoleStyles(page)
   expect(Object.values(before).filter((found) => found !== null).length).toBeGreaterThan(0)
 
@@ -52,7 +52,7 @@ test('the console keeps its computed styles on /claims after the mini-app chunk 
   await expect(page.getByTestId('screen-home')).toBeVisible()
   await expect(page.getByTestId('app-root')).toHaveClass(/miniapp/)
   await openClaims(page)
-  await expect(page.locator('h2').first()).toBeVisible()
+  await expect(page.locator('h1').first()).toBeVisible()
 
   expect(await consoleStyles(page)).toEqual(before)
 })

@@ -17,9 +17,10 @@
 }
 
 .zone-card__action .whatif-open {
-  height: auto;
+  height: 28px;
   min-height: 0;
-  padding: 0 var(--sp-2);
+  margin-block: -5px; /* a 28 px target that adds no height to the zone card's ward line */
+  padding: 0 var(--sp-3);
   font-size: var(--fs-xs);
   line-height: 1.5;
 }

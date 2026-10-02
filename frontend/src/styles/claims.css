@@ -33,7 +33,8 @@
 }
 
 .segmented button {
-  padding: 4px 11px;
+  min-height: 30px;
+  padding: 4px 12px;
   border: 0;
   background: #fff;
   font-size: var(--fs-xs);

@@ -79,15 +79,15 @@
   --font-hindi: var(--font-hi);
   --font-code: var(--font-mono);
   --font-weight-semibold: 700; /* Ubuntu ships 300/400/500/700 */
-  --text-2xs: var(--fs-2xs);
-  --text-xs: var(--fs-xs);
-  --text-caption: var(--fs-sm);
-  --text-sm: var(--fs-base);
-  --text-md: var(--fs-md);
+  --text-2xs: var(--mini-2xs, var(--fs-2xs));
+  --text-xs: var(--mini-xs, var(--fs-xs));
+  --text-caption: var(--mini-sm, var(--fs-sm));
+  --text-sm: var(--mini-base, var(--fs-base));
+  --text-md: var(--mini-md, var(--fs-md));
   --text-base: 16px;
   --text-field: 16px; /* text-field: iOS Safari zooms into inputs below 16px */
-  --text-lg: var(--fs-lg);
-  --text-xl: var(--fs-xl);
+  --text-lg: var(--mini-lg, var(--fs-lg));
+  --text-xl: var(--mini-xl, var(--fs-xl));
   --text-2xl: var(--fs-2xl);
   --text-3xl: var(--fs-3xl);
   --text-4xl: var(--fs-4xl);
@@ -166,6 +166,17 @@
 }
 :where(.miniapp) [hidden] {
   display: none !important;
+}
+/* Devanagari reads about one step smaller than Latin at the same px, so the small sizes step up in Hindi and Marathi. The --mini-* names override the console's --fs-* sizes for this subtree only (the --text-* theme names above read them first). */
+:where(.miniapp):lang(hi),
+:where(.miniapp):lang(mr) {
+  --mini-2xs: 13px;
+  --mini-xs: 14px;
+  --mini-sm: 15px;
+  --mini-base: 15px;
+  --mini-md: 16px;
+  --mini-lg: 18px;
+  --mini-xl: 21px;
 }
 :where(.miniapp) :lang(hi),
 :where(.miniapp) :lang(mr) {

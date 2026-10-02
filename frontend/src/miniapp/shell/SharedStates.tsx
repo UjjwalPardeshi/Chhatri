@@ -4,7 +4,7 @@
  * the code in small text, offline keeps the last data under a banner and disables what needs the network, and SIMULATED
  * and FALLBACK are badges. `ResourceScreen` puts a resource into the right state for a screen in one place.
  */
-import { WifiOff } from 'lucide-react'
+import { CircleAlert, Inbox, WifiOff } from 'lucide-react'
 import { useId, type ComponentProps, type ReactNode } from 'react'
 
 import type { ApiError } from '../../api/client'
@@ -41,7 +41,10 @@ export function SkeletonBlocks() {
 export function EmptyState({ message, children }: { message: string; children?: ReactNode }) {
   return (
     <div data-testid="app-empty" className="flex flex-col items-start gap-3 rounded-lg border bg-card p-4">
-      <p className="text-sm text-ink-2">{message}</p>
+      <div className="flex items-start gap-3">
+        <Inbox className="mt-0.5 size-5 shrink-0 text-ink-3" aria-hidden="true" />
+        <p className="text-md text-ink-2">{message}</p>
+      </div>
       {children}
     </div>
   )
@@ -60,7 +63,10 @@ export function ErrorState({ error, onRetry }: { error: ApiError; onRetry: () =>
   const { lang } = useMiniapp()
   return (
     <div data-testid="app-error" role="alert" className="flex flex-col items-start gap-2 rounded-lg border border-blocked bg-blocked-soft p-4">
-      <p className="text-sm font-medium text-foreground">{t(errorKey(error), lang)}</p>
+      <div className="flex items-start gap-3">
+        <CircleAlert className="mt-0.5 size-5 shrink-0 text-blocked" aria-hidden="true" />
+        <p className="text-md font-medium text-foreground">{t(errorKey(error), lang)}</p>
+      </div>
       {SHOWS_NO_CODE.has(error.code) ? null : <p className="text-xs text-ink-3">{t('error.code', lang, { code: error.code })}</p>}
       <Button data-testid="app-error-retry" variant="outline" onClick={onRetry}>
         {t('error.retry', lang)}

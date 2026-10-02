@@ -234,7 +234,7 @@
 }
 
 .integrations-summary__seg--sim {
-  color: var(--on-navy-3);
+  color: var(--on-navy-2);
   letter-spacing: 0.02em;
 }
 
@@ -624,5 +624,56 @@
 
   .brand__hi {
     display: none;
+  }
+}
+
+/* Phones: every control on the header, control bar, ops strip and the page headers is 44 px high (WCAG 2.5.8 and
+ * the design system's touch rule). The page flows at this width, so the taller rows cost scrolling, not layout. */
+@media (max-width: 640px) {
+  .brand,
+  .app-nav__link,
+  .present-toggle,
+  .integrations-summary,
+  .sound-toggle,
+  .btn,
+  .btn--icon,
+  .input,
+  .ops-cell,
+  .app .segmented button,
+  .app .live-test__run,
+  .provider-switch,
+  .provider-clear {
+    min-height: 44px;
+  }
+
+  .brand {
+    align-items: center;
+  }
+
+  .sound-toggle,
+  .btn--icon {
+    min-width: 44px;
+  }
+
+  .sound-toggle {
+    width: 44px;
+  }
+
+  .app-header__right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .app .zone-card__action .whatif-open {
+    height: 44px;
+    margin-block: 0;
+  }
+
+  .ops-cell {
+    align-content: center;
+  }
+
+  .scrubber__chapter::before {
+    inset: -13px -4px;
   }
 }

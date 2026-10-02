@@ -38,12 +38,17 @@ export function ProviderRow({ status, mock, busy, onSwitch }: RowProps) {
   const disabledWhy = status.switchable ? null : switchReason(status, mock)
   return (
     <li className={`provider-row provider-row--${status.mode.toLowerCase()}`} data-mode={status.mode} data-name={status.name} data-forced={status.forced ? 'true' : 'false'}>
-      <span className="provider-row__name">{label}</span>
-      <ModeWord mode={status.mode} />
+      <span className="provider-row__head">
+        <span className="provider-row__name">{label}</span>
+        <ModeWord mode={status.mode} />
+      </span>
       <span className="provider-row__detail">{status.detail}</span>
-      {who ? <span className="provider-row__who">{who}</span> : null}
-      {reason ? <span className="provider-row__reason">{reason}</span> : null}
-      {call ? <span className="provider-row__call num">{call}</span> : null}
+      <span className="provider-row__meta">
+        {who ? <span className="provider-row__who">{who}</span> : null}
+        {reason ? <span className="provider-row__reason">{reason}</span> : null}
+        {call ? <span className="provider-row__call num">{call}</span> : null}
+        {disabledWhy ? <span className={mock ? 'provider-row__why visually-hidden' : 'provider-row__why'}>{disabledWhy}</span> : null}
+      </span>
       <span className="provider-row__switch">
         <button
           type="button"
@@ -56,7 +61,6 @@ export function ProviderRow({ status, mock, busy, onSwitch }: RowProps) {
         >
           {status.forced ? 'Release' : 'Force fallback'}
         </button>
-        {disabledWhy ? <span className="provider-row__why">{disabledWhy}</span> : null}
       </span>
     </li>
   )
@@ -96,6 +100,7 @@ export function ProviderPanel({ integrations }: { integrations: readonly Integra
           {error}
         </p>
       ) : null}
+      {mock ? <p className="provider-note">Static demo: nothing is live, so no row can be forced.</p> : null}
       <ul className="integration-list provider-list">
         {integrations.map((status) => (
           <ProviderRow key={status.name} status={status} mock={mock} busy={busy} onSwitch={(row) => void run([row], !row.forced)} />

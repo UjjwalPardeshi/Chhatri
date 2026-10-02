@@ -25,7 +25,7 @@ export function AppBar() {
         </Button>
       ) : null}
       <div className="min-w-0 flex-1 px-2 py-1">
-        <Title className="truncate text-md font-semibold leading-tight">{t(titleKey, lang)}</Title>
+        <Title className="line-clamp-2 break-words text-md font-semibold leading-tight">{t(titleKey, lang)}</Title>
         {embedded ? (
           <time data-testid="app-clock" dateTime={now ?? undefined} className="block text-2xs leading-tight text-ink-3">
             {t('app.clock', lang, { time: formatDateTime(now, lang) })}

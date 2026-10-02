@@ -18,7 +18,7 @@ function Frame() {
   const target = { screen: url.screen, ...(url.claim ? { claim: url.claim } : {}), ...(url.decision ? { decision: url.decision } : {}) }
   return (
     <section className="phone phone--app" data-testid="app-frame" aria-label={t('app.frame_label', lang)}>
-      <div className="flex shrink-0 justify-end bg-card px-3 py-1">
+      <div className="flex shrink-0 justify-end bg-card px-3">
         <Link
           to={miniappHref(`/merchant/${merchantId}/app`, search, target)}
           data-testid="app-open-fullscreen"

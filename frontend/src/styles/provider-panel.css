@@ -44,25 +44,46 @@
 
 .provider-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px var(--sp-2);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--sp-3);
   align-items: center;
   padding: var(--sp-2) 0;
   border-top: 1px solid var(--line);
   font-size: var(--fs-xs);
 }
 
+.provider-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  grid-column: 1;
+}
+
 .provider-row__name {
   font-weight: 500;
 }
 
-.provider-row__detail,
-.provider-row__who,
-.provider-row__reason,
-.provider-row__call,
-.provider-row__why {
+.provider-row__detail {
+  grid-column: 1;
+  color: var(--ink-3);
+}
+
+/* Provider, reason, last call and why the switch is off share one wrapping line, dot-separated. */
+.provider-row__meta {
+  display: flex;
+  flex-wrap: wrap;
   grid-column: 1;
   color: var(--muted);
+}
+
+.provider-row__meta > * + *::before {
+  content: '·';
+  padding: 0 var(--sp-1);
+}
+
+.provider-row__meta > .visually-hidden::before {
+  content: none;
 }
 
 .provider-row--fallback .provider-row__reason {
@@ -71,18 +92,19 @@
 
 .provider-row__switch {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: flex-end;
   grid-column: 2;
-  grid-row: 3 / span 3;
-  gap: 2px;
+  grid-row: 1 / span 3;
 }
 
-.provider-row__why {
-  grid-column: auto;
-  max-width: 150px;
-  font-size: var(--fs-2xs);
-  text-align: right;
+.provider-note {
+  margin: 0 0 var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--demo-soft);
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
 }
 
 .provider-switch,

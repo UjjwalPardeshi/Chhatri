@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 
 import { useLatest } from '../../state/useLatest'
 import { t } from '../lib/copy'
+import { cn } from '../lib/cn'
 import { useMiniapp, type NextBestAction } from './MiniappContext'
 import { NetworkButton } from './SharedStates'
 
@@ -25,12 +26,12 @@ export function useNextBestAction(action: NextBestAction | null): void {
 }
 
 export function NextBestBar() {
-  const { nba, lang } = useMiniapp()
+  const { nba, lang, embedded } = useMiniapp()
   if (!nba) return null
   return (
-    <aside data-testid="app-nba" data-nba={nba.id} aria-label={t('app.nba', lang)} className="flex shrink-0 flex-col gap-2 border-t bg-accent px-4 py-3">
-      <p className="text-md font-medium text-foreground">{nba.label}</p>
-      <NetworkButton data-testid="app-nba-action" size="lg" onClick={nba.onAction}>
+    <aside data-testid="app-nba" data-nba={nba.id} aria-label={t('app.nba', lang)} className={cn('flex shrink-0 flex-col border-t bg-accent', embedded ? 'gap-1.5 px-3 py-2' : 'gap-2 px-4 py-3')}>
+      <p className={cn('font-medium text-foreground', embedded ? 'text-sm' : 'text-md')}>{nba.label}</p>
+      <NetworkButton data-testid="app-nba-action" size={embedded ? 'default' : 'lg'} onClick={nba.onAction}>
         {nba.actionLabel}
       </NetworkButton>
     </aside>

@@ -190,7 +190,7 @@
 }
 
 .slow-toggle input:focus-visible + .slow-toggle__switch {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -327,6 +327,13 @@
     background-color 120ms ease,
     color 120ms ease,
     transform var(--dur-press) var(--ease-out);
+}
+
+/* The chip stays 18 px tall; its press area reaches 30 px so a chapter is easy to hit from the back of a room. */
+.scrubber__chapter::before {
+  content: '';
+  position: absolute;
+  inset: -6px -2px -6px;
 }
 
 .scrubber__chapter:hover:not(:disabled) {

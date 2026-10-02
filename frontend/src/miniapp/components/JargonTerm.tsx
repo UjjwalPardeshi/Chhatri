@@ -22,7 +22,7 @@ export function JargonTerm({ id, children, className }: { id: TermId; children?:
           data-testid={`term-${id}`}
           aria-haspopup="dialog"
           className={cn(
-            'inline-flex min-h-11 items-center rounded-sm px-1 text-sm font-medium text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            'inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-1 text-sm font-medium text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
             className,
           )}
         >

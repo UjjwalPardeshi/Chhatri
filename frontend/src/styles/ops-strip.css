@@ -185,6 +185,22 @@
   border-bottom: 0;
 }
 
+/* Over the map column only, the cells size to their content first, so "100% · 312 of 312" and "₹4,25,420 · 312
+ * shops" read on one line at 1280 wide. Presenter mode steps the type up and lets the value wrap, balanced. */
+.home__strip .ops-cell {
+  flex: 1 1 auto;
+}
+
+.home__strip .ops-cell__value {
+  font-size: var(--fs-md);
+  white-space: nowrap;
+}
+
+[data-presenter='on'] .home__strip .ops-cell__value {
+  white-space: normal;
+  text-wrap: balance;
+}
+
 .home__strip .ops-pop {
   right: 0;
 }
@@ -192,6 +208,10 @@
 @media (max-width: 900px) {
   .home:has(> .home__strip) {
     grid-template-rows: none;
+  }
+
+  .home__strip .ops-cell {
+    flex: 0 0 auto;
   }
 
   .home__strip,

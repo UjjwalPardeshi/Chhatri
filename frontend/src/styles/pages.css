@@ -60,6 +60,12 @@
 .audit-table td {
   font-size: var(--fs-xs);
   white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* The subject id and the action sit on one size, so a row reads as one line (a nested .mono would drop to 11 px). */
+.audit-table td .mono {
+  font-size: var(--fs-xs);
 }
 
 .audit-table thead th {

@@ -49,7 +49,7 @@ export function DemoClockSheet() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <button type="button" data-testid="app-clock-open" className="block min-h-6 text-left text-2xs leading-tight text-ink-3 underline decoration-dotted underline-offset-2">
+        <button type="button" data-testid="app-clock-open" className="relative block min-h-6 text-left text-2xs leading-tight text-ink-3 underline decoration-dotted underline-offset-2 outline-none after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] focus-visible:ring-[3px] focus-visible:ring-ring/50">
           <time data-testid="app-clock" dateTime={now ?? undefined}>
             {t('app.clock', lang, { time: formatDateTime(now, lang) })}
           </time>
