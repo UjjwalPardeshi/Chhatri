@@ -99,12 +99,15 @@ backend/            Python 3.12 package `chhatri` (FastAPI app factory chhatri.a
 frontend/           Vite + React 19 + TypeScript + react-leaflet console (Dockerfile, nginx.conf)
 n8n/                entrypoint.sh and workflows/ (generated; see scripts/n8n_workflows.py)
 scripts/            infra tooling: init_env.py, n8n_workflows.py, n8n_selftest.py (+ tests/)
-docs/               SPEC.md (contract), ARCHITECTURE.md, DEMO.md, INTEGRATIONS.md, SECURITY.md
+docs/               SPEC.md (contract), ARCHITECTURE.md, DEMO.md, INTEGRATIONS.md, SECURITY.md, and the
+                    product docs indexed in docs/README.md
 docker-compose.yml  Makefile  .env.example  .github/workflows/ci.yml
 ```
 
 ## Documentation
 
+- [docs/README.md](docs/README.md): the index of the full documentation set (strategy, product, design,
+  engineering, business and delivery), with reading paths for judges, the team and engineers.
 - [docs/DEMO.md](docs/DEMO.md): the minute-by-minute presenter script with every golden number and string.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how a claim flows from signal to money, and how the parts fit.
 - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md): verified API facts, set-up, WhatsApp templates, the n8n contract.
