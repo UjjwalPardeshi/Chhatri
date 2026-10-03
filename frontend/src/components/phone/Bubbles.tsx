@@ -2,6 +2,8 @@
  * WhatsApp bubbles (SPEC §13.1, §20 "Merchant phone", deck slides 1 and 7): Hindi line + English
  * line, payout card with badge, case chip, voice note (waveform that fills while it plays, with
  * its duration; a compact grey one beside Chhatri's spoken lines), slip photo, and the Paytm premium link drawn as a payment card (§13.4 COVER_LINK).
+ * A slip pre-check card shows what was read on every copy of it, and its buttons on the latest message only; so does
+ * the doctor question (design 2.6). A doctor progress line carries a small "Doctor check" tag beside its mode chip.
  */
 import { useState } from 'react'
 import { Link } from 'react-router'
@@ -15,7 +17,10 @@ import { coverLink } from './coverOffer'
 import { linkify } from './linkify'
 import { spokenText, voiceAudioUrl, voiceSeconds, voiceSourceLabel, type VoiceSourceLabel } from './messages'
 import { PaytmLinkCard } from './PaytmLinkCard'
+import { ConsentActions } from './ConsentActions'
+import { consentCardOf, precheckCardOf } from './precheckCard'
 import { openPrecheck, PrecheckActions } from './PrecheckActions'
+import { PrecheckFields } from './PrecheckFields'
 import { Waveform } from './Waveform'
 
 function Stamp({ message }: { message: Message }) {
@@ -107,9 +112,32 @@ function VoiceBubble({ message }: { message: Message }) {
   )
 }
 
-function OpenPrecheck({ message }: { message: Message }) {
-  const card = openPrecheck(message)
-  return card ? <PrecheckActions message={message} card={card} /> : null
+/** What was read (every copy of a pre-check card) and, on the latest message, the answer buttons. */
+function PrecheckParts({ message, latest }: { message: Message; latest: boolean }) {
+  if (message.direction !== 'OUTBOUND') return null
+  const card = precheckCardOf(message)
+  const open = latest ? openPrecheck(message) : null
+  const consent = latest ? consentCardOf(message) : null
+  return (
+    <>
+      {card ? <PrecheckFields card={card} /> : null}
+      {open ? <PrecheckActions key={open.precheck_id} message={message} card={open} /> : null}
+      {consent ? <ConsentActions key={consent.consent_for} message={message} card={consent} /> : null}
+    </>
+  )
+}
+
+const DOCTOR_STEP_WORDS: Readonly<Record<string, string>> = { STARTED: 'asking the doctor', ASKED: 'doctor asked', CONFIRMED: 'doctor confirmed' }
+
+/** The "Doctor check" tag of a doctor progress line (design 2.6 message shape 3). */
+function DoctorTag({ message }: { message: Message }) {
+  const step = message.meta.doctor_check
+  if (!step) return null
+  return (
+    <span className="doctor-tag" data-testid="doctor-tag" data-step={step}>
+      Doctor check · {DOCTOR_STEP_WORDS[step] ?? step}
+    </span>
+  )
 }
 
 function PayoutCard({ message }: { message: Message }) {
@@ -188,8 +216,9 @@ export function MessageBubble({ message, latest = false }: { message: Message; l
         {message.kind === 'VOICE' ? <VoiceBubble message={message} /> : null}
         {message.kind === 'IMAGE' ? <ImageBubble message={message} /> : null}
         {message.kind !== 'VOICE' && message.kind !== 'IMAGE' ? <Lines message={message} /> : null}
+        {!mine ? <DoctorTag message={message} /> : null}
         {!mine && message.meta.mode ? <ModeChip label={message.meta} /> : null}
-        {latest && message.direction === 'OUTBOUND' ? <OpenPrecheck message={message} /> : null}
+        <PrecheckParts message={message} latest={latest} />
         <div className="bubble__foot">
           {speakable ? <SpokenFoot message={message} /> : null}
           <Stamp message={message} />
