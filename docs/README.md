@@ -112,7 +112,7 @@
 
 **IDs:** K1–K8 keep features · N1–N8 new features · X1–X8 fixes · H1–H26 ideas from other teams (credits in the competitive landscape) · C1–C12 policy clauses · J1–J10 journeys · FR-… functional requirements in the PRD · PS-1 to PS-14 track requirements · IR-1 to IR-7 implicit requirements · A1–A25 external facts · ADR architecture decisions.
 
-**Demo numbers (quote exactly):** Anil ₹1,380 at 17:04; Z7 total ₹58,900. Hospital-cash ₹1,500. Measured on 3 Oct 2026: backend 3,221 fast and 63 slow tests pass (98.85% coverage); frontend 1,340 unit tests pass; infra 164; demo-check 70 of 70. Replay speed 6 simulated minutes per real second.
+**Demo numbers (quote exactly):** Anil ₹1,380 at 17:04; Z7 total ₹58,900. Hospital-cash ₹1,500. Measured on 3 Oct 2026 (final run): backend 4,941 fast and 63 slow tests pass (97.90% coverage); frontend 1,426 unit tests pass; infra 212; demo-check 70 of 70; `make judge` READY; the stage walk 3 of 3. Replay speed 6 simulated minutes per real second.
 
 **Conventions:** No personal emails or phone numbers. Indian format (₹1,380; 1.57 crore). Hindi in Devanagari with English (for example "छत्री (Chhatri)"). Professional, short sentences, active voice. Links are relative. Facts cited as (A3), code as `path/to/file.py`. Every doc has a header table, TL;DR, numbered sections, open questions and changelog.
 

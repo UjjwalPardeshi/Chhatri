@@ -115,12 +115,14 @@ Measured on 3 Oct 2026, one run of each command (details and how to read them in
 
 | Suite | Result |
 |---|---|
-| `make test-backend` | 3,221 passed, 63 slow deselected; coverage of `chhatri/` 98.85 % (gate 80 %) |
+| `make test-backend` | 4,941 passed, 63 slow deselected (1,602 of them the policy invariants over seeded random claims); coverage of `chhatri/` 97.90 % (gate 80 %) |
 | `make test-slow` | 63 passed |
-| `make test-infra` | 164 passed; coverage of `scripts/` 99.44 % (gate 90 %) |
-| Frontend unit tests (`npx vitest run`) | 1,340 passed in 135 files |
+| `make test-infra` | 212 passed; coverage of `scripts/` 98.19 % (gate 90 %) |
+| Frontend unit tests (`npx vitest run`) | 1,426 passed in 145 files |
 | `make demo-check` | 70 of 70 checks |
-| Playwright e2e (`make e2e`, `npm run test:e2e:mock`) | 136 tests in 27 spec files (counted, not run for this table) |
+| `make judge` | every check PASS, `CHHATRI JUDGE READY ✓` |
+| `STAGE_RUNS=3 make stage-e2e` | 3 of 3 runs green (the stage script walked end to end, no AI keys) |
+| Playwright e2e (`make e2e`, `npm run test:e2e:mock`) | 137 tests in 27 spec files (listed, not all run for this table) |
 
 The suites run against simulated data. One evaluation run is stored (`backend/artifacts/evals/`, shown on
 `/evals`): intent routing, the guard and 50 Ask questions answered live by a free-tier Gemini model, on

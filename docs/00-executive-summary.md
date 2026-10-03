@@ -145,9 +145,9 @@ FINPATH and FinPath AI are two different projects.
 ## 7. Proof
 
 ### Engineering
-- **Backend:** 3,284 tests collected (3,221 fast, 63 slow). At the 2 Oct baseline (commit 86575ea) there were 1,747 (1,711 fast, 36 slow) at 99.7% coverage; the coverage of the larger suite is measured in the final run.
-- **Frontend and infra:** the frontend unit suite passes (X1 fixed the 2 failing tests of the baseline); the infra checks number 164 (118 at the baseline). **End to end:** 134 Playwright tests in 26 files for the mock project (21 at the baseline).
-- **Demo-check:** 70 of 70 checks passed at the baseline, running every demo scenario through the HTTP API. Run `make demo-check` again at the freeze.
+- **Backend:** 5,005 tests collected (4,942 fast, 63 slow; 1,602 of the fast ones are policy invariants over seeded random claims). Final run: 4,941 fast passed at 97.90 % coverage, 63 slow passed. At the 2 Oct baseline (commit 86575ea) there were 1,747 (1,711 fast, 36 slow) at 99.7% coverage.
+- **Frontend and infra:** the frontend unit suite passes (X1 fixed the 2 failing tests of the baseline); the infra checks number 212 (118 at the baseline). **End to end:** 137 Playwright tests in 27 files for the mock project (21 at the baseline); the stage walk ran 3 of 3 green.
+- **Demo-check:** 70 of 70 checks, running every demo scenario through the HTTP API (final run, 3 Oct 2026). `make judge` runs it with the artefact hashes, the audit chain and the typecheck, and ends READY.
 - **Deterministic replays:** every scenario load gives the same ids and amounts ([DEMO.md](DEMO.md)).
 
 ### Hash-chained audit log

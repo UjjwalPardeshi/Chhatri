@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-- **Measured on 3 Oct 2026:** backend 3,221 fast tests (98.85 % line coverage of `chhatri/`) and 63 slow tests; infra 164 tests (99.44 % coverage of `scripts/`); frontend 1,340 unit tests in 135 files; `make demo-check` 70 of 70; 134 Playwright tests listed in 26 spec files (counted, not run for this page).
+- **Measured on 3 Oct 2026 (final run):** backend 4,941 fast tests passed (97.90 % line coverage of `chhatri/`; 1,602 of them are the policy invariants over seeded random claims) and 63 slow tests; infra 212 tests (98.19 % coverage of `scripts/`); frontend 1,426 unit tests in 145 files; `make demo-check` 70 of 70; `make judge` READY; `STAGE_RUNS=3 make stage-e2e` 3 of 3 green; 137 Playwright tests listed in 27 spec files.
 - **Quality gates:** CI runs lint, the fast backend suite with coverage of at least 80 %, the frontend typecheck, lint, tests and build, the infra checks and the n8n self-test on every push to main and every pull request. `make test-slow`, `make demo-check` and `make e2e` are local gates that CI does not run.
 - **Every feature has tests:** N1 to N8, X1 to X8 and H-items are mapped to their test files in section 3. Failing-first test lists per card are in the [implementation guide](implementation-guide.md).
 - **AI quality is not measured.** The offline evaluation harness (H25) is BUILT and `make evals` runs it, but no run is committed, so the `/evals` page reads NOT MEASURED. The live suites need keys and graders and are not built ([AI evaluation plan](ai-evaluation-plan.md)).
@@ -22,16 +22,16 @@ Counts come from one run of each command on 3 Oct 2026 (`make test-backend`, `ma
 
 | Suite | Command | Result on 3 Oct 2026 |
 |---|---|---|
-| Backend, fast | `make test-backend` (`pytest -m "not slow"`, coverage gate 80 %) | 3,221 passed, 63 deselected; line coverage 98.85 % |
+| Backend, fast | `make test-backend` (`pytest -m "not slow"`, coverage gate 80 %) | 4,941 passed, 63 deselected; line coverage 97.90 % |
 | Backend, slow | `make test-slow` (`pytest -m slow`) | 63 passed |
-| Infra | `make test-infra` (workflow JSON check, then `pytest scripts/tests`, coverage gate 90 %) | 164 passed; coverage 99.44 % |
-| Frontend unit | `npm run test` (Vitest) | 1,340 passed in 135 files; coverage not measured (`npm run test:coverage` exists and was not run) |
+| Infra | `make test-infra` (workflow JSON check, then `pytest scripts/tests`, coverage gate 90 %) | 212 passed; coverage 98.19 % |
+| Frontend unit | `npm run test` (Vitest) | 1,426 passed in 145 files; coverage not measured (`npm run test:coverage` exists and was not run) |
 | Demo rehearsal | `make demo-check` | 70 of 70 checks pass |
-| Playwright e2e | `make e2e` (live project) or `npm run test:e2e:mock` | 134 tests in 26 spec files, counted with `playwright test --list --project=mock`; not run for this page |
+| Playwright e2e | `make e2e` (live project) or `npm run test:e2e:mock` | 137 tests in 27 spec files, counted with `playwright test --list --project=mock`; the stage walk (`make stage-e2e`) ran 3 of 3 green, the rest were not run for this page |
 
-### Backend fast tests by folder (3,221)
+### Backend fast tests by folder (4,942 collected)
 
-`api` 718 · `conversation` 514 · `integrations` 378 · `replay` 294 · `policy` 188 · `ask` 162 · `pipeline` 133 · `forecast` 115 · `sim` 103 · `detect` 88 · `ai` 84 · `backtest` 78 · `ledger` 61 · `precheck` 53 · `evals` 48 · `consent` 43 · `workflows` 37 · `cases` 37 · `audit` 29 · files directly under `tests/` 27 · `store` 23 · `domain` 8.
+`policy` 1,790 (1,602 invariants) · `api` 737 · `conversation` 528 · `integrations` 444 · `replay` 294 · `ask` 162 · `pipeline` 133 · `forecast` 115 · `sim` 103 · `backtest` 88 · `detect` 88 · `ai` 84 · `ledger` 61 · `evals` 53 · `precheck` 53 · `consent` 43 · `cases` 37 · `workflows` 37 · `audit` 29 · `store` 28 · files directly under `tests/` 27 · `domain` 8. One pricing route test was added after the full run; it passes on its own.
 
 ### Backend slow tests by folder (63)
 
@@ -233,8 +233,8 @@ A feature is **done** when:
 
 | Layer | Target | Measured 3 Oct 2026 | Status |
 |---|---|---|---|
-| Backend (fast suite, `chhatri/`) | 80 % | 98.85 % | Gate passes |
-| Infra (`scripts/`) | 90 % | 99.44 % | Gate passes |
+| Backend (fast suite, `chhatri/`) | 80 % | 97.90 % | Gate passes |
+| Infra (`scripts/`) | 90 % | 98.19 % | Gate passes |
 | Frontend | no gate | not measured (`npm run test:coverage` was not run) | not measured |
 | Slow tests | all pass | 63 of 63 | Pass |
 | Demo-check | all pass | 70 of 70 | Pass |
@@ -249,6 +249,7 @@ A feature is **done** when:
 
 ## Changelog
 
+- 2026-10-03 · v2.1 · final run: backend 4,941 fast (97.90 %), infra 212 (98.19 %), frontend 1,426, demo-check 70 of 70, make judge, stage walk 3 of 3; the policy invariants
 - 2026-10-03 · v2 · rewritten from measured counts (backend 3,221 fast and 63 slow, infra 164, frontend 1,340, demo-check 70) with the feature-to-test map in section 3, the CI description matched to `ci.yml`, PLANNED rows removed, and the demo-check flag set explained
 - 2026-10-02 · v1.4 · linked per-feature test lists (implementation guide) and the AI evaluation plan
 - 2026-10-02 · v1.3 · AI provider and live/simulated framing aligned: N2 and N3 section headers updated with provider statuses (Gemini PLANNED, Sarvam LIVE, Tesseract PLANNED); test status table rows clarified to show current (LIVE Sarvam) and planned (Gemini) eval paths; grounded-answer eval and slip extraction evals marked with provider availability; intent detection section clarified.
