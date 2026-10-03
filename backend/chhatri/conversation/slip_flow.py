@@ -10,7 +10,12 @@
   time by ``notify_personal_paid`` (binding decision B2), so the merchant is never told "credited"
   before the rail credits it; REFERRED → the SLIP_TO_HUMAN variant + CASE_CHIP with the review case
   (looked up by decision id; if the orchestrator has not opened it yet the chip is omitted and an
-  error is logged); DECLINED → PERSONAL_DECLINED with the first failing HARD check's reason.
+  error is logged); DECLINED → PERSONAL_DECLINED with the first failing HARD check's reason
+  (``outcome_messages``, which the pipeline reuses when it re-decides after the doctor answered).
+- When the orchestrator says the treating doctor is still being asked (``DoctorCheckPort``, the decision is interim)
+  the merchant hears DOCTOR_CHECK_STARTED instead, and no case chip: the real outcome follows the doctor's answer.
+- N3 on: a photo over the limit gets SLIP_PHOTO_LIMIT with the "Send to our team" button of the pre-check still open
+  (Telegram), so the merchant is never left without a way forward.
 """
 
 from __future__ import annotations
@@ -20,9 +25,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
+from chhatri.conversation.doctor_notices import DoctorNotices
 from chhatri.conversation.messages import bilingual, name_facts
 from chhatri.conversation.outbox import AI_ACTOR, Outbox, Outgoing
-from chhatri.conversation.ports import ClaimsPort, ConversationStore
+from chhatri.conversation.pending import ChoiceKind, choice_button
+from chhatri.conversation.ports import ClaimsPort, ConversationStore, DoctorCheckPort
 from chhatri.conversation.reasons import declined_reason_key, slip_to_human_key
 from chhatri.conversation.replies import case_chip
 from chhatri.domain.enums import DecisionOutcome
@@ -30,13 +37,22 @@ from chhatri.domain.models import Decision, Merchant, Message, SlipExtraction
 from chhatri.integrations.base import IntegrationError, SlipReader
 from chhatri.precheck.chat import chat_outgoing
 from chhatri.precheck.clean import UncleanableImage
+from chhatri.precheck.model import PrecheckStatus
 from chhatri.precheck.service import PrecheckConflict, SlipPrecheckService
 from chhatri.store.protocols import AuditSink
 
 logger = logging.getLogger(__name__)
 
 READ_FAILED_SOURCE: Final = "read-failed"
-SLIP_FIELDS: Final = ("patient_name", "admission_date", "discharge_date", "hospital_name", "document_type")
+SLIP_FIELDS: Final = (
+    "patient_name",
+    "admission_date",
+    "discharge_date",
+    "hospital_name",
+    "doctor_name",
+    "doctor_registration_no",
+    "document_type",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +61,7 @@ class FiledSlip:
 
     decision: Decision
     messages: tuple[Message, ...]
+    doctor_pending: bool = False  # the decision is interim: the treating doctor is still being asked
 
 
 PrecheckResolver = Callable[[], SlipPrecheckService | None]
@@ -72,6 +89,7 @@ class SlipFlow:
         audit: AuditSink,
         precheck: PrecheckResolver = _no_precheck,
         slip_consent: Callable[[str], bool] = _everyone_agreed,
+        doctor: DoctorNotices | None = None,
     ) -> None:
         self._precheck = precheck
         self._slip_consent = slip_consent
@@ -80,6 +98,7 @@ class SlipFlow:
         self._store = store
         self._reader = reader
         self._audit = audit
+        self._doctor = doctor
 
     async def reply(self, merchant: Merchant, image: bytes, mime: str, media_id: str) -> tuple[Message, ...]:
         if self._claims.open_silence(merchant.id) is None:
@@ -97,11 +116,25 @@ class SlipFlow:
         decision = await self._claims.submit_personal_claim(merchant.id, slip, media_id)
         if decision.merchant_id != merchant.id:
             raise ValueError(f"decision {decision.id} is for {decision.merchant_id}, not {merchant.id}")
+        claims: object = self._claims
+        if (
+            self._doctor is not None
+            and isinstance(claims, DoctorCheckPort)
+            and claims.doctor_check_pending(decision.id)
+        ):
+            return FiledSlip(
+                decision, (await self._doctor.check_started(merchant, slip),), doctor_pending=True
+            )
+        return FiledSlip(decision, await self.outcome_messages(merchant, decision))
+
+    async def outcome_messages(self, merchant: Merchant, decision: Decision) -> tuple[Message, ...]:
+        """What a personal decision tells the merchant now: nothing for APPROVED (the money message waits for the
+        credit), SLIP_TO_HUMAN_* and the case chip for REFERRED, PERSONAL_DECLINED for DECLINED."""
         if decision.outcome is DecisionOutcome.APPROVED:
-            return FiledSlip(decision, ())
+            return ()
         if decision.outcome is DecisionOutcome.REFERRED:
-            return FiledSlip(decision, await self._referred(merchant, decision))
-        return FiledSlip(decision, (await self._declined(merchant, decision),))
+            return await self._referred(merchant, decision)
+        return (await self._declined(merchant, decision),)
 
     async def _show_precheck(
         self, service: SlipPrecheckService, merchant: Merchant, image: bytes, mime: str
@@ -110,10 +143,24 @@ class SlipFlow:
         try:
             pc = await service.precheck(merchant.id, image, mime)
         except PrecheckConflict:
-            return (await self._outbox.send(merchant, Outgoing.text("SLIP_PHOTO_LIMIT")),)
+            return (await self._outbox.send(merchant, self._photo_limit(service, merchant.id)),)
         except UncleanableImage:
             return (await self._outbox.send(merchant, Outgoing.text("SLIP_RETAKE_CLEAR")),)
         return (await self._outbox.send(merchant, chat_outgoing(pc, minimum=service.minimum)),)
+
+    @staticmethod
+    def _photo_limit(service: SlipPrecheckService, merchant_id: str) -> Outgoing:
+        out = Outgoing.text("SLIP_PHOTO_LIMIT")
+        pc = service.open_for(merchant_id)
+        if pc is None or pc.status not in (PrecheckStatus.RETAKE, PrecheckStatus.NEEDS_TEAM):
+            return out
+        return Outgoing(
+            key=out.key,
+            kind=out.kind,
+            text_hi=out.text_hi,
+            text_en=out.text_en,
+            buttons=(choice_button(ChoiceKind.PRECHECK, pc.id, "team"),),
+        )
 
     async def _read(self, merchant: Merchant, image: bytes, mime: str, media_id: str) -> SlipExtraction:
         try:

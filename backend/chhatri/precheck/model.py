@@ -24,6 +24,12 @@ class PrecheckStatus(StrEnum):
     NEEDS_TEAM = "NEEDS_TEAM"
     SUPERSEDED = "SUPERSEDED"
     CONFIRMED = "CONFIRMED"
+    AWAITING_CONSENT = "AWAITING_CONSENT"  # fields confirmed; the doctor question waits for a yes or a no
+
+
+OPEN_STATUSES: Final = frozenset(
+    {PrecheckStatus.READY, PrecheckStatus.RETAKE, PrecheckStatus.NEEDS_TEAM, PrecheckStatus.AWAITING_CONSENT}
+)
 
 
 class Reason(StrEnum):
@@ -33,6 +39,7 @@ class Reason(StrEnum):
     LOW_CONFIDENCE = "LOW_CONFIDENCE"
     NAME_MISSING = "NAME_MISSING"
     DATES_NOT_CLEAR = "DATES_NOT_CLEAR"
+    DOCTOR_MISSING = "DOCTOR_MISSING"  # only while personal.require_doctor_confirmation is on
 
 
 class ConfirmedAs(StrEnum):
@@ -43,6 +50,11 @@ class ConfirmedAs(StrEnum):
 class Action(StrEnum):
     CONFIRM = "CONFIRM"
     SEND_TO_TEAM = "SEND_TO_TEAM"
+    CONSENT_YES = "CONSENT_YES"
+    CONSENT_NO = "CONSENT_NO"
+
+
+CONSENT_ACTIONS: Final = frozenset({Action.CONSENT_YES, Action.CONSENT_NO})
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +77,7 @@ class Precheck:
     status: PrecheckStatus
     reason: Reason | None
     guidance_key: str | None
-    slip: SlipExtraction | None  # the read as kept (four fields and the class), None when nothing was read
+    slip: SlipExtraction | None  # the read as kept (six fields and the class), None when nothing was read
     gate_passed: bool
     label: AiLabel
     created_at: datetime
@@ -73,6 +85,9 @@ class Precheck:
     claim_id: str | None = None
     decision_id: str | None = None
     messages: tuple[str, ...] = field(default=())  # ids of the messages the confirmation sent
+    consent: bool | None = None  # the merchant's answer to "may we ask the doctor?", None until answered
+    consent_at: datetime | None = None
+    fields_confirmed_at: datetime | None = None  # "Yes, this is right" while the doctor question waits
 
     @property
     def retakes_left(self) -> int:

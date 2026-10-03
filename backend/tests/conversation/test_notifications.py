@@ -341,6 +341,7 @@ async def test_closed_area_dispute_is_answered_with_the_area_numbers(world: Worl
 
 async def test_closed_personal_dispute_is_answered_with_the_daily_limit() -> None:
     world = make_world(start=ist(2025, 8, 21, 11, 25))
+    _without_doctor_rule(world)
     world.claims.silence = SILENT_DAY
     slip = render_slip("Anil R. Jadhav", SILENT_DAY, "KEM Hospital", "Viral fever")
     await world.service.handle_image(ANIL.id, slip, "image/png", "MD-9")
@@ -485,3 +486,12 @@ async def test_premium_paid_validation() -> None:
         await world.service.notify_premium_paid(paid, cover.model_copy(update={"id": "CV-other"}))
     with pytest.raises(ValueError, match="is for another merchant"):
         await world.service.notify_premium_paid(paid, cover.model_copy(update={"merchant_id": ANIL.id}))
+
+
+def _without_doctor_rule(world: World) -> None:
+    """This test is about the chat after a paid personal claim, not the doctor confirmation: the world's engine runs
+    without rule personal.require_doctor_confirmation (the conftest's claims never record a doctor's answer)."""
+    rules = world.claims.rules
+    world.claims.rules = rules.model_copy(
+        update={"personal": rules.personal.model_copy(update={"require_doctor_confirmation": False})}
+    )

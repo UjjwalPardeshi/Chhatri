@@ -40,6 +40,7 @@ async def test_why_about_yesterdays_payout_is_fallback_help(world: World) -> Non
 
 async def test_why_after_a_personal_payout_shows_the_formula() -> None:
     world = make_world(start=ist(2025, 8, 21, 11, 20))
+    _without_doctor_rule(world)
     world.claims.silence = SILENT_DAY
     await world.service.handle_image(
         ANIL.id, render_slip("Anil R. Jadhav", SILENT_DAY, "KEM Hospital", "Viral fever"), "image/png", "MD-1"
@@ -143,7 +144,8 @@ async def test_illness(world: World, silence: date | None, expected_en: str) -> 
         ("नहीं", SILENT_DAY, "What happened? If you're ill or in hospital, please tell me."),
         ("हाँ", None, FALLBACK_EN),
         ("नहीं", None, FALLBACK_EN),
-        ("नमस्ते", SILENT_DAY, FALLBACK_EN),
+        # an open check-in is the next step: a greeting gets ASK_SLIP, not the generic help (demo-day L3)
+        ("नमस्ते", SILENT_DAY, "Get well soon. Please send one photo of the hospital slip."),
         ("what is the weather", None, FALLBACK_EN),
     ],
 )
@@ -276,4 +278,13 @@ async def test_buy_cover_picks_the_blocked_now_line() -> None:
     replies = await _texts(later, RAMESH.id, "Cover me today, there is a red alert.")
     assert replies[0][1] == (
         "New cover starts after the waiting period — from 25 August. It won't apply to tomorrow's alert."
+    )
+
+
+def _without_doctor_rule(world: World) -> None:
+    """This test is about the chat after a paid personal claim, not the doctor confirmation: the world's engine runs
+    without rule personal.require_doctor_confirmation (the conftest's claims never record a doctor's answer)."""
+    rules = world.claims.rules
+    world.claims.rules = rules.model_copy(
+        update={"personal": rules.personal.model_copy(update={"require_doctor_confirmation": False})}
     )

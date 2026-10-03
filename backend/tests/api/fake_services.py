@@ -364,6 +364,12 @@ class FakeConversation:
         )
         return inbound, self._reply(merchant_id)
 
+    async def handle_choice(self, merchant_id: str, choice: Any) -> tuple[Message, ...]:
+        """A tapped pre-check or doctor-question button (`conversation.pending.Choice`)."""
+        self.calls.append(("choice", (merchant_id, choice)))
+        inbound = self._message(merchant_id, Direction.INBOUND, MessageKind.TEXT, text_en=choice.answer)
+        return inbound, self._reply(merchant_id)
+
 
 @dataclass
 class FakeChannel:

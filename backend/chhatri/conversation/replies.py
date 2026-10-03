@@ -15,7 +15,8 @@
   purchase question and follows BUY_COVER. BUY_COVER says COVER_BLOCKED_NOW when the blocking alert is already
   in force, COVER_BLOCKED when it starts later.
 - AFFIRM / DENY answer the silence check-in ("सब ठीक है?") while it is open; GREETING, UNKNOWN and
-  an AFFIRM/DENY with no open check-in → FALLBACK_HELP.
+  an AFFIRM/DENY with no open check-in → FALLBACK_HELP, or the merchant's open next step when one waits
+  (``next_step``: "your slip has been read, reply yes", "our team is checking your claim", …).
 """
 
 from __future__ import annotations
@@ -60,7 +61,7 @@ def explanation_message(explanation: Explanation) -> Outgoing:
 
 
 def case_chip(case_id: str) -> Outgoing:
-    """ "Sent to a claims officer · case C-2291" (English only, not voiced)."""
+    """ "Sent to a claims officer · case C-2291" (English only, not voiced); a phone also gets the Hindi line."""
     return Outgoing(
         key="CASE_CHIP",
         kind=MessageKind.CASE_CHIP,
@@ -68,16 +69,25 @@ def case_chip(case_id: str) -> Outgoing:
         text_en=render("CASE_CHIP", "en", case_id=case_id),
         case_id=case_id,
         voiced=False,
+        wire_hi=render("CASE_CHIP_WIRE", "hi", case_id=case_id),
     )
 
 
 class Replies:
     """Intent → §13.5 flow."""
 
-    def __init__(self, *, outbox: Outbox, claims: ClaimsPort, store: ConversationStore) -> None:
+    def __init__(
+        self,
+        *,
+        outbox: Outbox,
+        claims: ClaimsPort,
+        store: ConversationStore,
+        next_step: Callable[[str], Outgoing | None] | None = None,
+    ) -> None:
         self._outbox = outbox
         self._claims = claims
         self._store = store
+        self._next_step = next_step
         self._handlers: Mapping[Intent, Handler] = MappingProxyType(
             {
                 Intent.WHY_AMOUNT: self._why,
@@ -102,7 +112,8 @@ class Replies:
         return moment.astimezone(IST).date() == self._outbox.now().astimezone(IST).date()
 
     async def _fallback(self, merchant: Merchant, text: str) -> tuple[Message, ...]:
-        return await self.send(merchant, Outgoing.text("FALLBACK_HELP"))
+        step = self._next_step(merchant.id) if self._next_step is not None else None
+        return await self.send(merchant, step or Outgoing.text("FALLBACK_HELP"))
 
     async def _why(self, merchant: Merchant, text: str) -> tuple[Message, ...]:
         decision = self._claims.latest_paid_decision(merchant.id)

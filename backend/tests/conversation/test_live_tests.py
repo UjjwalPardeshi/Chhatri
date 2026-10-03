@@ -173,6 +173,7 @@ async def test_blocked_via_the_voice_chip() -> None:
 
 async def test_illness_story_one_photo_paid_same_day_and_todays_instalment_paused() -> None:
     world = make_world(start=ist(2025, 8, 21, 11, 20))
+    _without_doctor_rule(world)
     world.claims.silence = SILENT_DAY
     await world.service.checkin_silent(ANIL.id, SILENT_DAY)
     await _voice(world, ANIL.id, "ill")
@@ -198,4 +199,13 @@ async def test_illness_story_one_photo_paid_same_day_and_todays_instalment_pause
     assert (told.text_hi, told.text_en) == (
         "आज की ₹600 की किस्त रोक दी गई है।",
         "Today's ₹600 instalment is paused.",
+    )
+
+
+def _without_doctor_rule(world: World) -> None:
+    """This test is about the chat after a paid personal claim, not the doctor confirmation: the world's engine runs
+    without rule personal.require_doctor_confirmation (the conftest's claims never record a doctor's answer)."""
+    rules = world.claims.rules
+    world.claims.rules = rules.model_copy(
+        update={"personal": rules.personal.model_copy(update={"require_doctor_confirmation": False})}
     )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
 from datetime import UTC, timedelta
 
 import pytest
@@ -18,8 +19,10 @@ from chhatri.conversation.outbox import (
     WhatsAppTemplate,
     message_json,
 )
-from chhatri.domain.enums import Channel, Direction, Language, MessageKind
+from chhatri.conversation.replies import case_chip
+from chhatri.domain.enums import Channel, Direction, Language, MessageKind, PreferredChannel
 from chhatri.domain.models import Message
+from chhatri.integrations.base import DeliveryReceipt, InboundMedia, IntegrationError, OutboundMessage
 from chhatri.integrations.soundbox import SimulatedSoundbox
 from chhatri.integrations.whatsapp_sim import SimulatorChannel
 from chhatri.sim.city import ANIL
@@ -302,3 +305,93 @@ def test_deck_translations_cover_the_hindi_voice_chips_only() -> None:
         "मेरा नुकसान ज़्यादा हुआ।": "My loss was bigger.",
         "मैं अस्पताल में हूँ, बुखार है।": "I'm in hospital with a fever.",
     }
+
+
+# ------------------------------------------------------------------ Telegram buttons and wire lines
+
+
+class RecordingChannel:
+    """A MessagingChannel that keeps what it was given."""
+
+    def __init__(self) -> None:
+        self.sent: list[OutboundMessage] = []
+
+    async def send(self, message: OutboundMessage) -> DeliveryReceipt:
+        self.sent.append(message)
+        return DeliveryReceipt("1", "test", True, "ok")
+
+    async def download_media(self, media_id: str) -> InboundMedia:
+        raise IntegrationError("test", "no media")
+
+
+def _telegram_outbox(world: World, telegram: RecordingChannel, *, prefer_telegram: bool = True) -> Outbox:
+    route = PreferredChannel.TELEGRAM if prefer_telegram else PreferredChannel.WHATSAPP
+    return Outbox(
+        store=world.store,
+        audit=world.audit,
+        ids=world.ids,
+        clock=world.clock,
+        bus=world.bus,
+        channel=world.channel,
+        tts=world.tts,
+        soundbox=SimulatedSoundbox(world.tts),
+        channel_name=Channel.SIMULATOR,
+        telegram=telegram,
+        preferred=lambda merchant_id: route,
+    )
+
+
+BUTTONS = (("pc:PC-000001:confirm", "हाँ, सही है / Yes, this is right"),)
+
+
+async def test_buttons_and_the_wire_lines_go_to_telegram_only(world: World) -> None:
+    telegram = RecordingChannel()
+    out = replace(
+        Outgoing.text("SLIP_PRECHECK_SHOW"), buttons=BUTTONS, wire_extra="डॉक्टर / Doctor: Dr S. Rao"
+    )
+    message = await _telegram_outbox(world, telegram).send(ANIL, out)
+    [sent] = telegram.sent
+    assert sent.buttons == BUTTONS
+    assert sent.text is not None and sent.text.endswith("\nडॉक्टर / Doctor: Dr S. Rao")
+    assert message.text_en == out.text_en and "Dr S. Rao" not in (
+        message.text_en or ""
+    )  # the log keeps the line
+
+
+async def test_whatsapp_never_gets_buttons_or_wire_lines(world: World) -> None:
+    telegram = RecordingChannel()
+    out = replace(Outgoing.text("SLIP_PRECHECK_SHOW"), buttons=BUTTONS, wire_extra="extra")
+    await _telegram_outbox(world, telegram, prefer_telegram=False).send(ANIL, out)
+    assert telegram.sent == []
+    [sent] = world.channel.sent if hasattr(world.channel, "sent") else [None]
+    if sent is not None:
+        assert sent.buttons == ()
+
+
+def test_wire_text_adds_the_extra_line_and_nothing_else() -> None:
+    plain = Outgoing.text("SLIP_PRECHECK_SHOW")
+    assert replace(plain, wire_extra="x").wire_text() == plain.wire_text() + "\nx"
+    assert replace(plain, buttons=BUTTONS).wire_text() == plain.wire_text()
+
+
+async def test_a_payout_card_carries_the_bilingual_why_and_dispute_buttons(world: World) -> None:
+    telegram = RecordingChannel()
+    card = Outgoing(
+        key="PAYOUT_CARD",
+        kind=MessageKind.PAYOUT_CARD,
+        text_hi=None,
+        text_en=None,
+        card={"amount_label": "₹1,500", "subtitle_hi": "जमा", "subtitle_en": "credited", "badge": "PAID"},
+        voiced=False,
+    )
+    await _telegram_outbox(world, telegram).send(ANIL, card)
+    [sent] = telegram.sent
+    assert [callback for callback, _ in sent.buttons] == ["why", "dispute"]
+    for _, title in sent.buttons:
+        assert " / " in title and any("ऀ" <= ch <= "ॿ" for ch in title)
+
+
+def test_the_case_chip_reads_hindi_first_on_a_phone() -> None:
+    chip = case_chip("C-2291")
+    assert chip.text_hi is None  # the console's chip is unchanged
+    assert chip.wire_text() == "दावा अधिकारी को भेजा गया · केस C-2291\nSent to a claims officer · case C-2291"

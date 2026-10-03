@@ -122,5 +122,90 @@ SLIP_PRECHECK_LINES: Final[Mapping[str, tuple[str, str]]] = MappingProxyType(
             "आप पहले भी फ़ोटो भेज चुके हैं। अब इसे हमारी टीम को भेज दीजिए।",
             "You have already sent several photos. Please send this one to our team now.",
         ),
+        # ---- the treating doctor on the slip (rule personal.require_doctor_confirmation)
+        "SLIP_FIELD_DOCTOR": (
+            "डॉक्टर",
+            "Doctor",
+        ),
+        "SLIP_FIELD_DOCTOR_REG": (
+            "रजिस्ट्रेशन नंबर",
+            "Registration no.",
+        ),
+        "SLIP_RETAKE_DOCTOR": (
+            "डॉक्टर का नाम और रजिस्ट्रेशन नंबर साफ़ नहीं दिख रहा। डॉक्टर के नाम वाला हिस्सा पूरा दिखे, ऐसी फ़ोटो भेजिए।",
+            "The doctor's name and registration number are not clear. Please send a photo where the doctor's name and number are fully in view.",
+        ),
+        # ---- consent to ask the doctor (after "Yes, this is right"); names come in through placeholders
+        "DOCTOR_CONSENT_ASK": (
+            "क्या हम {hospital} के {doctor} से आपकी भर्ती की पुष्टि करवा सकते हैं? उन्हें सिर्फ़ आपका नाम और तारीख़ बताई जाएगी।",
+            "May we ask {doctor} at {hospital} to confirm your visit? They will see only your name and the date.",
+        ),
+        "DOCTOR_CONSENT_ASK_GENERIC": (
+            "क्या हम आपका इलाज करने वाले डॉक्टर से आपकी भर्ती की पुष्टि करवा सकते हैं? उन्हें सिर्फ़ आपका नाम और तारीख़ बताई जाएगी।",
+            "May we ask your treating doctor to confirm your visit? They will see only your name and the date.",
+        ),
+        "DOCTOR_CONSENT_YES": (
+            "हाँ, पूछ लीजिए",
+            "Yes, ask them",
+        ),
+        "DOCTOR_CONSENT_NO": (
+            "नहीं",
+            "No",
+        ),
+        "DOCTOR_CONSENT_REMIND": (
+            "कृपया हाँ या नहीं में जवाब दीजिए: क्या हम डॉक्टर से आपकी भर्ती की पुष्टि करवा सकते हैं?",
+            "Please answer yes or no: may we ask the doctor to confirm your visit?",
+        ),
+        # ---- the doctor check while it runs
+        "DOCTOR_CHECK_STARTED": (
+            "धन्यवाद। अब हम {hospital} के {doctor} से आपकी भर्ती की पुष्टि करवा रहे हैं। उनका जवाब आते ही आपको बताएँगे।",
+            "Thank you. We are now asking {doctor} at {hospital} to confirm your visit. We will tell you as soon as they answer.",
+        ),
+        "DOCTOR_ASKED": (
+            "हमने {doctor} से पूछ लिया है। उनके जवाब का इंतज़ार है।",
+            "We have asked {doctor}. We are waiting for their answer.",
+        ),
+        "DOCTOR_CONFIRMED_VISIT": (
+            "{doctor} ने आपकी भर्ती की पुष्टि कर दी है।",
+            "{doctor} has confirmed your visit.",
+        ),
+        "DOCTOR_WAITING": (
+            "हम डॉक्टर के जवाब का इंतज़ार कर रहे हैं। जवाब आते ही आपको बताएँगे।",
+            "We are waiting for the doctor to answer. We will tell you as soon as they do.",
+        ),
+        # ---- the open next step, when a chat message is not about it
+        "SLIP_PRECHECK_REMIND": (
+            'आपकी पर्ची पढ़ ली गई है। सब सही हो तो "हाँ" लिखिए, नहीं तो पर्ची की दूसरी फ़ोटो भेजिए।',
+            'Your slip has been read. If everything is right, reply "yes". If not, send another photo of the slip.',
+        ),
+        "SLIP_PRECHECK_SAID_NO": (
+            "ठीक है। पर्ची की एक और साफ़ फ़ोटो भेजिए।",
+            "All right. Please send another, clearer photo of the slip.",
+        ),
+        "SLIP_TEAM_REMIND": (
+            'आप पर्ची की एक और फ़ोटो भेज सकते हैं, या इसे हमारी टीम को भेजने के लिए "टीम" लिखिए।',
+            'You can send another photo of the slip, or reply "team" to send it to our team.',
+        ),
+        "SLIP_TEAM_ONLY_REMIND": (
+            'इसे हमारी टीम को भेजने के लिए "टीम" लिखिए।',
+            'Reply "team" to send it to our team.',
+        ),
+        "SLIP_ACTION_DONE": (
+            "यह जवाब पहले ही दर्ज है।",
+            "This answer is already recorded.",
+        ),
+        "SLIP_ACTION_EXPIRED": (
+            "यह बटन अब काम नहीं करता। कृपया नई फ़ोटो भेजिए या हमें लिखिए।",
+            "This button no longer works. Please send a new photo or write to us.",
+        ),
+        # the case chip on a phone (Telegram): the console draws the chip, a phone shows this line in both languages
+        "CASE_CHIP_WIRE": (
+            "दावा अधिकारी को भेजा गया · केस {case_id}",
+            "Sent to a claims officer · case {case_id}",
+        ),
+        "CLAIM_WITH_TEAM": (
+            "हमारी टीम आपका दावा देख रही है (केस {case_id})।",
+            "Our team is checking your claim (case {case_id}).",
+        ),
     }
 )

@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from chhatri.config import Settings
 from chhatri.domain.enums import CaseStatus, PreferredChannel
@@ -37,6 +37,9 @@ from chhatri.integrations.base import (
 )
 
 __all__ = ["AppStatePort", "RuntimePort", "StaticPort"]
+
+if TYPE_CHECKING:
+    from chhatri.conversation.pending import Choice
 
 
 class CityPort(Protocol):
@@ -126,6 +129,7 @@ class OrchestratorPort(Protocol):
     ) -> Decision | None: ...
     async def paytm_paid(self, link_id: str, txn_id: str | None) -> PremiumPayment: ...
     async def quote_cover(self, merchant_id: str) -> tuple[CoverQuote, PremiumPayment | None]: ...
+    def open_silence(self, merchant_id: str) -> date | None: ...
 
 
 class ConversationPort(Protocol):
@@ -136,6 +140,7 @@ class ConversationPort(Protocol):
     async def handle_image(
         self, merchant_id: str, image: bytes, mime: str, media_id: str
     ) -> tuple[Message, ...]: ...
+    async def handle_choice(self, merchant_id: str, choice: Choice) -> tuple[Message, ...]: ...
 
 
 class ChannelPort(Protocol):

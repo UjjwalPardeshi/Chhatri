@@ -1,4 +1,10 @@
-"""N3 on the real replay: the pre-check reads, shows and files nothing until the merchant confirms (AC-SLIP-01 to 17)."""
+"""N3 on the real replay: the pre-check reads, shows and files nothing until the merchant confirms (AC-SLIP-01 to 17).
+
+With rule personal.require_doctor_confirmation on (rules.yaml), confirming the fields asks "may we ask your doctor?" and
+files nothing; the answer (CONSENT_YES / CONSENT_NO) goes to the consent book first and then the claim is filed. Where
+the outcome depends on the claim pipeline's doctor step (chhatri-61), it is not pinned here: the claim is filed and the
+consent is recorded.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +18,8 @@ from PIL import Image
 
 from chhatri.ai.labels import AiMode, AiProvider, FallbackReason
 from chhatri.config import DATA_DIR, Settings
+from chhatri.consent.notice import DOCTOR
+from chhatri.consent.verification import doctor_consent
 from chhatri.domain.enums import CheckStatus, DecisionOutcome, MessageKind
 from chhatri.domain.models import SlipExtraction
 from chhatri.forecast.model import ExpectedSalesModel
@@ -20,7 +28,7 @@ from chhatri.integrations.sarvam_sim import SimulatedSlipReader
 from chhatri.integrations.slip_chain import SlipChain, build_slip_chain
 from chhatri.precheck.model import Action, PrecheckStatus, Reason
 from chhatri.precheck.registry import build_service, precheck_service
-from chhatri.precheck.service import PrecheckConflict, PrecheckNotFound, SlipPrecheckService
+from chhatri.precheck.service import Confirmation, PrecheckConflict, PrecheckNotFound, SlipPrecheckService
 from chhatri.replay.state import Runtime
 from chhatri.replay.static import StaticContext
 from chhatri.sim.types import City
@@ -49,6 +57,18 @@ def service(rt: Runtime) -> SlipPrecheckService:
     found = precheck_service(rt)
     assert found is not None
     return found
+
+
+async def confirm_and_answer(
+    svc: SlipPrecheckService, merchant_id: str, precheck_id: str, *, granted: bool = True
+) -> Confirmation:
+    """ "Yes, this is right", then the answer to the doctor question: the claim is filed on the answer."""
+    asked = await svc.confirm(merchant_id, precheck_id, Action.CONFIRM)
+    assert asked.precheck.status is PrecheckStatus.AWAITING_CONSENT and asked.outcome is None
+    return await svc.confirm(merchant_id, precheck_id, Action.CONSENT_YES if granted else Action.CONSENT_NO)
+
+
+FILED = {"APPROVED", "REFERRED"}  # the doctor step of the pipeline (chhatri-61) decides which
 
 
 # ------------------------------------------------------------------------------------------------ flag and read
@@ -97,8 +117,9 @@ async def test_the_audit_holds_ids_codes_and_counts_never_a_slip_value(flagged: 
         if e.action in {"slip.read", "precheck.shown", "precheck.confirmed"}
     ]
     assert [e.action for e in rows] == ["slip.read", "precheck.shown", "precheck.confirmed"]
+    assert rows[2].data["awaiting_consent"] is True and rows[2].data["claim_id"] is None
     text = json.dumps([e.data for e in rows], ensure_ascii=False)
-    for value in ("Anil", "Jadhav", "KEM", "2025-08-20", "Parel"):
+    for value in ("Anil", "Jadhav", "KEM", "2025-08-20", "Parel", "Rao", "MMC"):
         assert value not in text
     read = rows[0].data
     assert read["precheck_id"] == pc.id and read["attempt"] == 1 and read["mode"] == "SIMULATED"
@@ -106,6 +127,8 @@ async def test_the_audit_holds_ids_codes_and_counts_never_a_slip_value(flagged: 
         "patient_name",
         "admission_date",
         "hospital_name",
+        "doctor_name",
+        "doctor_registration_no",
         "document_type",
     ]
     assert rows[1].data["status"] == "READY" and rows[2].actor == f"merchant:{ANIL}"
@@ -113,8 +136,9 @@ async def test_the_audit_holds_ids_codes_and_counts_never_a_slip_value(flagged: 
 
 async def test_no_open_check_in_is_a_conflict_and_stores_nothing(flagged: StaticContext) -> None:
     rt = await loaded(flagged, "illness", seek="11:19")
-    with pytest.raises(PrecheckConflict):
+    with pytest.raises(PrecheckConflict) as refused:
         await service(rt).precheck(ANIL, sample("anil_admission_slip.png"), PNG)
+    assert refused.value.code == "no_checkin"
     assert service(rt).for_merchant(ANIL) == ()
     with pytest.raises(PrecheckConflict):
         await service(rt).precheck(RAMESH, sample("anil_admission_slip.png"), PNG)
@@ -123,26 +147,59 @@ async def test_no_open_check_in_is_a_conflict_and_stores_nothing(flagged: Static
 # ------------------------------------------------------------------------------------------------ confirm
 
 
-async def test_confirm_files_the_claim_at_the_minute_of_confirmation(flagged: StaticContext) -> None:
+async def test_confirm_asks_the_doctor_question_and_files_nothing(flagged: StaticContext) -> None:
     rt = await illness(flagged)
     svc = service(rt)
     pc = await svc.precheck(ANIL, sample("anil_admission_slip.png"), PNG)
-    await rt.engine.step(2)
-    done = await svc.confirm(ANIL, pc.id, Action.CONFIRM)
-    assert (done.outcome, done.case_id, done.messages) == ("APPROVED", None, ())
-    assert (
-        done.precheck.status is PrecheckStatus.CONFIRMED
-        and done.precheck.confirmed_as.value == "FIELDS_CONFIRMED"
+    await rt.engine.step(1)
+    asked = await svc.confirm(ANIL, pc.id, Action.CONFIRM)
+    assert asked.precheck.status is PrecheckStatus.AWAITING_CONSENT and asked.outcome is None
+    assert asked.consent is not None and (asked.consent.doctor_name, asked.consent.hospital_name) == (
+        "Dr S. Rao",
+        "KEM Hospital, Parel",
     )
+    [question] = asked.messages
+    assert question.text_en is not None and question.text_en.startswith(
+        "May we ask Dr S. Rao at KEM Hospital, Parel"
+    )
+    assert question.card is not None and question.card["consent_for"] == pc.id
+    assert rt.store.decisions_for(ANIL) == () and rt.orchestrator.open_silence(ANIL) == WEDNESDAY
+    assert svc.open_for(ANIL) == asked.precheck and doctor_consent(rt.store, ANIL) is None
+
+
+async def test_the_answer_is_recorded_then_the_claim_is_filed(flagged: StaticContext) -> None:
+    rt = await illness(flagged)
+    svc = service(rt)
+    pc = await svc.precheck(ANIL, sample("anil_admission_slip.png"), PNG)
+    done = await confirm_and_answer(svc, ANIL, pc.id)
+    consent = doctor_consent(rt.store, ANIL)
+    assert consent is not None and (consent.purpose, consent.status) == (DOCTOR, "ACTIVE")
+    assert done.outcome in FILED
+    assert done.precheck.status is PrecheckStatus.CONFIRMED and done.precheck.consent is True
+    assert done.precheck.confirmed_as is not None and done.precheck.confirmed_as.value == "FIELDS_CONFIRMED"
     [decision] = rt.store.decisions_for(ANIL)
-    assert decision.amount_paise == 150_000 and decision.decided_at.strftime("%H:%M") == "11:23"
     assert done.precheck.claim_id == decision.claim_id and done.precheck.decision_id == decision.id
     claim = rt.store.claim(decision.claim_id)
     assert claim.slip is not None and claim.slip.raw == {} and claim.slip_media_id == pc.media_id
-    with pytest.raises(PrecheckConflict):  # already confirmed
-        await svc.confirm(ANIL, pc.id, Action.CONFIRM)
+    assert claim.slip.doctor_registration_no == "MMC-2011-45817"
+    with pytest.raises(PrecheckConflict) as again:  # already confirmed
+        await svc.confirm(ANIL, pc.id, Action.CONSENT_YES)
+    assert again.value.code == "already_confirmed"
     with pytest.raises(PrecheckConflict):  # no check-in is open any more
         await svc.precheck(ANIL, sample("anil_admission_slip.png"), PNG)
+    assert svc.open_for(ANIL) is None
+
+
+async def test_a_no_is_recorded_and_the_claim_is_still_filed(flagged: StaticContext) -> None:
+    rt = await illness(flagged)
+    svc = service(rt)
+    pc = await svc.precheck(ANIL, sample("anil_admission_slip.png"), PNG)
+    done = await confirm_and_answer(svc, ANIL, pc.id, granted=False)
+    consent = doctor_consent(rt.store, ANIL)
+    assert consent is not None and consent.status == "WITHDRAWN"
+    assert done.precheck.consent is False and done.outcome is not None
+    assert len(rt.store.decisions_for(ANIL)) == 1
+    assert not any(e.action == "doctor.asked" for e in rt.audit.entries(limit=5000))  # a No means no
 
 
 async def test_a_mismatched_slip_is_ready_then_the_engine_refers_it(flagged: StaticContext) -> None:
@@ -150,14 +207,15 @@ async def test_a_mismatched_slip_is_ready_then_the_engine_refers_it(flagged: Sta
     svc = service(rt)
     pc = await svc.precheck(ANIL, sample("mismatch_admission_slip.png"), PNG)
     assert pc.status is PrecheckStatus.READY  # the pre-check never says whether a name matches the KYC
-    done = await svc.confirm(ANIL, pc.id, Action.CONFIRM)
+    done = await confirm_and_answer(svc, ANIL, pc.id)
     assert (done.outcome, done.case_id) == ("REFERRED", "C-2291")
     assert [m.kind for m in done.messages] == [MessageKind.TEXT, MessageKind.CASE_CHIP]
     lines = rt.store.case("C-2291").evidence["precheck"]
-    assert (lines["filed_as"], lines["photos"], lines["injection_suspected"]) == (
+    assert (lines["filed_as"], lines["photos"], lines["injection_suspected"], lines["doctor_consent"]) == (
         "FIELDS_CONFIRMED",
         1,
         False,
+        "GIVEN",
     )
 
 
@@ -174,9 +232,10 @@ async def test_blurry_then_clear_supersedes_and_counts_the_photos(flagged: Stati
     second = await svc.precheck(ANIL, sample("anil_admission_slip.png"), PNG)
     assert (second.attempt, second.retakes_left, second.status) == (2, 1, PrecheckStatus.READY)
     assert svc.get(ANIL, first.id).status is PrecheckStatus.SUPERSEDED
-    with pytest.raises(PrecheckConflict):  # superseded
+    with pytest.raises(PrecheckConflict) as superseded:
         await svc.confirm(ANIL, first.id, Action.SEND_TO_TEAM)
-    assert (await svc.confirm(ANIL, second.id, Action.CONFIRM)).outcome == "APPROVED"
+    assert superseded.value.code == "superseded"
+    assert (await confirm_and_answer(svc, ANIL, second.id)).outcome in FILED
 
 
 async def test_the_third_unclear_photo_goes_to_the_team_and_a_fourth_is_refused(
@@ -196,8 +255,9 @@ async def test_the_third_unclear_photo_goes_to_the_team_and_a_fourth_is_refused(
         "SLIP_PHOTO_LIMIT",
         0,
     )
-    with pytest.raises(PrecheckConflict):
+    with pytest.raises(PrecheckConflict) as limit:
         await svc.precheck(ANIL, sample("blurry_slip.png"), PNG)
+    assert limit.value.code == "photo_limit"
     done = await svc.confirm(ANIL, last.id, Action.SEND_TO_TEAM)
     assert (
         done.outcome == "REFERRED"
@@ -210,11 +270,16 @@ async def test_wrong_actions_are_conflicts_and_unknown_ids_are_not_found(flagged
     rt = await illness(flagged)
     svc = service(rt)
     ready = await svc.precheck(ANIL, sample("anil_admission_slip.png"), PNG)
-    with pytest.raises(PrecheckConflict):
+    with pytest.raises(PrecheckConflict) as team:
         await svc.confirm(ANIL, ready.id, Action.SEND_TO_TEAM)  # a READY slip is confirmed, not sent
+    assert team.value.code == "ready_not_team"
+    with pytest.raises(PrecheckConflict) as early:
+        await svc.confirm(ANIL, ready.id, Action.CONSENT_YES)  # nobody asked yet
+    assert early.value.code == "no_consent_question"
     retake = await svc.precheck(ANIL, sample("blurry_slip.png"), PNG)
-    with pytest.raises(PrecheckConflict):
+    with pytest.raises(PrecheckConflict) as not_ready:
         await svc.confirm(ANIL, retake.id, Action.CONFIRM)
+    assert not_ready.value.code == "not_ready"
     with pytest.raises(PrecheckNotFound):
         await svc.confirm(ANIL, "PC-000099", Action.CONFIRM)
     with pytest.raises(PrecheckNotFound):  # another merchant's pre-check is not found
@@ -233,6 +298,14 @@ READS = {
     ),
     Reason.DATES_NOT_CLEAR: SlipExtraction(
         patient_name="Anil R. Jadhav", document_type="admission_slip", confidence=0.9, source="gemini-vision"
+    ),
+    Reason.DOCTOR_MISSING: SlipExtraction(
+        patient_name="Anil R. Jadhav",
+        admission_date=WEDNESDAY,
+        hospital_name="KEM Hospital, Parel",
+        document_type="admission_slip",
+        confidence=0.9,
+        source="gemini-vision",
     ),
 }
 
@@ -280,6 +353,8 @@ ANIL_READ = SlipExtraction(
     admission_date=WEDNESDAY,
     document_type="admission_slip",
     hospital_name="KEM Hospital, Parel",
+    doctor_name="Dr S. Rao",
+    doctor_registration_no="MMC-2011-45817",
     confidence=0.95,
     source="gemini-vision",
     raw={"field_confidence": {"patient_name": 0.95}},
@@ -299,8 +374,8 @@ async def test_gemini_reads_the_cleaned_copy_and_the_result_is_live(flagged: Sta
     )
     assert len(gemini.seen) == 1 and b"chhatri:slip" not in gemini.seen[0]  # no provider sees the answer key
     assert pc.slip is not None and pc.slip.raw == {}
-    done = await svc.confirm(ANIL, pc.id, Action.CONFIRM)
-    assert done.outcome == "APPROVED"
+    done = await confirm_and_answer(svc, ANIL, pc.id)
+    assert done.outcome in FILED
 
 
 async def test_gemini_timing_out_falls_to_sarvam_with_a_fallback_label(flagged: StaticContext) -> None:
@@ -366,6 +441,7 @@ async def test_an_injected_slip_stops_the_chain_and_is_filed_as_the_empty_read(
         "filed_as": "SENT_TO_TEAM",
         "photos": 1,
         "injection_suspected": True,
+        "doctor_consent": None,
         "mode": pc.label.mode.value,
         "provider": pc.label.provider.value,
         "model": pc.label.model,
@@ -452,3 +528,16 @@ async def test_a_chat_photo_without_a_check_in_is_still_not_needed(flagged: Stat
         ANIL, sample("anil_admission_slip.png"), PNG, rt.ids.next("media")
     )
     assert reply.text_en is not None and reply.text_en.startswith("Thanks for the photo")
+
+
+async def test_typed_yes_twice_in_the_chat_confirms_then_consents(flagged: StaticContext) -> None:
+    rt = await illness(flagged)
+    await rt.conversation.handle_image(ANIL, sample("anil_admission_slip.png"), PNG, rt.ids.next("media"))
+    *_, question = await rt.conversation.handle_text(ANIL, "haan")
+    assert question.card is not None and question.card["consent_for"] == "PC-000001"
+    assert question.meta["consent_purpose"] == "doctor_verification"
+    assert rt.store.decisions_for(ANIL) == ()
+    await rt.conversation.handle_text(ANIL, "हाँ")
+    consent = doctor_consent(rt.store, ANIL)
+    assert consent is not None and consent.status == "ACTIVE" and consent.source == "CLAIM_CHAT"
+    assert len(rt.store.decisions_for(ANIL)) == 1
