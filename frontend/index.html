@@ -8,17 +8,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/fonts/fonts.css" />
     <title>Chhatri · Claims console</title>
-    <!-- First paint before the bundle runs: the Overview ("/") opens on navy, every other page on paper (no white flash on a projector). -->
+    <!-- First paint before the bundle runs: the Overview ("/") opens on navy, every other page on paper (no white flash on a projector),
+         with a visible line and a small spinner so a slow first load never looks like a dead screen. -->
     <script>
       document.documentElement.dataset.route = window.location.pathname === '/' ? 'overview' : 'console'
     </script>
     <style>
-      .boot-splash { position: fixed; inset: 0; background: #f3f5f8; }
+      .boot-splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #f3f5f8; }
       html[data-route='overview'] .boot-splash { background: #0f1a33; }
+      .boot-splash__text { margin: 0; color: #26344d; font: 500 16px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      html[data-route='overview'] .boot-splash__text { color: #ffffff; }
+      .boot-splash__spinner { width: 28px; height: 28px; border: 3px solid rgba(38, 52, 77, 0.2); border-top-color: #0a66c2; border-radius: 50%; animation: boot-spin 0.9s linear infinite; }
+      html[data-route='overview'] .boot-splash__spinner { border-color: rgba(255, 255, 255, 0.25); border-top-color: #ffffff; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot-splash__spinner { animation: none; } }
     </style>
   </head>
   <body>
-    <div id="root"><div class="boot-splash"></div></div>
+    <div id="root">
+      <div class="boot-splash" role="status" aria-live="polite">
+        <span class="boot-splash__spinner" aria-hidden="true"></span>
+        <p class="boot-splash__text">Chhatri · loading the console…</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

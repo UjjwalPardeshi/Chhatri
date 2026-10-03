@@ -31,10 +31,16 @@ function NotFound() {
   )
 }
 
-/** While a page's chunk loads: the landing page's white ground (no spinner on the landing page), a spinner elsewhere. */
+/** While a page's chunk loads: the landing page's white ground with one quiet line (no spinner there), a spinner and a line elsewhere. */
 export function RouteFallback() {
   const { pathname } = useLocation()
-  return pathname === '/' ? <div className="ov-fallback" aria-busy="true" /> : <Loading />
+  return pathname === '/' ? (
+    <div className="ov-fallback" aria-busy="true">
+      <p className="ov-fallback__text">Loading Chhatri…</p>
+    </div>
+  ) : (
+    <Loading label="Loading the page…" />
+  )
 }
 
 export function AppRoutes() {
@@ -75,7 +81,13 @@ function StandaloneApp() {
   const { search } = useLocation()
   if (!isFeatureEnabled('n1_miniapp')) return <Navigate to={`/merchant/${id}${consoleSearch(search)}`} replace />
   return (
-    <Suspense fallback={<div aria-busy="true" style={{ minHeight: '100dvh' }} />}>
+    <Suspense
+      fallback={
+        <div aria-busy="true" style={{ minHeight: '100dvh' }}>
+          <Loading label="Loading the app…" />
+        </div>
+      }
+    >
       <StandaloneRoute />
     </Suspense>
   )
