@@ -49,6 +49,7 @@ git clone <repo> chhatri && cd chhatri
 make setup     # backend/.venv with backend[dev], and npm ci in frontend/
 make env       # .env from .env.example with a generated CHHATRI_INTERNAL_SECRET (never overwrites)
 make data      # only if an artefact is missing (see below); slow: geo -> city -> history -> model -> calibration -> backtest
+make judge     # one command to check the build (environment, keys, artefacts, demo, audit chain, typecheck): ends CHHATRI JUDGE READY ✓
 make dev       # backend on http://localhost:8000, console on http://localhost:5173 (Ctrl+C stops both)
 ```
 

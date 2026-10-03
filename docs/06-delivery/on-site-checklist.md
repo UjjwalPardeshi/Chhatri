@@ -70,6 +70,7 @@ Every target listed here exists in the Makefile.
 |---|---|---|
 | `make setup` | On a new machine | Creates `backend/.venv` and installs the backend and the console packages |
 | `make env` | On a new machine | Creates `.env` with generated secrets. An existing `.env` is checked and never overwritten |
+| `make judge` | On a new machine, and at T−60 before `make dev` | One line per check: environment, keys SET or NOT SET (offline), artefacts against `MANIFEST.json`, the in-process demo check, the audit chain after the payout, the frontend typecheck. It ends with `CHHATRI JUDGE READY ✓` or lists what failed. Its in-process apps use a temporary state of their own, so it never touches a running backend |
 | `make dev` | T−60 | Starts the backend on :8000 and the console on :5173 with in-process workflows. The backend reloads on a saved file, so nobody edits a backend file after this |
 | `make up`, `make down` | Alternative to `make dev` | Docker stack, console on :8080. Set `CHHATRI_STACK_N8N_URL=` (empty) in `.env` for the in-process runner. `make down` stops it |
 | `make test-slow` | At the freeze | Golden numbers |

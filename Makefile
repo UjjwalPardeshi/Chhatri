@@ -33,7 +33,7 @@ endif
 COVERAGE_MIN ?= 80
 INFRA_COVERAGE_MIN ?= 90
 
-.PHONY: help setup data test test-backend test-frontend test-slow test-infra evals dev demo-check demo-stage stage-e2e e2e \
+.PHONY: help setup data test test-backend test-frontend test-slow test-infra evals dev demo-check judge demo-stage stage-e2e e2e \
 	env check-keys up down lint n8n-workflows n8n-selftest clean
 
 help: ## List the targets
@@ -75,6 +75,10 @@ dev: ## Backend (uvicorn :8000, reload) + console (vite :5173, proxies /api); Ct
 
 demo-check: ## Every scenario through the HTTP API: python backend/scripts/demo_check.py (needs artefacts)
 	cd $(ROOT) && $(PY) backend/scripts/demo_check.py
+
+# Without backend/.venv the script runs on python3 (its top is stdlib only) and reports the missing venv as a FAIL.
+judge: ## One command for a judge: environment, keys (SET / NOT SET), artefacts vs MANIFEST.json, demo check, audit chain, typecheck; ends CHHATRI JUDGE READY or lists what failed
+	cd $(ROOT) && $(if $(wildcard $(PY)),$(PY),python3) scripts/judge.py
 
 demo-stage: ## The 3-minute stage demo: backend + console, stage flag set, synthetic data, no reload. Live Gemini by default; STAGE_AI=sim: no AI keys
 	trap 'kill $$(jobs -p) 2>/dev/null || true' INT TERM EXIT; \

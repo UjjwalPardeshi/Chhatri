@@ -50,6 +50,7 @@ def test_data_is_exactly_build_data(repo_root: Path) -> None:
         ),
         ("test-slow", ["pytest -m slow"]),
         ("demo-check", ["python backend/scripts/demo_check.py"]),
+        ("judge", ["python scripts/judge.py"]),
         ("e2e", ["CONSOLE_URL=http://localhost:5173 npm run test:e2e"]),
         (
             "demo-stage",
