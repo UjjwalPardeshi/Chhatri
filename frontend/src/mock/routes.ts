@@ -16,6 +16,7 @@ import { EVALS_ROUTES } from './endpoints/evals'
 import { GRIEVANCE_ROUTES } from './endpoints/grievances'
 import { OPS_ROUTES } from './endpoints/ops'
 import { PREMIUM_ROUTES } from './endpoints/premium'
+import { PRICING_ROUTES } from './endpoints/pricing'
 import { PRECHECK_ROUTES } from './precheckRoutes'
 import { RECEIPT_ROUTES } from './endpoints/receipt'
 import { TRACKER_ROUTES } from './endpoints/tracker'
@@ -234,6 +235,7 @@ export const ROUTES: readonly Route[] = [
   ...PRECHECK_ROUTES,
   ...OPS_ROUTES,
   ...WHATIF_ROUTES,
+  ...PRICING_ROUTES,
   ...ASK_ROUTES,
   ...GRIEVANCE_ROUTES,
   ...CONSENT_ROUTES,

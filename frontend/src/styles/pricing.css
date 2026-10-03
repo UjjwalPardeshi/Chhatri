@@ -1,0 +1,262 @@
+/*
+ * The pricing simulator at the end of the Backtest page (GET /api/pricing, flag h24_whatif): the levers on the left,
+ * the chosen zone's figures and the city line on the right, one column on a phone. Plain CSS on the console tokens;
+ * type is on the scale tokens, so presenter mode steps it up with the rest of the page. The whole section fits the
+ * 1280 x 720 projector once `/backtest#pricing` has scrolled to it.
+ */
+.pricing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  scroll-margin-top: var(--sp-3);
+}
+
+.pricing__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+/* The head's gap spaces the heading, so it drops the margin `.section h2` gives it. */
+.section.pricing h2 {
+  margin: 0;
+}
+
+.pricing__readonly {
+  padding: 2px var(--sp-2);
+  border-radius: 4px;
+  background: var(--demo-soft);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.pricing__busy {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.pricing__body {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: var(--sp-4) var(--sp-8);
+  align-items: start;
+}
+
+.pricing__caption {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.pricing__unavailable {
+  min-height: 96px;
+}
+
+/* Levers: a name and its value, the control, then what it means and, when it differs, what the rules have. */
+.pricing-levers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.pricing-lever {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pricing-lever__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.pricing-lever__name {
+  padding: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.pricing-lever legend {
+  margin-bottom: var(--sp-1);
+}
+
+.pricing-lever__value {
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.pricing-lever[data-changed='true'] .pricing-lever__value {
+  color: var(--blue);
+}
+
+.pricing-lever input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--blue);
+}
+
+.pricing-lever__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.pricing-lever__rule {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pricing-floor {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.pricing-floor .btn {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--sp-1);
+}
+
+.pricing-floor .btn[aria-pressed='true'] {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.pricing-levers__reset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+/* Results: the zone picker, eight figures for that zone, then the city. */
+.pricing-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.pricing-zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.pricing-zone select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pricing-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.pricing-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.pricing-figure--lead {
+  border-color: var(--blue-soft);
+  background: var(--blue-soft);
+}
+
+.pricing-figure dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.pricing-figure dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.pricing-figure--lead dd {
+  font-size: var(--fs-xl);
+}
+
+.pricing-figure dd.pricing-figure__note {
+  color: var(--amber-ink);
+  font-size: var(--fs-2xs);
+}
+
+.pricing-city {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+}
+
+.pricing-city > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+
+.pricing-city dt {
+  color: var(--muted);
+}
+
+.pricing-city dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+@media (max-width: 900px) {
+  .pricing__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Phones: two figures a row, and each city line under its name. */
+@media (max-width: 640px) {
+  .pricing-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pricing-city > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}

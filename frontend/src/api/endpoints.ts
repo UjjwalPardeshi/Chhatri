@@ -42,6 +42,7 @@ import { askCalls } from '../miniapp/api/askCalls'
 import { rightsCalls } from '../miniapp/api/rightsCalls'
 import { CONSENT_PURPOSES, type ConsentPurpose } from '../miniapp/api/rights'
 import { EVALS_PATH, parseEvalsSummary, type EvalsSummary } from './evals'
+import { parsePricing, pricingPath, type Pricing, type PricingLevers } from './pricing'
 
 export const MIN_SPEED = 1
 export const MAX_SPEED = 120
@@ -237,6 +238,8 @@ export function createApi(client: ApiClient) {
     /** H24 (flag h24_whatif): read-only, nothing is saved. A slider sends several of these a second, so it takes a signal. */
     whatIfArea: async (request: WhatIfRequest, signal?: AbortSignal): Promise<WhatIfArea> =>
       parseWhatIf(await client.post<unknown>('/api/whatif/area', { ...request, zone_id: assertZoneId(request.zone_id) }, false, signal)),
+    /** The pricing simulator (flag h24_whatif, data-model 5.9.1): read-only, null prices the published rules. A slider sends several of these a second, so it takes a signal. Parsed strictly. */
+    pricing: async (levers: PricingLevers | null, signal?: AbortSignal): Promise<Pricing> => parsePricing(await client.get<unknown>(pricingPath(levers), signal)),
     /** Ask Chhatri and voice (data-model 5.2 and 5.11): `ask`, `voiceStt` and `voiceTts`. */
     ...askCalls(client),
     /** N5 and N6 (data-model 5.4 and 5.5): the grievance ladder, the consent centre, the activity log and "forget my slip". */
