@@ -1,7 +1,9 @@
 /**
  * Audit log (SPEC §11, §20 "Audit"): the tamper-evident chain, newest first, grouped by simulated
  * minute (AuditTable), and "Verify chain". While the run has only its first few entries, a card
- * says what will appear here and starts the storm replay.
+ * says what will appear here and starts the storm replay. A long run (a whole monsoon day writes
+ * thousands of entries) paints its newest page first, read after a one-row probe for the total;
+ * "Show earlier entries" loads the page before it, and new entries still arrive live on top.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -34,40 +36,71 @@ export async function fetchAuditAfter(api: Api, after: number, signal?: AbortSig
   }
 }
 
-type RunEntries = { run: string; items: AuditEntry[] }
+/** The entries of one scenario run held on screen: everything after `floor` (seqs are contiguous from 1). */
+type RunEntries = { run: string; items: AuditEntry[]; floor: number }
 
-/** Entries of one scenario run; a new run (reload/reset) starts the log again from seq 0. */
+/** Where the first paint starts: the newest page of the run (a one-row probe reads the total). */
+async function newestFloor(api: Api, signal: AbortSignal): Promise<number> {
+  const probe = await api.audit(0, 1, signal)
+  return Math.max(0, (probe.meta?.total ?? 0) - AUDIT_PAGE)
+}
+
+/** Entries of one scenario run; a new run (reload/reset) starts the log again from its newest page. */
 function useAuditEntries() {
   const { api, snapshot } = useLive()
   const [loaded, setLoaded] = useState<RunEntries | null>(null)
   const [error, setError] = useState<ApiError | null>(null)
   const [version, setVersion] = useState(0)
+  const [earlierBusy, setEarlierBusy] = useState(false)
   const lastSeq = useRef({ run: '', seq: 0 })
   const scenarioKey = `${snapshot?.clock.scenario}|${snapshot?.clock.start}`
 
   useEffect(() => {
     const controller = new AbortController()
-    const after = lastSeq.current.run === scenarioKey ? lastSeq.current.seq : 0
-    fetchAuditAfter(api, after, controller.signal).then(
-      (fresh) => {
-        if (controller.signal.aborted) return
-        const known = lastSeq.current.run === scenarioKey ? lastSeq.current.seq : 0
-        const added = fresh.filter((e) => e.seq > known)
-        lastSeq.current = { run: scenarioKey, seq: added.at(-1)?.seq ?? known }
-        setLoaded((current) => ({ run: scenarioKey, items: current?.run === scenarioKey ? [...current.items, ...added] : added }))
-        setError(null)
-      },
-      (reason: unknown) => {
-        if (!controller.signal.aborted) setError(toApiError(reason))
-      },
-    )
+    const sameRun = lastSeq.current.run === scenarioKey
+    const start = sameRun ? Promise.resolve(lastSeq.current.seq) : newestFloor(api, controller.signal)
+    start
+      .then(async (after) => ({ after, fresh: await fetchAuditAfter(api, after, controller.signal) }))
+      .then(
+        ({ after, fresh }) => {
+          if (controller.signal.aborted) return
+          const known = lastSeq.current.run === scenarioKey ? lastSeq.current.seq : after
+          const added = fresh.filter((e) => e.seq > known)
+          lastSeq.current = { run: scenarioKey, seq: added.at(-1)?.seq ?? known }
+          setLoaded((current) => (current?.run === scenarioKey ? { ...current, items: [...current.items, ...added] } : { run: scenarioKey, items: added, floor: after }))
+          setError(null)
+        },
+        (reason: unknown) => {
+          if (!controller.signal.aborted) setError(toApiError(reason))
+        },
+      )
     return () => controller.abort()
   }, [api, version, scenarioKey])
 
   const bump = useCallback(() => setVersion((v) => v + 1), [])
   useLiveEvent(['audit'], bump)
+
+  /** The page before the oldest entry on screen. */
+  const loadEarlier = useCallback(async () => {
+    const current = loaded
+    if (!current || current.floor === 0 || earlierBusy) return
+    const floor = Math.max(0, current.floor - AUDIT_PAGE)
+    setEarlierBusy(true)
+    try {
+      const page = await api.audit(floor, current.floor - floor)
+      const older = page.items.filter((e) => e.seq > floor && e.seq <= current.floor)
+      setLoaded((now) => (now?.run === current.run && now.floor === current.floor ? { ...now, items: [...older, ...now.items], floor } : now))
+      setError(null)
+    } catch (reason) {
+      setError(toApiError(reason))
+    } finally {
+      setEarlierBusy(false)
+    }
+  }, [api, loaded, earlierBusy])
+
   const entries = loaded?.run === scenarioKey ? loaded.items : null
-  return { entries, error, reload: bump }
+  const hasEarlier = loaded?.run === scenarioKey && loaded.floor > 0
+  return { entries, error, reload: bump, hasEarlier, loadEarlier, earlierBusy }
 }
 
 function VerifyResult({ result }: { result: AuditVerify }) {
@@ -98,7 +131,7 @@ function EarlyRun() {
 
 export default function Audit() {
   const { api } = useLive()
-  const { entries, error, reload } = useAuditEntries()
+  const { entries, error, reload, hasEarlier, loadEarlier, earlierBusy } = useAuditEntries()
   const [filter, setFilter] = useState('')
   const [verify, setVerify] = useState<AuditVerify | null>(null)
   const [verified, setVerified] = useState(0)
@@ -146,6 +179,14 @@ export default function Audit() {
         <div className="card audit-wrap">
           <AuditTable entries={shown} verified={verified} />
           {shown.length === 0 ? <p className="status-box">No entries match.</p> : null}
+          {hasEarlier ? (
+            <div className="audit-earlier">
+              <button type="button" className="btn" disabled={earlierBusy} onClick={() => void loadEarlier()}>
+                {earlierBusy ? 'Loading earlier entries…' : 'Show earlier entries'}
+              </button>
+              {needle !== '' ? <span className="muted">The search covers the entries on screen.</span> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
