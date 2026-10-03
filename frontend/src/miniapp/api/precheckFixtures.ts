@@ -1,5 +1,8 @@
-/** Test fixtures: the READY, RETAKE and NEEDS_TEAM examples of data-model 5.3, as the API sends them. */
-import type { SlipPrecheck } from '../../api/types'
+/**
+ * Test fixtures: the READY, RETAKE and NEEDS_TEAM examples of data-model 5.3 (six slots, design 2.3) and the confirm and
+ * open answers of design 2.4, as the API sends them.
+ */
+import type { DoctorConsent, PrecheckOpen, SlipPrecheck } from '../../api/types'
 
 export const READY_PRECHECK: SlipPrecheck = {
   precheck_id: 'PC-000001',
@@ -14,6 +17,8 @@ export const READY_PRECHECK: SlipPrecheck = {
     { key: 'admission_date', value: '2025-08-20', state: 'READ', note: null },
     { key: 'discharge_date', value: null, state: 'NOT_ON_SLIP', note: null },
     { key: 'hospital_name', value: 'KEM Hospital, Parel', state: 'READ', note: null },
+    { key: 'doctor_name', value: 'Dr S. Rao', state: 'READ', note: null },
+    { key: 'doctor_registration_no', value: 'MMC-2011-45817', state: 'READ', note: null },
   ],
   checklist: [
     { id: 'photo_readable', state: 'PASS' },
@@ -41,6 +46,8 @@ export const RETAKE_PRECHECK: SlipPrecheck = {
     { key: 'admission_date', value: null, state: 'MISSING', note: null },
     { key: 'discharge_date', value: null, state: 'NOT_ON_SLIP', note: null },
     { key: 'hospital_name', value: null, state: 'NOT_ON_SLIP', note: null },
+    { key: 'doctor_name', value: null, state: 'NOT_ON_SLIP', note: null },
+    { key: 'doctor_registration_no', value: null, state: 'NOT_ON_SLIP', note: null },
   ],
   checklist: [
     { id: 'photo_readable', state: 'WARN' },
@@ -86,4 +93,41 @@ export const CONFIRMED_RESPONSE = {
   outcome: 'APPROVED',
   case_id: null,
   messages: [],
+  consent: null,
+  doctor_check: null,
 } as const
+
+export const ASKED_CONSENT: DoctorConsent = {
+  purpose: 'doctor_verification',
+  status: 'ASKED',
+  precheck_id: 'PC-000001',
+  doctor_name: 'Dr S. Rao',
+  hospital_name: 'KEM Hospital, Parel',
+  question_hi: 'क्या हम KEM Hospital, Parel के Dr S. Rao से आपकी भर्ती की पुष्टि करवा सकते हैं? उन्हें सिर्फ़ आपका नाम और तारीख़ बताई जाएगी।',
+  question_en: 'May we ask Dr S. Rao at KEM Hospital, Parel to confirm your visit? They will see only your name and the date.',
+  answered_at: null,
+}
+
+/** CONFIRM with the doctor rule on: nothing is filed yet, the doctor question is asked. */
+export const AWAITING_CONSENT_RESPONSE = {
+  precheck_id: 'PC-000001',
+  status: 'AWAITING_CONSENT',
+  confirmed_as: 'FIELDS_CONFIRMED',
+  claim_id: null,
+  decision_id: null,
+  outcome: null,
+  case_id: null,
+  messages: [],
+  consent: ASKED_CONSENT,
+  doctor_check: null,
+} as const
+
+/** CONSENT_YES: the claim is filed and waits for the doctor (interim REFERRED, no case yet). */
+export const DOCTOR_PENDING_RESPONSE = {
+  ...CONFIRMED_RESPONSE,
+  outcome: 'REFERRED',
+  consent: { ...ASKED_CONSENT, status: 'GIVEN', answered_at: '2025-08-21T11:21:00+05:30' },
+  doctor_check: { status: 'PENDING', doctor_name: 'Dr S. Rao', hospital_name: 'KEM Hospital, Parel' },
+} as const
+
+export const OPEN_READY: PrecheckOpen = { merchant_id: 'S-0142', checkin_open: true, first_silent_day: '2025-08-20', precheck: READY_PRECHECK, awaiting_consent: null }

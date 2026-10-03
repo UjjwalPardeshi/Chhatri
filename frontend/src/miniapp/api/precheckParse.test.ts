@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { ContractViolation } from './parse'
-import { CONFIRMED_RESPONSE, NEEDS_TEAM_PRECHECK, READY_PRECHECK, RETAKE_PRECHECK } from './precheckFixtures'
-import { parsePrecheck, parsePrecheckConfirm } from './precheckParse'
+import { ASKED_CONSENT, AWAITING_CONSENT_RESPONSE, CONFIRMED_RESPONSE, DOCTOR_PENDING_RESPONSE, NEEDS_TEAM_PRECHECK, OPEN_READY, READY_PRECHECK, RETAKE_PRECHECK } from './precheckFixtures'
+import { parsePrecheck, parsePrecheckConfirm, parsePrecheckOpen } from './precheckParse'
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 const mutate = (base: unknown, change: (draft: Record<string, unknown>) => void): unknown => {
@@ -10,6 +10,8 @@ const mutate = (base: unknown, change: (draft: Record<string, unknown>) => void)
   change(draft)
   return draft
 }
+
+const slotValue = (index: number, value: string) => mutate(READY_PRECHECK, (d) => { (d.slots as { value: unknown }[])[index].value = value })
 
 describe('parsePrecheck', () => {
   it('accepts the READY, RETAKE and NEEDS_TEAM examples of data-model 5.3', () => {
@@ -36,8 +38,29 @@ describe('parsePrecheck', () => {
     expect(() => parsePrecheck(mutate(RETAKE_PRECHECK, (d) => { d.reason = 'BLURRY' }))).toThrow(ContractViolation)
   })
 
-  it('rejects slots that are not the four in the fixed order, or whose state disagrees with the value', () => {
-    expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { (d.slots as unknown[]).pop() }))).toThrow(/four slots/)
+  it('reads the six slots in order, the doctor and the registration number last', () => {
+    expect(parsePrecheck(READY_PRECHECK).slots.map((slot) => slot.key)).toEqual(['patient_name', 'admission_date', 'discharge_date', 'hospital_name', 'doctor_name', 'doctor_registration_no'])
+    expect(parsePrecheck(READY_PRECHECK).slots[5].value).toBe('MMC-2011-45817')
+  })
+
+  it('caps the doctor at 80 characters and the registration number at 32, and keeps them plain text', () => {
+    expect(parsePrecheck(slotValue(4, 'D'.repeat(80))).slots[4].value).toHaveLength(80)
+    expect(() => parsePrecheck(slotValue(4, 'D'.repeat(81)))).toThrow(/too long/)
+    expect(() => parsePrecheck(slotValue(5, '1'.repeat(33)))).toThrow(/too long/)
+    expect(() => parsePrecheck(slotValue(5, 'call +91 98200 00000'))).toThrow(/plain text/)
+  })
+
+  it('accepts the doctor retake (DOCTOR_MISSING with SLIP_RETAKE_DOCTOR)', () => {
+    const doctor = mutate(RETAKE_PRECHECK, (d) => {
+      d.reason = 'DOCTOR_MISSING'
+      d.guidance = { key: 'SLIP_RETAKE_DOCTOR', text_hi: 'डॉक्टर का नाम साफ़ नहीं दिख रहा।', text_en: 'The doctor is not clear.' }
+    })
+    expect(parsePrecheck(doctor).reason).toBe('DOCTOR_MISSING')
+  })
+
+  it('rejects slots that are not the six in the fixed order, or whose state disagrees with the value', () => {
+    expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { (d.slots as unknown[]).pop() }))).toThrow(/six slots/)
+    expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { d.slots = (d.slots as unknown[]).slice(0, 4) }))).toThrow(/six slots/)
     expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { (d.slots as unknown[]).reverse() }))).toThrow(ContractViolation)
     expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { (d.slots as { value: unknown }[])[0].value = null }))).toThrow(/READ/)
     expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { (d.slots as { state: unknown }[])[0].state = 'NOT_ON_SLIP' }))).toThrow(ContractViolation)
@@ -86,5 +109,49 @@ describe('parsePrecheckConfirm', () => {
     expect(() => parsePrecheckConfirm({ ...CONFIRMED_RESPONSE, outcome: 'PAID' })).toThrow(ContractViolation)
     expect(() => parsePrecheckConfirm({ ...CONFIRMED_RESPONSE, claim_id: 'X' })).toThrow(ContractViolation)
     expect(() => parsePrecheckConfirm({ ...CONFIRMED_RESPONSE, extra: 1 })).toThrow(ContractViolation)
+  })
+
+  it('reads a server without the doctor keys as no consent and no doctor check (the rule off)', () => {
+    const { consent: _consent, doctor_check: _check, ...old } = CONFIRMED_RESPONSE
+    expect(parsePrecheckConfirm(old)).toEqual(CONFIRMED_RESPONSE)
+  })
+
+  it('accepts AWAITING_CONSENT with nothing filed and the question ASKED', () => {
+    expect(parsePrecheckConfirm(AWAITING_CONSENT_RESPONSE)).toEqual(AWAITING_CONSENT_RESPONSE)
+    expect(() => parsePrecheckConfirm({ ...AWAITING_CONSENT_RESPONSE, claim_id: 'CL-000001' })).toThrow(/AWAITING_CONSENT/)
+    expect(() => parsePrecheckConfirm({ ...AWAITING_CONSENT_RESPONSE, consent: null })).toThrow(/consent/)
+    expect(() => parsePrecheckConfirm({ ...AWAITING_CONSENT_RESPONSE, consent: { ...ASKED_CONSENT, status: 'GIVEN', answered_at: '2025-08-21T11:21:00+05:30' } })).toThrow(/ASKED/)
+  })
+
+  it('needs a claim, a decision and an outcome once CONFIRMED', () => {
+    expect(() => parsePrecheckConfirm({ ...CONFIRMED_RESPONSE, claim_id: null })).toThrow(/CONFIRMED/)
+    expect(() => parsePrecheckConfirm({ ...CONFIRMED_RESPONSE, outcome: null })).toThrow(/CONFIRMED/)
+  })
+
+  it('accepts REFERRED with no case while the doctor is being asked', () => {
+    expect(parsePrecheckConfirm(DOCTOR_PENDING_RESPONSE)).toEqual(DOCTOR_PENDING_RESPONSE)
+    expect(() => parsePrecheckConfirm({ ...DOCTOR_PENDING_RESPONSE, doctor_check: null })).toThrow(/case_id/)
+  })
+
+  it('rejects an unknown key or purpose in the consent block', () => {
+    expect(() => parsePrecheckConfirm({ ...AWAITING_CONSENT_RESPONSE, consent: { ...ASKED_CONSENT, phone: '9820000000' } })).toThrow(/unknown field phone/)
+    expect(() => parsePrecheckConfirm({ ...AWAITING_CONSENT_RESPONSE, consent: { ...ASKED_CONSENT, purpose: 'SALES_DATA_FOR_CLAIM' } })).toThrow(/purpose/)
+    expect(() => parsePrecheckConfirm({ ...DOCTOR_PENDING_RESPONSE, doctor_check: { ...DOCTOR_PENDING_RESPONSE.doctor_check, chat_id: 'tg:1' } })).toThrow(/unknown field chat_id/)
+  })
+})
+
+describe('parsePrecheckOpen', () => {
+  it('accepts an open READY pre-check, a waiting question and a closed check-in', () => {
+    expect(parsePrecheckOpen(OPEN_READY)).toEqual(OPEN_READY)
+    const waiting = { ...OPEN_READY, precheck: null, awaiting_consent: ASKED_CONSENT }
+    expect(parsePrecheckOpen(waiting)).toEqual(waiting)
+    const closed = { merchant_id: 'S-0142', checkin_open: false, first_silent_day: null, precheck: null, awaiting_consent: null }
+    expect(parsePrecheckOpen(closed)).toEqual(closed)
+  })
+
+  it('rejects an unknown key, a closed check-in with a pre-check, and both a pre-check and a question', () => {
+    expect(() => parsePrecheckOpen({ ...OPEN_READY, extra: 1 })).toThrow(/unknown field extra/)
+    expect(() => parsePrecheckOpen({ ...OPEN_READY, checkin_open: false, first_silent_day: null })).toThrow(/checkin_open/)
+    expect(() => parsePrecheckOpen({ ...OPEN_READY, awaiting_consent: ASKED_CONSENT })).toThrow(/awaiting_consent/)
   })
 })

@@ -16,6 +16,7 @@ import type {
   ClockState,
   Cover,
   Decision,
+  DoctorEnrolment,
   IntegrationStatus,
   MerchantDetail,
   MerchantSummary,
@@ -26,6 +27,7 @@ import type {
   PrecheckAction,
   PrecheckConfirm,
   PrecheckInput,
+  PrecheckOpen,
   PreferredChannel,
   PremiumLinkResult,
   Receipt,
@@ -37,8 +39,9 @@ import type {
   ZonePanel,
 } from './types'
 import { parseOpsSummary, parseWhatIf, type OpsSummary, type WhatIfArea, type WhatIfRequest } from './opsWhatIf'
-import { SCENARIO_NAMES } from './types'
+import { PRECHECK_ACTIONS, SCENARIO_NAMES } from './types'
 import { askCalls } from '../miniapp/api/askCalls'
+import { parsePrecheckOpen } from '../miniapp/api/precheckParse'
 import { rightsCalls } from '../miniapp/api/rightsCalls'
 import { CONSENT_PURPOSES, type ConsentPurpose } from '../miniapp/api/rights'
 import { EVALS_PATH, parseEvalsSummary, type EvalsSummary } from './evals'
@@ -55,6 +58,8 @@ const DECISION_ID = /^D-\d{6,}$/
 const PRECHECK_ID = /^PC-\d{6,}$/
 const LINK_ID = /^[A-Za-z0-9_-]{1,64}$/
 const ZONE_ID = /^Z\d{1,2}$/
+/** A medical council registration number as the directory holds it (MMC-2011-45817). */
+const REGISTRATION_NO = /^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
 
 function invalid(field: string, reason: string): ApiError {
@@ -79,6 +84,16 @@ function assertDecisionId(id: string): string {
 function assertPrecheckId(id: string): string {
   if (!PRECHECK_ID.test(id)) throw invalid('precheck_id', 'must look like PC-000001')
   return id
+}
+
+function assertPrecheckAction(action: string): string {
+  if (!(PRECHECK_ACTIONS as readonly string[]).includes(action)) throw invalid('action', `one of ${PRECHECK_ACTIONS.join(', ')}`)
+  return action
+}
+
+function assertRegistrationNo(value: string): string {
+  if (!REGISTRATION_NO.test(value)) throw invalid('registration_no', 'must look like MMC-2011-45817')
+  return value
 }
 
 function assertLinkId(id: string): string {
@@ -207,8 +222,17 @@ export function createApi(client: ApiClient) {
       const ok = input.consent ? { consent: true, notice_version: assertNoticeVersion(input.notice_version ?? '') } : {}
       return client.post<SlipPrecheck>(path, { ...(input.sample ? { sample: input.sample } : {}), ...(input.lang ? { lang: input.lang } : {}), ...ok })
     },
+    /** CONFIRM, SEND_TO_TEAM, or the answer to the doctor question (CONSENT_YES / CONSENT_NO, design 2.4). Parse with `parsePrecheckConfirm`. */
     confirmSlipPrecheck: (id: string, precheckId: string, action: PrecheckAction) =>
-      client.post<PrecheckConfirm>(`${merchantPath(id)}/slip-precheck/${assertPrecheckId(precheckId)}/confirm`, { action }),
+      client.post<PrecheckConfirm>(`${merchantPath(id)}/slip-precheck/${assertPrecheckId(precheckId)}/confirm`, { action: assertPrecheckAction(action) }),
+    /** The open check-in and the pre-check or doctor question it waits on (design 2.4), parsed strictly. */
+    openSlipPrecheck: async (id: string, signal?: AbortSignal): Promise<PrecheckOpen> =>
+      parsePrecheckOpen(await client.get<unknown>(`${merchantPath(id)}/slip-precheck/open`, signal)),
+    /** The Telegram enrolment link of every directory doctor (officer only, design 2.9). POST: the links are secrets. */
+    doctorEnrolmentLinks: () => client.post<DoctorEnrolment[]>('/api/doctors/enrolment-links', {}, true),
+    /** A new link for one doctor; the old one stops working and the doctor's chat is unenrolled. */
+    resetDoctorEnrolmentLink: (registrationNo: string) =>
+      client.post<DoctorEnrolment>(`/api/doctors/${encodeURIComponent(assertRegistrationNo(registrationNo))}/enrolment-link/reset`, {}, true),
     cases: (status: CaseStatus | 'ALL', signal?: AbortSignal) =>
       client.get<Case[]>(status === 'ALL' ? '/api/cases' : `/api/cases?status=${status}`, signal),
     caseDetail: (id: string, signal?: AbortSignal) => client.get<Case>(`/api/cases/${assertCaseId(id)}`, signal),

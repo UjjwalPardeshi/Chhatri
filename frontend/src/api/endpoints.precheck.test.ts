@@ -1,4 +1,4 @@
-/** The two slip pre-check routes of createApi (data-model 5.3): the paths, the body forms and the client-side checks. */
+/** The slip pre-check routes and the doctor enrolment routes of createApi (data-model 5.3): the paths, the body forms and the client-side checks. */
 import { describe, expect, it, vi } from 'vitest'
 
 import { ApiClient, type FetchLike } from './client'
@@ -47,5 +47,37 @@ describe('slip pre-check routes', () => {
     const { api, fetcher } = setup()
     await api.confirmSlipPrecheck('S-0142', 'PC-000001', 'SEND_TO_TEAM')
     expect(call(fetcher)).toEqual({ url: '/api/merchants/S-0142/slip-precheck/PC-000001/confirm', method: 'POST', body: JSON.stringify({ action: 'SEND_TO_TEAM' }) })
+  })
+
+  it('answers the doctor question with CONSENT_YES or CONSENT_NO, and refuses an unknown action', async () => {
+    const { api, fetcher } = setup()
+    await api.confirmSlipPrecheck('S-0142', 'PC-000001', 'CONSENT_YES')
+    expect(call(fetcher).body).toBe(JSON.stringify({ action: 'CONSENT_YES' }))
+    expect(() => api.confirmSlipPrecheck('S-0142', 'PC-000001', 'APPROVE' as never)).toThrow(/Invalid input/)
+  })
+
+  it('reads the open pre-check with a GET', async () => {
+    const { api, fetcher } = setup()
+    await api.openSlipPrecheck('S-0142').catch(() => undefined)
+    expect(call(fetcher)).toEqual({ url: '/api/merchants/S-0142/slip-precheck/open', method: 'GET', body: undefined })
+  })
+})
+
+describe('doctor enrolment routes (officer token)', () => {
+  it('posts for the links and for a reset, with the officer token', async () => {
+    const { api, fetcher } = setup()
+    api.client.setOfficerToken('tok')
+    await api.doctorEnrolmentLinks()
+    await api.resetDoctorEnrolmentLink('MMC-2011-45817')
+    expect(call(fetcher)).toEqual({ url: '/api/doctors/enrolment-links', method: 'POST', body: '{}' })
+    expect((fetcher.mock.calls[0][1]?.headers as Record<string, string> | undefined)?.Authorization).toBe('Bearer tok')
+    expect(fetcher.mock.calls[1][0]).toBe('/api/doctors/MMC-2011-45817/enrolment-link/reset')
+  })
+
+  it('refuses a registration number that does not look like one before any request', () => {
+    const { api, fetcher } = setup()
+    api.client.setOfficerToken('tok')
+    expect(() => api.resetDoctorEnrolmentLink('../x')).toThrow(/Invalid input/)
+    expect(fetcher).not.toHaveBeenCalled()
   })
 })
