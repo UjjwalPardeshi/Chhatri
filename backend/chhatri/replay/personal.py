@@ -216,6 +216,12 @@ class PersonalFlow:
         Chhatri only asks, and only with the merchant's consent. The doctor is reached on the chat
         id in the directory, never on anything printed on the slip. A doctor who does not answer
         leaves the claim for a person: silence is not a denial, and it is never a confirmation.
+
+        The patient asked about is the merchant's KYC name, never the name an AI read off the
+        photograph. The insured person is the merchant, so that is who the doctor is asked about;
+        and asking about the slip's name would hand a misread one of its own a way to decline a
+        claim, through a denial it provoked. A slip whose name does not match is still caught, by
+        NAME_MATCHES_KYC, which is SOFT and sends the claim to a person.
         """
         rt = self._link.rt
         rules = rt.static.rules.personal
@@ -235,7 +241,7 @@ class PersonalFlow:
             hospital_id=hospital.id,
             doctor_registration_no=doctor.registration_no,
             verify_chat_id=doctor.verify_chat_id,
-            patient_name=(claim.slip.patient_name if claim.slip else None) or "",
+            patient_name=rt.static.city.merchant(merchant_id).kyc_name,
             visit_date=claim.event_date,
             requested_at=now,
         )
