@@ -85,6 +85,18 @@ Omkar speaks and never clicks. Ujjwal clicks. Times are the plan for the speaker
 
 **Spare 30 seconds, the slide 8 live tests (not in the 3 minutes; walked by the second test of `stage-demo.spec.ts`).** *HUMAN:* load **Illness mismatch**, seek 11:25, on **Merchant phone** tap the check-in reply, **Send a photo**, **Slip with a different name**, **Yes, this is right**. The phone says the team will check it within 24 hours and shows `case C-2291`. Open **Claims**: case C-2291 is `REFERRED` (`Name on the slip doesn't match KYC`); tap **Approve** once and the resolution reads `APPROVED` with the ₹1,500 credit. Say: "A name that does not match is never decided by the AI: a person sees it, and one tap releases the money." *BLOCKED:* load **Buy cover**, seek 18:10, on **Merchant phone** tap `Red alert tomorrow. Cover me today.` The reply says new cover starts after the waiting period, from 25 August, with a SIMULATED Paytm link. Say: "Cover bought after an alert is told the truth, never approved."
 
+### 3.1 For the questions (not in the 3 minutes)
+
+Each answer is one screen. Open it only when a judge asks.
+
+| Question | Open | Say |
+|---|---|---|
+| "Who approved this money?" | Anil's app: **दावे**, the claim, **रसीद देखें** (see the receipt) | The receipt opens with who authorised the money: the policy engine under rules `pilot-0.1`, "AI authority: none", and **Verify this decision**, which checks the audit log. |
+| "What happens to Anil after the payout?" | Anil's app: the paid claim | "What happens next": the credit, the lender's answer (SIMULATED), how to dispute and the reply time, the cover's paid-up date. Every line comes from the receipt and the cover. |
+| "How do you know the AI is any good?" | `/evals` (flag `h25_evals`, not in the stage flag set: use `make dev` with every flag, or say it) | One stored run on synthetic questions we wrote: 50 live Ask answers with no forbidden statement, 30 of 31 citing the right clause, 2 of 50 with a rupee figure not traced to a fact; slip reading and voice not measured. Quote the page, with its n. |
+| "How did you price it? What if the price is wrong?" | **Backtest**, scroll to **Price the cover** (flag `h24_whatif`, in the stage set) | Every zone priced from the backtest's own triggers. Z7 is ₹18.62 a day at the published rules; press 55% or drag the share and the premium, the loss ratio at today's price and the false payouts move with it. "Planning figures, not an actuarial price; the pilot sets the price." |
+| "Is the build real?" | A terminal: `make judge` | One line per check, ending `CHHATRI JUDGE READY ✓`: artefacts against their hashes, 70 demo checks, the audit chain after the payout. |
+
 ## 4. The cut-downs
 
 **30 seconds, no clicks** (Live map at 17:05, or slide 1):
@@ -123,4 +135,5 @@ The honest labels stay as they are: sales, alerts, KYC, payouts, the lender, the
 
 ## Changelog
 
+- 2026-10-03 · v1.1 · §3.1 for the questions: the receipt's authority block, What happens next, /evals, the pricing simulator, `make judge`
 - 2026-10-03 · v1 · first version: story, flag set, start command, script, cut-downs, reset, fallbacks
