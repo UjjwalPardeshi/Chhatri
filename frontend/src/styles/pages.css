@@ -88,12 +88,31 @@
   text-align: left;
 }
 
-/* Money rows: a blue rule on the left edge and the action in bold. */
+/* Money rows: a blue rule on the left edge and the sentence in bold. */
 .audit-row[data-money='true'] td:first-child {
   box-shadow: inset 3px 0 0 var(--blue);
 }
 
-.audit-row[data-money='true'] .audit-row__action {
+/* What happened: the sentence, then a muted detail line (amounts, places, reasons). */
+.audit-table td.audit-row__action {
+  min-width: 300px;
+  white-space: normal;
+}
+
+.audit-row__text {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.audit-row__detail {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.audit-row[data-money='true'] .audit-row__text {
   color: var(--ink);
   font-weight: 700;
 }

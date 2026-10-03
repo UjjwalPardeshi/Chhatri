@@ -8,7 +8,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ApiError } from '../api/client'
 import type { Api } from '../api/endpoints'
 import type { AuditEntry, AuditVerify } from '../api/types'
-import { AuditTable, HASH_CHARS } from '../components/audit/AuditTable'
+import { AuditTable } from '../components/audit/AuditTable'
+import { searchText } from '../components/audit/auditText'
 import { ErrorState, InlineError, Loading } from '../components/common/Status'
 import { LaunchButton } from '../components/overview/LaunchButton'
 import { LaunchError } from '../components/overview/LaunchError'
@@ -71,12 +72,12 @@ function useAuditEntries() {
 
 function VerifyResult({ result }: { result: AuditVerify }) {
   return result.valid ? (
-    <output className="verify verify--ok">
-      Chain valid · {result.entries} entries · head <span className="mono">{result.head_hash.slice(0, HASH_CHARS)}…</span>
+    <output className="verify verify--ok" title={`Latest fingerprint ${result.head_hash}`}>
+      Chain valid · {result.entries} entries · none changed since written
     </output>
   ) : (
     <output className="verify verify--bad">
-      Chain INVALID · first bad entry #{result.first_bad_seq} of {result.entries}
+      Chain INVALID · first bad entry #{result.first_bad_seq} of {result.entries} · it was changed after it was written
     </output>
   )
 }
@@ -118,7 +119,7 @@ export default function Audit() {
     }
   }
   const needle = filter.trim().toLowerCase()
-  const shown = (entries ?? []).filter((e) => needle === '' || `${e.action} ${e.actor} ${e.subject_type} ${e.subject_id}`.toLowerCase().includes(needle)).toReversed()
+  const shown = (entries ?? []).filter((e) => needle === '' || searchText(e).includes(needle)).toReversed()
 
   return (
     <div className="page">
@@ -126,10 +127,10 @@ export default function Audit() {
         <div>
           <p className="eyebrow">Tamper-evident log</p>
           <h1>Audit log</h1>
-          <p className="muted">Every step, with simulated time. Each entry hashes the previous one (sha256), so any edit breaks the chain.</p>
+          <p className="muted">Every step Chhatri took, in plain words and simulated time. Each entry carries a fingerprint of the one before it (sha256), so changing any entry breaks the chain.</p>
         </div>
         <div className="page__tools">
-          <input className="input" placeholder="Filter by action, actor or subject" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter audit entries" />
+          <input className="input" placeholder="Search: payout, lender, S-0142…" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter audit entries" />
           <button type="button" className="btn btn--primary" disabled={verifying} onClick={() => void runVerify()}>
             {verifying ? 'Verifying…' : 'Verify chain'}
           </button>

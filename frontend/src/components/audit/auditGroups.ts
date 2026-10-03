@@ -18,20 +18,6 @@ export function isMoneyAction(action: string): boolean {
   return MONEY_ACTION.test(action)
 }
 
-const ACTION_NAMES: Readonly<Record<string, string>> = Object.freeze({
-  'instalment.holiday_request': 'Lender asked',
-  'instalment.holiday_decision': 'Lender answered',
-})
-
-/**
- * A plain name for the two audit actions of the EDI holiday (X4), shown beside the raw action; null for any other
- * action. The decision entry is also written when the lender gave no answer, and then it says so.
- */
-export function actionName(entry: Pick<AuditEntry, 'action' | 'data'>): string | null {
-  if (entry.action === 'instalment.holiday_decision' && entry.data.decision === 'NO_RESPONSE') return 'Lender did not answer'
-  return ACTION_NAMES[entry.action] ?? null
-}
-
 /** "19 Aug 2025 · 17:04" groups, in the order the entries come. */
 export function groupByMinute(entries: readonly AuditEntry[]): AuditGroup[] {
   return entries.reduce<AuditGroup[]>((groups, entry) => {
