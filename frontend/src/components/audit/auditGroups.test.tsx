@@ -80,3 +80,20 @@ describe('audit groups', () => {
     expect(container.querySelectorAll('[data-money="true"]')).toHaveLength(2)
   })
 })
+
+const doctorEntry = (action: string, data: Record<string, unknown>, actor = 'merchant:S-0142') =>
+  ({ ...entry(9, '11:22', action), actor, data: { merchant_id: 'S-0142', ...data } }) as AuditEntry
+
+describe('doctor confirmation entries (design 2.3, 2.9)', () => {
+  it('says each answer to the slip check and the doctor question in words', () => {
+    expect(describeEntry(doctorEntry('precheck.confirmed', { action: 'CONFIRM', awaiting_consent: true }))).toEqual({ text: 'Merchant S-0142 confirmed the slip details', detail: 'asked about the doctor next' })
+    expect(describeEntry(doctorEntry('precheck.confirmed', { action: 'CONSENT_YES' })).text).toBe('Merchant S-0142 agreed that we may ask the doctor')
+    expect(describeEntry(doctorEntry('precheck.confirmed', { action: 'CONSENT_NO' })).text).toBe('Merchant S-0142 said no to asking the doctor')
+  })
+
+  it('names the doctor steps and the doctor as an actor', () => {
+    expect(describeEntry(doctorEntry('doctor.answered', { status: 'CONFIRMED' }))).toEqual({ text: 'The treating doctor answered', detail: 'confirmed' })
+    expect(describeEntry(doctorEntry('doctor.enrolled', { registration_no: 'MMC-2011-45817' })).detail).toBe('MMC-2011-45817')
+    expect(actorLabel('doctor:MMC-2011-45817')).toBe('Doctor MMC-2011-45817')
+  })
+})

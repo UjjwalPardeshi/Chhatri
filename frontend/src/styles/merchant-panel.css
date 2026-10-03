@@ -542,3 +542,75 @@
   color: var(--muted);
   font-size: var(--fs-xs);
 }
+
+/* The treating doctor's Telegram link for the officer (design 2.9, D8): no QR, Copy / Open / New link. */
+.doctor-card {
+  display: grid;
+  gap: 6px;
+}
+
+.doctor-card h2 {
+  font-size: var(--fs-lg);
+}
+
+.doctor-card__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.doctor-card__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doctor-link {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.doctor-link__who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  font-size: var(--fs-sm);
+}
+
+.doctor-link__status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.doctor-link[data-answers='TELEGRAM'] .doctor-link__status {
+  color: var(--green-ink);
+}
+
+.doctor-link__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.doctor-link__actions p {
+  margin: 0;
+  font-size: var(--fs-xs);
+}
+
+.doctor-link__note {
+  color: var(--green-ink);
+  font-size: var(--fs-xs);
+}
+
+.doctor-link__field {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: var(--fs-xs);
+}
