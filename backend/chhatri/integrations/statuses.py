@@ -39,6 +39,11 @@ GEMINI_STATUS_NAMES: tuple[str, ...] = ("gemini_chat", "gemini_vision")
 # flag-off API never change. It is added to `GET /api/integrations`, the provider panel and the preflight only with the flag on.
 TELEGRAM_STATUS_NAMES: tuple[str, ...] = ("telegram",)
 
+# The treating doctor who confirms a medical claim (design 2.9): one row of its own, read at request time from the
+# verifier (LIVE while an enrolled doctor would be asked on Telegram, SIMULATED for the stage register, FALLBACK while
+# X6 forces it). It follows the Telegram row in `GET /api/integrations`, with or without the provider panel.
+DOCTOR_STATUS_NAMES: tuple[str, ...] = ("doctor",)
+
 ALWAYS_SIMULATED: tuple[IntegrationStatus, ...] = (
     IntegrationStatus("sales_data", IntegrationMode.SIMULATED, "Paytm sales simulated from a fixed seed"),
     IntegrationStatus("alerts", IntegrationMode.SIMULATED, "IMD-style nowcast · simulated"),
