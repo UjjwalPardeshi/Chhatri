@@ -41,6 +41,7 @@ from chhatri.domain.models import (
     PremiumPayment,
 )
 from chhatri.sim.types import City
+from chhatri.store.telegram_bindings import LIVE_TELEGRAM_BINDINGS
 
 ANNUAL_WINDOW: Final = timedelta(days=365)
 COUNTED_STATUSES: Final = frozenset({PayoutStatus.PENDING, PayoutStatus.CREDITED})
@@ -67,8 +68,10 @@ def _matches(p: Payout, zone_id: str | None, day: date | None, city: City) -> bo
 class Store:
     """Repository for one scenario run (SPEC §24.3); satisfies `store.protocols.MessageLog`."""
 
-    def __init__(self, city: City) -> None:
+    def __init__(self, city: City, *, sticky: Callable[[str], PreferredChannel | None] | None = None) -> None:
         self.city = city
+        # the chat app a merchant chose while their Telegram chat stays linked outlives a load (D3)
+        self._sticky = sticky if sticky is not None else LIVE_TELEGRAM_BINDINGS.sticky_channel
         self._lock = threading.RLock()
         self._covers: dict[str, Cover] = dict(city.covers)
         self._claims: dict[str, Claim] = {}
@@ -324,9 +327,12 @@ class Store:
 
     # preferred channel (Telegram channel): a per-run choice on top of the merchant's default ------
     def preferred_channel(self, merchant_id: str) -> PreferredChannel:
-        """Where this merchant's notifications go: the choice made in this run, else the merchant's own default."""
+        """Where this merchant's notifications go: the choice made in this run, else the choice kept while their
+        Telegram chat stays linked (``TelegramBindings.sticky_channel``), else the merchant's own default."""
         with self._lock:
-            return self._channels.get(merchant_id) or self.city.merchant(merchant_id).preferred_channel
+            chosen = self._channels.get(merchant_id)
+        default = self.city.merchant(merchant_id).preferred_channel
+        return chosen or self._sticky(merchant_id) or default
 
     def set_preferred_channel(self, merchant_id: str, channel: PreferredChannel) -> None:
         """Choose the channel for `merchant_id` (KeyError for an unknown merchant); recreated with the store on a load."""

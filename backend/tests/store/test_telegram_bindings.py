@@ -55,3 +55,49 @@ def test_the_store_rejects_an_unknown_merchant() -> None:
         store.set_preferred_channel("S-9999", PreferredChannel.TELEGRAM)
     with pytest.raises(KeyError):
         store.preferred_channel("S-9999")
+
+
+# ------------------------------------------------------------------ the chosen chat app outlives a scenario load (D3, L5)
+
+
+def test_a_telegram_choice_is_sticky_only_while_a_chat_is_bound() -> None:
+    bindings = TelegramBindings()
+    bindings.remember_choice("S-0142", PreferredChannel.TELEGRAM)
+    assert bindings.sticky_channel("S-0142") is None  # no chat linked: nothing to keep (the simulator)
+    bindings.bind(10, "S-0142")
+    assert bindings.sticky_channel("S-0142") is PreferredChannel.TELEGRAM
+    assert bindings.sticky_channel("S-0907") is None
+
+
+def test_choosing_whatsapp_unbinding_or_clearing_forgets_the_choice() -> None:
+    bindings = TelegramBindings()
+    bindings.bind(10, "S-0142")
+    bindings.remember_choice("S-0142", PreferredChannel.TELEGRAM)
+    bindings.remember_choice("S-0142", PreferredChannel.WHATSAPP)
+    assert bindings.sticky_channel("S-0142") is None
+    bindings.remember_choice("S-0142", PreferredChannel.TELEGRAM)
+    bindings.unbind(10)
+    bindings.bind(10, "S-0142")
+    assert bindings.sticky_channel("S-0142") is None  # /stop forgot it; a new /start chooses again
+    bindings.remember_choice("S-0142", PreferredChannel.TELEGRAM)
+    bindings.clear()
+    bindings.bind(10, "S-0142")
+    assert bindings.sticky_channel("S-0142") is None
+
+
+def test_a_new_store_keeps_telegram_for_a_bound_remembered_merchant() -> None:
+    bindings = TelegramBindings()
+    bindings.bind(10, "S-0142")
+    bindings.remember_choice("S-0142", PreferredChannel.TELEGRAM)
+    reloaded = Store(MiniCity(), sticky=bindings.sticky_channel)  # type: ignore[arg-type]
+    assert reloaded.preferred_channel("S-0142") is PreferredChannel.TELEGRAM
+    assert reloaded.preferred_channel("S-0907") is PreferredChannel.WHATSAPP
+    reloaded.set_preferred_channel("S-0142", PreferredChannel.WHATSAPP)  # the run's own choice wins
+    assert reloaded.preferred_channel("S-0142") is PreferredChannel.WHATSAPP
+
+
+def test_without_a_bound_chat_a_load_resets_to_the_default() -> None:
+    bindings = TelegramBindings()
+    bindings.remember_choice("S-0142", PreferredChannel.TELEGRAM)
+    reloaded = Store(MiniCity(), sticky=bindings.sticky_channel)  # type: ignore[arg-type]
+    assert reloaded.preferred_channel("S-0142") is PreferredChannel.WHATSAPP

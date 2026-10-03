@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, Final
 
 import pytest
@@ -9,7 +10,13 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from chhatri.api.app import create_app
+from chhatri.api.routers import channel as channel_router
+from chhatri.domain.enums import IntegrationMode
+from chhatri.integrations.base import IntegrationStatus
+from chhatri.integrations.retry import HttpStatusError
+from chhatri.integrations.telegram_health import TelegramHealth
 from chhatri.replay.state import AppState
+from chhatri.store.telegram_bindings import LIVE_TELEGRAM_BINDINGS
 from tests.api.helpers import error_of
 from tests.replay.helpers import OFFICER_TOKEN
 
@@ -83,3 +90,41 @@ async def test_flag_off_is_404(loaded: AppState) -> None:
         404,
         "not_found",
     )
+
+
+# ------------------------------------------------------------------ the choice outlives a load while the chat is linked
+
+
+@pytest.fixture
+def linked() -> Any:
+    LIVE_TELEGRAM_BINDINGS.bind(777_000_142, "S-0142")
+    yield LIVE_TELEGRAM_BINDINGS
+    LIVE_TELEGRAM_BINDINGS.unbind(777_000_142)
+
+
+async def test_a_reload_keeps_telegram_while_the_chat_is_linked(loaded: AppState, linked: Any) -> None:
+    app = app_for(loaded)
+    await call(app, "POST", URL, json={"channel": "telegram"}, headers=OFFICER)
+    await loaded.load("monsoon")
+    body = (await call(app, "GET", URL)).json()["data"]
+    assert body["preferred_channel"] == "telegram"
+    assert {c["channel"]: c for c in body["channels"]}["telegram"]["linked"] is True
+
+
+async def test_choosing_whatsapp_forgets_the_kept_choice(loaded: AppState, linked: Any) -> None:
+    app = app_for(loaded)
+    await call(app, "POST", URL, json={"channel": "telegram"}, headers=OFFICER)
+    await call(app, "POST", URL, json={"channel": "whatsapp"}, headers=OFFICER)
+    await loaded.load("monsoon")
+    assert (await call(app, "GET", URL)).json()["data"]["preferred_channel"] == "whatsapp"
+
+
+def test_a_live_telegram_row_reads_fallback_during_an_outage() -> None:
+    live = IntegrationStatus("telegram", IntegrationMode.LIVE, "Telegram Bot API · long polling")
+    runtime = SimpleNamespace(integrations=SimpleNamespace(statuses=(), telegram_statuses=(live,)))
+    health = TelegramHealth()
+    assert channel_router._mode(runtime, "telegram", health) == "LIVE"  # type: ignore[arg-type]
+    health.record_poll_failure(HttpStatusError("telegram", 409))
+    assert channel_router._mode(runtime, "telegram", health) == "FALLBACK"  # type: ignore[arg-type]
+    health.record_poll_ok()
+    assert channel_router._mode(runtime, "telegram", health) == "LIVE"  # type: ignore[arg-type]
