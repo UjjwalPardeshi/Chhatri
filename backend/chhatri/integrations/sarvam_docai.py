@@ -8,6 +8,10 @@ output_format="json")` → `job_id`; poll `client.doc_ai.get_status(job_id)` unt
 Confidence = min(annotations["patient_name"].confidence, annotations["admission_date"].confidence),
 a missing field or confidence counting as 0; a leaf may be a dict with `confidence` or a list of such
 dicts (a list counts as its least confident member). The whole read is bounded by 60 s.
+
+The treating doctor's name and medical registration number are read too (the policy looks them up in the directory).
+No phone, chat or contact detail is ever asked for or kept: the contact used to reach a doctor comes from the
+directory, never from a slip the claimant supplied. A "registration number" that looks like a phone number is dropped.
 """
 
 from __future__ import annotations
@@ -15,11 +19,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import Callable, Mapping
 from datetime import date
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Final
 
 from chhatri.domain.models import SlipExtraction
 from chhatri.integrations.base import IntegrationError
@@ -39,6 +44,17 @@ FAILED_STATUSES = frozenset({"failed", "rejected"})
 DOCUMENT_TYPES = ("admission_slip", "discharge_summary", "prescription", "bill", "other")
 OTHER_DOCUMENT = "other"
 CONFIDENCE_FIELDS = ("patient_name", "admission_date")
+MAX_REGISTRATION_CHARS: Final = 32  # shared with precheck/fields.py
+MIN_PHONE_DIGITS: Final = 10
+DOCTOR_NAME_DESCRIPTION: Final = (
+    "Name of the treating doctor exactly as printed (for example under the signature), or null"
+)
+REGISTRATION_DESCRIPTION: Final = (
+    "The treating doctor's medical council registration number exactly as printed, without a label such as "
+    "'Reg. No', or null. Never a phone number."
+)
+_REGISTRATION_LABEL: Final = re.compile(r"(?i)^reg(?:istration)?\.?\s*(?:no|number)?\.?\s*[:\-]?\s*")
+_PHONE_LIKE: Final = re.compile(r"^[\d\s+\-]+$")
 
 SLIP_SCHEMA: Mapping[str, Any] = MappingProxyType(
     {
@@ -51,6 +67,8 @@ SLIP_SCHEMA: Mapping[str, Any] = MappingProxyType(
                 "description": "Date of discharge, formatted YYYY-MM-DD; empty if not discharged",
             },
             "hospital_name": {"type": "string", "description": "Name of the hospital or clinic"},
+            "doctor_name": {"type": "string", "description": DOCTOR_NAME_DESCRIPTION},
+            "doctor_registration_no": {"type": "string", "description": REGISTRATION_DESCRIPTION},
             "document_type": {
                 "type": "string",
                 "enum": list(DOCUMENT_TYPES),
@@ -95,6 +113,21 @@ def _iso_date(value: Any) -> date | None:
         return None
 
 
+def _registration(value: Any) -> str | None:
+    """A registration number without its printed label; None when empty, too long, digit-less or phone-like."""
+    text = _text(value)
+    if text is None:
+        return None
+    number = _REGISTRATION_LABEL.sub("", text, count=1).strip()
+    digits = sum(ch.isdigit() for ch in number)
+    if not number or len(number) > MAX_REGISTRATION_CHARS or digits == 0:
+        return None
+    if _PHONE_LIKE.match(number) and digits >= MIN_PHONE_DIGITS:
+        logger.info("slip registration number looks like a phone number; treated as missing")
+        return None
+    return number
+
+
 def _document_type(value: Any) -> str | None:
     text = _text(value)
     if text is None:
@@ -110,6 +143,8 @@ def parse_slip(result: Mapping[str, Any], confidence: float, *, source: str) -> 
         admission_date=_iso_date(result.get("admission_date")),
         discharge_date=_iso_date(result.get("discharge_date")),
         hospital_name=_text(result.get("hospital_name")),
+        doctor_name=_text(result.get("doctor_name")),
+        doctor_registration_no=_registration(result.get("doctor_registration_no")),
         document_type=_document_type(result.get("document_type")),
         confidence=min(max(confidence, 0.0), 1.0),
         source=source,

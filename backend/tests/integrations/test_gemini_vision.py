@@ -15,8 +15,11 @@ from chhatri.ai.labels import FallbackReason
 from chhatri.domain.models import SlipExtraction
 from chhatri.integrations.base import IntegrationError, SlipReader
 from chhatri.integrations.gemini_vision import (
+    FIELD_KEYS,
     GEMINI_SLIP_SCHEMA,
+    REPLY_SCHEMA,
     SLIP_SOURCE,
+    SYSTEM_PROMPT,
     LiveGeminiSlipReader,
 )
 
@@ -65,7 +68,7 @@ async def test_the_request_is_the_image_then_the_instruction_with_no_merchant_da
     assert set(body) == {"systemInstruction", "contents", "generationConfig"}
 
 
-async def test_the_schema_is_the_five_builtin_fields_plus_one_confidence_per_scored_field() -> None:
+async def test_the_schema_is_the_slip_fields_plus_one_confidence_per_scored_field() -> None:
     double = GeminiDouble(gemini_json(slip()))
     await read(reader(double))
     sent = double.body()["generationConfig"]["responseJsonSchema"]
@@ -75,6 +78,8 @@ async def test_the_schema_is_the_five_builtin_fields_plus_one_confidence_per_sco
         "discharge_date",
         "hospital_name",
         "document_type",
+        "doctor_name",
+        "doctor_registration_no",
         "field_confidence",
     }
     assert set(sent["required"]) == set(sent["properties"])
@@ -242,3 +247,68 @@ def test_construction_is_validated_and_it_is_a_slip_reader() -> None:
         LiveGeminiSlipReader(KEY, model="a/b")
     adapter = LiveGeminiSlipReader(KEY, model=f"models/{MODEL}")
     assert isinstance(adapter, SlipReader) and adapter.model == MODEL
+
+
+CONTACT_WORDS = ("phone", "mobile", "chat", "contact", "email", "e-mail", "whatsapp", "telegram")
+
+
+def _keys(schema: Any) -> set[str]:
+    """Every property name anywhere in a JSON schema."""
+    if isinstance(schema, dict):
+        own = set(schema.get("properties", {})) if isinstance(schema.get("properties"), dict) else set()
+        return own.union(*(_keys(v) for v in schema.values()))
+    if isinstance(schema, list):
+        return set().union(*(_keys(v) for v in schema))
+    return set()
+
+
+async def test_the_sent_schema_requires_and_caps_the_doctor_keys_and_asks_for_no_contact() -> None:
+    double = GeminiDouble(gemini_json(slip()))
+    await read(reader(double))
+    sent = double.body()["generationConfig"]["responseJsonSchema"]
+    assert {"doctor_name", "doctor_registration_no"} <= set(sent["required"])
+    for key in ("doctor_name", "doctor_registration_no"):
+        assert sent["properties"][key]["type"] == ["string", "null"], key
+    assert GEMINI_SLIP_SCHEMA["properties"]["doctor_name"]["maxLength"] == 80
+    assert GEMINI_SLIP_SCHEMA["properties"]["doctor_registration_no"]["maxLength"] == 32
+    assert "phone number" in GEMINI_SLIP_SCHEMA["properties"]["doctor_registration_no"]["description"]
+    assert FIELD_KEYS[-2:] == ("doctor_name", "doctor_registration_no")
+    for schema in (sent, GEMINI_SLIP_SCHEMA, REPLY_SCHEMA):
+        assert not [k for k in _keys(schema) if any(word in k.lower() for word in CONTACT_WORDS)]
+
+
+def test_the_prompt_asks_for_the_doctor_and_forbids_any_contact_detail() -> None:
+    assert "treating doctor's name or medical registration number" in SYSTEM_PROMPT
+    assert "Never return a phone number, e-mail address or any other contact detail" in SYSTEM_PROMPT
+
+
+async def test_a_reply_with_the_doctor_fills_the_fields() -> None:
+    reply = slip(doctor_name="Dr S. Rao", doctor_registration_no="Reg. No: MMC-2011-45817")
+    result = await read(reader(GeminiDouble(gemini_json(reply))))
+    assert (result.doctor_name, result.doctor_registration_no) == ("Dr S. Rao", "MMC-2011-45817")
+    assert result.confidence == 0.88  # the gate still scores the patient name and admission date only
+
+
+async def test_a_reply_without_the_doctor_keys_still_parses() -> None:
+    result = await read(reader(GeminiDouble(gemini_json(slip()))))
+    assert result.doctor_name is None and result.doctor_registration_no is None
+    assert result.patient_name == "ANIL RAMESH JADHAV"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        slip(doctor_name="D" * 81),
+        slip(doctor_registration_no="R" * 33),
+        slip(doctor_registration_no=45817),
+        slip(doctor_phone="+91 98200 12345"),  # a contact key is an extra key
+    ],
+)
+async def test_a_doctor_value_that_breaks_the_schema_is_an_invalid_reply(reply: dict[str, Any]) -> None:
+    with pytest.raises(InvalidReply):
+        await read(reader(GeminiDouble(gemini_json(reply))))
+
+
+async def test_a_phone_number_in_the_registration_field_is_dropped() -> None:
+    result = await read(reader(GeminiDouble(gemini_json(slip(doctor_registration_no="+91 98200 12345")))))
+    assert result.doctor_registration_no is None
