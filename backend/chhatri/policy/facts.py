@@ -6,9 +6,7 @@ The orchestrator gathers these facts; the engine turns them into a Decision with
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
-
-from datetime import datetime
+from datetime import date, datetime
 
 from chhatri.domain.models import (
     Alert,

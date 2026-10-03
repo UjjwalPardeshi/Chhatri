@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-from chhatri.conversation.messages import CATALOGUE
 from chhatri.clock import ist
+from chhatri.conversation.messages import CATALOGUE
 from chhatri.detect.triggers import VerdictInputs, trigger_verdict
 from chhatri.domain.enums import (
     CheckCode,
