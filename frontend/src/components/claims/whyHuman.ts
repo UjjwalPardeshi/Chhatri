@@ -13,6 +13,11 @@ export const FAILURE_TITLES: Readonly<Record<string, string>> = Object.freeze({
   NAME_MATCHES_KYC: 'Name on the slip doesn’t match KYC',
   DATES_MATCH: 'Dates on the slip don’t match the silent days',
   SLIP_READABLE: 'The slip can’t be read clearly',
+  HOSPITAL_IDENTIFIED: 'The hospital on the slip isn’t in the directory',
+  DOCTOR_IDENTIFIED: 'The doctor isn’t on that hospital’s register',
+  VERIFICATION_CONSENT: 'The merchant would rather we didn’t ask the doctor',
+  DOCTOR_NOT_DENIED: 'The doctor said the patient did not attend',
+  DOCTOR_CONFIRMED: 'The doctor hasn’t confirmed the visit',
 })
 
 /** Display order of check results: what blocks the money first. */

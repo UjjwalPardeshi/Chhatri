@@ -44,14 +44,24 @@ const LABEL_KEYS: Readonly<Record<string, CopyKey>> = {
   SLIP_READABLE: 'CHK_SLIP_READABLE',
   NAME_MATCHES_KYC: 'CHK_NAME_MATCHES_KYC',
   DATES_MATCH: 'CHK_DATES_MATCH',
+  HOSPITAL_IDENTIFIED: 'CHK_HOSPITAL_IDENTIFIED',
+  DOCTOR_IDENTIFIED: 'CHK_DOCTOR_IDENTIFIED',
+  VERIFICATION_CONSENT: 'CHK_VERIFICATION_CONSENT',
+  DOCTOR_NOT_DENIED: 'CHK_DOCTOR_NOT_DENIED',
+  DOCTOR_CONFIRMED: 'CHK_DOCTOR_CONFIRMED',
   WITHIN_AUTO_LIMIT: 'CHK_WITHIN_AUTO_LIMIT',
   NOT_ALREADY_PAID: 'CHK_NOT_ALREADY_PAID',
   WITHIN_ANNUAL_LIMIT: 'CHK_WITHIN_ANNUAL_LIMIT',
 }
 
+/** The plain label of a check code, or null for a code the app has no words for (the engine's English is shown). */
+export function checkLabelKey(code: string): CopyKey | null {
+  return Object.hasOwn(LABEL_KEYS, code) ? LABEL_KEYS[code] : null
+}
+
 function CheckLabel({ check }: { check: ReceiptCheck }) {
   const { lang } = useMiniapp()
-  const key = Object.hasOwn(LABEL_KEYS, check.code) ? LABEL_KEYS[check.code] : null
+  const key = checkLabelKey(check.code)
   return key === null ? <span lang={langAttr('en', lang)}>{check.label_en}</span> : <>{t(key, lang)}</>
 }
 
