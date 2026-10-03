@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import io
+
 import pytest
 from httpx import AsyncClient
+from PIL import Image
 
 from chhatri.api.schemas import MerchantDetail, MerchantSummary, Message
 from chhatri.config import DATA_DIR
@@ -132,6 +135,11 @@ async def test_voice_demo_rejects_unknown_keys(client: AsyncClient) -> None:
     )
 
 
+def _pixels(image: bytes) -> tuple[str, tuple[int, int], bytes]:
+    with Image.open(io.BytesIO(image)) as opened:
+        return opened.format or "", opened.size, opened.convert("RGB").tobytes()
+
+
 async def test_photo_upload_is_stored_and_served(client: AsyncClient, fake_state: FakeAppState) -> None:
     png = media.image_bytes("PNG")
     files = {"file": ("slip.jpg", png, "image/jpeg")}
@@ -139,7 +147,7 @@ async def test_photo_upload_is_stored_and_served(client: AsyncClient, fake_state
     assert items[0].media_url == "/api/media/MD-000001"
     assert fake_state.runtime.conversation.calls[-1][1][2:] == ("image/png", "MD-000001")
     served = await client.get("/api/media/MD-000001")
-    assert served.status_code == 200 and served.content == png
+    assert served.status_code == 200 and _pixels(served.content) == _pixels(png)  # a cleaned copy (design D4)
     assert (served.headers["content-type"], served.headers["cache-control"]) == ("image/png", "no-store")
     assert served.headers["x-content-type-options"] == "nosniff"
 
