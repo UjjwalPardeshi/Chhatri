@@ -11,6 +11,7 @@ import { check, decide, personalExplanation, schedulePayout } from './claims'
 import type { MockMerchant } from './fixtures'
 import type { MockRuntime } from './runtime'
 import { addDays } from './scenarios'
+import { doctorChecks, type DoctorStep } from './doctor'
 
 export const NAME_MATCH_MIN = 85
 export const SLIP_CONFIDENCE_MIN = 0.8
@@ -23,6 +24,8 @@ export const SAMPLE_SLIPS: Readonly<Record<string, SlipRead>> = Object.freeze({
     admission_date: '2025-08-20',
     discharge_date: null,
     hospital_name: 'KEM Hospital, Parel',
+    doctor_name: 'Dr S. Rao',
+    doctor_registration_no: 'MMC-2011-45817',
     document_type: 'admission_slip',
     confidence: 0.94,
     source: 'simulated',
@@ -33,6 +36,8 @@ export const SAMPLE_SLIPS: Readonly<Record<string, SlipRead>> = Object.freeze({
     admission_date: '2025-08-20',
     discharge_date: null,
     hospital_name: 'KEM Hospital, Parel',
+    doctor_name: 'Dr S. Rao',
+    doctor_registration_no: 'MMC-2011-45817',
     document_type: 'admission_slip',
     confidence: 0.93,
     source: 'simulated',
@@ -43,6 +48,8 @@ export const SAMPLE_SLIPS: Readonly<Record<string, SlipRead>> = Object.freeze({
     admission_date: null,
     discharge_date: null,
     hospital_name: null,
+    doctor_name: null,
+    doctor_registration_no: null,
     document_type: 'admission_slip',
     confidence: 0.41,
     source: 'simulated',
@@ -72,16 +79,22 @@ function personalChecks(slip: SlipRead, silentDay: string): Check[] {
 
 function referralMessage(checks: readonly Check[]): Bilingual {
   const failing = checks.find((c) => c.severity === 'SOFT' && c.status !== 'PASS')
+  if (failing?.code === 'VERIFICATION_CONSENT') return MSG.slipToHumanConsent
   return failing?.code === 'NAME_MATCHES_KYC' ? MSG.slipToHuman : MSG.slipUnreadable
 }
 
-export function submitSlip(rt: MockRuntime, merchant: MockMerchant, mediaUrl: string, sample: string | null): void {
+/**
+ * Files a slip claim. `doctor` is the merchant's answer to the doctor question of the pre-check (design 2.3): with it
+ * the two doctor checks join the list, and a simulated doctor confirms a slip whose name matches (doctor.ts).
+ */
+export function submitSlip(rt: MockRuntime, merchant: MockMerchant, mediaUrl: string, sample: string | null, doctor?: DoctorStep): void {
   const read = (sample ? SAMPLE_SLIPS[sample] : undefined) ?? UNREADABLE
   const silentDay = addDays(rt.scenario.day, -1)
   const claimId = rt.nextId('CL')
   rt.conversations.set(merchant.id, { ...rt.conversation(merchant.id), claimId })
   rt.record('ai-agent', 'slip.read', 'claim', claimId, { patient_name: read.patient_name, confidence: read.confidence })
-  const checks = personalChecks(read, silentDay)
+  const base = personalChecks(read, silentDay)
+  const checks = doctor ? [...base.slice(0, 6), ...doctorChecks(rt, merchant, read, doctor), ...base.slice(6)] : base
   const failing = checks.find((c) => c.severity === 'SOFT' && c.status !== 'PASS')
   const decision = decide(rt, {
     claimId,

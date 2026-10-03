@@ -1,9 +1,12 @@
-/** Mock parity for the slip pre-check routes (data-model 5.3 and 6, card 4.2): same bodies, ids, statuses and errors. */
+/**
+ * Mock parity for the slip pre-check routes (data-model 5.3 and 6, card 4.2, design 2.3 and 2.4): same bodies, ids,
+ * statuses, the doctor question between the confirm and the claim, the open route and the 409 codes.
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../api/client'
 import type { ScenarioName } from '../api/types'
-import { parsePrecheck, parsePrecheckConfirm } from '../miniapp/api/precheckParse'
+import { parsePrecheck, parsePrecheckConfirm, parsePrecheckOpen } from '../miniapp/api/precheckParse'
 import type { MockBackend } from './backend'
 import { MOCK_OFFICER_TOKEN } from './fixtures'
 import { testApi } from './testkit'
@@ -49,6 +52,10 @@ describe('POST slip-precheck', () => {
     expect(check).toMatchObject({ precheck_id: 'PC-000001', status: 'READY', attempt: 1, retakes_left: 2, mode: 'SIMULATED', provider: 'mock', fallback_reason: 'MOCK_BACKEND' })
     expect(check.slots[0]).toEqual({ key: 'patient_name', value: 'Anil R. Jadhav', state: 'READ', note: null })
     expect(check.slots[2]).toMatchObject({ key: 'discharge_date', state: 'NOT_ON_SLIP' })
+    expect(check.slots.slice(4)).toEqual([
+      { key: 'doctor_name', value: 'Dr S. Rao', state: 'READ', note: null },
+      { key: 'doctor_registration_no', value: 'MMC-2011-45817', state: 'READ', note: null },
+    ])
     expect(check.source).toMatchObject({ kind: 'SLIP', origin: 'SIMULATED', clause: 'C3' })
     expect(b.runtime.decisions.filter((d) => d.merchant_id === 'S-0142')).toHaveLength(0)
   })
@@ -78,7 +85,7 @@ describe('POST slip-precheck', () => {
     expect(third).toMatchObject({ attempt: 3, retakes_left: 0, status: 'NEEDS_TEAM', reason: 'LOW_CONFIDENCE', next_action: { kind: 'SEND_TO_TEAM' } })
     expect(third.guidance?.key).toBe('SLIP_PHOTO_LIMIT')
     const fourth = await failure(api.slipPrecheck('S-0142', { sample: 'blurry_slip.png' }))
-    expect([fourth.status, fourth.code]).toEqual([409, 'conflict'])
+    expect([fourth.status, fourth.code]).toEqual([409, 'photo_limit'])
   })
 
   it('a photo that is not a sample reads as unreadable, and a bad sample name is 404', async () => {
@@ -89,10 +96,10 @@ describe('POST slip-precheck', () => {
     expect(odd.status).toBe('RETAKE')
   })
 
-  it('is 409 conflict with no silence check-in open, and 404 for an unknown merchant', async () => {
+  it('is 409 no_checkin with no silence check-in open, and 404 for an unknown merchant', async () => {
     const early = await session('illness', '10:45')
     const conflict = await failure(early.api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' }))
-    expect([conflict.status, conflict.code]).toEqual([409, 'conflict'])
+    expect([conflict.status, conflict.code]).toEqual([409, 'no_checkin'])
     const missing = await failure(early.api.slipPrecheck('S-9999', { sample: 'anil_admission_slip.png' }))
     expect([missing.status, missing.code]).toEqual([404, 'not_found'])
   })
@@ -107,44 +114,82 @@ describe('POST slip-precheck', () => {
 })
 
 describe('POST slip-precheck confirm', () => {
-  it('CONFIRM on READY files the claim, and the engine pays', async () => {
+  it('CONFIRM on READY files nothing yet: it asks the doctor question once, as a chat message with Yes and No', async () => {
     const { api, backend: b } = await session()
     const check = await api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' })
-    const done = await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    const asked = await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    expect(parsePrecheckConfirm(asked)).toEqual(asked)
+    expect(asked).toMatchObject({ status: 'AWAITING_CONSENT', confirmed_as: 'FIELDS_CONFIRMED', claim_id: null, outcome: null })
+    expect(asked.consent).toMatchObject({ purpose: 'doctor_verification', status: 'ASKED', doctor_name: 'Dr S. Rao', hospital_name: 'KEM Hospital, Parel' })
+    expect(asked.consent?.question_en).toBe('May we ask Dr S. Rao at KEM Hospital, Parel to confirm your visit? They will see only your name and the date.')
+    expect(asked.messages).toHaveLength(1)
+    const card = asked.messages[0].card as unknown as { consent_for: string; actions: { kind: string }[] }
+    expect([card.consent_for, card.actions.map((a) => a.kind)]).toEqual([check.precheck_id, ['CONSENT_YES', 'CONSENT_NO']])
+    expect(asked.messages[0].meta).toMatchObject({ precheck_id: check.precheck_id, consent_purpose: 'doctor_verification' })
+    expect(b.runtime.decisions.filter((d) => d.merchant_id === 'S-0142')).toHaveLength(0)
+  })
+
+  it('CONSENT_YES records the answer, files the claim and the engine pays after the (simulated) doctor confirms', async () => {
+    const { api, backend: b } = await session()
+    const check = await api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' })
+    await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    const done = await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONSENT_YES')
     expect(parsePrecheckConfirm(done)).toEqual(done)
-    expect(done).toMatchObject({ status: 'CONFIRMED', confirmed_as: 'FIELDS_CONFIRMED', outcome: 'APPROVED', case_id: null, messages: [] })
-    expect(b.runtime.decisions.some((d) => d.id === done.decision_id)).toBe(true)
-    expect(b.runtime.audit.some((e) => e.action === 'precheck.confirmed')).toBe(true)
+    expect(done).toMatchObject({ status: 'CONFIRMED', confirmed_as: 'FIELDS_CONFIRMED', outcome: 'APPROVED', case_id: null, doctor_check: null })
+    expect(done.consent).toMatchObject({ status: 'GIVEN' })
+    expect(done.messages.map((m) => m.meta.doctor_check)).toContain('CONFIRMED')
+    expect(b.runtime.decisions.find((d) => d.id === done.decision_id)?.checks.find((c) => c.code === 'DOCTOR_CONFIRMED')?.status).toBe('PASS')
+    const consent = b.runtime.audit.find((e) => e.action === 'consent.granted')
+    expect(consent?.data).toMatchObject({ purpose: 'DOCTOR_CONFIRMATION', precheck_id: check.precheck_id })
+    expect(JSON.stringify(consent)).not.toMatch(/Jadhav|Rao/)
+  })
+
+  it('CONSENT_NO records the refusal, files the claim, and a person decides it', async () => {
+    const { api, backend: b } = await session()
+    const check = await api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' })
+    await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    const done = await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONSENT_NO')
+    expect(parsePrecheckConfirm(done)).toEqual(done)
+    expect(done).toMatchObject({ status: 'CONFIRMED', outcome: 'REFERRED' })
+    expect(done.consent).toMatchObject({ status: 'REFUSED' })
+    expect(done.case_id).toMatch(/^C-\d+$/)
+    expect(b.runtime.audit.some((e) => e.action === 'consent.refused' && e.data.purpose === 'DOCTOR_CONFIRMATION')).toBe(true)
   })
 
   it('a confirmed READ whose name does not match is REFERRED with a case and its messages', async () => {
     const { api } = await session('illness_mismatch')
     const check = await api.slipPrecheck('S-0142', { sample: 'mismatch_admission_slip.png' })
-    const done = await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    const done = await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONSENT_YES')
     expect(parsePrecheckConfirm(done)).toEqual(done)
     expect(done.outcome).toBe('REFERRED')
     expect(done.case_id).toMatch(/^C-\d+$/)
     expect(done.messages.map((m) => m.kind)).toEqual(['TEXT', 'CASE_CHIP'])
   })
 
-  it('SEND_TO_TEAM on a RETAKE files the claim as referred', async () => {
+  it('SEND_TO_TEAM on a RETAKE files the claim as referred, with no doctor question', async () => {
     const { api } = await session()
     const check = await api.slipPrecheck('S-0142', { sample: 'blurry_slip.png' })
     const done = await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'SEND_TO_TEAM')
-    expect(done).toMatchObject({ confirmed_as: 'SENT_TO_TEAM', outcome: 'REFERRED' })
+    expect(done).toMatchObject({ confirmed_as: 'SENT_TO_TEAM', outcome: 'REFERRED', consent: null })
     expect(done.case_id).not.toBeNull()
   })
 
-  it('refuses the wrong action for the status, a second confirm and a superseded check with 409', async () => {
+  it('answers each wrong action with its 409 code (design 2.3)', async () => {
     const { api } = await session()
+    const code = async (id: string, action: Parameters<typeof api.confirmSlipPrecheck>[2]) => (await failure(api.confirmSlipPrecheck('S-0142', id, action))).code
     const blurry = await api.slipPrecheck('S-0142', { sample: 'blurry_slip.png' })
-    expect((await failure(api.confirmSlipPrecheck('S-0142', blurry.precheck_id, 'CONFIRM'))).code).toBe('conflict')
+    expect(await code(blurry.precheck_id, 'CONFIRM')).toBe('not_ready')
+    expect(await code(blurry.precheck_id, 'CONSENT_YES')).toBe('no_consent_question')
     const ready = await api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' })
-    expect((await failure(api.confirmSlipPrecheck('S-0142', blurry.precheck_id, 'SEND_TO_TEAM'))).code).toBe('conflict')
-    expect((await failure(api.confirmSlipPrecheck('S-0142', ready.precheck_id, 'SEND_TO_TEAM'))).status).toBe(409)
+    expect(await code(blurry.precheck_id, 'SEND_TO_TEAM')).toBe('superseded')
+    expect(await code(ready.precheck_id, 'SEND_TO_TEAM')).toBe('ready_not_team')
+    expect(await code(ready.precheck_id, 'CONSENT_NO')).toBe('no_consent_question')
     await api.confirmSlipPrecheck('S-0142', ready.precheck_id, 'CONFIRM')
-    expect((await failure(api.confirmSlipPrecheck('S-0142', ready.precheck_id, 'CONFIRM'))).status).toBe(409)
-    expect((await failure(api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' }))).status).toBe(409)
+    expect(await code(ready.precheck_id, 'CONFIRM')).toBe('consent_pending')
+    await api.confirmSlipPrecheck('S-0142', ready.precheck_id, 'CONSENT_YES')
+    expect(await code(ready.precheck_id, 'CONSENT_YES')).toBe('already_confirmed')
+    expect((await failure(api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' }))).code).toBe('no_checkin')
   })
 
   it('is 404 for an unknown pre-check and 422 for an unknown action', async () => {
@@ -153,6 +198,26 @@ describe('POST slip-precheck confirm', () => {
     expect((await failure(api.confirmSlipPrecheck('S-0142', 'PC-000099', 'CONFIRM'))).status).toBe(404)
     const bad = await failure(api.client.post<unknown>(`/api/merchants/S-0142/slip-precheck/${check.precheck_id}/confirm`, { action: 'APPROVE' }))
     expect([bad.status, bad.code]).toEqual([422, 'validation_error'])
+  })
+})
+
+describe('GET slip-precheck/open', () => {
+  it('says whether a check-in waits, then shows the open pre-check, then the waiting question, then nothing', async () => {
+    const { api } = await session()
+    expect(parsePrecheckOpen(await api.openSlipPrecheck('S-0142'))).toMatchObject({ checkin_open: true, first_silent_day: '2025-08-20', precheck: null, awaiting_consent: null })
+    const check = await api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' })
+    expect((await api.openSlipPrecheck('S-0142')).precheck?.precheck_id).toBe(check.precheck_id)
+    await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    expect(await api.openSlipPrecheck('S-0142')).toMatchObject({ precheck: null, awaiting_consent: { status: 'ASKED', precheck_id: check.precheck_id } })
+    await api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONSENT_YES')
+    expect(await api.openSlipPrecheck('S-0142')).toEqual({ merchant_id: 'S-0142', checkin_open: false, first_silent_day: null, precheck: null, awaiting_consent: null })
+  })
+
+  it('is closed before the check-in and 404 while the flag is off', async () => {
+    const early = await session('illness', '10:45')
+    expect((await early.api.openSlipPrecheck('S-0142')).checkin_open).toBe(false)
+    vi.stubEnv('VITE_FEATURES', '')
+    expect((await failure(early.api.openSlipPrecheck('S-0142'))).status).toBe(404)
   })
 })
 

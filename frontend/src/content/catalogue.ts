@@ -56,6 +56,20 @@ export const MSG = {
     hi: 'धन्यवाद। पर्ची साफ़ नहीं पढ़ी जा सकी, इसलिए हमारी टीम इसे देखेगी। 24 घंटे में जवाब मिलेगा।',
     en: "Thank you. We couldn't read the slip clearly, so our team will check it. You'll hear back within 24 hours.",
   } as Bilingual,
+  slipToHumanConsent: {
+    hi: 'धन्यवाद। आप नहीं चाहते कि हम अस्पताल से पुष्टि करें, इसलिए हमारी टीम इसे देखेगी। 24 घंटे में जवाब मिलेगा।',
+    en: "Thank you. You'd rather we didn't confirm this with the hospital, so our team will check it. You'll hear back within 24 hours.",
+  } as Bilingual,
+  /** Design 2.6 DOCTOR_CONSENT_ASK: the doctor question after the merchant confirms what was read. */
+  doctorConsentAsk: (doctor: string, hospital: string): Bilingual => ({
+    hi: `क्या हम ${hospital} के ${doctor} से आपकी भर्ती की पुष्टि करवा सकते हैं? उन्हें सिर्फ़ आपका नाम और तारीख़ बताई जाएगी।`,
+    en: `May we ask ${doctor} at ${hospital} to confirm your visit? They will see only your name and the date.`,
+  }),
+  doctorConsentAskGeneric: {
+    hi: 'क्या हम आपका इलाज करने वाले डॉक्टर से आपकी भर्ती की पुष्टि करवा सकते हैं? उन्हें सिर्फ़ आपका नाम और तारीख़ बताई जाएगी।',
+    en: 'May we ask your treating doctor to confirm your visit? They will see only your name and the date.',
+  } as Bilingual,
+  doctorConfirmedVisit: (doctor: string): Bilingual => ({ hi: `${doctor} ने आपकी भर्ती की पुष्टि कर दी है।`, en: `${doctor} has confirmed your visit.` }),
   explainArea: (weekdayHi: string, weekdayEn: string, expected: string, drop: number): Bilingual => ({
     hi: `आपका आम ${weekdayHi}: ${expected}। आज आपके इलाके की बिक्री ${drop}% गिरी। छतरी खोई हुई बिक्री का आधा देती है।`,
     en: `Your usual ${weekdayEn}: ${expected}. Your area fell ${drop}%. Chhatri pays half the lost sales.`,
