@@ -116,6 +116,10 @@ def test_slip_to_human_variants_share_the_tone() -> None:
         "SLIP_TO_HUMAN_DATES",
         "SLIP_TO_HUMAN_UNREADABLE",
         "SLIP_TO_HUMAN_DAYS",
+        "SLIP_TO_HUMAN_CONSENT",
+        "SLIP_TO_HUMAN_DOCTOR",
+        "SLIP_TO_HUMAN_HOSPITAL",
+        "SLIP_TO_HUMAN_DOCTOR_MISSING",
     )
     for key in SLIP_TO_HUMAN_KEYS:
         hi, en = bilingual(key)

@@ -44,16 +44,16 @@ def all_sources(lines: Any) -> list[Source]:
 
 
 def test_every_check_has_sources_and_a_clause() -> None:
-    """All 14 checks cite at least one kind of source and a clause of the wording, C1 to C12 (fs-09 8.4)."""
+    """All 19 checks cite at least one kind of source and a clause of the wording, C1 to C12 (fs-09 8.4)."""
     assert set(CHECK_SOURCE_KINDS) == set(CHECK_CLAUSE) == set(CheckCode)
-    assert len(CheckCode) == 14 and tuple(f"C{n}" for n in range(1, 13)) == CLAUSES
+    assert len(CheckCode) == 19 and tuple(f"C{n}" for n in range(1, 13)) == CLAUSES
     for code in CheckCode:
         assert CHECK_SOURCE_KINDS[code], code
         assert CHECK_CLAUSE[code] in CLAUSES, code
     assert {kind for kinds in CHECK_SOURCE_KINDS.values() for kind in kinds} <= set(SourceKind) - {
         SourceKind.LENDER
     }
-    assert len(SourceKind) == 13
+    assert len(SourceKind) == 14
 
 
 def test_source_object_is_closed() -> None:
@@ -175,6 +175,7 @@ def resolves(ref: str, facts: Any) -> bool:
         "sales": lambda: rest.split(":")[0] == merchant.id and rest.split(":")[1] in days,
         "payouts": lambda: rest == merchant.id,
         "decision": lambda: re.fullmatch(r"D-\d{6,}", rest) is not None,
+        "doctor": lambda: facts.doctor is not None and rest == facts.doctor.registration_no,
     }
     return prefix in checks and checks[prefix]()
 

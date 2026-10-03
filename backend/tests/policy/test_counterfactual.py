@@ -35,7 +35,16 @@ from tests.policy import builders as b
 RULES = default_rules()
 NOW = ist(2025, 8, 19, 17)
 A, R, D = DecisionOutcome.APPROVED, DecisionOutcome.REFERRED, DecisionOutcome.DECLINED
-EXPLAIN_ONLY = {CheckCode.NOT_ALREADY_PAID, CheckCode.WITHIN_ANNUAL_LIMIT}
+EXPLAIN_ONLY = {
+    CheckCode.NOT_ALREADY_PAID,
+    CheckCode.WITHIN_ANNUAL_LIMIT,
+    # "if the doctor had said yes" is not a fact about this claim, it is a different claim
+    CheckCode.HOSPITAL_IDENTIFIED,
+    CheckCode.DOCTOR_IDENTIFIED,
+    CheckCode.VERIFICATION_CONSENT,
+    CheckCode.DOCTOR_NOT_DENIED,
+    CheckCode.DOCTOR_CONFIRMED,
+}
 
 
 def area(**kw: Any) -> tuple[Any, Decision]:
