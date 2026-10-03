@@ -196,6 +196,21 @@ def test_negatives_are_unknown(text: str) -> None:
     assert classify(text) is Intent.UNKNOWN
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I want to cancel my cover.",
+        "Please cancel the insurance and refund me.",
+        "cover cancel karna hai, paise wapas chahiye",
+        "मेरा बीमा रद्द कर दो",
+        "policy band karo aur paisa vapas do",
+    ],
+)
+def test_a_cancel_or_refund_request_never_buys_cover(text: str) -> None:
+    """A cancel request has a cover word and a buy-like word ("get", "do"); it must not open a payment link."""
+    assert classify(text) is not Intent.BUY_COVER
+
+
 def test_insurance_word_is_not_illness() -> None:
     # बीमा (insurance) must not match बीमार (ill), and vice versa
     assert classify("बीमा") is Intent.UNKNOWN

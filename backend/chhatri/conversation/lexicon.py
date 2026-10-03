@@ -121,6 +121,12 @@ BUY: Final = Concept(
     ),
     whole=("ले", "दे", "दो", "cover do"),
 )  # fmt: skip
+CANCEL: Final = Concept(
+    stems=(
+        "cancel", "refund", "money back", "unsubscrib", "stop my cover", "stop the cover", "रद्द",
+        "पैसे वापस", "पैसा वापस", "radd", "paise wapas", "paisa wapas", "paise vapas", "paisa vapas",
+    ),
+)  # fmt: skip
 STATUS: Final = Concept(
     stems=(
         "status", "activ", "valid", "chalu", "चालू", "expir", "am i covered", "do i have",

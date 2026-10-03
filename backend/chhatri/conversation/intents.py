@@ -8,7 +8,8 @@ matches, else ``UNKNOWN``. Rules (word lists in ``lexicon``):
 - WHY_AMOUNT — a why-word with an amount word ("मुझे इतने ही पैसे क्यों मिले?"), or "explain/हिसाब".
 - REPORT_ILLNESS — hospital, fever, ill, accident … ("मैं अस्पताल में हूँ, बुखार है।").
 - COVER_STATUS — a cover word with a status word (active, कब, "do I have").
-- BUY_COVER — a cover word with a buy word ("Red alert tomorrow. Cover me today.", "कवर दे दो").
+- BUY_COVER — a cover word with a buy word ("Red alert tomorrow. Cover me today.", "कवर दे दो"), unless the
+  merchant asks to cancel or get money back ("cancel the cover and get my money back" is not a purchase).
 - DENY / AFFIRM / GREETING — only when the whole message is made of such words (plus fillers), so
   "hello, why did I get this?" is still WHY_AMOUNT.
 
@@ -88,7 +89,7 @@ def _cover_status(text: str, tokens: tuple[str, ...]) -> bool:
 
 
 def _buy_cover(text: str, tokens: tuple[str, ...]) -> bool:
-    return lx.COVER.found_in(text) and lx.BUY.found_in(text)
+    return lx.COVER.found_in(text) and lx.BUY.found_in(text) and not lx.CANCEL.found_in(text)
 
 
 _ACK_WORDS: Final = lx.AFFIRM_WORDS | lx.FILLER_WORDS

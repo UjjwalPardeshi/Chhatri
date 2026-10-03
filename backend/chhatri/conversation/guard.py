@@ -33,7 +33,8 @@ PROMISE: Final = Concept(
         "surely get", "मंजूर", "गारंटी", "पक्का", "वादा", "मिल जाएंग", "मिल जायेंग", "मिलेंगे",
         "पैसे मिल", "रुपये मिल", "भुगतान मिल", "भुगतान कर देंगे", "भुगतान हो जाएग", "जमा हो जाएग",
         "जमा कर देंगे", "manjoor", "manzoor", "manjur", "pakka", "pass ho jayega", "mil jayenge",
-        "mil jayega", "paisa milega", "paise milenge", "payment ho jayega",
+        "mil jayega", "paisa milega", "paise milenge", "payment ho jayega", "claim is accept",
+        "claim has been accept", "claim was accept", "claim accept", "दावा स्वीकार", "क्लेम स्वीकार",
     )
 )  # fmt: skip
 

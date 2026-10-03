@@ -53,6 +53,9 @@ def test_ungrounded_numbers_fail(reply: str) -> None:
         "हम आपको भुगतान कर देंगे।",
         "claim pass ho jayega",
         "paise mil jayenge",
+        "Good news, your claim has been accepted.",
+        "Claim accepted for today.",
+        "आपका दावा स्वीकार हो गया है।",
     ],
 )
 def test_money_or_approval_promises_fail(reply: str) -> None:
