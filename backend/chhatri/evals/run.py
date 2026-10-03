@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -48,14 +48,19 @@ def run_offline(
     *,
     split: str = "all",
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    live: Mapping[str, SuiteResult] | None = None,
+    started_at: datetime | None = None,
 ) -> tuple[dict[str, Any], dict[str, tuple[dict[str, Any], ...]]]:
-    """Score the selected suites that need no network. Returns the summary and the per-item rows by suite."""
+    """Score the selected suites that need no network, and take the live suites already run (``live``, by suite id,
+    with ``started_at`` the time the live run began). Returns the summary and the per-item rows by suite."""
     selected = set(suites)
-    started = now()
+    started = started_at or now()
     results: list[SuiteResult] = []
     for suite_id in SUITE_IDS:
         if suite_id not in selected:
             results.append(_unmeasured(suite_id, REASON_NOT_SELECTED))
+        elif live is not None and suite_id in live:
+            results.append(live[suite_id])
         elif suite_id in OFFLINE_SUITES:
             results.append(OFFLINE_SUITES[suite_id](split))
         else:

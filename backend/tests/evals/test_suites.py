@@ -10,7 +10,7 @@ import pytest
 
 from chhatri.conversation.guard_strict import GuardNumbers
 from chhatri.evals import __main__ as cli
-from chhatri.evals.fixtures import FIXTURE_DIR, held_out_hashes, load_rows, select_split
+from chhatri.evals.fixtures import FIXTURE_DIR, HELD_OUT_FILES, held_out_hashes, load_rows, select_split
 from chhatri.evals.run import run_offline, write_run
 from chhatri.evals.suites import chain, guard, intent
 from chhatri.evals.summary import SUITE_IDS, held_out_changed, load_summary
@@ -143,6 +143,7 @@ def test_run_offline_leaves_live_suites_not_measured_and_labels_providers() -> N
     assert run["data_origin"] == "synthetic" and set(run["held_out_sha256"]) == {
         "intents.jsonl",
         "guard.jsonl",
+        "ask.jsonl",
     }
     assert {p["component"] for p in run["providers"]} == {"intent_rules", "guard", "chain"}
     assert set(items) == {"intent", "guard", "chain"}
@@ -170,7 +171,7 @@ def test_write_run_and_the_file_round_trips_through_the_loader(tmp_path: Path) -
 def test_held_out_hash_detects_a_change(tmp_path: Path) -> None:
     summary, _ = run_offline()
     assert held_out_changed(summary) == []
-    for name in ("intents.jsonl", "guard.jsonl"):
+    for name in HELD_OUT_FILES:
         (tmp_path / name).write_text((FIXTURE_DIR / name).read_text(encoding="utf-8"), encoding="utf-8")
     assert held_out_changed(summary, tmp_path) == []
     (tmp_path / "guard.jsonl").write_text("changed\n")
@@ -208,6 +209,12 @@ def test_live_is_refused_with_exit_one_and_a_reason(
     monkeypatch.setattr(cli, "get_settings", lambda: type("S", (), {"chhatri_data_is_synthetic": False})())
     assert cli.main(["--live"]) == 1
     assert "data gate is closed" in capsys.readouterr().err
-    monkeypatch.setattr(cli, "get_settings", lambda: type("S", (), {"chhatri_data_is_synthetic": True})())
+    no_ai = {"chhatri_data_is_synthetic": True, "gemini_chat_live": False, "sarvam_live": False}
+    monkeypatch.setattr(cli, "get_settings", lambda: type("S", (), no_ai)())
     assert cli.main(["--live", "--yes"]) == 1
-    assert "no live suite is built" in capsys.readouterr().err
+    assert "no AI provider is set" in capsys.readouterr().err
+    with_ai = {**no_ai, "gemini_chat_live": True}
+    monkeypatch.setattr(cli, "get_settings", lambda: type("S", (), with_ai)())
+    monkeypatch.setattr(cli, "_confirm", lambda calls: False)
+    assert cli.main(["--live"]) == 1
+    assert "stopped before any provider call" in capsys.readouterr().err

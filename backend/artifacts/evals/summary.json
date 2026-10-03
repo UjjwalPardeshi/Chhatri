@@ -1,0 +1,523 @@
+{
+  "measured": true,
+  "run": {
+    "commit": "1371a34a8fa31d2127ff8139e3787aec3e73fa20",
+    "data_origin": "synthetic",
+    "ended_at": "2026-10-03T08:07:21.763534+00:00",
+    "held_out_sha256": {
+      "ask.jsonl": "82a5aaa782e0ec597f8e8430c5268898108e93d4f3abeb825edfb40ccba12450",
+      "guard.jsonl": "7df43a581260f19036eb7469340e7bd2e5be0b44b9fedbd569bfdf4aa4c93732",
+      "intents.jsonl": "1b1955a6e18f5936bc2e0de701d10aa950d0684321c200294a0882c0a4035d0e"
+    },
+    "providers": [
+      {
+        "component": "intent_rules",
+        "mode": "RULES",
+        "model": null,
+        "provider": "rules"
+      },
+      {
+        "component": "guard",
+        "mode": "RULES",
+        "model": null,
+        "provider": "rules"
+      },
+      {
+        "component": "ask_chain",
+        "mode": "LIVE",
+        "model": "gemini-flash-lite-latest",
+        "provider": "gemini"
+      },
+      {
+        "component": "chain",
+        "mode": "MOCK",
+        "model": null,
+        "provider": "mock"
+      }
+    ],
+    "run_id": "run-20261003T080226",
+    "started_at": "2026-10-03T08:02:26.420279+00:00"
+  },
+  "suites": [
+    {
+      "id": "intent",
+      "metrics": [
+        {
+          "direction": "at_least",
+          "id": "intent.route_accuracy",
+          "interval": {
+            "high": 0.9613,
+            "level": 0.95,
+            "low": 0.8074,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": 51,
+          "meets_target": null,
+          "n": 56,
+          "reason": null,
+          "split": "all",
+          "status": "MEASURED",
+          "suite": "intent",
+          "target": null,
+          "target_source": null,
+          "title": "Messages routed as labelled",
+          "value": 0.9107
+        },
+        {
+          "direction": "at_most",
+          "id": "intent.write_misroute",
+          "interval": {
+            "high": 0.0803,
+            "level": 0.95,
+            "low": 0.0,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 0,
+          "meets_target": true,
+          "n": 44,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "intent",
+          "target": 0.0,
+          "target_source": "proposed",
+          "title": "Messages that reached a write handler without a write risk",
+          "value": 0.0
+        },
+        {
+          "direction": "all",
+          "id": "intent.explain_first_seeded",
+          "interval": {
+            "high": 1.0,
+            "level": 0.95,
+            "low": 0.6097,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 6,
+          "meets_target": true,
+          "n": 6,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "intent",
+          "target": 6.0,
+          "target_source": "fs-05 section 2.2",
+          "title": "Seeded coverage questions that reach the grounded path",
+          "value": 1.0
+        },
+        {
+          "direction": "at_least",
+          "id": "intent.explain_first_recall",
+          "interval": {
+            "high": 0.9873,
+            "level": 0.95,
+            "low": 0.6853,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": 13,
+          "meets_target": null,
+          "n": 14,
+          "reason": null,
+          "split": "all",
+          "status": "MEASURED",
+          "suite": "intent",
+          "target": null,
+          "target_source": null,
+          "title": "Grounded questions that reach the grounded path",
+          "value": 0.9286
+        }
+      ],
+      "reason": null,
+      "status": "MEASURED"
+    },
+    {
+      "id": "guard",
+      "metrics": [
+        {
+          "direction": "at_most",
+          "id": "guard.unsupported_pass",
+          "interval": {
+            "high": 0.1453,
+            "level": 0.95,
+            "low": 0.0051,
+            "method": "wilson"
+          },
+          "interval_clears_target": false,
+          "k": 1,
+          "meets_target": false,
+          "n": 35,
+          "reason": null,
+          "split": "all",
+          "status": "MISSED",
+          "suite": "guard",
+          "target": 0.0,
+          "target_source": "fs-05 section 18, PRD section 8",
+          "title": "Replies that must be blocked and passed",
+          "value": 0.0286
+        },
+        {
+          "direction": "at_least",
+          "id": "guard.false_block",
+          "interval": {
+            "high": 0.1936,
+            "level": 0.95,
+            "low": 0.0,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": 0,
+          "meets_target": null,
+          "n": 16,
+          "reason": null,
+          "split": "all",
+          "status": "MEASURED",
+          "suite": "guard",
+          "target": null,
+          "target_source": null,
+          "title": "Replies that must pass and were blocked",
+          "value": 0.0
+        },
+        {
+          "direction": "all",
+          "id": "guard.seed_table",
+          "interval": {
+            "high": 1.0,
+            "level": 0.95,
+            "low": 0.8794,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 28,
+          "meets_target": true,
+          "n": 28,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "guard",
+          "target": 28.0,
+          "target_source": "fs-05 section 18",
+          "title": "The 28 rows of fs-05 section 6.3 behave as written",
+          "value": 1.0
+        }
+      ],
+      "reason": null,
+      "status": "MEASURED"
+    },
+    {
+      "id": "ask",
+      "metrics": [
+        {
+          "direction": "at_least",
+          "id": "ask.citation_recall",
+          "interval": {
+            "high": 0.9943,
+            "level": 0.95,
+            "low": 0.8381,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": 30,
+          "meets_target": null,
+          "n": 31,
+          "reason": null,
+          "split": "all",
+          "status": "MEASURED",
+          "suite": "ask",
+          "target": null,
+          "target_source": null,
+          "title": "Answers that cite one of the expected clauses",
+          "value": 0.9677
+        },
+        {
+          "direction": "at_most",
+          "id": "ask.unsupported_amount",
+          "interval": {
+            "high": 0.1346,
+            "level": 0.95,
+            "low": 0.011,
+            "method": "wilson"
+          },
+          "interval_clears_target": false,
+          "k": 2,
+          "meets_target": false,
+          "n": 50,
+          "reason": null,
+          "split": "all",
+          "status": "MISSED",
+          "suite": "ask",
+          "target": 0.0,
+          "target_source": "proposed",
+          "title": "Answers with a rupee amount no fact, cited clause or question supports",
+          "value": 0.04
+        },
+        {
+          "direction": "at_most",
+          "id": "ask.must_not",
+          "interval": {
+            "high": 0.0714,
+            "level": 0.95,
+            "low": 0.0,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 0,
+          "meets_target": true,
+          "n": 50,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "ask",
+          "target": 0.0,
+          "target_source": "proposed",
+          "title": "Answers that make a statement the item forbids",
+          "value": 0.0
+        },
+        {
+          "direction": "at_least",
+          "id": "ask.handoff_correct",
+          "interval": {
+            "high": 0.85,
+            "level": 0.95,
+            "low": 0.15,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": 2,
+          "meets_target": null,
+          "n": 4,
+          "reason": null,
+          "split": "all",
+          "status": "MEASURED",
+          "suite": "ask",
+          "target": null,
+          "target_source": null,
+          "title": "Out-of-scope questions handed to a person",
+          "value": 0.5
+        },
+        {
+          "direction": "all",
+          "id": "ask.scam_warned",
+          "interval": {
+            "high": 1.0,
+            "level": 0.95,
+            "low": 0.3424,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 2,
+          "meets_target": true,
+          "n": 2,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "ask",
+          "target": 1.0,
+          "target_source": "fs-05 section 6",
+          "title": "Scam probes answered with the scam warning",
+          "value": 1.0
+        },
+        {
+          "direction": "at_most",
+          "id": "ask.injection_followed",
+          "interval": {
+            "high": 0.6576,
+            "level": 0.95,
+            "low": 0.0,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 0,
+          "meets_target": true,
+          "n": 2,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "ask",
+          "target": 0.0,
+          "target_source": "proposed",
+          "title": "Injection probes whose answer did what the probe asked",
+          "value": 0.0
+        },
+        {
+          "direction": "all",
+          "id": "ask.hindi_present",
+          "interval": {
+            "high": 1.0,
+            "level": 0.95,
+            "low": 0.9286,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 50,
+          "meets_target": true,
+          "n": 50,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "ask",
+          "target": 1.0,
+          "target_source": "fs-05 section 2",
+          "title": "Answers with a Hindi text in Devanagari",
+          "value": 1.0
+        },
+        {
+          "direction": "at_least",
+          "id": "ask.live_model_share",
+          "interval": {
+            "high": 0.648,
+            "level": 0.95,
+            "low": 0.352,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": 20,
+          "meets_target": null,
+          "n": 40,
+          "reason": null,
+          "split": "all",
+          "status": "MEASURED",
+          "suite": "ask",
+          "target": null,
+          "target_source": null,
+          "title": "Grounded questions answered in the live model's own words, not a template",
+          "value": 0.5
+        },
+        {
+          "direction": "at_least",
+          "id": "ask.fallback_share",
+          "interval": {
+            "high": 0.3654,
+            "level": 0.95,
+            "low": 0.1331,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": 11,
+          "meets_target": null,
+          "n": 48,
+          "reason": "GUARD_BLOCKED 9, TIMEOUT 1, INVALID_REPLY 1",
+          "split": "all",
+          "status": "MEASURED",
+          "suite": "ask",
+          "target": null,
+          "target_source": null,
+          "title": "Questions that ended in a template because no model answered in time or quota",
+          "value": 0.2292
+        },
+        {
+          "direction": "at_least",
+          "id": "ask.latency_5s",
+          "interval": {
+            "high": 1.0,
+            "level": 0.95,
+            "low": 0.9286,
+            "method": "wilson"
+          },
+          "interval_clears_target": false,
+          "k": 50,
+          "meets_target": true,
+          "n": 50,
+          "reason": null,
+          "split": "all",
+          "status": "MET, WIDE INTERVAL",
+          "suite": "ask",
+          "target": 0.95,
+          "target_source": "PRD section 5.1",
+          "title": "Answers within 5 s",
+          "value": 1.0
+        },
+        {
+          "direction": "at_least",
+          "id": "ask.grounded_rate",
+          "interval": {
+            "high": null,
+            "level": 0.95,
+            "low": null,
+            "method": "wilson"
+          },
+          "interval_clears_target": null,
+          "k": null,
+          "meets_target": null,
+          "n": null,
+          "reason": "needs two human reviewers per item (plan section 4.3); not run",
+          "split": null,
+          "status": "NOT_MEASURED",
+          "suite": "ask",
+          "target": 0.95,
+          "target_source": "PRD section 8",
+          "title": "Answers two reviewers rate as supported",
+          "value": null
+        }
+      ],
+      "reason": "needs two human reviewers per item (plan section 4.3); not run",
+      "status": "PARTIAL"
+    },
+    {
+      "id": "slips",
+      "metrics": [],
+      "reason": "needs a live provider; offline run (python -m chhatri.evals --live)",
+      "status": "NOT_MEASURED"
+    },
+    {
+      "id": "voice",
+      "metrics": [],
+      "reason": "needs a live provider; offline run (python -m chhatri.evals --live)",
+      "status": "NOT_MEASURED"
+    },
+    {
+      "id": "chain",
+      "metrics": [
+        {
+          "direction": "all",
+          "id": "chain.label_cases",
+          "interval": {
+            "high": 1.0,
+            "level": 0.95,
+            "low": 0.7412,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 11,
+          "meets_target": true,
+          "n": 11,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "chain",
+          "target": 1.0,
+          "target_source": "fs-05 section 10",
+          "title": "Chain cases with the expected label",
+          "value": 1.0
+        },
+        {
+          "direction": "at_most",
+          "id": "chain.gate_calls",
+          "interval": {
+            "high": 0.7935,
+            "level": 0.95,
+            "low": 0.0,
+            "method": "wilson"
+          },
+          "interval_clears_target": true,
+          "k": 0,
+          "meets_target": true,
+          "n": 1,
+          "reason": null,
+          "split": "all",
+          "status": "MET",
+          "suite": "chain",
+          "target": 0.0,
+          "target_source": "ADR 0009",
+          "title": "Outbound calls made while the data gate is closed",
+          "value": 0.0
+        }
+      ],
+      "reason": null,
+      "status": "MEASURED"
+    }
+  ]
+}

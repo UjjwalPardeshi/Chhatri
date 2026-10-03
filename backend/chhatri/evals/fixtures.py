@@ -10,7 +10,7 @@ from typing import Any, Final
 __all__ = ["FIXTURE_DIR", "HELD_OUT_FILES", "file_sha256", "held_out_hashes", "load_rows", "select_split"]
 
 FIXTURE_DIR: Final = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "evals"
-HELD_OUT_FILES: Final = ("intents.jsonl", "guard.jsonl")
+HELD_OUT_FILES: Final = ("intents.jsonl", "guard.jsonl", "ask.jsonl")
 SPLITS: Final = ("held_out", "dev", "all")
 
 

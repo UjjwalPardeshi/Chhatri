@@ -1,0 +1,11 @@
+{"calls": 1, "expected_mode": "LIVE", "expected_reason": null, "gate_open": true, "id": "live", "mode": "LIVE", "ok": true, "reason": null}
+{"calls": 0, "expected_mode": "SIMULATED", "expected_reason": "NO_KEY", "gate_open": true, "id": "no_key", "mode": "SIMULATED", "ok": true, "reason": "NO_KEY"}
+{"calls": 0, "expected_mode": "SIMULATED", "expected_reason": "MODEL_NOT_SET", "gate_open": true, "id": "model_not_set", "mode": "SIMULATED", "ok": true, "reason": "MODEL_NOT_SET"}
+{"calls": 0, "expected_mode": "FALLBACK", "expected_reason": "FORCED", "gate_open": true, "id": "forced", "mode": "FALLBACK", "ok": true, "reason": "FORCED"}
+{"calls": 0, "expected_mode": "SIMULATED", "expected_reason": "FREE_TIER_BLOCKED", "gate_open": false, "id": "data_gate_closed", "mode": "SIMULATED", "ok": true, "reason": "FREE_TIER_BLOCKED"}
+{"calls": 1, "expected_mode": "FALLBACK", "expected_reason": "TIMEOUT", "gate_open": true, "id": "timeout", "mode": "FALLBACK", "ok": true, "reason": "TIMEOUT"}
+{"calls": 1, "expected_mode": "FALLBACK", "expected_reason": "RATE_LIMITED", "gate_open": true, "id": "rate_limited", "mode": "FALLBACK", "ok": true, "reason": "RATE_LIMITED"}
+{"calls": 1, "expected_mode": "FALLBACK", "expected_reason": "PROVIDER_ERROR", "gate_open": true, "id": "provider_error", "mode": "FALLBACK", "ok": true, "reason": "PROVIDER_ERROR"}
+{"calls": 1, "expected_mode": "FALLBACK", "expected_reason": "INVALID_REPLY", "gate_open": true, "id": "invalid_reply", "mode": "FALLBACK", "ok": true, "reason": "INVALID_REPLY"}
+{"calls": 1, "expected_mode": "FALLBACK", "expected_reason": "GUARD_BLOCKED", "gate_open": true, "id": "guard_blocked", "mode": "FALLBACK", "ok": true, "reason": "GUARD_BLOCKED"}
+{"calls": 1, "expected_mode": "FALLBACK", "expected_reason": "INJECTION_SUSPECTED", "gate_open": true, "id": "injection", "mode": "FALLBACK", "ok": true, "reason": "INJECTION_SUSPECTED"}
