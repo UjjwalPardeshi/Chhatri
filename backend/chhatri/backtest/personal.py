@@ -12,7 +12,8 @@
 4. Claim: the merchant answers with a slip when the episode is over (the day after its last silent
    day) and claims all of its silent days — so closures longer than `max_auto_days` reach a human
    (SPEC §9.4). The expected day is the P50 day sum of the first silent day, published to ₹10.
-Decisions come from `policy.engine.evaluate_personal_claim` at `CLAIM_HOUR` of the claim day.
+Decisions come from `policy.engine.evaluate_personal_claim` at `CLAIM_HOUR` of the claim day, with
+the doctor-confirmation rule off: see `without_doctor_check` for why a backtest cannot ask a doctor.
 """
 
 from __future__ import annotations
@@ -46,6 +47,21 @@ logger = logging.getLogger(__name__)
 HOURS_PER_DAY: Final = 24
 CLAIM_HOUR: Final = 12  # the merchant's slip arrives around midday of the claim day
 OUTREACH_UNTIL_HOUR: Final = 11  # SPEC §8.3: zero transactions by 11:00
+
+
+def without_doctor_check(rules: PolicyRules) -> PolicyRules:
+    """The rules with `personal.require_doctor_confirmation` off, for the backtest only.
+
+    Two historical monsoons have no hospital attendance register to ask, and inventing one would
+    make the answer whatever we chose it to be. So the backtest measures what it can measure
+    honestly — the trigger, the loss ratio, and how many medical claims the slip checks alone could
+    settle — and the report says so. The doctor confirmation is measured on the live flow instead.
+
+    Without this the whole personal path would silently become REFERRED, because no claim here
+    carries a hospital, a doctor or an answer, and the published split would mean nothing.
+    """
+    personal = rules.personal.model_copy(update={"require_doctor_confirmation": False})
+    return rules.model_copy(update={"personal": personal})
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,5 +257,7 @@ def decide_personal(
         already_paid_dates=ledger.personal_dates(plan.merchant_id),
         weekday=plan.silent_dates[0].weekday(),
     )
-    decision = evaluate_personal_claim(facts, rules, decision_id=ids.next("decision"), now=plan.claim_at)
+    decision = evaluate_personal_claim(
+        facts, without_doctor_check(rules), decision_id=ids.next("decision"), now=plan.claim_at
+    )
     return _record_personal(plan, decision, ledger, rules)

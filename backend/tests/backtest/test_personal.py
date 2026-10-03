@@ -16,6 +16,7 @@ from chhatri.backtest.personal import (
     outreach_day,
     plan_claims,
     silent_findings,
+    without_doctor_check,
     zero_trade_mask,
 )
 from chhatri.backtest.slips import OTHER_PATIENT_NAME, SlipKind, slip_kind
@@ -27,7 +28,7 @@ from chhatri.domain.enums import ClaimKind, DecisionOutcome
 from chhatri.domain.models import SlipExtraction
 from chhatri.forecast.model import ExpectedSalesModel
 from chhatri.ids import IdFactory
-from chhatri.policy.rules import PolicyRules
+from chhatri.policy.rules import PolicyRules, default_rules
 from tests.backtest.conftest import TEST_CONFIG, TEST_SEASON
 
 SEED = 20251019
@@ -202,3 +203,22 @@ def test_annual_limit_declines(
     )
     # SPEC §9.1: the rolling 365 days end on the event date (the last silent day), not the claim day.
     assert _decide(world, plan, after_event, rules) is DecisionOutcome.APPROVED
+
+
+def test_the_backtest_decides_without_the_doctor_confirmation() -> None:
+    """Two historical monsoons have no hospital register to ask, so the backtest turns the rule off.
+
+    This is what keeps the committed report reproducible: with the rule on, every claim here would
+    refer for want of a hospital, a doctor and an answer, and the published auto-paid split would
+    silently mean nothing. Every other rule is left exactly as shipped.
+    """
+    shipped = default_rules()
+    assert shipped.personal.require_doctor_confirmation is True
+
+    measured = without_doctor_check(shipped)
+    assert measured.personal.require_doctor_confirmation is False
+    assert measured.version == shipped.version
+    assert measured.model_dump(exclude={"personal"}) == shipped.model_dump(exclude={"personal"})
+    assert measured.personal.model_dump(exclude={"require_doctor_confirmation"}) == (
+        shipped.personal.model_dump(exclude={"require_doctor_confirmation"})
+    )
