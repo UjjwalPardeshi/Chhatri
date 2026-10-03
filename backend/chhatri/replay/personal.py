@@ -32,7 +32,13 @@ from chhatri.conversation.message_guard import MessageSuppressed
 from chhatri.detect.silent import find_silent, silent_this_morning
 from chhatri.detect.triggers import TRIGGER_ALERT_KINDS
 from chhatri.detect.types import SilentFinding
-from chhatri.domain.enums import ClaimKind, DecisionOutcome, VerificationStatus
+from chhatri.domain.enums import (
+    Channel,
+    ClaimKind,
+    DecisionOutcome,
+    PreferredChannel,
+    VerificationStatus,
+)
 from chhatri.domain.models import Claim, Decision, DoctorVerification, SlipExtraction
 from chhatri.integrations.base import DoctorVerificationRequest, IntegrationError
 from chhatri.policy.engine import evaluate_personal_claim, publish_expected_day
@@ -43,6 +49,16 @@ from chhatri.replay.fmt import weekday_day_month
 from chhatri.replay.publish import RuntimeLink
 from chhatri.replay.runs import start_payout
 
+CHANNEL_LABEL: Final[Mapping[Channel, str]] = MappingProxyType(
+    {
+        Channel.WHATSAPP: "WhatsApp",
+        Channel.TELEGRAM: "Telegram",
+        Channel.SOUNDBOX: "the Soundbox",
+    }
+)
+PREFERRED_LABEL: Final[Mapping[PreferredChannel, str]] = MappingProxyType(
+    {PreferredChannel.WHATSAPP: "WhatsApp", PreferredChannel.TELEGRAM: "Telegram"}
+)
 __all__ = ["OUTREACH_UNTIL_HOUR", "SILENCE_LOOKBACK_DAYS", "PersonalFlow"]
 
 logger = logging.getLogger(__name__)
@@ -153,7 +169,7 @@ class PersonalFlow:
         )
         shop = rt.static.city.merchant(merchant_id).shop_name
         try:
-            await rt.conversation.checkin_silent(merchant_id, first)
+            sent = await rt.conversation.checkin_silent(merchant_id, first)
         except (
             MessageSuppressed
         ) as held:  # X8: the daily cap; the audit holds the reason, the feed says so too
@@ -161,7 +177,12 @@ class PersonalFlow:
                 now, "checkin", f"Check-in with {shop} held back ({held.reason})", merchant_id=merchant_id
             )
             return
-        text = f"Checked in with {shop} on WhatsApp · no sales since {weekday_day_month(first)}"
+        # The channel the message actually went out on, not an assumption: a merchant on the
+        # Telegram bot was being told, on stage, that we had reached them on WhatsApp. SIMULATOR
+        # is how the demo delivers, not a channel a merchant has, so it reads as whichever of the
+        # two they are on.
+        where = CHANNEL_LABEL.get(sent.channel) or PREFERRED_LABEL[rt.store.preferred_channel(merchant_id)]
+        text = f"Checked in with {shop} on {where} · no sales since {weekday_day_month(first)}"
         rt.feed.add(now, "checkin", text, merchant_id=merchant_id)
 
     async def submit(self, merchant_id: str, slip: SlipExtraction, media_id: str) -> Decision:
@@ -271,9 +292,13 @@ class PersonalFlow:
             answered_at=None if status is VerificationStatus.NO_ANSWER else answered_at,
             answered_by=answered_by,
         )
+        # NO_ANSWER covers an unreachable doctor and the X6 force. Chhatri wrote that row by
+        # giving up waiting, so it is a system record; attributing it to the doctor would put
+        # words in the mouth of someone who never spoke.
+        answered = status is not VerificationStatus.NO_ANSWER
         rt.audit.append(
             at=answered_at,
-            actor=f"doctor:{doctor.registration_no}",
+            actor=f"doctor:{doctor.registration_no}" if answered else "system",
             action="doctor.answered",
             subject_type="claim",
             subject_id=claim.id,
