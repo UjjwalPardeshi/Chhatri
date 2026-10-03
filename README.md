@@ -34,7 +34,7 @@ Sarvam, Gemini and Cognee run on free tiers, so they are called only when `CHHAT
 
 Every feature added for the final (the merchant mini-app, Ask Chhatri, the slip pre-check, voice, the grievance
 ladder, the consent centre, Marathi, the lender request, the provider panel, the distress guard, the ops strip,
-the what-if drawer, the evaluation page, the console polish and the Telegram channel) ships behind one of 15 flags
+the what-if drawer and the pricing simulator, the evaluation page, the console polish and the Telegram channel) ships behind one of 15 flags
 that are **off by default**. Set `CHHATRI_FEATURES` (backend) and `VITE_FEATURES` (console) to the same comma-separated list, for
 example `n1_miniapp,n2_ask_chhatri`. A route whose flag is off answers the ordinary 404. The names are in
 `backend/chhatri/features.py` and `frontend/src/features.ts`, and `GET /api/health` lists the flags that are on.

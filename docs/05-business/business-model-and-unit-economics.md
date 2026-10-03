@@ -97,7 +97,11 @@ If the day's collections are below the premium (₹18.62 in Z7), nothing is dedu
 
 **Assumption to test:** merchants keep cover because a same-day payout on a shock day is worth more to them than its average cost.
 
-### 3.5 Honest calibration note
+### 3.5 Pricing simulator (BUILT, flag `h24_whatif`)
+
+The console's Backtest page ends with **Price the cover**: the same formula as §3.1, applied to every area trigger of the backtest at five index floors (40, 45, 50, 55 and 60%), with the payout share, the area daily cap and the loading as levers (`GET /api/pricing`, table `backend/artifacts/pricing/events.json`). For each zone it shows the premium per day, month and year, the expected payout per shop, today's premium and the loss ratio that premium would run at, and, city-wide, the share of real drops paid and of payouts on a day with no real drop. At the published levers it reproduces `premiums.json` and the backtest report exactly (a test holds this). It is a planning tool for the pilot conversation, with the limits of §3.6: area claims only, simulated sales, one monsoon counted as a policy year.
+
+### 3.6 Honest calibration note
 
 Today's premiums are derived from simulated merchant sales (with real rainfall data from Jun–Sep 2024 and 2025). The simulation parameters are searched so the demo replay reproduces the stated numbers (e.g., Z7 at 37% sales index, Anil's ₹1,380 payout). As a result, every zone's **backtest loss ratio is about 65% by construction**.
 
@@ -169,7 +173,7 @@ For hospital-cash claims, the slip's patient name must match the KYC name with a
 
 ### 5.4 Slip confidence floor (K2)
 
-- The slip reader's confidence must be at least 0.80 (today Sarvam Vision or its labelled simulator; Gemini is the first provider in the chain, tested against fakes only).
+- The slip reader's confidence must be at least 0.80 (Gemini is the first provider in the chain and ran live on 3 Oct 2026, then Sarvam Vision; with no key, the labelled simulator).
 - Below 80%, the slip is REFERRED to a human, not auto-approved.
 
 **Economic role:** Blurry or forged slips are reviewed before payout.
