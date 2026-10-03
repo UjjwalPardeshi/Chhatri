@@ -26,6 +26,8 @@ PREFIXES: Final[dict[str, str]] = {
     "precheck": "PC",
     "grievance": "GR",
     "consent": "CN",
+    "doctor_request": "DR",
+    "doctor_verification": "DV",
 }
 
 CASE_START: Final = 2291
