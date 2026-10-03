@@ -1,0 +1,35 @@
+# Independent hospital and doctor directory (SPEC §9.2).
+#
+# This is the ONLY place Chhatri ever gets a doctor's contact from. A slip tells us *which*
+# hospital and doctor to look up — never how to reach them, because a number printed on a slip
+# the claimant supplied would confirm whatever the claimant wanted it to confirm.
+#
+# In a pilot this is a feed from the hospital's own administration and the state medical
+# council's register. Here it is fixed, fictional data for the demo.
+version: pilot-0.1
+hospitals:
+  - id: H-KEM
+    name: KEM Hospital, Parel
+    city: Mumbai
+    aliases: [KEM Hospital, Seth G.S. Medical College and KEM Hospital, K.E.M. Hospital Parel]
+  - id: H-SION
+    name: Lokmanya Tilak Municipal General Hospital, Sion
+    city: Mumbai
+    aliases: [Sion Hospital, LTMG Hospital]
+  - id: H-NAIR
+    name: B. Y. L. Nair Charitable Hospital, Mumbai Central
+    city: Mumbai
+    aliases: [Nair Hospital]
+doctors:
+  - registration_no: MMC-2011-45817
+    name: Dr S. Rao
+    hospital_id: H-KEM
+    verify_chat_id: "tg:482913"
+  - registration_no: MMC-2008-31204
+    name: Dr A. Kulkarni
+    hospital_id: H-SION
+    verify_chat_id: "tg:482914"
+  - registration_no: MMC-2015-60933
+    name: Dr P. Shaikh
+    hospital_id: H-NAIR
+    verify_chat_id: null
