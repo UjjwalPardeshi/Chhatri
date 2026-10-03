@@ -43,6 +43,11 @@ CheckCodeName = Literal[
     "SLIP_READABLE",
     "NAME_MATCHES_KYC",
     "DATES_MATCH",
+    "HOSPITAL_IDENTIFIED",
+    "DOCTOR_IDENTIFIED",
+    "VERIFICATION_CONSENT",
+    "DOCTOR_NOT_DENIED",
+    "DOCTOR_CONFIRMED",
     "WITHIN_AUTO_LIMIT",
     "NOT_ALREADY_PAID",
     "WITHIN_ANNUAL_LIMIT",
@@ -66,6 +71,7 @@ class SourceView(Schema):
         "SALES_DAY",
         "PAYOUT_HISTORY",
         "LENDER",
+        "DOCTOR",
     ]
     label: str = Field(min_length=1)
     ref: str = Field(min_length=1)
