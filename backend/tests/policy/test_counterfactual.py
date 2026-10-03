@@ -110,6 +110,19 @@ def test_flip_table_covers_every_check_code() -> None:
     assert {code for code, flip in FLIP_TABLE.items() if flip is None} == EXPLAIN_ONLY
 
 
+def test_the_doctor_sentences_take_no_facts() -> None:
+    """`render` rejects a fact whose template has no placeholder, and the rejection takes out the
+    whole counterfactual list, not the one sentence. So every illness receipt came back with
+    counterfactuals: [] while _explain_item handed the annual-limit numbers to these five.
+    """
+    from chhatri.conversation.messages import _KEY_FIELDS
+
+    doctorish = EXPLAIN_ONLY - {CheckCode.NOT_ALREADY_PAID, CheckCode.WITHIN_ANNUAL_LIMIT}
+    assert doctorish
+    for code in doctorish:
+        assert _KEY_FIELDS[EXPLAIN_KEY[code]] == frozenset(), code
+
+
 def test_every_unflippable_check_has_a_sentence() -> None:
     """A check with no flip has to be explainable, or the receipt raises instead of saying why.
 

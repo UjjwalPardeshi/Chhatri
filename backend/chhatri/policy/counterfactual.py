@@ -415,15 +415,20 @@ def _flip_item(facts: Facts, decision: Decision, rules: PolicyRules, rerun: Reru
 
 
 def _explain_item(check: CheckResult, facts: Facts, decision: Decision, rules: PolicyRules) -> Counterfactual:
+    text: TextFacts
     if check.code is CheckCode.NOT_ALREADY_PAID:
-        days = _paid_days(facts)
-        text: TextFacts = _day_text(*days)
-    else:
+        text = _day_text(*_paid_days(facts))
+    elif check.code is CheckCode.WITHIN_ANNUAL_LIMIT:
         text = {
             "window_days": ROLLING_WINDOW_DAYS,
             "paid_total": format_inr(facts.paid_last_365_days_paise),
             "annual_limit": format_inr(rules.annual_limit_paise),
         }
+    else:
+        # The doctor checks say their piece without numbers, and `render` rejects a fact a
+        # template has no placeholder for — which took out every illness receipt's whole
+        # counterfactual list, not just the one sentence.
+        text = {}
     shown = _change(check.code, "engine_numbers", check.observed or "", check.required or "")
     return _item(
         CounterfactualKind.EXPLAIN_ONLY,
