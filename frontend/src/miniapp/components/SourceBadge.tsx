@@ -5,7 +5,6 @@
  * the record, the time, the type of source and the policy clause. A value without a source shows "Source missing" in
  * the blocked tone, and no screen draws a number that way on purpose.
  */
-import { BadgeCheck, CircleX } from 'lucide-react'
 import { useRef } from 'react'
 
 import type { Source } from '../../api/types'
@@ -17,7 +16,7 @@ import { useMiniapp } from '../shell/MiniappContext'
 import { Button } from '../ui/button'
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet'
 
-const ORIGIN_TAG: Readonly<Record<'LIVE' | 'SIMULATED', string>> = { LIVE: 'bg-live-soft text-live-ink', SIMULATED: 'bg-demo-soft text-demo' }
+const ORIGIN_TAG: Readonly<Record<'LIVE' | 'SIMULATED', string>> = { LIVE: 'text-live-ink', SIMULATED: 'text-demo' }
 
 /** The record id after the colon of `alert:A-20250818-01`. */
 const idOfRef = (ref: string): string | null => ref.split(':')[1] ?? null
@@ -116,7 +115,7 @@ function SourceSheet({ source, label }: { source: Source; label: string }) {
 }
 
 const CHIP =
-  'relative inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 text-left text-xs font-medium text-ink-2 outline-none after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[""] focus-visible:ring-[3px] focus-visible:ring-ring/50 print:border-line-strong'
+  'relative inline-flex min-h-6 max-w-full items-center gap-2 rounded-sm bg-paper-2 px-2 py-1 text-left text-xs text-ink-2 outline-none after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[""] focus-visible:ring-[3px] focus-visible:ring-ring/50 print:border-line-strong'
 
 export function SourceBadge({ source, rulesVersion }: { source: Source; rulesVersion: string }) {
   const { lang } = useMiniapp()
@@ -127,14 +126,13 @@ export function SourceBadge({ source, rulesVersion }: { source: Source; rulesVer
     <Sheet>
       <SheetTrigger asChild>
         <button type="button" data-testid="source-badge" data-kind={source.kind} data-origin={source.origin} aria-haspopup="dialog" title={t('chip.tap', lang)} className={CHIP}>
-          <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
           <span>
             {label}
             {clause}
             <span className="num text-ink-3">{time}</span>
           </span>
           {source.origin === 'CONFIG' ? null : (
-            <span className={cn('shrink-0 rounded-sm px-1.5 py-0.5 text-2xs tracking-wide', ORIGIN_TAG[source.origin])}>{source.origin}</span>
+            <span className={cn('shrink-0 text-2xs font-bold tracking-wider', ORIGIN_TAG[source.origin])}>{source.origin}</span>
           )}
         </button>
       </SheetTrigger>
@@ -147,8 +145,7 @@ export function SourceBadge({ source, rulesVersion }: { source: Source; rulesVer
 export function MissingSource() {
   const { lang } = useMiniapp()
   return (
-    <span data-testid="source-missing" className="inline-flex min-h-6 items-center gap-1.5 rounded-lg bg-blocked-soft px-2.5 py-1 text-xs font-medium text-blocked">
-      <CircleX className="size-3.5 shrink-0" aria-hidden="true" />
+    <span data-testid="source-missing" className="inline-flex min-h-6 items-center gap-1.5 rounded-sm bg-blocked-soft px-2 py-1 text-xs font-bold text-blocked">
       {t('badge.source_missing', lang)}
     </span>
   )
@@ -157,7 +154,7 @@ export function MissingSource() {
 /** The badges of one value, or "Source missing" when it has none. */
 export function SourceBadges({ sources, rulesVersion, testId }: { sources: readonly Source[]; rulesVersion: string; testId?: string }) {
   return (
-    <div data-testid={testId} className="flex flex-wrap gap-x-2 gap-y-5 pt-2">
+    <div data-testid={testId} className="flex flex-wrap gap-x-2 gap-y-5 pt-1.5">
       {sources.length === 0 ? <MissingSource /> : sources.map((source) => <SourceBadge key={source.ref} source={source} rulesVersion={rulesVersion} />)}
     </div>
   )

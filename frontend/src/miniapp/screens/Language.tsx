@@ -23,11 +23,11 @@ export function Language() {
   return (
     <ScreenRoot name="settings" state="ready">
       <div data-testid="screen-language" className="flex flex-col gap-4">
-        <fieldset className="flex flex-col gap-3">
-          <legend className="mb-2 text-md font-medium">{t('lang.label')}</legend>
-          <RadioGroup value={lang} onValueChange={(next) => isLang(next) && setLang(next)} aria-label={t('lang.label')}>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 px-1 text-caption font-bold text-ink-2">{t('lang.label')}</legend>
+          <RadioGroup className="gap-0 overflow-hidden rounded-lg border bg-card [&>*+*]:border-t [&>*+*]:border-line-soft" value={lang} onValueChange={(next) => isLang(next) && setLang(next)} aria-label={t('lang.label')}>
             {languages.map((option) => (
-              <Label key={option} htmlFor={`lang-option-${option}`} className="flex min-h-12 items-center gap-3 rounded-lg border bg-card px-4 py-3 text-md" lang={option}>
+              <Label key={option} htmlFor={`lang-option-${option}`} className="flex min-h-14 items-center gap-3 px-4 py-3 text-md font-medium" lang={option}>
                 <RadioGroupItem id={`lang-option-${option}`} value={option} data-testid={`lang-option-${option}`} />
                 {{ hi: 'हिंदी', en: 'English', mr: 'मराठी' }[option]}
               </Label>

@@ -41,9 +41,8 @@
   min-width: 0;
   overflow: hidden;
   height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  padding: 0 12px;
+  border-radius: var(--radius-control);
   background: var(--paper);
   font-size: var(--fs-sm);
   white-space: nowrap;
@@ -241,14 +240,13 @@
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--grey-soft);
-  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 4%);
 }
 
 .scrubber__fill {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgb(11 99 201 / 70%), var(--blue));
+  background: var(--blue);
   transform-origin: left center;
   transition: transform 300ms linear;
 }

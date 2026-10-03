@@ -10,8 +10,7 @@
   top: 0;
   z-index: var(--z-sticky);
   border-bottom: 1px solid var(--line);
-  background: rgb(255 255 255 / 86%);
-  backdrop-filter: saturate(1.4) blur(10px);
+  background: var(--card);
 }
 
 .ov-rail__list {
@@ -20,16 +19,16 @@
   gap: 4px;
   max-width: var(--ov-max);
   margin: 0 auto;
-  padding: 6px var(--ov-pad-x);
+  padding: 0 var(--ov-pad-x);
   list-style: none;
 }
 
 .ov-rail__link {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  height: 30px;
+  height: 40px;
   padding: 0 12px;
-  border-radius: var(--radius-pill);
   color: var(--muted);
   font-size: var(--fs-sm);
   font-weight: 500;
@@ -45,8 +44,18 @@
 }
 
 .ov-rail__link[aria-current='location'] {
-  background: var(--navy);
-  color: #fff;
+  color: var(--navy);
+}
+
+.ov-rail__link[aria-current='location']::after {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+  content: '';
 }
 
 /* Anchored sections land below the rail. */

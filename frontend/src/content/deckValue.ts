@@ -10,7 +10,7 @@ export const USP = Object.freeze({
     { label: 'What starts the claim', cells: ['The merchant files it', 'A weather reading', 'The shop’s own sales data'] },
     { label: 'Proof needed', cells: ['Bills, photos and forms', 'None', 'None for area events; one photo for personal ones'] },
     { label: 'Matches the real loss', cells: ['Assessed case by case', 'Often not: a one-in-three chance of missing a total loss in one study', 'Measured from actual sales'] },
-    { label: 'Time to money', cells: ['30–60 days (Paytm’s earlier plans)', '6–8 weeks (SEWA heat cover)', 'Same day'] },
+    { label: 'Time to money', cells: ['30–60 days (Paytm’s earlier plans)', 'Weeks (SEWA heat cover)', 'Same day'] },
     { label: 'Loan instalment on a bad day', cells: ['Still due', 'Still due', 'Paused automatically'] },
     { label: 'Hard to game', cells: ['Documents can be faked', 'Yes', 'Area-level trigger, KYC and date checks, waiting period'] },
   ] as const,

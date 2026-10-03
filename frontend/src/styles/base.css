@@ -91,11 +91,10 @@ button:disabled {
 }
 
 .eyebrow {
-  color: var(--blue);
-  font-size: var(--fs-2xs);
+  color: var(--muted);
+  font-size: var(--fs-xs);
   font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .card {
@@ -103,7 +102,6 @@ button:disabled {
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
 }
 
 .btn {
@@ -111,11 +109,12 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 12px;
+  height: 34px;
+  padding: 0 14px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--card);
+  color: var(--navy);
   font-weight: 500;
   white-space: nowrap;
   transition:
@@ -133,15 +132,17 @@ button:disabled {
   border-color: var(--faint);
 }
 
+/* The one sky-blue action on a screen: navy text on the sky fill (6:1), never white. */
 .btn--primary {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--blue-hover);
-  border-color: var(--blue-hover);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .btn--approve {
@@ -165,7 +166,7 @@ button:disabled {
 }
 
 .btn--icon {
-  width: 32px;
+  width: 34px;
   padding: 0;
 }
 
@@ -176,10 +177,10 @@ button:disabled {
 }
 
 .input {
-  height: 32px;
+  height: 34px;
   padding: 0 10px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--card);
 }
 
@@ -192,14 +193,14 @@ button:disabled {
   border-radius: 4px;
   font-size: var(--fs-2xs);
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .badge--red {
-  background: var(--red);
-  color: #fff;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .badge--amber {
@@ -223,23 +224,23 @@ button:disabled {
 }
 
 .badge--solid-blue {
-  background: var(--blue);
-  color: #fff;
+  background: var(--blue-soft);
+  color: var(--blue);
 }
 
 .badge--solid-amber {
-  background: var(--amber-solid);
-  color: #fff;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
 }
 
 .badge--solid-red {
-  background: var(--red);
-  color: #fff;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .badge--navy {
-  background: var(--navy);
-  color: #fff;
+  background: var(--blue-soft);
+  color: var(--navy);
 }
 
 .status-box {
@@ -332,8 +333,9 @@ button:disabled {
 }
 
 .table th {
-  background: var(--paper-2);
-  color: var(--ink);
+  background: var(--card);
+  border-bottom-color: var(--line-strong);
+  color: var(--muted);
   font-size: var(--fs-xs);
   font-weight: 500;
 }

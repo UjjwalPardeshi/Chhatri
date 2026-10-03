@@ -49,7 +49,7 @@
   z-index: var(--z-popover);
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
+  gap: var(--sp-6);
   padding: 0 var(--sp-4);
   background: var(--navy);
   color: var(--on-navy);
@@ -70,10 +70,10 @@
 .brand__mark {
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   align-self: center;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--accent);
   color: var(--navy);
 }
@@ -92,7 +92,8 @@
 .app-nav {
   position: relative;
   display: flex;
-  gap: 2px;
+  align-self: stretch;
+  gap: var(--sp-1);
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -106,31 +107,48 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 7px 11px;
-  border-radius: var(--radius-sm);
+  padding: 0 12px;
   color: var(--on-navy-2);
   font-size: var(--fs-sm);
   white-space: nowrap;
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
+  transition: color 120ms ease;
+}
+
+/* The page you are on gets a 3 px sky-blue underline on the bar's bottom edge, not a filled chip. */
+.app-nav__link::after {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+  content: '';
+  transition: background-color 120ms ease;
 }
 
 .app-nav__link:hover {
-  background: rgb(255 255 255 / 8%);
   color: var(--on-navy);
   text-decoration: none;
 }
 
+.app-nav__link:hover::after {
+  background: var(--navy-line);
+}
+
 .app-nav__link.is-active {
-  background: rgb(56 163 232 / 20%);
   color: var(--on-navy);
+  font-weight: 500;
+}
+
+.app-nav__link.is-active::after {
+  background: var(--accent);
 }
 
 /* The count sits on the link's corner, so it appearing never shifts the nav. */
 .app-nav__count {
   position: absolute;
-  top: 1px;
+  top: 6px;
   right: -3px;
   display: inline-grid;
   place-items: center;
@@ -174,7 +192,7 @@
   padding: 0;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: rgb(255 255 255 / 6%);
   color: var(--on-navy-2);
   font-size: var(--fs-2xs);
@@ -226,7 +244,6 @@
   height: 7px;
   border-radius: 50%;
   background: #22c55e;
-  box-shadow: 0 0 0 3px rgb(34 197 94 / 22%);
 }
 
 .integrations-summary__more {
@@ -345,7 +362,7 @@
   height: 30px;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 30%);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--on-navy);
   font-size: var(--fs-xs);
@@ -399,7 +416,7 @@
   height: 30px;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 30%);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--on-navy);
   font-size: var(--fs-xs);
@@ -561,7 +578,7 @@
     order: 3;
     width: calc(100% + 2 * var(--sp-4));
     margin: 0 calc(-1 * var(--sp-4));
-    padding: 0 var(--sp-4) var(--sp-2);
+    padding: 0 var(--sp-4);
     scroll-snap-type: x proximity;
     scroll-padding: 0 var(--sp-6);
     mask-image: linear-gradient(90deg, transparent 0, #000 var(--sp-4), #000 calc(100% - 64px), rgb(0 0 0 / 35%) calc(100% - 24px), transparent 100%);

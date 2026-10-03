@@ -23,7 +23,7 @@ function Frame() {
           to={miniappHref(`/merchant/${merchantId}/app`, search, target)}
           data-testid="app-open-fullscreen"
           lang={lang}
-          className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-primary"
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-link"
         >
           {t('app.fullscreen', lang)}
           <ExternalLink className="size-3.5" aria-hidden="true" />

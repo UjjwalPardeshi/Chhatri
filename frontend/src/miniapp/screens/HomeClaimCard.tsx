@@ -3,24 +3,21 @@
  * says where it stands, linking to the claim's detail (S5). The pill's words are the plain labels of fs-04 14.2 in the
  * language shown; `data-status` carries the engine word. A dispute opens the claim it is about. Nothing is computed here.
  */
-import { ChevronRight, CircleCheck, CircleX, Clock, Hourglass, Scale, UserRound, type LucideIcon } from 'lucide-react'
-import { Link } from 'react-router'
 
 import type { ClaimItem } from '../../api/types'
 import { t, type CopyKey } from '../lib/copy'
-import { cn } from '../lib/cn'
 import { formatDate } from '../lib/format'
+import { ListGroup, ListRowLink, SectionLabel } from '../components/ListRow'
+import { StatusWord, type StatusTone } from '../components/StatusWord'
 import { useMiniapp } from '../shell/MiniappContext'
-import { Badge } from '../ui/badge'
-import { Card } from '../ui/card'
 
-type Pill = { word: string; labelKey: CopyKey; tone: string; icon: LucideIcon }
+type Pill = { word: string; labelKey: CopyKey; tone: StatusTone }
 
-const PAID = 'bg-paid-soft text-paid-ink'
-const DECIDED = 'bg-decided-soft text-decided'
-const REFERRED = 'bg-referred-soft text-referred-ink'
-const BLOCKED = 'bg-blocked-soft text-blocked'
-const NEUTRAL = 'bg-secondary text-secondary-foreground'
+const PAID = 'paid'
+const DECIDED = 'decided'
+const REFERRED = 'referred'
+const BLOCKED = 'blocked'
+const NEUTRAL = 'neutral'
 
 const KIND_KEYS: Readonly<Record<ClaimItem['kind'], CopyKey>> = {
   AREA: 'tracker.kind.area',
@@ -34,22 +31,22 @@ const isCredited = (item: ClaimItem): boolean => item.steps.some((step) => step.
 export function claimPill(item: ClaimItem): Pill {
   if (item.kind === 'DISPUTE') {
     return item.case_status === 'OPEN'
-      ? { word: 'DISPUTE_OPEN', labelKey: 'claim.status.question_open', tone: REFERRED, icon: Scale }
-      : { word: 'DISPUTE_CLOSED', labelKey: 'claim.status.question_closed', tone: NEUTRAL, icon: CircleCheck }
+      ? { word: 'DISPUTE_OPEN', labelKey: 'claim.status.question_open', tone: REFERRED }
+      : { word: 'DISPUTE_CLOSED', labelKey: 'claim.status.question_closed', tone: NEUTRAL }
   }
   switch (item.outcome) {
     case 'APPROVED':
       return isCredited(item)
-        ? { word: 'APPROVED', labelKey: 'claim.status.paid', tone: PAID, icon: CircleCheck }
-        : { word: 'APPROVED', labelKey: 'claim.status.approved_pending', tone: DECIDED, icon: Clock }
+        ? { word: 'APPROVED', labelKey: 'claim.status.paid', tone: PAID }
+        : { word: 'APPROVED', labelKey: 'claim.status.approved_pending', tone: DECIDED }
     case 'REFERRED':
-      return { word: 'REFERRED', labelKey: 'claim.status.referred', tone: REFERRED, icon: UserRound }
+      return { word: 'REFERRED', labelKey: 'claim.status.referred', tone: REFERRED }
     case 'DECLINED':
-      return { word: 'DECLINED', labelKey: 'claim.status.declined', tone: BLOCKED, icon: CircleX }
+      return { word: 'DECLINED', labelKey: 'claim.status.declined', tone: BLOCKED }
     default:
       return item.kind === 'PERSONAL'
-        ? { word: 'WAITING_FOR_SLIP', labelKey: 'claim.status.waiting_slip', tone: NEUTRAL, icon: Hourglass }
-        : { word: 'IN_PROGRESS', labelKey: 'tracker.state.now', tone: NEUTRAL, icon: Clock }
+        ? { word: 'WAITING_FOR_SLIP', labelKey: 'claim.status.waiting_slip', tone: NEUTRAL }
+        : { word: 'IN_PROGRESS', labelKey: 'tracker.state.now', tone: NEUTRAL }
   }
 }
 
@@ -63,26 +60,23 @@ export function HomeClaimCard({ item }: { item: ClaimItem }) {
   const id = claimLinkId(item)
   const to = url.href(id === null ? { screen: 'claims' } : { screen: 'claim', claim: id })
   return (
-    <Card data-testid="home-latest-claim" data-status={pill.word} className="gap-0 overflow-hidden py-0">
-      <Link to={to} className="flex min-h-14 flex-col gap-2 p-4 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50">
-        <span className="flex items-center justify-between gap-2">
-          <Title className="text-caption font-medium text-muted-foreground">{t('home.latest', lang)}</Title>
-          <Badge variant="secondary" data-testid="home-latest-claim-pill" className={cn('gap-1', pill.tone)}>
-            <pill.icon aria-hidden="true" />
-            {t(pill.labelKey, lang)}
-          </Badge>
-        </span>
-        <span className="flex items-end justify-between gap-3">
-          <span className="flex min-w-0 flex-col">
-            <span className="text-md font-medium">{t(KIND_KEYS[item.kind], lang)}</span>
-            <span className="text-caption text-muted-foreground">{formatDate(item.claim_at, lang)}</span>
-          </span>
-          <span className="flex items-center gap-1">
-            {item.amount_label ? <span className="num text-xl font-medium">{item.amount_label}</span> : null}
-            <ChevronRight className="size-5 text-muted-foreground" aria-hidden="true" />
-          </span>
-        </span>
-      </Link>
-    </Card>
+    <section data-testid="home-latest-claim" data-status={pill.word} className="flex flex-col gap-2">
+      <SectionLabel as={Title}>{t('home.latest', lang)}</SectionLabel>
+      <ListGroup>
+        <ListRowLink
+          to={to}
+          title={t(KIND_KEYS[item.kind], lang)}
+          secondary={
+            <span className="flex flex-wrap items-center gap-x-2">
+              <span>{formatDate(item.claim_at, lang)}</span>
+              <StatusWord tone={pill.tone} data-testid="home-latest-claim-pill">
+                {t(pill.labelKey, lang)}
+              </StatusWord>
+            </span>
+          }
+          trailing={item.amount_label ? <span className="num text-xl font-bold">{item.amount_label}</span> : null}
+        />
+      </ListGroup>
+    </section>
   )
 }

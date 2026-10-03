@@ -17,7 +17,7 @@ function ClaimCardSkeletons() {
   return (
     <div data-testid="app-skeleton" className="flex flex-col gap-3">
       {[0, 1, 2].map((row) => (
-        <Skeleton key={row} className="h-28 w-full rounded-xl" />
+        <Skeleton key={row} className="h-20 w-full rounded-lg" />
       ))}
     </div>
   )
@@ -42,7 +42,7 @@ export function Claims() {
       }
     >
       {() => (
-        <ul data-testid="claims-list" className="flex flex-col gap-3">
+        <ul data-testid="claims-list" className="flex flex-col overflow-hidden rounded-lg border bg-card [&>*+*]:border-t [&>*+*]:border-line-soft">
           {views.map((view) => (
             <ClaimsCard key={view.id} view={view} />
           ))}

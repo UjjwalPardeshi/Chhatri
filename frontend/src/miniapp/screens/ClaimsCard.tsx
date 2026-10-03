@@ -22,11 +22,11 @@ export function ClaimsCard({ view }: { view: ClaimView }) {
     <li
       data-testid={`claim-card-${view.id}`}
       data-status={view.pill.word}
-      className="relative flex flex-col gap-2 rounded-xl border bg-card p-4 text-card-foreground shadow-sm focus-within:ring-[3px] focus-within:ring-ring/50 hover:bg-accent"
+      className="relative flex flex-col gap-2 px-4 py-3 text-card-foreground focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50 hover:bg-paper-2"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col">
-          <ClaimsHeading className="text-md font-medium">
+          <ClaimsHeading className="text-md font-bold leading-snug">
             <Link to={to} className="outline-none after:absolute after:inset-0 after:content-['']">
               {t(view.kindKey, lang)}
             </Link>
@@ -36,17 +36,15 @@ export function ClaimsCard({ view }: { view: ClaimView }) {
             {view.disputedClaimId === null ? null : <span> · {t('tracker.about_claim', lang, { claim_id: view.disputedClaimId })}</span>}
           </p>
         </div>
-        <ClaimPill pill={view.pill} />
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {view.nextLine === null ? null : <LineText line={view.nextLine} className="text-caption text-ink-2" />}
-        </div>
         <div className="flex shrink-0 items-center gap-1">
-          {view.amountLabel === null ? null : <span className="num text-xl font-medium">{view.amountLabel}</span>}
-          <ChevronRight className="size-5 text-muted-foreground" aria-hidden="true" />
+          <div className="flex flex-col items-end gap-0.5">
+            {view.amountLabel === null ? null : <span className="num text-xl font-bold leading-tight">{view.amountLabel}</span>}
+            <ClaimPill pill={view.pill} />
+          </div>
+          <ChevronRight className="size-5 text-faint" aria-hidden="true" />
         </div>
       </div>
+      {view.nextLine === null ? null : <LineText line={view.nextLine} className="text-caption text-ink-2" />}
     </li>
   )
 }

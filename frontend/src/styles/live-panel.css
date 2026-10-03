@@ -18,17 +18,31 @@
   min-height: 0;
 }
 
+/* The panel is one white surface; its sections are divided by hairlines, not stacked as separate cards. */
 .home__panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   min-height: 0;
   overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.home__panel > .card,
+.home__panel > .explanations {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.home__panel > :last-child {
+  border-bottom: 0;
 }
 
 /* Zone card */
 .zone-card {
-  padding: 12px 16px 10px;
+  padding: 12px 16px 8px;
 }
 
 .zone-card__head {
@@ -174,10 +188,9 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 -8px;
-  padding: 4px 8px;
-  border-top: 1px solid var(--line);
-  border-radius: 4px;
+  margin: 0 -16px;
+  padding: 4px 16px;
+  border-top: 1px solid var(--line-soft);
   line-height: 19px;
   transition: background-color 900ms ease;
 }
@@ -203,14 +216,14 @@
  */
 .moment {
   flex: none;
-  padding: 8px 14px 6px;
-  border-left: 4px solid var(--blue);
+  padding: 10px 16px 6px;
+  box-shadow: inset 3px 0 0 var(--blue);
   animation: fade-in var(--dur-ui) var(--ease-out);
 }
 
 .moment[data-state='credited'],
 .moment[data-state='instalments'] {
-  border-left-color: var(--green);
+  box-shadow: inset 3px 0 0 var(--green);
 }
 
 .moment__line {
@@ -231,14 +244,13 @@
   margin-top: 9px;
   border-radius: var(--radius-pill);
   background: var(--grey-soft);
-  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 4%);
 }
 
 .moment__fill {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgb(11 99 201 / 70%), var(--blue));
+  background: var(--blue);
   transform-origin: left center;
   transition: transform 300ms linear;
 }
@@ -350,12 +362,12 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 8px;
 }
 
 .explanation {
-  padding: 9px 13px;
-  border-left: 4px solid var(--blue);
+  padding: 10px 16px;
+  background: var(--blue-soft);
+  box-shadow: inset 3px 0 0 var(--blue);
   font-size: var(--fs-sm);
   line-height: 1.45;
   text-align: left;
@@ -368,14 +380,14 @@
 
 /* In the live panel: tighter, but always the whole sentence (deck slide 6's punchline). */
 .explanation--compact {
-  padding: 7px 12px;
+  padding: 8px 16px;
   font-size: var(--fs-sm);
   line-height: 1.38;
 }
 
 .explanation--quiet {
-  border-left-color: var(--line-strong);
-  box-shadow: none;
+  background: var(--paper);
+  box-shadow: inset 3px 0 0 var(--line-strong);
   color: var(--muted);
 }
 
@@ -500,7 +512,7 @@
 .feed__item--money {
   margin-left: -14px;
   padding-left: 11px;
-  border-left: 3px solid var(--green);
+  box-shadow: inset 3px 0 0 var(--green);
 }
 
 .feed__item--money strong {

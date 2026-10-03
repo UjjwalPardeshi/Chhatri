@@ -14,15 +14,15 @@ export type Mode = 'SIMULATED' | 'FALLBACK' | 'LIVE'
 const ICON: Readonly<Record<Mode, LucideIcon>> = { LIVE: CircleDot, SIMULATED: CircleDashed, FALLBACK: TriangleAlert }
 
 const STYLE: Readonly<Record<Mode, string>> = {
-  SIMULATED: 'bg-demo-soft text-demo',
-  FALLBACK: 'bg-fallback-soft text-fallback',
-  LIVE: 'bg-live-soft text-live-ink',
+  SIMULATED: 'text-demo',
+  FALLBACK: 'text-fallback',
+  LIVE: 'text-live-ink',
 }
 
 export function ModeBadge({ mode, testId = 'app-mode-badge', className }: { mode: Mode; testId?: string; className?: string }) {
   const Icon = ICON[mode]
   return (
-    <Badge variant="secondary" data-testid={testId} data-mode={mode} className={cn('tracking-wide', STYLE[mode], className)}>
+    <Badge variant="secondary" data-testid={testId} data-mode={mode} className={cn('gap-1 border-border bg-card px-1.5 py-px text-2xs font-medium tracking-wider', STYLE[mode], className)}>
       <Icon aria-hidden="true" />
       {mode}
     </Badge>

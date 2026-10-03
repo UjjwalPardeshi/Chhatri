@@ -29,9 +29,9 @@ export function NextBestBar() {
   const { nba, lang, embedded } = useMiniapp()
   if (!nba) return null
   return (
-    <aside data-testid="app-nba" data-nba={nba.id} aria-label={t('app.nba', lang)} className={cn('flex shrink-0 flex-col border-t bg-accent', embedded ? 'gap-1.5 px-3 py-2' : 'gap-2 px-4 py-3')}>
-      <p className={cn('font-medium text-foreground', embedded ? 'text-sm' : 'text-md')}>{nba.label}</p>
-      <NetworkButton data-testid="app-nba-action" size={embedded ? 'default' : 'lg'} onClick={nba.onAction}>
+    <aside data-testid="app-nba" data-nba={nba.id} aria-label={t('app.nba', lang)} className={cn('flex shrink-0 flex-col border-t bg-card', embedded ? 'gap-2 px-3 py-3' : 'gap-2 px-4 py-3')}>
+      <p className={cn('font-medium leading-snug text-foreground', embedded ? 'text-sm' : 'text-base')}>{nba.label}</p>
+      <NetworkButton data-testid="app-nba-action" size="default" onClick={nba.onAction}>
         {nba.actionLabel}
       </NetworkButton>
     </aside>

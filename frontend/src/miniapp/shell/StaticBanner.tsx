@@ -34,10 +34,11 @@ export function StaticBanner() {
   const [dismissed, setDismissed] = useState(readDismissed)
   if (embedded || !mock || dismissed) return null
   return (
-    <div data-testid="app-static-banner" role="note" className="flex shrink-0 items-center gap-3 border-b bg-demo-soft px-4 py-2 text-xs print:hidden">
+    <div data-testid="app-static-banner" role="note" className="flex shrink-0 items-center gap-3 border-b bg-paper-2 py-1 pr-1 pl-4 text-xs text-ink-2 print:hidden">
       <p className="min-w-0 flex-1">{t('offline.static', lang)}</p>
       <Button
-        variant="outline"
+        variant="ghost"
+        className="h-11 px-3 text-link"
         data-testid="app-static-banner-close"
         onClick={() => {
           writeDismissed()

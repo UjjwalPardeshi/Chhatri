@@ -10,7 +10,7 @@ import { cn } from '../lib/cn'
 
 export function ReceiptDocument({ heading, children }: { heading: ReactNode; children: ReactNode }) {
   return (
-    <article data-testid="receipt-document" className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm">
+    <article data-testid="receipt-document" className="flex flex-col gap-4 rounded-lg border bg-card p-4">
       {heading}
       <dl className="flex flex-col divide-y">{children}</dl>
     </article>

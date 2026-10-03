@@ -44,7 +44,7 @@ export function ClaimDetail() {
           <>
             <ClaimHeader view={view} />
             {question === null ? null : <DisputeCard view={question} />}
-            <section className="rounded-xl border bg-card p-4 shadow-sm">
+            <section className="rounded-lg border bg-card p-4">
               <Stepper steps={view.steps} />
             </section>
             <CaseBlock view={view} />

@@ -61,7 +61,8 @@ export type LaunchKey = keyof typeof LAUNCHES
 export type TimeToMoney = { label: string; minDays: number; maxDays: number; text: string; ours: boolean }
 export const TIME_TO_MONEY: readonly TimeToMoney[] = [
   { label: 'Paytm’s earlier merchant protection plans', minDays: 30, maxDays: 60, text: '30-60', ours: false },
-  { label: 'Weather-triggered heat cover (SEWA)', minDays: 42, maxDays: 56, text: '42-56', ours: false },
+  // SEWA: facts-and-sources §E says only "weeks"; minDays/maxDays only draw the bar (illustrative), the label does not claim a day range.
+  { label: 'Weather-triggered heat cover (SEWA)', minDays: 42, maxDays: 56, text: 'Weeks', ours: false },
   { label: 'Chhatri', minDays: 0, maxDays: 0, text: 'Same day', ours: true },
 ]
 

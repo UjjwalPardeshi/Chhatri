@@ -24,7 +24,7 @@ function ClauseChip({ clause, lang }: { clause: AskClause; lang: Lang }) {
     <Sheet>
       <SheetTrigger asChild>
         <button type="button" data-testid="ask-clause" data-clause={clause.id} aria-haspopup="dialog" className={CHIP}>
-          <BookOpen className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <BookOpen className="size-3.5 shrink-0 text-link" aria-hidden="true" />
           <span className="num">{clause.id}</span>
           <span className="text-ink-3">{title}</span>
         </button>

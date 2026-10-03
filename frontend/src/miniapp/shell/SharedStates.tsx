@@ -4,7 +4,7 @@
  * the code in small text, offline keeps the last data under a banner and disables what needs the network, and SIMULATED
  * and FALLBACK are badges. `ResourceScreen` puts a resource into the right state for a screen in one place.
  */
-import { CircleAlert, Inbox, WifiOff } from 'lucide-react'
+import { WifiOff } from 'lucide-react'
 import { useId, type ComponentProps, type ReactNode } from 'react'
 
 import type { ApiError } from '../../api/client'
@@ -41,10 +41,7 @@ export function SkeletonBlocks() {
 export function EmptyState({ message, children }: { message: string; children?: ReactNode }) {
   return (
     <div data-testid="app-empty" className="flex flex-col items-start gap-3 rounded-lg border bg-card p-4">
-      <div className="flex items-start gap-3">
-        <Inbox className="mt-0.5 size-5 shrink-0 text-ink-3" aria-hidden="true" />
-        <p className="text-md text-ink-2">{message}</p>
-      </div>
+      <p className="text-md text-ink-2">{message}</p>
       {children}
     </div>
   )
@@ -62,11 +59,8 @@ const SHOWS_NO_CODE: ReadonlySet<string> = new Set(['NETWORK_ERROR', 'TIMEOUT'])
 export function ErrorState({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
   const { lang } = useMiniapp()
   return (
-    <div data-testid="app-error" role="alert" className="flex flex-col items-start gap-2 rounded-lg border border-blocked bg-blocked-soft p-4">
-      <div className="flex items-start gap-3">
-        <CircleAlert className="mt-0.5 size-5 shrink-0 text-blocked" aria-hidden="true" />
-        <p className="text-md font-medium text-foreground">{t(errorKey(error), lang)}</p>
-      </div>
+    <div data-testid="app-error" role="alert" className="flex flex-col items-start gap-2 rounded-lg border border-blocked/40 bg-blocked-soft p-4">
+      <p className="text-md font-bold text-foreground">{t(errorKey(error), lang)}</p>
       {SHOWS_NO_CODE.has(error.code) ? null : <p className="text-xs text-ink-3">{t('error.code', lang, { code: error.code })}</p>}
       <Button data-testid="app-error-retry" variant="outline" onClick={onRetry}>
         {t('error.retry', lang)}
@@ -79,7 +73,7 @@ export function ErrorState({ error, onRetry }: { error: ApiError; onRetry: () =>
 export function OfflineBanner({ time }: { time: string | null }) {
   const { lang } = useMiniapp()
   return (
-    <output data-testid="app-offline-banner" className="flex items-center gap-2 rounded-lg bg-referred-soft px-3 py-2 text-xs text-referred-ink">
+    <output data-testid="app-offline-banner" className="flex items-center gap-2 rounded-md bg-referred-soft px-3 py-2 text-xs text-referred-ink">
       <WifiOff className="size-4 shrink-0" aria-hidden="true" />
       <span>{t('offline.banner', lang, { time: formatDateTime(time, lang) })}</span>
     </output>

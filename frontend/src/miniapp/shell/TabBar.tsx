@@ -26,9 +26,12 @@ export function TabBar() {
             to={url.href({ screen })}
             data-testid={`app-tab-${tab}`}
             aria-current={current ? 'page' : undefined}
-            className={cn('flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-medium', current ? 'text-primary' : 'text-ink-3')}
+            className={cn(
+              'relative flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50',
+              current ? 'font-bold text-link before:absolute before:inset-x-7 before:top-0 before:h-0.5 before:rounded-full before:bg-primary' : 'font-medium text-ink-3',
+            )}
           >
-            <Icon className="size-5" aria-hidden="true" />
+            <Icon className="size-5" strokeWidth={current ? 2.25 : 1.75} aria-hidden="true" />
             <span>{t(labelKey, lang)}</span>
           </Link>
         )

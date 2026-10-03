@@ -7,10 +7,9 @@
   position: relative;
   display: flex;
   align-items: stretch;
-  gap: var(--sp-2);
-  min-height: 40px;
-  padding: 4px var(--gutter);
-  background: var(--paper-2);
+  min-height: 44px;
+  padding: 0;
+  background: var(--card);
   border-bottom: 1px solid var(--line);
 }
 
@@ -34,19 +33,25 @@
   align-items: baseline;
   flex-wrap: wrap;
   column-gap: var(--sp-2);
-  padding: 2px var(--sp-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--card);
+  padding: 4px var(--sp-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
   text-align: left;
-  transition:
-    background-color 700ms ease,
-    border-color 120ms ease;
+  transition: background-color 700ms ease;
+}
+
+.ops-cell + .ops-cell {
+  border-left: 1px solid var(--line);
+}
+
+.ops-strip > .ops-cell:first-child {
+  padding-left: var(--gutter);
 }
 
 .ops-cell:hover:not(:disabled) {
-  border-color: var(--faint);
+  background: var(--paper);
 }
 
 .ops-cell:disabled {
@@ -62,13 +67,13 @@
 .ops-cell__label {
   flex: 0 0 100%;
   color: var(--muted);
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-xs);
   line-height: 1.2;
 }
 
 .ops-cell__value {
   font-size: var(--fs-lg);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
@@ -83,7 +88,6 @@
 }
 
 .ops-cell[data-tone='overdue'] {
-  border-color: var(--red-line);
   background: var(--red-soft);
 }
 
@@ -180,9 +184,16 @@
 }
 
 .home__strip .ops-strip {
-  padding: 0;
-  background: none;
-  border-bottom: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.home__strip .ops-cell:first-child {
+  border-radius: calc(var(--radius-card) - 1px) 0 0 calc(var(--radius-card) - 1px);
+}
+
+.home__strip .ops-cell:last-of-type {
+  border-radius: 0 calc(var(--radius-card) - 1px) calc(var(--radius-card) - 1px) 0;
 }
 
 /* Over the map column only, the cells size to their content first, so "100% · 312 of 312" and "₹4,25,420 · 312

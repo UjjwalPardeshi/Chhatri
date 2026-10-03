@@ -75,15 +75,30 @@ The order follows the [final deck](final-deck-and-video-script.md), slides 1 to 
 | Disclosure | How to say it | When |
 |---|---|---|
 | **Pre-built work** | "We built the prototype between 29 September and 1 October, before the final. The organisers confirmed pre-built work is allowed. Everything added from 2 October is in the git log with its date and author." | If asked, or if time allows. |
-| **Flagged features** | "Everything on our list is built behind flags, all off by default. What you see is what was switched on and rehearsed at the freeze. Anything else stays hidden, not shown half-working. The AI paths are tested against fakes; we have not run them with live keys." | If asked about the mini-app, Ask Chhatri, voice or the consent centre. |
+| **Flagged features** | "Everything on our list is built behind flags, all off by default. What you see is what was switched on and rehearsed at the freeze. Anything else stays hidden, not shown half-working. The AI paths are tested against fakes, and on 3 October the stage script was also walked with a live Gemini key (slip read and a free question both labelled LIVE gemini). Sarvam has not been run: we have no key." | If asked about the mini-app, Ask Chhatri, voice or the consent centre. |
 | **No partner** | "No insurer or lender has agreed to anything, and we have no talks to report. A partner insurer and lender will be approached after the hackathon." | Any partner question, and the close. |
 | **Simulated sales and alerts** | "The rainfall is real Open-Meteo data. The shops' sales and the alert feed are simulated, so the replay shows the rules work as specified, not that they work on real merchants." | Backtest beat, or "Is this real data?" |
 | **Accelerated clock** | "The replay runs at 6 simulated minutes per real second, so an hour takes 10 seconds. 'Four minutes to money' is simulated time; in the product the credit rides the evening settlement." | If asked about timing. |
 | **Circular calibration** | "We searched simulation parameters so the replay reproduces the demo numbers: Z7 at 37%, ₹4,380, ₹58,900. And we priced cover so the backtest loss ratio is 65%. That is specification validation, not market proof. The pilot tests real merchants." | Backtest beat, or "Isn't this circular?" Say it calmly. |
 | **Not measured** | "We haven't measured slip-reading accuracy, intent accuracy or merchants' willingness to pay. The evaluation page shows a number only once a stored run exists." | AI and price questions. |
-| **What is live** | Only the components the header badge shows as LIVE. Today that can be Sarvam's speech, chat and vision with our key; Gemini only if a Gemini key is set (the code is tested against fakes, no key has been run), and a FALLBACK badge when a provider is down or unset. WhatsApp and the Paytm link are simulated: we have no keys for them. Free tiers get synthetic data only. | Disclosure beat. |
+| **What is live** | Only the components the header badge shows as LIVE. Today that can be Sarvam's speech, chat and vision with our key; Gemini when a Gemini key is set (`make demo-stage` is live by default; the stage script was walked live on 3 October with `gemini-2.5-flash-lite`), and a FALLBACK badge when a provider is down or unset. WhatsApp and the Paytm link are simulated: we have no keys for them. Free tiers get synthetic data only. | Disclosure beat. |
 | **Round-1 deck errata** | "The round-1 sketch showed Z7 at 41%. The prototype shows 37%, which produces the 63% drop and the ₹1,380 payout. It also called WhatsApp and the Paytm link live and the price 'a few rupees a day': both are simulated, and the price is open." | If asked about the deck. |
 | **Public, not open source** | "The repository is public. We haven't added a licence yet." | If asked about open source. |
+
+### Deck vs screen
+
+The round-1 PDF is the submitted artefact and is not edited. Where the screen differs, the screen is right. Say it plainly when asked, and never defend the PDF line.
+
+| PDF says | The screen shows | Say |
+|---|---|---|
+| Slide 6: "Z7 · 41%" | `Z7 · 37% · 46 shops`; 37% of the usual day is a 63% drop, which gives ₹4,380 × 63% × ½ = ₹1,380 | "The sketch said 41%. 41% would not give our own 63% drop. The prototype's 37% does, and every number on screen traces to a source." |
+| Slide 13: "What is live: Sarvam voice, the policy engine, WhatsApp, the claims console and the Paytm premium link" | Live: the policy engine, the claims console, the audit chain, real Open-Meteo rainfall, and Gemini for the slip reader and free questions when the footer says LIVE. SIMULATED: shop sales, KYC, payouts, the lender, WhatsApp, the Paytm link, and Sarvam unless a key is set | "The engine, the console and the audit chain are real. WhatsApp, the Paytm link and voice are simulators, and the header chip says so." |
+| Slide 13: "Premium paid with a real Paytm link (staging)" | `paytm.me/sim-...` with a SIMULATED badge: no Paytm staging credentials | "We have no Paytm credentials, so the link is a labelled simulation." |
+| Slide 9: "Sarvam runs the conversation" | Intents come from a word-list classifier first; for free text the chain is Gemini, then Sarvam, then rules, and the footer names which answered. The only model with a key on this machine is Gemini | "Rules first, so the three live tests never depend on a model's mood. A model answers only free text, and the footer says which one." |
+| Slides 2 and 10: SEWA "42-56 days" / "6-8 weeks" | "Weeks" | "SEWA pays automatically after a heat trigger, and the money reaches members weeks later. We do not quote a day count." |
+| Slide 12: "a few rupees a day" | Per-area premium from the backtest ledger, ₹6.93 to ₹38.82 a day (Z7 ₹18.62, about 0.4% of its ₹4,380 average day) | "Priced per area from its history; the price is open until a pilot. Compare it to a day's sales, not to the under-₹2 base plan." |
+| Slide 6: rain band "14:00-17:00" | "Heavy rain band · since 14:00" (the band is still on at the time shown) | Nothing; it is the same fact. |
+| Slide 7: instalment "paused by Chhatri" | With the lender flag on: "your lender has paused tomorrow's instalment", labelled SIMULATED | "Chhatri asks, the lender decides. The lender is simulated." |
 
 ## 6. Judge questions and answers
 

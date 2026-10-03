@@ -47,64 +47,64 @@ function contrast(foreground: string, background: string): number {
 type Pair = readonly [text: string, background: string, documented: number]
 
 const TEXT_ON_SURFACES: readonly Pair[] = [
-  ['ink', 'card', 17.85],
-  ['ink', 'paper', 16.35],
-  ['ink-2', 'card', 10.35],
-  ['ink-3', 'card', 7.58],
-  ['ink-3', 'grey-soft', 6.57],
-  ['muted', 'card', 5.97],
-  ['muted', 'paper', 5.46],
-  ['muted', 'paper-2', 5.27],
-  ['muted', 'grey-soft', 5.18],
-  ['blue', 'card', 5.77],
-  ['blue', 'blue-soft', 5.01],
+  ['ink', 'card', 17.15],
+  ['ink', 'paper', 15.84],
+  ['ink-2', 'card', 12.49],
+  ['ink-3', 'card', 8.42],
+  ['ink-3', 'grey-soft', 7.23],
+  ['muted', 'card', 6.15],
+  ['muted', 'paper', 5.68],
+  ['muted', 'paper-2', 5.42],
+  ['muted', 'grey-soft', 5.28],
+  ['blue', 'card', 6.09],
+  ['blue', 'blue-soft', 5.29],
   ['red', 'card', 6.47],
   ['green-ink', 'card', 7.13],
   ['amber-ink', 'card', 5.41],
-  ['ink', 'bubble-out', 16.1],
+  ['ink', 'bubble-out', 15.47],
 ]
 
 /** Design system 2.3, one row per state: white on the solid fill, then the ink on the soft tint. */
 const STATUS_STATES: readonly { state: string; solid: string; solidRatio: number; tint: string; ink: string; inkRatio: number }[] = [
   { state: 'paid', solid: 'paid', solidRatio: 5.02, tint: 'paid-soft', ink: 'green-ink', inkRatio: 6.25 },
-  { state: 'decided', solid: 'decided', solidRatio: 5.77, tint: 'blue-soft', ink: 'blue', inkRatio: 5.01 },
+  { state: 'decided', solid: 'decided', solidRatio: 6.09, tint: 'blue-soft', ink: 'blue', inkRatio: 5.29 },
   { state: 'referred', solid: 'referred', solidRatio: 5.02, tint: 'referred-soft', ink: 'referred-ink', inkRatio: 4.79 },
   { state: 'blocked', solid: 'blocked', solidRatio: 6.47, tint: 'blocked-soft', ink: 'red', inkRatio: 5.56 },
   { state: 'live', solid: 'live', solidRatio: 5.02, tint: 'live-soft', ink: 'green-ink', inkRatio: 6.25 },
-  { state: 'demo (SIMULATED)', solid: 'demo', solidRatio: 7.58, tint: 'demo-soft', ink: 'demo', inkRatio: 6.57 },
+  { state: 'demo (SIMULATED)', solid: 'demo', solidRatio: 8.42, tint: 'demo-soft', ink: 'demo', inkRatio: 7.23 },
   { state: 'fallback', solid: 'fallback', solidRatio: 5.18, tint: 'fallback-soft', ink: 'fallback', inkRatio: 4.68 },
 ]
 
 const ON_FILLS: readonly Pair[] = [
-  [WHITE, 'blue', 5.77],
-  [WHITE, 'blue-hover', 7.11],
+  [WHITE, 'blue', 6.09],
+  [WHITE, 'blue-hover', 7.90],
   [WHITE, 'red', 6.47],
   [WHITE, 'green', 5.02],
   [WHITE, 'amber-solid', 5.02],
-  [WHITE, 'navy', 17.27],
-  [WHITE, 'wa-header', 12.2],
+  [WHITE, 'navy', 13.00],
+  [WHITE, 'wa-header', 12.20],
   ['red', 'red-soft', 5.56],
   ['amber-ink', 'amber-soft', 4.79],
   ['green-ink', 'green-soft', 6.25],
 ]
 
 const ON_NAVY: readonly Pair[] = [
-  ['on-navy', 'navy', 17.27],
-  ['on-navy', 'navy-3', 13.42], // the pressed "Present" button (design system 8.2); computed, not in the tables
-  ['on-navy-2', 'navy', 11.48],
-  ['on-navy-3', 'navy', 6.88],
-  ['on-navy-3', 'navy-3', 5.35],
-  ['fallback-on-navy', 'navy', 7.63],
-  ['fallback-on-navy', 'navy-3', 5.93],
+  ['on-navy', 'navy', 13.00],
+  ['on-navy', 'navy-3', 10.44], // the pressed "Present" button (design system 8.2); computed, not in the tables
+  ['on-navy-2', 'navy', 9.39],
+  ['on-navy-3', 'navy', 6.83],
+  ['on-navy-3', 'navy-3', 5.49],
+  ['fallback-on-navy', 'navy', 7.05],
+  ['fallback-on-navy', 'navy-3', 5.66],
 ]
 
 /** The edge of a field, a switch or a focus ring: WCAG 1.4.11, 3:1 against what it sits on. */
 const CONTROL_EDGES: readonly Pair[] = [
-  ['field-border', 'card', 4.33],
-  ['field-border', 'paper', 3.96],
-  ['field-border', 'paper-2', 3.82],
-  ['accent', 'navy', 6.23],
-  ['faint', 'card', 3.1],
+  ['field-border', 'card', 4.28],
+  ['field-border', 'paper', 3.95],
+  ['field-border', 'paper-2', 3.77],
+  ['accent', 'navy', 5.70],
+  ['faint', 'card', 3.18],
 ]
 
 const label = ([text, background]: Pair) => `${text} on ${background}`

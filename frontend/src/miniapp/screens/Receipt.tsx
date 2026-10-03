@@ -24,7 +24,7 @@ import './receipt.print.css'
 function ReceiptSkeleton() {
   const { lang } = useMiniapp()
   return (
-    <output data-testid="app-skeleton" aria-label={t('state.loading', lang)} className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+    <output data-testid="app-skeleton" aria-label={t('state.loading', lang)} className="flex flex-col gap-4 rounded-lg border bg-card p-4">
       {[0, 1, 2].map((row) => (
         <Skeleton key={row} className="h-5 w-2/3" />
       ))}

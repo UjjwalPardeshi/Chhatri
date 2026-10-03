@@ -98,7 +98,7 @@ function PolicyContent({ policy, launcher }: { policy: PolicyView; launcher: Lau
         <Checks policy={policy} />
       </div>
       <div className="policy-grid__col">
-        <LiveTests launcher={launcher} />
+        <LiveTests launcher={launcher} className="live-tests--light" />
         <Rules policy={policy} />
       </div>
     </div>

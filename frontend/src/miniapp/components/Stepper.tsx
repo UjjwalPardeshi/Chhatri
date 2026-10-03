@@ -23,16 +23,16 @@ const ICONS: Readonly<Record<StepIcon, LucideIcon>> = {
   stopped: CircleX,
 }
 const DISC: Readonly<Record<StepIcon, string>> = {
-  done: 'bg-paid-soft text-paid-ink',
-  working: 'bg-accent text-primary',
+  done: 'bg-paid text-white',
+  working: 'bg-primary text-primary-foreground',
   person: 'bg-referred-soft text-referred-ink',
-  waiting: 'bg-secondary text-ink-3',
-  skipped: 'bg-secondary text-ink-3',
-  stopped: 'bg-blocked-soft text-blocked',
+  waiting: 'border border-line-strong bg-card text-ink-3',
+  skipped: 'border border-line-strong bg-card text-ink-3',
+  stopped: 'bg-blocked text-white',
 }
 const STATE_WORD: Readonly<Record<StepIcon, string>> = {
   done: 'text-paid-ink',
-  working: 'text-primary',
+  working: 'text-link',
   person: 'text-referred-ink',
   waiting: 'text-ink-3',
   skipped: 'text-ink-3',
@@ -47,8 +47,8 @@ function announcedStep(steps: readonly StepView[]): StepView | null {
 function Disc({ icon }: { icon: StepIcon }) {
   const Icon = ICONS[icon]
   return (
-    <span className={cn('relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full', DISC[icon])}>
-      <Icon className={cn('size-4', icon === 'working' && 'animate-spin')} aria-hidden="true" />
+    <span className={cn('relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full', DISC[icon])}>
+      <Icon className={cn('size-3.5', icon === 'working' && 'animate-spin')} aria-hidden="true" />
     </span>
   )
 }
@@ -56,7 +56,7 @@ function Disc({ icon }: { icon: StepIcon }) {
 export function SimulatedLine({ kind }: { kind: 'payment' | 'lender' }) {
   const { lang } = useMiniapp()
   return (
-    <p data-mode="SIMULATED" className="mt-2 inline-flex items-start gap-1.5 rounded-md bg-demo-soft px-2 py-1 text-xs text-demo">
+    <p data-mode="SIMULATED" className="mt-2 inline-flex items-start gap-1.5 rounded-sm border bg-paper px-2 py-1 text-xs text-demo">
       <CircleDashed className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
       <span>{t(kind === 'payment' ? 'sim.payment' : 'sim.lender', lang)}</span>
     </p>
@@ -74,18 +74,18 @@ function StepRow({ step, last }: { step: StepView; last: boolean }) {
       aria-current={step.status === 'current' ? 'step' : undefined}
       className="relative flex gap-3 pb-5 last:pb-0"
     >
-      {last ? null : <span aria-hidden="true" className="absolute top-7 bottom-0 left-3.5 w-0.5 -translate-x-1/2 bg-border" />}
+      {last ? null : <span aria-hidden="true" className="absolute top-6 bottom-0 left-3 w-px -translate-x-1/2 bg-border" />}
       <Disc icon={step.icon} />
-      <div className="min-w-0 flex-1 pt-0.5">
+      <div className="min-w-0 flex-1 pt-px">
         <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-md font-medium leading-snug text-foreground">{t(step.titleKey, lang)}</h3>
+          <h3 className="text-md font-bold leading-snug text-foreground">{t(step.titleKey, lang)}</h3>
           {step.at === null ? null : (
             <time dateTime={step.at} className="num shrink-0 text-caption text-ink-3">
               {time}
             </time>
           )}
         </div>
-        <p className={cn('text-xs font-medium', STATE_WORD[step.icon])}>{t(step.stateKey, lang)}</p>
+        <p className={cn('text-xs font-bold', STATE_WORD[step.icon])}>{t(step.stateKey, lang)}</p>
         {step.headline === null ? null : (
           <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
             <LineText line={step.headline} className="text-sm font-medium text-foreground" />

@@ -14,13 +14,13 @@ import { Skeleton } from '../ui/skeleton'
 import { ClaimsHeading } from './ClaimsHeading'
 import type { WhyRow, WhyValue } from './WhyRows'
 
-const BLOCK = 'flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm'
+const BLOCK = 'flex flex-col gap-3 rounded-lg border bg-card p-4'
 
 export function WhyFormula({ en, hi }: { en: string; hi: string }) {
   const { lang } = useMiniapp()
   return (
     <section className={BLOCK}>
-      <ClaimsHeading className="text-md font-medium">{t('receipt.row.formula', lang)}</ClaimsHeading>
+      <ClaimsHeading className="text-md font-bold">{t('receipt.row.formula', lang)}</ClaimsHeading>
       <FormulaBlock testId="why-formula" en={en} hi={hi} />
     </section>
   )
@@ -42,14 +42,14 @@ export function WhyNumbers({ rows, rulesVersion }: { rows: readonly WhyRow[]; ru
   const { lang } = useMiniapp()
   return (
     <section className={BLOCK}>
-      <ClaimsHeading className="text-md font-medium">{t('why.numbers', lang)}</ClaimsHeading>
+      <ClaimsHeading className="text-md font-bold">{t('why.numbers', lang)}</ClaimsHeading>
       <dl data-testid="why-numbers" className="flex flex-col divide-y">
         {rows.map((row) => (
           <div key={row.key} data-testid={`why-row-${row.key}`} className="flex flex-wrap items-baseline justify-between gap-x-3 py-2 first:pt-0 last:pb-0">
             <dt className="min-w-0 flex-1 text-sm text-ink-2">
               <Label row={row} />
             </dt>
-            <dd data-testid={`why-value-${row.key}`} className="num text-md font-medium text-foreground">
+            <dd data-testid={`why-value-${row.key}`} className="num text-md font-bold text-foreground">
               <Value value={row.value} />
             </dd>
             <dd className="basis-full">
@@ -69,7 +69,7 @@ export function WhyNoAmount({ heading, intro, lines }: PersonProps) {
   const { lang } = useMiniapp()
   return (
     <section data-testid="why-no-amount" className={BLOCK}>
-      <ClaimsHeading className="text-md font-medium">{t(heading, lang)}</ClaimsHeading>
+      <ClaimsHeading className="text-md font-bold">{t(heading, lang)}</ClaimsHeading>
       {intro === null ? null : <p className="text-sm text-foreground">{t(intro, lang)}</p>}
       {lines.length === 0 ? null : (
         <ul data-testid="why-reasons" className="flex list-disc flex-col gap-1.5 ps-5 text-sm text-foreground">
@@ -88,7 +88,7 @@ export function WhySkeleton() {
   return (
     <output data-testid="app-skeleton" aria-label={t('state.loading', lang)} className="flex flex-col gap-4">
       <Skeleton className="h-24 w-full rounded-xl" />
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+      <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex flex-col gap-2">
             <Skeleton className="h-4 w-2/3" />

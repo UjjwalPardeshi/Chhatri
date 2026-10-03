@@ -11,6 +11,7 @@ import type { ClaimItem, Cover } from '../../api/types'
 import { isFeatureEnabled } from '../../features'
 import { AlertBanner } from '../components/AlertBanner'
 import { CoverCard, type CoverRow } from '../components/CoverCard'
+import { ListGroup, ListRowLink } from '../components/ListRow'
 import { ModeBadge } from '../components/ModeBadge'
 import { useNextBest } from '../hooks/nextBestActionBar'
 import { useClaims, useCover } from '../hooks/useMiniappData'
@@ -45,7 +46,7 @@ function Greeting() {
   if (merchant.data === null) return <Skeleton className="h-7 w-1/2" />
   const name = firstName(lang === 'en' ? merchant.data.owner_name : merchant.data.owner_name_hi)
   return (
-    <p data-testid="home-greeting" className="text-xl font-medium">
+    <p data-testid="home-greeting" className="text-xl font-bold leading-tight">
       {t('home.greeting', lang, { name })}
     </p>
   )
@@ -90,9 +91,9 @@ function ExpectedDay({ label }: { label: string }) {
   const { lang, embedded } = useMiniapp()
   const Title = embedded ? 'h3' : 'h2'
   return (
-    <Card data-testid="home-expected-day" className="flex-row items-center justify-between gap-3 px-4 py-3">
-      <Title className="text-sm text-muted-foreground">{t('home.expected', lang)}</Title>
-      <span className="num text-xl font-medium">{label}</span>
+    <Card data-testid="home-expected-day" className="min-h-14 flex-row items-center justify-between gap-3 px-4 py-3">
+      <Title className="text-md font-bold">{t('home.expected', lang)}</Title>
+      <span className="num text-xl font-bold">{label}</span>
     </Card>
   )
 }
@@ -109,27 +110,17 @@ function HomeBody({ cover, claims }: { cover: Cover; claims: Resource<ClaimItem[
       <CoverCard cover={cover} testPrefix="home" extraRows={extraRows} />
       {expected ? <ExpectedDay label={expected} /> : null}
       <ClaimSlot claims={claims} />
-      <div className="flex flex-col gap-3">
-        {cover.status === 'NONE' ? (
-          <Button asChild size="lg">
-            <Link to={url.href({ screen: 'buy' })} data-testid="home-open-buy">
-              {t('home.btn.buy', lang)}
-            </Link>
-          </Button>
-        ) : null}
-        <Button asChild size="lg" variant="outline">
-          <Link to={url.href({ screen: 'coverage' })} data-testid="home-open-coverage">
-            {t('home.btn.coverage', lang)}
+      {cover.status === 'NONE' ? (
+        <Button asChild size="lg">
+          <Link to={url.href({ screen: 'buy' })} data-testid="home-open-buy">
+            {t('home.btn.buy', lang)}
           </Link>
         </Button>
-        {isFeatureEnabled('n2_ask_chhatri') ? (
-          <Button asChild size="lg" variant="outline">
-            <Link to={url.href({ screen: 'ask' })} data-testid="home-open-ask">
-              {t('home.btn.ask', lang)}
-            </Link>
-          </Button>
-        ) : null}
-      </div>
+      ) : null}
+      <ListGroup>
+        <ListRowLink to={url.href({ screen: 'coverage' })} data-testid="home-open-coverage" title={t('home.btn.coverage', lang)} />
+        {isFeatureEnabled('n2_ask_chhatri') ? <ListRowLink to={url.href({ screen: 'ask' })} data-testid="home-open-ask" title={t('home.btn.ask', lang)} /> : null}
+      </ListGroup>
     </>
   )
 }

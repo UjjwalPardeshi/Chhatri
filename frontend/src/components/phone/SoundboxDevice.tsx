@@ -14,7 +14,7 @@ export function SoundboxDevice({ message, announcing }: Props) {
       <span className="soundbox-device__speaker" aria-hidden="true">
         <span className="soundbox-device__ring" />
         <span className="soundbox-device__grille" />
-        <span className="soundbox-device__brand">paytm</span>
+        <span className="soundbox-device__brand">Chhatri</span>
       </span>
       <div className="soundbox-device__text">
         <p className="eyebrow">

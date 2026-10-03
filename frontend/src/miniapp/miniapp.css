@@ -25,8 +25,11 @@
   --color-card-foreground: var(--ink);
   --color-popover: var(--card);
   --color-popover-foreground: var(--ink);
-  --color-primary: var(--blue);
-  --color-primary-foreground: var(--on-navy);
+  --color-primary: var(--accent); /* Paytm-style sky fill; its text is navy (6:1), white would not reach 4.5:1 */
+  --color-primary-foreground: var(--on-accent);
+  --color-primary-hover: var(--accent-hover);
+  --color-link: var(--blue); /* links and text-sized marks: the sky fill is for fills only */
+  --color-link-hover: var(--blue-hover);
   --color-secondary: var(--paper-2);
   --color-secondary-foreground: var(--ink-2);
   --color-muted: var(--paper-2);
@@ -45,6 +48,13 @@
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
   --color-line-strong: var(--line-strong);
+  --color-line-soft: var(--line-soft); /* hairline between list rows */
+  --color-paper: var(--paper); /* the page, for a quiet fill inside a white surface */
+  --color-paper-2: var(--paper-2);
+  --color-faint: var(--faint); /* icons and chevrons only, never text */
+  --color-on-navy-2: var(--on-navy-2);
+  --color-on-navy-3: var(--on-navy-3);
+  --color-navy-line: var(--navy-line);
   --color-white: var(--on-navy);
   --color-black: var(--navy); /* scrims such as bg-black/50 use navy */
 
@@ -94,10 +104,10 @@
 
   --spacing: 4px; /* p-4 = 16px = --sp-4 */
 
-  --shadow-xs: 0 1px 2px rgb(15 23 42 / 6%);
-  --shadow-sm: var(--shadow);
-  --shadow-md: var(--shadow);
-  --shadow-lg: 0 10px 40px rgb(15 23 42 / 18%);
+  --shadow-xs: none;
+  --shadow-sm: none; /* surfaces are separated by hairlines, not shadows */
+  --shadow-md: none;
+  --shadow-lg: 0 10px 40px rgb(0 30 80 / 18%);
 
   --ease-ui: var(--ease-out);
   --ease-move: var(--ease-in-out);

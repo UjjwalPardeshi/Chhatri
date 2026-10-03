@@ -83,10 +83,10 @@ function CheckRow({ check, rulesVersion }: { check: ReceiptCheck; rulesVersion: 
   return (
     <li data-testid={`receipt-check-${check.code}`} data-status={check.status} data-severity={check.severity} className="flex flex-col gap-1.5 py-3 break-inside-avoid first:pt-0 last:pb-0">
       <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 text-sm font-medium text-foreground">
+        <p className="min-w-0 text-sm font-bold text-foreground">
           <CheckLabel check={check} />
         </p>
-        <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', STATUS_TONE[check.status])}>
+        <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-bold', STATUS_TONE[check.status])}>
           <Icon className="size-3" aria-hidden="true" />
           {t(STATUS_KEY[check.status], lang)}
         </span>

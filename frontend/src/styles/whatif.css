@@ -6,6 +6,11 @@
   display: none;
 }
 
+.home__panel[data-whatif='open'] {
+  border: 0;
+  background: none;
+}
+
 .whatif-open {
   align-self: flex-start;
 }
@@ -33,7 +38,6 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-card);
   background: var(--card);
-  box-shadow: var(--shadow);
   font-size: var(--fs-sm);
 }
 
@@ -53,7 +57,7 @@
   align-self: flex-start;
   margin: 0;
   padding: 2px var(--sp-2);
-  border-radius: var(--radius-pill);
+  border-radius: 4px;
   background: var(--demo-soft);
   color: var(--ink-2);
   font-weight: 500;

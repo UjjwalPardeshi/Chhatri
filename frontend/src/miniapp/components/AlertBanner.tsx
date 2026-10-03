@@ -12,9 +12,9 @@ import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
 export type AlertTone = 'info' | 'warning' | 'error'
 
 const TONE: Readonly<Record<AlertTone, { box: string; icon: LucideIcon }>> = {
-  info: { box: 'border-decided/30 bg-decided-soft text-foreground', icon: Info },
-  warning: { box: 'border-referred/40 bg-referred-soft text-referred-ink', icon: CircleAlert },
-  error: { box: 'border-blocked/30 bg-blocked-soft text-blocked', icon: CircleAlert },
+  info: { box: 'border-decided/20 border-l-decided bg-decided-soft text-foreground [&>svg]:text-decided', icon: Info },
+  warning: { box: 'border-referred/25 border-l-referred bg-referred-soft text-foreground [&>svg]:text-referred-ink', icon: CircleAlert },
+  error: { box: 'border-blocked/25 border-l-blocked bg-blocked-soft text-foreground [&>svg]:text-blocked', icon: CircleAlert },
 }
 
 type AlertBannerProps = {
@@ -35,14 +35,14 @@ export function AlertBanner({ tone = 'info', icon, title, badge, children, testI
     <Alert
       data-testid={testId}
       role={tone === 'error' ? 'alert' : 'status'}
-      className={cn('items-start gap-y-1 px-3 py-3 has-[>svg]:grid-cols-[calc(var(--spacing)*5)_1fr] [&>svg]:size-5', box, className)}
+      className={cn('items-start gap-y-1 rounded-md border-l-4 px-3 py-3 has-[>svg]:grid-cols-[calc(var(--spacing)*5)_1fr] [&>svg]:size-5', box, className)}
     >
       <Icon aria-hidden="true" />
-      <AlertTitle className="line-clamp-none flex min-h-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold tracking-normal">
+      <AlertTitle className="line-clamp-none flex min-h-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-bold tracking-normal">
         <span>{title}</span>
         {badge}
       </AlertTitle>
-      {children ? <AlertDescription className="gap-1 text-sm text-current">{children}</AlertDescription> : null}
+      {children ? <AlertDescription className="gap-1 text-sm text-ink-2">{children}</AlertDescription> : null}
     </Alert>
   )
 }

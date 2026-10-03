@@ -51,8 +51,8 @@
   color: var(--blue);
   font-size: var(--fs-sm);
   font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .journey__n {
@@ -123,8 +123,8 @@
   color: var(--accent);
   font-size: var(--fs-2xs);
   font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .live-tests__list {
@@ -425,5 +425,51 @@
 }
 
 .audit-teaser > svg {
+  color: var(--blue);
+}
+
+/* On /policy the tests sit on a white surface with the other tables: same content, no navy block. */
+.live-tests--light {
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.live-tests--light .live-tests__title {
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.live-tests--light .live-test {
+  border-top-color: var(--line);
+}
+
+.live-tests--light .live-test__quote {
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+.live-tests--light .live-test__text {
+  color: var(--ink-3);
+}
+
+.live-tests--light .live-test__badge {
+  height: 22px;
+  font-size: var(--fs-2xs);
+}
+
+.live-tests--light .live-test__run {
+  border-color: var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--navy);
+}
+
+.live-tests--light .live-test__run:hover:not(:disabled) {
+  border-color: var(--blue);
   color: var(--blue);
 }

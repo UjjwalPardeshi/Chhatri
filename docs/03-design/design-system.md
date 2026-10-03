@@ -63,47 +63,48 @@ Clear, and one step at a time. The merchant is a shopkeeper who reads Hindi by p
 
 ## 2. Design tokens
 
-Source of truth: `frontend/src/styles/tokens.css`, 137 lines, BUILT. Token names are final and are not renamed. W0 added the tokens marked BUILT, W0 below to the same `:root` block, because the Tailwind theme (section 13) points at them. Contrast ratios are calculated with the WCAG 2.x relative-luminance formula on 2 Oct 2026. Re-run them when a token changes.
+Source of truth: `frontend/src/styles/tokens.css`, BUILT. The values below are the 3 Oct "Paytm-native refresh" values (note at the end of this section). Token names are final and are not renamed. W0 added the tokens marked BUILT, W0 below to the same `:root` block, because the Tailwind theme (section 13) points at them. Contrast ratios are calculated with the WCAG 2.x relative-luminance formula on 2 Oct 2026. Re-run them when a token changes.
 
 ### 2.1 Palette (BUILT)
 
 | Token | Value | Use | Contrast and rule |
 |---|---|---|---|
-| `--navy` | `#0f1a33` | Header, hero, dark surfaces | White on navy 17.27:1 |
-| `--ink` | `#0f172a` | Body text | 17.85:1 on white |
-| `--blue` | `#0b63c9` | Primary action, links | 5.77:1 on white, and white on it 5.77:1 |
-| `--accent` | `#38a3e8` | Highlights on navy | 2.77:1 on white. Use for fills and focus rings on navy (6.23:1 on navy), never as text on a light surface |
-| `--paper` | `#f3f5f8` | Page background | n/a |
+| `--navy` | `#002e6e` | Header, hero, dark surfaces, text on the sky fill | White on navy 13.00:1 |
+| `--ink` | `#0b1b36` | Body text | 17.15:1 on white |
+| `--blue` | `#0a5fc4` | Links, text-sized marks, the chart bars, the switch track | 6.09:1 on white, and white on it 6.09:1 |
+| `--accent` | `#00b9f1` | The one sky-blue accent: mini-app primary buttons (navy text on it, 5.70:1), the active-tab mark, highlights on navy | 2.28:1 on white, so a fill only, never text or a thin line on a light surface. 5.70:1 on navy |
+| `--paper` | `#f4f6f9` | Page background (very light grey) | n/a |
 | `--amber` | `#e39a4f` | Map ramp mid-stop, hatching | 2.33:1 on white. Use as a fill, never as text. Text on an amber tint uses `--amber-ink` |
 | `--red` | `#b91c1c` | Declined, blocked, errors | 6.47:1 on white |
 | `--green` | `#15803d` | Paid, approved, LIVE | 5.02:1 on white |
 | `--wa-header` | `#0b3d2e` | WhatsApp simulator header | White on it 12.20:1 |
 | `--chat-bg` | `#ece5dd` | Simulator thread | n/a |
-| `--bubble-out` | `#d9fdd3` | Simulator outgoing bubble | Ink on it 16.10:1 |
+| `--bubble-out` | `#d9fdd3` | Simulator outgoing bubble | Ink on it 15.47:1 |
 
 ### 2.2 Surfaces, lines and text
 
 | Token | Value | Use | Contrast and rule |
 |---|---|---|---|
 | `--card` | `#ffffff` | Card background | n/a |
-| `--paper-2` | `#eef1f6` | Subtle section background | `--muted` on it 5.27:1 |
-| `--line` | `#dfe4ec` | Standard divider | 1.28:1 on white. A divider, never a control edge |
-| `--line-soft` | `#edf0f5` | Subtle divider | n/a |
-| `--line-strong` | `#c9d1dd` | Emphasised divider, console button border | 1.54:1 on white. A divider. The edge of an input needs `--field-border` |
-| `--blue-hover` | `#0a56ae` | Button hover | White on it 7.11:1 |
-| `--blue-soft` | `#e7f0fb` | Info tint | `--blue` on it 5.01:1 |
-| `--ink-2` | `#334155` | Secondary text | 10.35:1 on white |
-| `--ink-3` | `#475569` | Tertiary text | 7.58:1 on white |
-| `--muted` | `#5b6474` | Muted text | 5.97:1 on white, 5.46:1 on `--paper`, 5.27:1 on `--paper-2` |
-| `--faint` | `#8a93a3` | Icons, lines, disabled controls | 3.10:1 on white, 2.83:1 on `--paper`. **Fails as text.** fs-08 section 13.2 moves 9 text declarations to `--muted` |
-| `--field-border` (BUILT, W0) | `#707a8c` | Outline of inputs, selects, switch tracks | 4.33:1 on white, 3.96:1 on `--paper`, 3.82:1 on `--paper-2`. WCAG 1.4.11 asks 3:1 for a control's edge, and `--line-strong` cannot give it |
+| `--paper-2` | `#edf1f6` | Subtle section background, pressed list row | `--muted` on it 5.42:1 |
+| `--line` | `#e4e9f0` | Standard hairline | 1.22:1 on white. A divider, never a control edge |
+| `--line-soft` | `#eef2f7` | Hairline between list rows | n/a |
+| `--line-strong` | `#cbd4e1` | Emphasised divider, outline-button border | 1.50:1 on white. A divider. The edge of an input needs `--field-border` |
+| `--blue-hover` | `#08509f` | Link and console button hover | White on it 7.90:1 |
+| `--accent-hover`, `--on-accent` | `#00a5d9`, `var(--navy)` | Sky fill pressed, and the text on the sky fill | `--on-accent` on `--accent` 5.70:1 |
+| `--blue-soft` | `#e6f0fc` | Info tint, hover surface | `--blue` on it 5.29:1 |
+| `--ink-2` | `#26344d` | Secondary text | 12.49:1 on white |
+| `--ink-3` | `#3f4e66` | Tertiary text | 8.42:1 on white |
+| `--muted` | `#55627a` | Muted text | 6.15:1 on white, 5.68:1 on `--paper`, 5.42:1 on `--paper-2` |
+| `--faint` | `#8591a6` | Icons, chevrons, lines, disabled controls | 3.18:1 on white, 2.94:1 on `--paper`. **Fails as text.** fs-08 section 13.2 moves 9 text declarations to `--muted` |
+| `--field-border` (BUILT, W0) | `#6f7b90` | Outline of inputs, selects, switch tracks | 4.28:1 on white, 3.95:1 on `--paper`, 3.77:1 on `--paper-2`. WCAG 1.4.11 asks 3:1 for a control's edge, and `--line-strong` cannot give it |
 | `--amber-ink` | `#a8520f` | Text on amber tints | 5.41:1 on white, 4.79:1 on `--amber-soft` |
 | `--amber-solid` | `#b45309` | Amber fill with white text | White on it 5.02:1 |
 | `--amber-soft` | `#fcefe0` | Amber tint | n/a |
 | `--red-soft`, `--red-line` | `#fbeaea`, `#f1c4c4` | Red tint and its border | `--red` on `--red-soft` 5.56:1 |
 | `--green-soft` | `#e4f4e9` | Green tint | `--green` on it is 4.40:1 and **fails as text**. Use `--green-ink` |
 | `--green-ink` (BUILT, W0) | `#166534` | Text on green tints | 7.13:1 on white, 6.25:1 on `--green-soft` |
-| `--grey-soft` | `#eceff4` | Neutral tint | `--ink-3` on it 6.57:1, `--muted` on it 5.18:1 |
+| `--grey-soft` | `#eaeef4` | Neutral tint | `--ink-3` on it 7.23:1, `--muted` on it 5.28:1 |
 
 ### 2.3 Status colours (BUILT, W0)
 
@@ -122,9 +123,9 @@ The draft proposed status colours without checking them. These are the corrected
 --live: var(--green);       --live-soft: var(--green-soft);
 --demo: var(--ink-3);       --demo-soft: var(--grey-soft);          /* SIMULATED */
 --fallback: #c2410c;        --fallback-soft: #fff1e6;
---fallback-on-navy: #fb923c;                                         /* FALLBACK chip on the navy header */
+--fallback-on-navy: #fdae5c;                                         /* FALLBACK chip on the navy header */
 
---radius-control: var(--radius-sm);
+--radius-control: 8px;
 --radius-card: var(--radius);
 --radius-panel: var(--radius-lg);
 ```
@@ -132,14 +133,14 @@ The draft proposed status colours without checking them. These are the corrected
 | State | Solid (fill, white text) | Soft tint | Text on the tint | Icon (mini-app) | Used for |
 |---|---|---|---|---|---|
 | Paid | `--paid` `#15803d`, 5.02:1 | `--paid-soft` | `--green-ink`, 6.25:1 | `circle-check` | Payout credited, PAID pill, PASS rows |
-| Decided | `--decided` `#0b63c9`, 5.77:1 | `--blue-soft` | `--blue`, 5.01:1 | `clock` | Approved, credit on its way |
+| Decided | `--decided` `#0a5fc4`, 6.09:1 | `--blue-soft` | `--blue`, 5.29:1 | `clock` | Approved, credit on its way |
 | Referred | `--referred` `#b45309`, 5.02:1 | `--referred-soft` | `--referred-ink`, 4.79:1 | `user-round` | With a claims officer, UNSURE, open cases, waived by officer |
 | Blocked | `--blocked` `#b91c1c`, 6.47:1 | `--blocked-soft` | `--red`, 5.56:1 | `circle-x` | Declined, FAIL, BLOCKED quote |
 | Live | `--live` `#15803d`, 5.02:1 | `--live-soft` | `--green-ink`, 6.25:1 | `circle-dot` | LIVE mode |
-| Simulated | `--demo` `#475569`, 7.58:1 | `--demo-soft` | `--demo`, 6.57:1 | `circle-dashed` | SIMULATED mode |
+| Simulated | `--demo` `#3f4e66`, 8.42:1 | `--demo-soft` | `--demo`, 7.23:1 | `circle-dashed` | SIMULATED mode |
 | Fallback | `--fallback` `#c2410c`, 5.18:1 | `--fallback-soft` | `--fallback`, 4.68:1 | `triangle-alert` | FALLBACK mode |
 
-Status indicators carry an icon and a word, never colour alone.
+Status indicators carry a word, never colour alone. Since the 3 Oct refresh the mini-app shows a claim or cover status as a coloured word with a small dot, not a pill with an icon; the mode badge keeps its icon and word.
 
 **What the draft got wrong.**
 
@@ -149,7 +150,7 @@ Status indicators carry an icon and a word, never colour alone.
 | Orange `#fb923c` | 4.6:1 | 2.26:1, fails | `--fallback` `#c2410c`, 5.18:1 |
 | Teal `#14919b` | 5.5:1 | 3.78:1, fails | Grey for SIMULATED (below) |
 | Green `#15803d` | 6.8:1 | 5.02:1, passes | Number corrected |
-| Blue `#0b63c9` | 5.9:1 | 5.77:1, passes | Number corrected |
+| Blue `#0b63c9` | 5.9:1 | 5.77:1, passes | Number corrected (the 3 Oct refresh then moved `--blue` to `#0a5fc4`) |
 | Red `#b91c1c` | 6.4:1 | 6.47:1, passes | Number corrected |
 
 **Why SIMULATED is grey and not teal.**
@@ -163,16 +164,32 @@ Status indicators carry an icon and a word, never colour alone.
 
 | Token | Value | Use | Contrast |
 |---|---|---|---|
-| `--navy` | `#0f1a33` | Header, hero, closing band | n/a |
-| `--navy-2` | `#16244a` | Slightly lighter navy | n/a |
-| `--navy-3` | `#1d2d57` | Panels on navy | n/a |
-| `--navy-line` | `#25355f` | Border on navy | n/a |
-| `--on-navy` | `#ffffff` | Strong text | 17.27:1 on navy |
-| `--on-navy-2` | `#c8d3ea` | Secondary text | 11.48:1 on navy |
-| `--on-navy-3` | `#93a4c6` | Tertiary text, the SIMULATED part of the header chip | 6.88:1 on navy, 5.35:1 on `--navy-3` |
-| `--fallback-on-navy` (BUILT, W2) | `#fb923c` | FALLBACK segment of the header chip | 7.63:1 on navy, 5.93:1 on `--navy-3` |
+| `--navy` | `#002e6e` | Header, hero, closing band, the mini-app cover card | n/a |
+| `--navy-2` | `#0a3a82` | Slightly lighter navy | n/a |
+| `--navy-3` | `#0c3d83` | Panels on navy | n/a |
+| `--navy-line` | `#1f4f94` | Border on navy | n/a |
+| `--on-navy` | `#ffffff` | Strong text | 13.00:1 on navy |
+| `--on-navy-2` | `#cfdcf2` | Secondary text | 9.39:1 on navy |
+| `--on-navy-3` | `#a9bde0` | Tertiary text, the SIMULATED part of the header chip | 6.83:1 on navy, 5.49:1 on `--navy-3` |
+| `--fallback-on-navy` (BUILT, W2) | `#fdae5c` | FALLBACK segment of the header chip | 7.05:1 on navy, 5.66:1 on `--navy-3` |
 
-`--accent` on navy is 6.23:1, so it works as a focus ring there. `--blue` on navy is 3.00:1, which is below the 3:1 a line or icon needs: never use `--blue` as an icon or line on navy.
+`--accent` on navy is 5.70:1, so it works as a focus ring there. `--blue` on navy is 2.13:1, which is below the 3:1 a line or icon needs: never use `--blue` as an icon or line on navy.
+
+### 2.4a Paytm-native refresh, 3 Oct
+
+Decision: the whole app should feel like it belongs inside a payments app, without any Paytm logo or wordmark (the brand stays Chhatri). The token names did not change, only values and one addition.
+
+| Before | After | Why |
+|---|---|---|
+| Navy `#0f1a33`, a near-black | `#002e6e`, a deep blue navy | Reads as a payments-app header and hero |
+| Blue `#0b63c9` with white text as the primary fill | Sky `--accent` `#00b9f1` as the primary fill with navy text; `--blue` `#0a5fc4` for links and text | Sky is the one bright accent. White on sky is 2.4:1 and fails, navy on sky is 5.7:1 |
+| Page `#f3f5f8`, cards with a 6% and 16% shadow | Page `#f4f6f9`, white surfaces separated by `--line` hairlines, no shadow in the mini-app | Hairlines, not heavy boxes |
+| Radius 6, 10, 16 | 8 (controls), 12 (cards), 16 (panels) | Small, consistent |
+| New | `--accent-hover`, `--on-accent` | Pressed state and text on the sky fill |
+
+Mini-app rules that follow (frontend/src/miniapp): `bg-primary` is the sky fill and carries `text-primary-foreground` (navy); text-sized links use `text-link`; menus and lists are one white sheet with hairline-divided rows (title, second line, trailing amount or chevron) instead of a card per row; amounts are bold with tabular numerals; a status is a coloured word with a dot, not a pill; a source is a quiet grey strip, not an outlined pill; no decorative icons (the tab bar, the app bar's Back and language buttons and the mode badge keep theirs). The contrast tests (`src/contrast.test.ts`) carry the new ratios.
+
+Console rules that follow (frontend/src/components, pages, styles): the header stays deep navy and the page you are on gets a 3 px `--accent` underline on the bar's bottom edge instead of a filled chip; the same underline marks the Overview section rail. The primary button (Play, Verify chain) is the sky fill with navy text, secondary buttons are white with a `--line-strong` outline, controls are 34 px high with an 8 px radius. A card has a hairline and no shadow. The ops strip is one white band whose five cells are divided by hairlines. The right panel on /live and the panel beside the merchant phone are each one white surface with sections divided by hairlines, not a stack of cards; the moment card and the slow-day note keep a 3 px left bar. Status badges are the soft tint with its ink (never a solid fill), table headers are quiet muted text on white, and labels that were letter-spaced capitals (eyebrows, section labels) are sentence case with 0.02em spacing. The /policy live tests sit on a white card (`live-tests--light`); the Overview keeps them on navy. Gradients, glows and the hero hex field are gone; the phone bezel is `--ink` with a light shadow, and the simulated Soundbox carries the word Chhatri, not a Paytm mark. LIVE, SIMULATED and FALLBACK stay visible as small tinted words.
 
 ### 2.5 Type scale (BUILT; presenter column BUILT, W4)
 
@@ -239,8 +256,9 @@ In the mini-app Tailwind's `--spacing` is 4 px, so `p-4`, `gap-6` and `mt-14` eq
 
 | Token | Value | Use | Tailwind class in the mini-app |
 |---|---|---|---|
-| `--radius-sm` | 6 px | Controls: buttons, inputs, chips | `rounded-md` through `--radius-control` |
-| `--radius` | 10 px | Cards | `rounded-lg` and `rounded-xl` through `--radius-card` |
+| `--radius-sm` | 6 px | Small console details | `rounded-sm` (4 px in the mini-app) |
+| `--radius-control` | 8 px | Controls: buttons, inputs, chips | `rounded-md` through `--radius-control` |
+| `--radius` | 12 px | Cards | `rounded-lg` and `rounded-xl` through `--radius-card` |
 | `--radius-lg` | 16 px | Panels, map container | `rounded-2xl` through `--radius-panel` |
 | `--radius-pill` | 999 px | CTAs and status pills | `rounded-full` |
 | (none) | 4 px | Small inner details | `rounded-sm` |
@@ -251,8 +269,8 @@ Why aliases: Tailwind's theme uses the names `--radius-sm` and `--radius-lg`, wh
 
 | Token | Value | Use |
 |---|---|---|
-| `--shadow` | `0 1px 2px rgb(15 23 42 / 6%), 0 4px 16px rgb(15 23 42 / 6%)` | Cards. Tailwind `shadow-sm` and `shadow-md` |
-| `--shadow-lg` | `0 10px 40px rgb(15 23 42 / 18%)` | The phone frame, popovers, sheets. Tailwind `shadow-lg` |
+| `--shadow` | `0 1px 2px rgb(0 30 80 / 6%), 0 2px 8px rgb(0 30 80 / 4%)` | Console panels. The mini-app maps `shadow-sm` and `shadow-md` to none: hairlines separate surfaces |
+| `--shadow-lg` | `0 10px 40px rgb(0 30 80 / 18%)` | The phone frame, popovers, sheets. Tailwind `shadow-lg` |
 | `--shadow-navy` | `0 30px 80px rgb(4 10 24 / 45%)` | Hero depth, in the console |
 
 ### 2.9 Motion (BUILT)
@@ -757,6 +775,8 @@ The mode of a source comes from the API. No component decides it, and presenter 
 
 ### 11.2 Claim, check and payout pills
 
+3 Oct refresh: in the mini-app a claim status is drawn as a coloured word with a small dot (`StatusWord`), not a pill with an icon. The icon column below is the earlier design and no longer drawn on a claim; the word, the tone and `data-status` are unchanged.
+
 | Engine state | Tone | Console today (BUILT) | Mini-app icon (BUILT) | English label |
 |---|---|---|---|---|
 | APPROVED, credit pending | Decided | None: the case panel says it in a credit note | `clock` | "Approved. Credit is on its way." |
@@ -786,7 +806,7 @@ The page shows one chip per metric ([AI evaluation plan](../04-engineering/ai-ev
 
 ### 11.4 Verified-by badge (H13, BUILT, W1)
 
-A source badge is a pill that names which system produced or checked a value, with a `badge-check` icon, the source kind in words, and the mode word where there is one.
+A source badge is a quiet grey strip (3 Oct refresh: no outline, no icon) that names which system produced or checked a value, the source kind in words, and the mode word in small bold type where there is one.
 
 | Part | Rule |
 |---|---|
@@ -1186,7 +1206,7 @@ For a status badge use the soft fill with the matching ink text: `bg-paid-soft t
 
 | Group | Tailwind names | Value |
 |---|---|---|
-| Radius | `rounded-sm` / `rounded-md` / `rounded-lg`, `rounded-xl` / `rounded-2xl` / `rounded-full` | 4 px (inner details) / 6 px (controls) / 10 px (cards) / 16 px (panels) / pill |
+| Radius | `rounded-sm` / `rounded-md` / `rounded-lg`, `rounded-xl` / `rounded-2xl` / `rounded-full` | 4 px (inner details) / 8 px (controls) / 12 px (cards) / 16 px (panels) / pill |
 | Font family | `font-sans`, `font-hindi`, `font-code` | `--font`, `--font-hi`, `--font-mono` |
 | Font weight | `font-normal`, `font-medium`, `font-semibold`, `font-bold` | 400, 500, 700 (Ubuntu has no 600), 700 |
 | Text size | `text-2xs` `text-xs` `text-caption` `text-sm` `text-md` `text-base` `text-field` `text-lg` `text-xl` `text-2xl` `text-3xl` `text-4xl` | 11, 12, 13, 14, 15, 16, 16, 17, 20, 26, 34, 44 px |

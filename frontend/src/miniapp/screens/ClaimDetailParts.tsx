@@ -4,7 +4,6 @@
  * amount is the API's label: a question about a payout shows the amount of the payout, unchanged, and never offers
  * another one.
  */
-import { Clock, Scale, UserRound } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { LineText } from '../components/StepperLine'
@@ -21,7 +20,7 @@ import type { Dispute } from './ClaimDetailDispute'
 import { ClaimsHeading } from './ClaimsHeading'
 import { ClaimPill } from './ClaimsPill'
 
-const BLOCK = 'flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm'
+const BLOCK = 'flex flex-col gap-3 rounded-lg border bg-card p-4'
 
 function clockText(clock: ClockValue, lang: Lang): string {
   switch (clock.kind) {
@@ -40,7 +39,7 @@ export function ClaimHeader({ view }: { view: ClaimView }) {
     <section data-testid="claim-header" className={BLOCK}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col">
-          <ClaimsHeading data-testid="claim-kind" className="text-md font-medium">
+          <ClaimsHeading data-testid="claim-kind" className="text-md font-bold">
             {t(view.kindKey, lang)}
           </ClaimsHeading>
           <p data-testid="claim-date" className="text-caption text-muted-foreground">
@@ -50,7 +49,7 @@ export function ClaimHeader({ view }: { view: ClaimView }) {
         <ClaimPill pill={view.pill} testId="claim-pill" />
       </div>
       {view.amountLabel === null ? null : (
-        <p data-testid="claim-amount" className="num text-3xl font-medium text-foreground">
+        <p data-testid="claim-amount" className="num text-4xl font-bold leading-none text-foreground">
           {view.amountLabel}
         </p>
       )}
@@ -64,9 +63,8 @@ export function CaseChip({ caseId }: { caseId: string }) {
     <div
       data-testid="claim-case-chip"
       tabIndex={-1}
-      className="inline-flex w-fit max-w-full items-start gap-2 rounded-lg bg-referred-soft px-3 py-2 text-referred-ink outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="inline-flex w-fit max-w-full items-start gap-2 rounded-md bg-referred-soft px-3 py-2 text-referred-ink outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      <UserRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <LineText line={{ kind: 'copy', key: 'CASE_CHIP', params: { case_id: caseId } }} className="text-sm font-medium" />
     </div>
   )
@@ -76,7 +74,6 @@ export function ClaimClock({ clock }: { clock: ClockValue }) {
   const { lang } = useMiniapp()
   return (
     <p data-testid="claim-clock" className={cn('inline-flex items-center gap-1.5 text-caption font-medium', clock.kind === 'overdue' ? 'text-blocked' : 'text-ink-2')}>
-      <Clock className="size-4 shrink-0" aria-hidden="true" />
       <span>{clockText(clock, lang)}</span>
     </p>
   )
@@ -112,14 +109,13 @@ export function DisputeCard({ view }: { view: ClaimView }) {
   return (
     <section data-testid="claim-dispute-card" data-status={view.pill.word} className={BLOCK}>
       <div className="flex items-start justify-between gap-3">
-        <ClaimsHeading className="flex items-center gap-2 text-md font-medium">
-          <Scale className="size-4 shrink-0 text-ink-2" aria-hidden="true" />
+        <ClaimsHeading className="flex items-center gap-2 text-md font-bold">
           {t(view.kindKey, lang)}
         </ClaimsHeading>
         <ClaimPill pill={view.pill} testId="claim-dispute-pill" />
       </div>
       {view.amountLabel === null ? null : (
-        <p data-testid="claim-dispute-amount" className="num text-xl font-medium text-foreground">
+        <p data-testid="claim-dispute-amount" className="num text-2xl font-bold text-foreground">
           {view.amountLabel}
         </p>
       )}
@@ -184,8 +180,8 @@ export function ClaimSkeleton() {
   const { lang } = useMiniapp()
   return (
     <output data-testid="app-skeleton" aria-label={t('state.loading', lang)} className="flex flex-col gap-4">
-      <Skeleton className="h-24 w-full rounded-xl" />
-      <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+      <Skeleton className="h-24 w-full rounded-lg" />
+      <div className="flex flex-col gap-4 rounded-lg border bg-card p-4">
         {[0, 1, 2, 3, 4].map((row) => (
           <div key={row} data-testid="claim-skeleton-step" className="flex items-center gap-3">
             <Skeleton className="size-7 shrink-0 rounded-full" />

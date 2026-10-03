@@ -18,16 +18,16 @@ export function AppBar() {
   const Title = embedded ? 'h2' : 'h1'
   const { titleKey, parent } = SCREEN_DEFS[url.screen]
   return (
-    <header data-testid="app-appbar" className="flex min-h-14 shrink-0 items-center gap-1 border-b bg-card px-2">
+    <header data-testid="app-appbar" className="flex min-h-14 shrink-0 items-center gap-1 border-b bg-card pr-1 pl-2">
       {parent ? (
         <Button variant="ghost" size="icon" data-testid="app-back" aria-label={t('app.back', lang)} onClick={() => url.go({ screen: parent })}>
           <ArrowLeft aria-hidden="true" />
         </Button>
       ) : null}
       <div className="min-w-0 flex-1 px-2 py-1">
-        <Title className="line-clamp-2 break-words text-md font-semibold leading-tight">{t(titleKey, lang)}</Title>
+        <Title className="line-clamp-2 break-words text-lg font-bold leading-tight">{t(titleKey, lang)}</Title>
         {embedded ? (
-          <time data-testid="app-clock" dateTime={now ?? undefined} className="block text-2xs leading-tight text-ink-3">
+          <time data-testid="app-clock" dateTime={now ?? undefined} className="mt-0.5 block text-2xs leading-tight text-muted-foreground">
             {t('app.clock', lang, { time: formatDateTime(now, lang) })}
           </time>
         ) : (

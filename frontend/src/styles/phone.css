@@ -17,10 +17,10 @@
   max-height: 840px;
   min-height: 0;
   overflow: hidden;
-  border: 9px solid #1b2440;
+  border: 9px solid var(--ink);
   border-radius: 34px;
   background: var(--chat-bg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 8px 28px rgb(0 30 80 / 16%);
 }
 
 .phone__status {

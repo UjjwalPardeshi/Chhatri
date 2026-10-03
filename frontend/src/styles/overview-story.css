@@ -153,8 +153,8 @@
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-sm);
   font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .day-card--typical .day-card__title {

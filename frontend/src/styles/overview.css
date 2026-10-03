@@ -19,9 +19,7 @@
 }
 
 .ov-section--navy {
-  background:
-    radial-gradient(70% 60% at 20% 0%, rgb(56 163 232 / 10%), transparent 70%),
-    var(--navy);
+  background: var(--navy);
   color: var(--on-navy);
 }
 
@@ -222,22 +220,8 @@
 .ov-hero {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(60% 80% at 82% 38%, rgb(56 163 232 / 16%), transparent 70%),
-    var(--navy);
+  background: var(--navy);
   color: var(--on-navy);
-}
-
-/* A faint hex field (the map's cells) behind the copy, fading out toward the phone. */
-.ov-hero::before {
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50V16L28 0l28 16v34L28 66zm0 0v34M28 0v-34' fill='none' stroke='%2338a3e8' stroke-width='1.2'/%3E%3C/svg%3E");
-  background-size: 56px 100px;
-  opacity: 0.07;
-  mask-image: radial-gradient(70% 90% at 25% 55%, #000 30%, transparent 80%);
-  content: '';
-  pointer-events: none;
 }
 
 .ov-hero__inner {
@@ -256,8 +240,8 @@
   color: var(--accent);
   font-size: var(--fs-sm);
   font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .ov-hero__name {

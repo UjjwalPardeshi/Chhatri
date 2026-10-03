@@ -9,10 +9,12 @@
  */
 import { expect, test, type Page } from '@playwright/test'
 
-import { goTo, GOLDEN, IS_MOCK, loadScenario, openConsole, REPLAY_TIMEOUT_MS, seek, settled } from './helpers'
+import { bubble, goTo, GOLDEN, IS_MOCK, LINES, loadScenario, openConsole, REPLAY_TIMEOUT_MS, seek, settled } from './helpers'
 
 const STAGE_FLAGS = ['n1_miniapp', 'n2_ask_chhatri', 'n3_slip_precheck', 'x4_lender_request', 'h24_whatif', 'console_polish', 'x6_provider_panel']
 const ON = (process.env.E2E_FEATURES ?? '').split(/[\s,]+/).filter((name) => name !== '')
+/** `make stage-e2e STAGE_E2E_AI=live`: the .env Gemini key is on, so the slip footer and a free question must say LIVE gemini. */
+const LIVE_AI = process.env.STAGE_AI === 'live'
 const SLIP_PNG = new URL('../../../backend/data/slips/anil_admission_slip.png', import.meta.url).pathname
 
 test.skip(IS_MOCK || !STAGE_FLAGS.every((flag) => ON.includes(flag)), 'needs the real backend and the stage flag set (make stage-e2e)')
@@ -162,7 +164,10 @@ test('the 3-minute stage script, beat by beat', async ({ page }) => {
     await expect(fields).toContainText('KEM Hospital, Parel')
     await expect(fields).toContainText('20 अगस्त')
     for (const id of ['photo_readable', 'name_on_slip', 'dates_on_slip']) await expect(page.getByTestId(`slip-check-${id}`)).toHaveAttribute('data-state', 'PASS')
-    await expect(page.getByTestId('slip-footer')).toContainText('SIMULATED')
+    if (LIVE_AI) {
+      await expect(page.getByTestId('slip-footer')).toContainText('LIVE')
+      await expect(page.getByTestId('slip-footer')).toContainText(/gemini/i)
+    } else await expect(page.getByTestId('slip-footer')).toContainText('SIMULATED')
     await expect(page.getByTestId('screen-slip')).not.toContainText(/confidence|\d+\s?%/i)
     await page.getByTestId('slip-confirm').click()
     await expect(page).toHaveURL(/screen=claim&claim=CL-\d+/)
@@ -201,10 +206,17 @@ test('the 3-minute stage script, beat by beat', async ({ page }) => {
     const second = page.getByTestId('ask-entry').last()
     const secondMode = (await second.getByTestId('ask-mode').innerText()).trim()
     expect(['LIVE', 'SIMULATED', 'FALLBACK']).toContain(secondMode)
-    /** No AI key in this run, so the model path cannot be LIVE: the label must say a simulator answered. */
-    expect(secondMode).toBe('SIMULATED')
-    await expect(second.getByTestId('ask-provider')).toHaveText('template')
-    await expect(second.getByTestId('ask-answer-text')).toContainText('मैं छतरी हूँ')
+    if (LIVE_AI) {
+      /** A live key: the free question goes to the model and the footer says so (the amount is never its decision). */
+      expect(secondMode).toBe('LIVE')
+      await expect(second.getByTestId('ask-provider')).toHaveText('gemini')
+      await expect(second.getByTestId('ask-clause').first()).toContainText(/C\d/)
+    } else {
+      /** No AI key in this run, so the model path cannot be LIVE: the label must say a simulator answered. */
+      expect(secondMode).toBe('SIMULATED')
+      await expect(second.getByTestId('ask-provider')).toHaveText('template')
+      await expect(second.getByTestId('ask-answer-text')).toContainText('मैं छतरी हूँ')
+    }
     mark(`free question: ${secondMode} / template`)
   })
 
@@ -234,5 +246,43 @@ test('the spare 15 seconds: what-if on Zone 9 fires with a 51% drop and saves no
   await expect(drawer).toContainText('Would fire: yes, 51% drop')
   await page.keyboard.press('Escape')
   await expect(drawer).toBeHidden()
+  expect(errors, 'page errors and console.error calls').toEqual([])
+})
+
+test('the spare 30 seconds: slide 8 live tests, a name mismatch goes to case C-2291 and one tap approves it; red-alert cover is BLOCKED', async ({ page }) => {
+  const errors = watchErrors(page)
+  await openConsole(page)
+
+  await test.step('HUMAN test: a slip with another name is REFERRED to case C-2291, approved in one tap', async () => {
+    await park(page, 'illness_mismatch', 'illness mismatch replay', '11:25')
+    await goTo(page, 'Merchant phone')
+    const phone = page.getByTestId('phone')
+    await phone.getByRole('button', { name: /मैं अस्पताल में हूँ/ }).click()
+    await expect(bubble(phone, 'Get well soon. Please send one photo of the hospital slip.')).toBeVisible({ timeout: REPLAY_TIMEOUT_MS })
+    await phone.getByRole('button', { name: 'Send a photo' }).click()
+    await phone.getByRole('menuitem', { name: 'Slip with a different name' }).click()
+    /** With the slip pre-check on (n3), the phone first asks "Is this slip right?"; one tap sends it on. */
+    await phone.getByRole('button', { name: 'Yes, this is right' }).click()
+    await expect(bubble(phone, LINES.slipToHuman)).toBeVisible({ timeout: REPLAY_TIMEOUT_MS })
+    await expect(phone.getByRole('link', { name: /case C-2291/ })).toBeVisible()
+    await goTo(page, 'Claims')
+    const detail = page.getByRole('article', { name: 'Case C-2291' })
+    await expect(detail.getByText('REFERRED', { exact: true })).toBeVisible()
+    await expect(detail.getByText('Name on the slip doesn’t match KYC', { exact: true })).toBeVisible()
+    await detail.getByRole('button', { name: 'Approve' }).click()
+    await expect(detail.locator('.resolution')).toContainText('APPROVED', { timeout: REPLAY_TIMEOUT_MS })
+    await expect(detail.locator('.resolution')).toContainText(/₹1,500 credited to Anil.s Tea Stall at \d\d:\d\d, with the settlement\./, { timeout: REPLAY_TIMEOUT_MS })
+  })
+
+  await test.step('BLOCKED test: "Red alert tomorrow. Cover me today." is told the truth, never approved', async () => {
+    await goTo(page, 'Live map')
+    await park(page, 'buy_cover', 'buy cover replay', '18:10')
+    await goTo(page, 'Merchant phone')
+    const phone = page.getByTestId('phone')
+    await phone.getByRole('button', { name: 'Red alert tomorrow. Cover me today.' }).click()
+    await expect(bubble(phone, LINES.coverBlocked)).toBeVisible({ timeout: REPLAY_TIMEOUT_MS })
+    await expect(phone.getByRole('link', { name: /paytm\.me\/sim-|paytm/ }).first()).toBeVisible()
+    await expect(page.getByText('Cover bought after an alert')).toBeVisible()
+  })
   expect(errors, 'page errors and console.error calls').toEqual([])
 })

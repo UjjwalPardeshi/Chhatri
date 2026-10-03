@@ -36,7 +36,7 @@ Left off on purpose: `n6_consents` (it adds a tick before the slip and a tick be
 **Start command** (repo root, one terminal, never saved-file reload):
 
 ```bash
-make demo-stage                 # backend :8000, console :5173; AI keys are read from .env
+make demo-stage                 # backend :8000, console :5173; LIVE Gemini by default (STAGE_AI=live, keys read from .env)
 make demo-stage STAGE_AI=sim    # same, with both AI keys blanked: every badge reads SIMULATED
 ```
 
@@ -46,8 +46,8 @@ make demo-stage STAGE_AI=sim    # same, with both AI keys blanked: every badge r
 
 | Mode | Command | What the screen says | Say |
 |---|---|---|---|
-| All simulated (the safe default, the one the spec walks 3 of 3) | `make demo-stage STAGE_AI=sim` | Slip footer SIMULATED, Ask footer `LIVE · rules` for the first question | "No AI key on this machine, so the slip reader and the model are simulators, and the label says so." |
-| Gemini live | `make demo-stage`, after the three checks below pass | Slip footer LIVE `gemini`; a free question shows `LIVE · gemini` with a clause chip | "This answer came from a live model; the footer says which. The amount was never its decision." |
+| All simulated (the fallback, walked 3 of 3 by `make stage-e2e`) | `make demo-stage STAGE_AI=sim` | Slip footer SIMULATED, Ask footer `LIVE · rules` for the first question | "No AI key on this machine, so the slip reader and the model are simulators, and the label says so." |
+| Gemini live (the default; walked by `make stage-e2e STAGE_E2E_AI=live`) | `make demo-stage`, after the three checks below pass | Slip footer LIVE `gemini`; a free question shows `LIVE · gemini` with a clause chip | "This answer came from a live model; the footer says which. The amount was never its decision." |
 
 Three checks before choosing Gemini live, at T-30 on the venue network: `make check-keys` (key SET and the model listed); one slip read through the app (READY inside 6 s; on 3 Oct a read took about 5 s); one free question ("What is the yearly limit?" returned `LIVE gemini` with clause C4.3). Any one fails: restart with `STAGE_AI=sim`. Free-tier services get synthetic data only: the sample slip, never a real document.
 
@@ -65,7 +65,7 @@ Omkar speaks and never clicks. Ujjwal clicks. Times are the plan for the speaker
 
 | Time | Ujjwal clicks | Omkar says | Screen must show (asserted by the spec) | If it fails |
 |---|---|---|---|---|
-| 0:00 to 0:20 | Nothing. Live map parked at 16:40 | "Anil runs a tea stall in Parel. In heavy rain his sales fall by more than half, and his 600 rupee instalment is still cut. Getting paid for a day like that has typically taken 30 to 60 days. Watch what Chhatri does with no claim." | Map at 16:40, paused. Header chip `Simulated`. Footer: `Sales, alerts, KYC, payouts, lender and Soundbox are simulated` | Blank map: reload the page (the backend holds the clock). Still blank: `post /api/replay/load '{"scenario":"monsoon"}'` then seek 16:40 |
+| 0:00 to 0:20 | Nothing. Live map parked at 16:40 | "Before the demo, one honest line: the policy engine, the console and the audit chain are real; shop sales, WhatsApp and the Paytm link are simulated, and every screen labels which is which. Anil runs a tea stall in Parel. In heavy rain his sales fall by more than half, and his 600 rupee instalment is still cut. Getting paid for a day like that has typically taken 30 to 60 days. Watch what Chhatri does with no claim." | Map at 16:40, paused. Header chip `Simulated`. Footer: `Sales, alerts, KYC, payouts, lender and Soundbox are simulated` | Blank map: reload the page (the backend holds the clock). Still blank: `post /api/replay/load '{"scenario":"monsoon"}'` then seek 16:40 |
 | 0:20 to 0:45 | **Play** (about 12 s later the clock reads 17:05) then **Pause** | "A red alert from 14:00 over three wards. Zone 7: sales at 37% of expected for three hours, all 46 shops. At 17:00 the rule fires. At 17:04, with the evening settlement, 312 shops are paid. Nobody filed anything." | Map labels `Z7 · 37% · 46 shops`, `Z3 · 38% · 141 shops`, `Z12 · 47% · 125 shops`. Moment card `₹1,380 credited · 17:04` with `Anil's Tea Stall · with the settlement`. Strip `123 instalments paused · ₹4,25,420 to 312 shops`. Tiles `3` zones, `312` shops paid, `4 min` to money. Zone 7 panel: Alert `Red alert from 14:00`, Sales `37% of expected for 3 hours`, Cover `46 of 46 prepaid`, Paid `17:04, with the settlement`, Total `₹58,900 · instalments paused` | Replay stalls: pause, then seek 17:05 and say "same replay, one step". Last resort: Overview "Watch the storm replay" |
 | 0:45 to 0:55 | Nothing (Zone 7 and the Zone 9 line are already on screen) | "Zone 9 also dipped, to 61%, but it had no alert. A slow day is not a loss event, so it gets nothing." | `Z9 · 61% of expected`. Line `Why Zone 9 got nothing: its sales fell to 61% on a day with no weather alert. That's a slow day, not a loss event, so Chhatri doesn't pay.` | Skip the line (first thing to drop) |
 | 0:55 to 1:10 | **Merchant phone** | "Anil's phone, in Hindi. 1,380 rupees with today's settlement, and the Soundbox says it out loud. No claim needed." | Chat card `₹1,380`, badge `No claim needed`, Soundbox `“Paytm par ₹1,380 prapt hue — Chhatri se”`. The app header reads `डेमो: 19 अगस्त, 17:05` on one line, with the SIMULATED badge. The lender line `आपके लेंडर ने कल की ₹600 की किस्त रोक दी है।` | No sound: click **Enable sound**; the Soundbox text is on screen |
@@ -82,6 +82,8 @@ Omkar speaks and never clicks. Ujjwal clicks. Times are the plan for the speaker
 **Drop order if late:** the Zone 9 line, the source-badge tap, the Ask beat, the ₹1,500 credit step (say it instead). Never the slip pre-check, never the disclosure.
 
 **Spare 15 seconds (not in the 3 minutes).** On Live map after 17:00, click `Z9 · 61%`, **What if…**, drag the three hours to 49, tap **Rain**. The panel reads `Would fire: yes, 51% drop`, and "Read-only: nothing is saved". Say: "Give Zone 9 an alert and the same rule fires. Nothing is stored." The spec walks this in its own test, which loads monsoon, so do it before leaving monsoon or reload monsoon and seek 17:05 first.
+
+**Spare 30 seconds, the slide 8 live tests (not in the 3 minutes; walked by the second test of `stage-demo.spec.ts`).** *HUMAN:* load **Illness mismatch**, seek 11:25, on **Merchant phone** tap the check-in reply, **Send a photo**, **Slip with a different name**, **Yes, this is right**. The phone says the team will check it within 24 hours and shows `case C-2291`. Open **Claims**: case C-2291 is `REFERRED` (`Name on the slip doesn't match KYC`); tap **Approve** once and the resolution reads `APPROVED` with the ₹1,500 credit. Say: "A name that does not match is never decided by the AI: a person sees it, and one tap releases the money." *BLOCKED:* load **Buy cover**, seek 18:10, on **Merchant phone** tap `Red alert tomorrow. Cover me today.` The reply says new cover starts after the waiting period, from 25 August, with a SIMULATED Paytm link. Say: "Cover bought after an alert is told the truth, never approved."
 
 ## 4. The cut-downs
 
