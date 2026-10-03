@@ -3,7 +3,9 @@
  * while an alert is in force in the zone, the cover card, the expected day, the latest claim and the shortcuts, then
  * one next step from the global list of the rules (H21). Ask Chhatri is a shortcut only while the next-step bar does
  * not already offer it, so Home says it once. Everything is an API field: the cover sentence is the catalogue's, the
- * amounts are the API's labels. Home creates no payment link and shows no offer of any kind (X8).
+ * amounts are the API's labels. Home creates no payment link and shows no offer of any kind (X8). With the slip
+ * pre-check on, Home asks the open check-in (GET slip-precheck/open) so "Send the slip photo" is the next step while
+ * Chhatri waits for the slip or for the merchant's answer about it.
  */
 import { CloudRain } from 'lucide-react'
 import { Link } from 'react-router'
@@ -21,6 +23,7 @@ import { t } from '../lib/copy'
 import { formatClock, formatDate, formatDateTime } from '../lib/format'
 import type { Lang } from '../lib/lang'
 import { useLive } from '../../state/live'
+import { useResource } from '../hooks/useResource'
 import { useMiniapp } from '../shell/MiniappContext'
 import { ErrorState, ResourceScreen, ScreenRoot } from '../shell/SharedStates'
 import { Button } from '../ui/button'
@@ -128,13 +131,21 @@ function HomeBody({ cover, claims, showAsk }: BodyProps) {
   )
 }
 
+/** True while a check-in waits on the slip (n3_slip_precheck); false while the flag is off or the route fails. */
+function useSlipOpen(merchantId: string): boolean {
+  const on = isFeatureEnabled('n3_slip_precheck')
+  const open = useResource(merchantId, (api, signal) => (on ? api.openSlipPrecheck(merchantId, signal) : Promise.resolve(null)), { deps: [on] })
+  return open.data?.checkin_open === true
+}
+
 export function Home() {
   const { merchantId, merchant } = useMiniapp()
   const cover = useCover(merchantId)
   const claims = useClaims(merchantId)
+  const slipOpen = useSlipOpen(merchantId)
   const shown = (cover.state === 'ready' || cover.state === 'offline') && cover.data !== null
   const settled = claims.state !== 'loading' && (merchant.data !== null || merchant.error !== null)
-  const nba = useNextBest(shown && settled && cover.data ? { screen: 'home', cover: cover.data, claims: claims.data ?? [] } : null)
+  const nba = useNextBest(shown && settled && cover.data ? { screen: 'home', cover: cover.data, claims: claims.data ?? [], slipOpen } : null)
   const showAsk = isFeatureEnabled('n2_ask_chhatri') && nba?.id !== 'ask'
 
   if (cover.state !== 'error' && merchant.error && merchant.data === null) {

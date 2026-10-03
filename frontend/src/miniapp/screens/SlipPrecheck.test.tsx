@@ -1,7 +1,11 @@
-/** N3 slip pre-check (fs-02 7.3, screens-and-flows 6): read, show what was read, confirm / retake / send to the team. */
+/**
+ * N3 slip pre-check (fs-02 7.3, screens-and-flows 6, design 2.4): read, show what was read, confirm / retake / send to
+ * the team, answer the doctor question, and resume what the open check-in waits on.
+ */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '../../api/client'
 import type { ScenarioName } from '../../api/types'
 import type { MockBackend } from '../../mock/backend'
 import { MOCK_OFFICER_TOKEN } from '../../mock/fixtures'
@@ -88,6 +92,8 @@ describe('READY', () => {
     expect(text('slip-field-admission_date')).toContain('20 August')
     expect(text('slip-field-discharge_date')).toContain('Not on the slip')
     expect(text('slip-field-hospital_name')).toContain('KEM Hospital, Parel')
+    expect(text('slip-field-doctor_name')).toContain('Dr S. Rao')
+    expect(text('slip-field-doctor_registration_no')).toContain('MMC-2011-45817')
     expect(screen.getAllByTestId(/^slip-check-/)).toHaveLength(3)
     expect(text('slip-check-photo_readable')).toBe('The photo could be read')
     expect(text('slip-notes')).toContain('There is no discharge date on the slip.')
@@ -99,7 +105,7 @@ describe('READY', () => {
   it('shows no confidence, no percentage and no number except the date (H5)', async () => {
     await openSlip()
     await demo('slip-demo-good')
-    const withoutDate = text('screen-slip').replace(/20 August(?: 2025)?/g, '')
+    const withoutDate = text('screen-slip').replace(/20 August(?: 2025)?/g, '').replace('MMC-2011-45817', '')
     expect(withoutDate).not.toMatch(/\d/)
     expect(withoutDate).not.toMatch(/confidence|%/i)
   })
@@ -112,13 +118,71 @@ describe('READY', () => {
     expect(text('slip-details')).toContain('Reason: MOCK_BACKEND')
   })
 
-  it('confirming decides the claim and opens its detail', async () => {
+  it('confirming asks the doctor question first; Yes decides the claim and opens its detail', async () => {
     const { backend: b } = await openSlip()
     await demo('slip-demo-good')
     expect(b.runtime.decisions.filter((d) => d.merchant_id === 'S-0142')).toHaveLength(0)
     fireEvent.click(screen.getByTestId('slip-confirm'))
+    const card = await screen.findByTestId('slip-consent-card')
+    expect(card.textContent).toContain('May we ask Dr S. Rao at KEM Hospital, Parel to confirm your visit?')
+    expect(screen.getByTestId('slip-consent-yes').textContent).toBe('Yes, ask them')
+    expect(screen.getByTestId('slip-consent-no').textContent).toBe('No')
+    expect(b.runtime.decisions.filter((d) => d.merchant_id === 'S-0142')).toHaveLength(0)
+    fireEvent.click(screen.getByTestId('slip-consent-yes'))
     await screen.findByTestId('screen-claim')
     expect(b.runtime.decisions.some((d) => d.merchant_id === 'S-0142' && d.outcome === 'APPROVED')).toBe(true)
+  })
+
+  it('No to the doctor question still files the claim, and a person decides it', async () => {
+    const { backend: b } = await openSlip()
+    await demo('slip-demo-good')
+    fireEvent.click(screen.getByTestId('slip-confirm'))
+    fireEvent.click(await screen.findByTestId('slip-consent-no'))
+    await screen.findByTestId('screen-claim')
+    expect(b.runtime.decisions.some((d) => d.merchant_id === 'S-0142' && d.outcome === 'REFERRED')).toBe(true)
+  })
+
+  it('asks the doctor question in Hindi first', async () => {
+    await openSlip({ search: '?screen=slip' })
+    await demo('slip-demo-good')
+    fireEvent.click(screen.getByTestId('slip-confirm'))
+    expect((await screen.findByTestId('slip-consent-card')).textContent).toContain('क्या हम KEM Hospital, Parel के Dr S. Rao से')
+    expect(screen.getByTestId('slip-consent-yes').textContent).toBe('हाँ, पूछ लीजिए')
+  })
+
+  it('says a recorded answer in a friendly line, never the server message', async () => {
+    const kit = await openSlip()
+    await demo('slip-demo-good')
+    vi.spyOn(kit.api, 'confirmSlipPrecheck').mockRejectedValue(new ApiError('already_confirmed', 'pre-check PC-000001 is CONFIRMED', 409))
+    fireEvent.click(screen.getByTestId('slip-confirm'))
+    await waitFor(() => expect(text('slip-error')).toBe('This answer is already recorded.'))
+    expect(text('screen-slip')).not.toContain('PC-000001 is CONFIRMED')
+  })
+})
+
+describe('resuming the open check-in', () => {
+  it('opens on the READY pre-check the merchant has not answered yet', async () => {
+    const kit = testApi()
+    backend = kit.backend
+    await kit.api.load('illness')
+    await kit.api.seek('11:30')
+    await kit.api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' })
+    renderStandalone('/merchant/S-0142/app?lang=en&screen=slip', kit.backend, kit.api)
+    expect((await screen.findByTestId('slip-result')).getAttribute('data-status')).toBe('READY')
+    expect(screen.getByTestId('slip-confirm')).toBeTruthy()
+  })
+
+  it('opens on the waiting doctor question', async () => {
+    const kit = testApi()
+    backend = kit.backend
+    await kit.api.load('illness')
+    await kit.api.seek('11:30')
+    const check = await kit.api.slipPrecheck('S-0142', { sample: 'anil_admission_slip.png' })
+    await kit.api.confirmSlipPrecheck('S-0142', check.precheck_id, 'CONFIRM')
+    renderStandalone('/merchant/S-0142/app?lang=en&screen=slip', kit.backend, kit.api)
+    await screen.findByTestId('slip-consent-card')
+    fireEvent.click(screen.getByTestId('slip-consent-yes'))
+    expect(await screen.findByTestId('screen-claim')).toBeTruthy()
   })
 })
 
