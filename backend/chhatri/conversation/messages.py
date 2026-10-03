@@ -413,6 +413,26 @@ _ENTRIES: Final[dict[str, Template]] = {
         "Payouts in the past {window_days} days add up to {paid_total}. "
         "With this claim the total would pass the yearly limit of {annual_limit}.",
     ),
+    "CF_EXPLAIN_HOSPITAL_IDENTIFIED": Template(
+        "पर्ची पर लिखा अस्पताल हमारी सूची में नहीं मिला, इसलिए पुष्टि करने के लिए कोई नहीं था।",
+        "The hospital named on the slip is not one in our directory, so there was nobody to check with.",
+    ),
+    "CF_EXPLAIN_DOCTOR_IDENTIFIED": Template(
+        "उस अस्पताल की सूची में पर्ची पर लिखे डॉक्टर का नाम नहीं मिला, इसलिए पूछने के लिए कोई नहीं था।",
+        "The doctor named on the slip is not on that hospital's register, so there was nobody to ask.",
+    ),
+    "CF_EXPLAIN_VERIFICATION_CONSENT": Template(
+        "डॉक्टर से पुष्टि करने की अनुमति हमारे पास नहीं थी, इसलिए यह दावा एक व्यक्ति देखेगा।",
+        "We did not have permission to check with the doctor, so a person will look at this claim.",
+    ),
+    "CF_EXPLAIN_DOCTOR_NOT_DENIED": Template(
+        "इलाज करने वाले डॉक्टर ने बताया कि उस दिन यह मरीज़ वहाँ नहीं आया था।",
+        "The treating doctor told us this patient did not attend on that date.",
+    ),
+    "CF_EXPLAIN_DOCTOR_CONFIRMED": Template(
+        "इलाज करने वाले डॉक्टर ने अभी तक पुष्टि नहीं की है, इसलिए यह दावा एक व्यक्ति देखेगा।",
+        "The treating doctor has not confirmed the visit yet, so a person will look at this claim.",
+    ),
     "CF_AMOUNT_ONE_POINT": Template(
         "इलाके की गिरावट एक प्रतिशत और होती, तो लगभग {delta} और जुड़ते।",
         "One more point of area drop would have added about {delta}.",
