@@ -29,6 +29,7 @@ export const INTEGRATION_LABELS: Readonly<Record<IntegrationName, string>> = Obj
   kyc: 'KYC',
   gemini_chat: 'Gemini chat',
   gemini_vision: 'Gemini vision',
+  telegram: 'Telegram bot',
 })
 
 /** The product name a live integration shows as in the header (several Sarvam services are one "Sarvam"). */
@@ -50,6 +51,7 @@ export const INTEGRATION_BRANDS: Readonly<Record<IntegrationName, string>> = Obj
   kyc: 'KYC',
   gemini_chat: 'Gemini',
   gemini_vision: 'Gemini',
+  telegram: 'Telegram',
 })
 
 /** Named header chips: at most this many live products are named before "+N". */

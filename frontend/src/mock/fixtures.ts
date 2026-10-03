@@ -6,6 +6,7 @@
 import type { BacktestReport, IntegrationStatus, MerchantSummary, PolicyView } from '../api/types'
 import backtestReport from './data/backtest.json'
 import zonePrices from './data/premiums.json'
+import { isFeatureEnabled } from '../features'
 
 export type MockMerchant = MerchantSummary & {
   owner_name_hi: string
@@ -107,9 +108,13 @@ export const MOCK_FORCEABLE: ReadonlySet<string> = new Set(['lender'])
 const MOCK_PROVIDER: Readonly<Record<string, string>> = { sarvam_chat: 'mock', gemini_chat: 'mock', sarvam_tts: 'browser' }
 const MOCK_REASON: Readonly<Record<string, string>> = { sarvam_chat: 'MOCK_BACKEND', sarvam_vision: 'MOCK_BACKEND', sarvam_stt: 'MOCK_BACKEND', gemini_chat: 'MOCK_BACKEND', gemini_vision: 'MOCK_BACKEND' }
 
+/** The Telegram bot row (flag telegram_channel): simulated in the static demo, which has no bot token. */
+const TELEGRAM_ROW: IntegrationStatus = { name: 'telegram', mode: 'SIMULATED', detail: `Telegram bot: messages recorded in the console phone, no token in the static demo (${MOCK_DETAIL})` }
+
 /** The rows the mock serves: every component SIMULATED, the lender FORCED to FALLBACK while its switch is on (fs-08 9.7). */
 export function integrationRows(lenderForced: boolean): IntegrationStatus[] {
-  return BASE_INTEGRATIONS.map((row) => {
+  const rows = isFeatureEnabled('telegram_channel') ? [...BASE_INTEGRATIONS, TELEGRAM_ROW] : BASE_INTEGRATIONS
+  return rows.map((row) => {
     const forced = row.name === 'lender' && lenderForced
     const base = { ...row, provider: MOCK_PROVIDER[row.name] ?? 'simulated', model: null, fallback_reason: MOCK_REASON[row.name] ?? null, switchable: MOCK_FORCEABLE.has(row.name), forced, last_call: null }
     return forced ? { ...base, mode: 'FALLBACK' as const, detail: 'Simulated lender (NBFC partner), not answering: forced for the demo', provider: 'simulated', fallback_reason: 'FORCED' } : base

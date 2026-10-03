@@ -1,7 +1,8 @@
 /**
  * Merchant phone page (SPEC §13, §20 "Merchant phone"): the WhatsApp-like conversation for one
  * merchant, updated live from `message` events, with the shop's Soundbox, money and the "What
- * happened" steps beside it.
+ * happened" steps beside it. With telegram_channel on, a switch beside it moves the merchant's
+ * messages to Telegram, and the phone then wears Telegram's colours.
  * A launcher from the Overview can pass a `hint` (useLaunch) to highlight the chip to tap next.
  */
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
@@ -11,6 +12,7 @@ import { assertMerchantId } from '../api/endpoints'
 import type { Message, VoiceDemoKey } from '../api/types'
 import { Feature } from '../components/common/Feature'
 import { ErrorState, InlineError, Loading } from '../components/common/Status'
+import { ChannelSwitch } from '../components/phone/ChannelSwitch'
 import { Composer, type ComposerActions } from '../components/phone/Composer'
 import { MerchantPanel } from '../components/phone/MerchantPanel'
 import { coverOffer } from '../components/phone/coverOffer'
@@ -24,6 +26,7 @@ import { isFeatureEnabled } from '../features'
 import { useLive, useLiveEvent } from '../state/live'
 import { toApiError, useAsync } from '../state/useAsync'
 import type { LaunchNavState } from '../state/useLaunch'
+import { useChannel } from '../state/useChannel'
 import { useMerchant } from '../state/useMerchant'
 import { useSettle } from '../state/useSettle'
 
@@ -112,6 +115,7 @@ function MerchantView({ merchantId }: { merchantId: string }) {
   const hint = useHint()
   const merchant = useMerchant(merchantId)
   const conversation = useConversation(merchantId)
+  const channel = useChannel(merchantId)
   const { actions, busy, error, clearError } = useActions(merchantId, conversation.reload)
   const status = conversation.loaded.error && conversation.messages.length === 0 ? (
     <ErrorState error={conversation.loaded.error} title="Could not load the conversation" onRetry={conversation.reload} />
@@ -134,7 +138,7 @@ function MerchantView({ merchantId }: { merchantId: string }) {
   const soundbox = <SoundboxDevice message={announcement} announcing={conversation.pulse} />
   return (
     <div className={isFeatureEnabled('n1_miniapp') ? 'merchant-page merchant-page--app' : 'merchant-page'}>
-      <Phone now={snapshot?.clock.now ?? ''} messages={chatMessages(conversation.messages)} status={status} footer={footer} />
+      <Phone now={snapshot?.clock.now ?? ''} messages={chatMessages(conversation.messages)} status={status} footer={footer} channel={channel.preferred} />
       <Feature name="n1_miniapp">
         <Suspense fallback={<div className="phone phone--app" aria-busy="true" />}>
           <AppFrame merchantId={merchantId} />
@@ -147,6 +151,7 @@ function MerchantView({ merchantId }: { merchantId: string }) {
           soundbox={soundbox}
           offer={coverOffer(conversation.messages)}
           steps={happenedSteps(merchant.data, conversation.messages)}
+          channel={<ChannelSwitch state={channel} />}
         />
       ) : merchant.error ? (
         <ErrorState error={merchant.error} title="Could not load the merchant" onRetry={merchant.reload} />

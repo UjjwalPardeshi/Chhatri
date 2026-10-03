@@ -27,6 +27,7 @@ export const INTEGRATION_NAMES = [
   'kyc',
   'gemini_chat',
   'gemini_vision',
+  'telegram',
 ] as const
 export type IntegrationName = (typeof INTEGRATION_NAMES)[number]
 export type IntegrationMode = 'LIVE' | 'SIMULATED' | 'FALLBACK'
@@ -272,7 +273,13 @@ export type HolidayRequest = {
 }
 
 export type MessageDirection = 'INBOUND' | 'OUTBOUND'
-export type MessageChannel = 'WHATSAPP' | 'SIMULATOR' | 'SOUNDBOX'
+export type MessageChannel = 'WHATSAPP' | 'SIMULATOR' | 'SOUNDBOX' | 'TELEGRAM'
+/** Where a merchant's notifications go (GET /api/merchants/{id}/channel, flag telegram_channel; lowercase on the wire). */
+export type PreferredChannel = 'whatsapp' | 'telegram'
+export type WhatsAppOption = { channel: 'whatsapp'; mode: IntegrationMode }
+/** Telegram: whether a chat is linked, and the bot's deep link (t.me/<bot>?start=S-0142) once its username is known. */
+export type TelegramOption = { channel: 'telegram'; mode: IntegrationMode; linked: boolean; bot_username: string | null; deep_link: string | null }
+export type ChannelView = { merchant_id: string; preferred_channel: PreferredChannel; channels: (WhatsAppOption | TelegramOption)[] }
 export type MessageKind = 'TEXT' | 'VOICE' | 'IMAGE' | 'PAYOUT_CARD' | 'CASE_CHIP' | 'SOUNDBOX' | 'TEMPLATE' | 'BUTTONS'
 export type PayoutCard = {
   amount_label: string

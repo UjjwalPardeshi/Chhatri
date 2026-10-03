@@ -5,6 +5,7 @@
  * (binding decision B1: jobs run at decision time + offset, in (at, seq) order).
  */
 import type {
+  PreferredChannel,
   AreaTrigger,
   AuditEntry,
   Case,
@@ -66,6 +67,8 @@ export class MockRuntime {
   holidayRequests: MockHolidayRequest[] = []
   /** True while the lender component is forced to FALLBACK (card 4.5): the mock lender then gives no answer. */
   lenderForced = false
+  /** Each merchant's chat app (flag telegram_channel); a load starts again on WhatsApp, as on the backend. */
+  readonly preferred = new Map<string, PreferredChannel>()
   messages: Message[] = []
   cases: Case[] = []
   audit: AuditEntry[] = []
@@ -173,7 +176,7 @@ export class MockRuntime {
       id: this.nextId('M'),
       merchant_id: merchantId,
       direction: spec.direction ?? 'OUTBOUND',
-      channel: spec.channel ?? 'SIMULATOR',
+      channel: spec.channel ?? (this.preferred.get(merchantId) === 'telegram' ? 'TELEGRAM' : 'SIMULATOR'),
       kind: spec.kind,
       text_hi: spec.text?.hi ?? null,
       text_en: spec.text?.en || null,

@@ -1,6 +1,7 @@
 /**
  * S9 Language (fs-04 section 8 and 13): a radio list of the languages the flags allow, each in its own script, a
- * preview line, and the note when some text falls back to Hindi. Static and offline-safe: the choice goes to the URL
+ * preview line, and the note when some text falls back to Hindi. With telegram_channel on, the chat app choice follows
+ * (ChannelChoice). Static and offline-safe: the choice goes to the URL
  * and, where storage allows, to the stored preference (the provider does both).
  */
 import { useLanguage } from '../hooks/useLanguage'
@@ -10,6 +11,7 @@ import { isLang } from '../lib/lang'
 import { useMiniapp } from '../shell/MiniappContext'
 import { ScreenRoot } from '../shell/SharedStates'
 import { Card, CardContent } from '../ui/card'
+import { ChannelChoice } from './ChannelChoice'
 import { Label } from '../ui/label'
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
 
@@ -48,6 +50,7 @@ export function Language() {
             {t('lang.fallback_note')}
           </p>
         ) : null}
+        <ChannelChoice />
       </div>
     </ScreenRoot>
   )

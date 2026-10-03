@@ -666,3 +666,14 @@
   padding: 0;
   border: 0;
 }
+
+/* Telegram (flag telegram_channel): the same phone in Telegram's colours, the bot named in the header. */
+.phone--telegram {
+  --wa-header: #517da2;
+  --chat-bg: #dbe7f0;
+  --bubble-out: #e3f8cf;
+}
+
+.phone--telegram .phone__day::after {
+  background: linear-gradient(var(--chat-bg), rgb(219 231 240 / 0%));
+}

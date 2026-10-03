@@ -21,6 +21,7 @@ import { RECEIPT_ROUTES } from './endpoints/receipt'
 import { TRACKER_ROUTES } from './endpoints/tracker'
 import { WHATIF_ROUTES } from './endpoints/whatif'
 import { BACKTEST, integrationRows, MERCHANTS, MOCK_OFFICER_TOKEN, POLICY } from './fixtures'
+import { CHANNEL_ROUTES } from './channel'
 import { bodyField, invalid, merchantParam, notFound, ok, requireOfficer, type Handler, type Route, type RouteContext, type RouteResult } from './http'
 import { SAMPLE_SLIPS } from './personal'
 import { GENESIS_HASH } from './runtime'
@@ -197,6 +198,7 @@ export const ROUTES: readonly Route[] = [
   { method: 'GET', pattern: /^\/api\/merchants\/(S-\d{4})$/, handler: (c) => ok(merchantDetailView(c.backend.runtime, merchantParam(c))) },
   { method: 'GET', pattern: /^\/api\/merchants\/(S-\d{4})\/messages$/, handler: (c) => { const m = merchantParam(c); return ok(c.backend.runtime.messages.filter((x) => x.merchant_id === m.id)) } },
   { method: 'POST', pattern: /^\/api\/merchants\/(S-\d{4})\/messages$/, handler: postText },
+  ...CHANNEL_ROUTES,
   { method: 'POST', pattern: /^\/api\/merchants\/(S-\d{4})\/voice-demo$/, handler: postVoiceDemo },
   { method: 'POST', pattern: /^\/api\/merchants\/(S-\d{4})\/voice$/, handler: postVoice },
   { method: 'POST', pattern: /^\/api\/merchants\/(S-\d{4})\/photo$/, handler: postPhoto },

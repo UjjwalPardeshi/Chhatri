@@ -11,6 +11,7 @@ import type {
   BacktestReport,
   Case,
   CaseStatus,
+  ChannelView,
   ClaimItem,
   ClockState,
   Cover,
@@ -21,10 +22,11 @@ import type {
   Message,
   OfficerResult,
   PaytmAck,
+  PolicyView,
   PrecheckAction,
   PrecheckConfirm,
   PrecheckInput,
-  PolicyView,
+  PreferredChannel,
   PremiumLinkResult,
   Receipt,
   ScenarioName,
@@ -163,6 +165,13 @@ export function createApi(client: ApiClient) {
     merchant: (id: string, signal?: AbortSignal) => client.get<MerchantDetail>(merchantPath(id), signal),
     merchants: (query: string) => client.list<MerchantSummary[]>(`/api/merchants?${query}`),
     messages: (id: string, signal?: AbortSignal) => client.get<Message[]>(`${merchantPath(id)}/messages`, signal),
+    /** The merchant's preferred channel and each channel's mode (flag telegram_channel). */
+    channel: (id: string, signal?: AbortSignal) => client.get<ChannelView>(`${merchantPath(id)}/channel`, signal),
+    /** Choose WhatsApp or Telegram for this merchant's notifications (officer token, as the other demo writes). */
+    setChannel: (id: string, channel: PreferredChannel) => {
+      if (channel !== 'whatsapp' && channel !== 'telegram') throw invalid('channel', 'whatsapp or telegram')
+      return client.post<ChannelView>(`${merchantPath(id)}/channel`, { channel }, true)
+    },
     sendText: (id: string, text: string) => {
       const trimmed = text.trim()
       if (trimmed.length === 0) throw invalid('text', 'type a message first')

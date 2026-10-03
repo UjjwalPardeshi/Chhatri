@@ -135,12 +135,13 @@ function MerchantFile({ merchant }: { merchant: MerchantDetail }) {
   )
 }
 
-type Props = { merchant: MerchantDetail; scenario: ScenarioName | null; soundbox?: ReactNode; offer?: CoverOffer | null; steps?: readonly HappenedStep[] }
+type Props = { merchant: MerchantDetail; scenario: ScenarioName | null; soundbox?: ReactNode; offer?: CoverOffer | null; steps?: readonly HappenedStep[]; channel?: ReactNode }
 
-export function MerchantPanel({ merchant, scenario, soundbox = null, offer = null, steps = [] }: Props) {
+export function MerchantPanel({ merchant, scenario, soundbox = null, offer = null, steps = [], channel = null }: Props) {
   return (
     <aside className="merchant-panel">
       <div className="merchant-panel__soundbox">{soundbox}</div>
+      {channel}
       <Money merchant={merchant} offer={offer} />
       <WhatHappened steps={steps} />
       <MerchantFile merchant={merchant} />

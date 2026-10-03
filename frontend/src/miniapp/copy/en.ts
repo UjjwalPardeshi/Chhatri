@@ -524,6 +524,13 @@ export const en = {
   'slip.err.conflict': 'There is no open check-in for a slip right now, or the claim was already sent.',
   'slip.none': 'Nothing to send right now. Chhatri asks for a hospital slip only after it checks on a shop that stayed closed.',
   'slip.none.home': 'Back to Home',
+  'channel.label': 'Messages from Chhatri',
+  'channel.hint': 'Payouts, check-ins and answers come here. Cover and payouts stay the same.',
+  'channel.linked': 'Telegram chat linked.',
+  'channel.not_linked': 'Not linked yet: open Chhatri in Telegram and press Start.',
+  'channel.open': 'Open Chhatri in Telegram',
+  'channel.simulated': 'Telegram is simulated here: messages show on the console phone.',
+  'channel.error': 'Could not change it. Try again.',
   'slip.err.limit': 'Several photos have been sent already. Please send the slip to our team.',
   // Rights screens: titles of N5 and N6 (copy deck 13.1, 14.4 and 14.5); the rest is in copy/rights.ts
   'grv.title': 'Complaints and escalation',

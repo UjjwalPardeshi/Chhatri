@@ -469,3 +469,76 @@
     height: auto;
   }
 }
+
+/* Chat app switch (flag telegram_channel): WhatsApp or Telegram for this merchant's messages. */
+.channel-card {
+  display: grid;
+  gap: 6px;
+}
+
+.channel-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.channel-card h2 {
+  font-size: var(--fs-lg);
+}
+
+.channel-switch {
+  display: inline-flex;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+}
+
+.channel-switch__option {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.channel-switch__option[aria-pressed='true'] {
+  background: var(--navy);
+  color: var(--on-navy);
+}
+
+.channel-switch__option[aria-pressed='true'][data-channel='telegram'] {
+  background: #2a7ab8;
+}
+
+.channel-switch__option:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.channel-switch__option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.channel-card__line {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.channel-card__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
