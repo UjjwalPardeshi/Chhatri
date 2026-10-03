@@ -1,9 +1,10 @@
 /**
- * What the receipt says (fs-04 S7, 10.2, screens and flows 4.7): the SIMULATED line, then one card holding the decision,
- * the rules version, who decided and when, the formula, where each number came from, the checks, what would have
- * changed it, the clauses used, the payout and the lender's answer, the audit entry and the way up if the merchant
- * disagrees. Everything is read from the receipt, and the app computes none of it. A row that has nothing to say is not
- * drawn. A number with no source reads "Source missing" (the parser refuses such a receipt, and this is the second net).
+ * What the receipt says (fs-04 S7, 10.2, screens and flows 4.7): the SIMULATED line, then one card led by who
+ * authorised the money (the engine under its rules version, or an officer; no AI; "Verify this decision"), then the
+ * decision and when it was made, the formula, where each number came from, the checks, what would have changed it, the
+ * clauses used, the payout and the lender's answer, the audit entry and the way up if the merchant disagrees.
+ * Everything is read from the receipt, and the app computes none of it. A row that has nothing to say is not drawn.
+ * A number with no source reads "Source missing" (the parser refuses such a receipt, and this is the second net).
  */
 import { Fragment } from 'react'
 
@@ -19,18 +20,17 @@ import { formatDateTime } from '../lib/format'
 import { useMiniapp } from '../shell/MiniappContext'
 import { Badge } from '../ui/badge'
 import { ReceiptAudit } from './ReceiptAudit'
+import { ReceiptAuthority } from './ReceiptAuthority'
 import { ClaimsHeading } from './ClaimsHeading'
 import { ReceiptChecks } from './ReceiptChecks'
 import { ReceiptLadder } from './ReceiptLadder'
-import { clausesOf, isCredited, isSimulated, lenderLine } from './ReceiptRows'
+import { clausesOf, isCredited, isOfficerDecision, isSimulated, lenderLine } from './ReceiptRows'
 import { rowLabel, rowValue, whyRows } from './WhyRows'
-
-const isOfficer = (receipt: Receipt): boolean => receipt.decision.decided_by.startsWith('officer:')
 
 function DecisionRow({ receipt }: { receipt: Receipt }) {
   const { lang } = useMiniapp()
   const { decision } = receipt
-  const officer = isOfficer(receipt)
+  const officer = isOfficerDecision(decision)
   const word =
     decision.outcome === 'REFERRED'
       ? t('claim.status.referred', lang)
@@ -158,19 +158,14 @@ export function ReceiptContent({ receipt }: { receipt: Receipt }) {
             {t(credited ? 'receipt.title' : 'receipt.title.record', lang)}
           </ClaimsHeading>
         }
+        lead={<ReceiptAuthority decision={decision} />}
       >
         <DecisionRow receipt={receipt} />
-        <ReceiptRow label={t('receipt.row.rules', lang)}>
-          <span data-testid="receipt-rules-version" className="font-code">
-            {decision.rules_version}
-          </span>
-        </ReceiptRow>
         <ReceiptRow label={t('receipt.row.decided_at', lang)}>
           <time dateTime={decision.decided_at} className="num">
             {formatDateTime(decision.decided_at, lang)}
           </time>
         </ReceiptRow>
-        <ReceiptRow label={t('receipt.row.decided_by', lang)}>{t(isOfficer(receipt) ? 'receipt.by.officer' : 'receipt.by.engine', lang)}</ReceiptRow>
         {decision.outcome === 'APPROVED' ? (
           <ReceiptRow label={t('receipt.row.formula', lang)} testId="receipt-formula-row">
             <FormulaBlock testId="receipt-formula" en={explanation.formula_en} hi={explanation.formula_hi} />

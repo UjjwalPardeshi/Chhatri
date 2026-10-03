@@ -353,6 +353,10 @@ export const en = {
   'tracker.live_step': '{step}: {state}', // proposed
   'tracker.about_claim': 'About claim {claim_id}', // proposed
   'tracker.officer_note': 'Note from our team', // proposed
+  'claim.next.title': 'What happens next', // proposed
+  'claim.next.money': '{amount} was credited with your settlement on {time}.', // proposed
+  'claim.next.wrong': 'If the amount looks wrong, tap This is wrong.', // proposed
+  'claim.next.cover': 'Your cover continues. The premium is paid up to {date}.', // proposed
   'why.row.expected_day': 'Your usual day', // proposed
   'why.row.area_index': 'Area index', // proposed
   'why.row.area_drop': 'Area drop', // proposed
@@ -392,6 +396,12 @@ export const en = {
   'receipt.check.observed': 'What we found', // proposed
   'receipt.check.required': 'What is needed', // proposed
   'receipt.lender.granted': 'Your lender has paused the {instalment} instalment due on {date}. It moves to the end of your loan with no penalty.', // adapted from HOLIDAY_GRANTED_ON
+  'receipt.authority.title': 'Who authorised this money', // proposed
+  'receipt.authority.title.record': 'Who decided this', // proposed
+  'receipt.authority.engine': 'The policy engine', // proposed
+  'receipt.authority.ai_label': 'AI authority', // proposed
+  'receipt.authority.ai': 'None. AI can explain this decision, but it cannot decide or change a payout.', // proposed
+  'receipt.authority.verify': 'Verify this decision', // proposed
   'src.RULES': 'Chhatri rules {rules_version}',
   'src.CLAUSE': 'Policy clause {clause}',
   'src.ALERT': 'Weather alert {alert_id}',

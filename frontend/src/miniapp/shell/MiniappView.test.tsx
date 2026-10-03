@@ -26,7 +26,7 @@ describe('the shell', () => {
   it('draws the app bar, Home and three tabs, with Home current and one SIMULATED badge', async () => {
     renderStandalone('/merchant/S-0142/app?lang=en', backend)
     expect((await screen.findByTestId('screen-home')).getAttribute('data-state')).toBe('ready')
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Your cover')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Chhatri')
     expect(screen.getByRole('main').contains(screen.getByTestId('screen-home'))).toBe(true)
     const tabs = screen.getByTestId('app-tabbar')
     expect(tabs.tagName).toBe('NAV')
@@ -117,7 +117,7 @@ describe('the shell', () => {
     const hindi = renderStandalone('/merchant/S-0142/app', backend)
     await screen.findByTestId('screen-home')
     expect(screen.getByTestId('app-root').getAttribute('lang')).toBe('hi')
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('आपका कवर')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('छतरी')
     expect(screen.getByTestId('app-lang-button').getAttribute('aria-label')).toBe('भाषा')
     hindi.unmount()
     backend = testBackend()

@@ -2,16 +2,20 @@
  * The frame of the receipt (fs-04 S7, design system 5.2): one card holding a description list, so a screen reader
  * hears each label with its value and the printed page reads as a form. A row does not split across printed pages.
  * `ReceiptNotice` is the line at the top (SIMULATED, or "no receipt yet" for a record). The document has no
- * behaviour: the screen decides which rows there are, from what the receipt holds.
+ * behaviour: the screen decides which rows there are, from what the receipt holds, and what leads them.
  */
 import type { ReactNode } from 'react'
 
 import { cn } from '../lib/cn'
 
-export function ReceiptDocument({ heading, children }: { heading: ReactNode; children: ReactNode }) {
+/** `lead` is drawn between the heading and the rows, across the whole width (who authorised the money). */
+type DocumentProps = { heading: ReactNode; lead?: ReactNode; children: ReactNode }
+
+export function ReceiptDocument({ heading, lead, children }: DocumentProps) {
   return (
     <article data-testid="receipt-document" className="flex flex-col gap-4 rounded-lg border bg-card p-4">
       {heading}
+      {lead}
       <dl className="flex flex-col divide-y">{children}</dl>
     </article>
   )

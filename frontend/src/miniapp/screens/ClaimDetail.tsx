@@ -1,7 +1,8 @@
 /**
  * S5 Claim detail (fs-04 8, screens and flows 4.5, H1): where one claim is, in five steps, with a plain reason at each
  * step. The tracker model words every step from what the API recorded; this screen only lays them out. A question
- * about the claim's payout is its own card above the steps. An id that matches nothing is "not found" with a way back.
+ * about the claim's payout is its own card above the steps, and once the payout is credited "What happens next" sits
+ * there too. An id that matches nothing is "not found" with a way back.
  */
 import { useMemo } from 'react'
 
@@ -13,6 +14,7 @@ import { useClaims } from '../hooks/useMiniappData'
 import { useMiniapp } from '../shell/MiniappContext'
 import { ResourceScreen, ScreenRoot } from '../shell/SharedStates'
 import { useDispute } from './ClaimDetailDispute'
+import { ClaimNextCard } from './ClaimDetailNext'
 import { CaseBlock, ClaimActions, ClaimHeader, ClaimSkeleton, DisputeCard } from './ClaimDetailParts'
 import { NotFoundCard } from './ClaimsNotFound'
 
@@ -44,6 +46,7 @@ export function ClaimDetail() {
           <>
             <ClaimHeader view={view} />
             {question === null ? null : <DisputeCard view={question} />}
+            {view.paid && view.decisionId !== null ? <ClaimNextCard decisionId={view.decisionId} canDispute={view.canDispute} /> : null}
             <section className="rounded-lg border bg-card p-4">
               <Stepper steps={view.steps} />
             </section>

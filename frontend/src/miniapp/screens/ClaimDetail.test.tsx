@@ -1,8 +1,9 @@
-/** S5 Claim detail (fs-04 section 8, H1): five steps, the case chip and the clock, the lender's answer, "This is wrong" (AC-17, AC-19 to AC-25). */
+/** S5 Claim detail (fs-04 section 8, H1): five steps, the case chip and the clock, the lender's answer, "This is wrong", what happens next (AC-17, AC-19 to AC-25). */
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiClient, ApiError } from '../../api/client'
+import type { HolidayStatus, ReceiptEdi } from '../../api/types'
 import type { MockBackend } from '../../mock/backend'
 import {
   areaCreditPending,
@@ -17,7 +18,8 @@ import {
   personalOfficerDeclined,
   personalWaitingForSlip,
 } from '../../test/claimFixtures'
-import { referredSession, session, stubClaims } from '../../test/claimScenes'
+import { referredSession, session, stubClaims, stubReceipt } from '../../test/claimScenes'
+import { hi } from '../copy/hi'
 import { DISPUTE_PHRASE } from './ClaimDetailDispute'
 import { renderStandalone } from '../shell/shellKit'
 
@@ -322,6 +324,113 @@ describe("the lender's answer (AC-24, AC-25)", () => {
     expect(status('edi')).toBe('skipped')
     expect(text('claim-step-edi')).toContain('No loan on file')
     expect(text('claim-step-edi')).not.toContain('SIMULATED lender')
+  })
+})
+
+/** The lender block of a receipt with this answer: a refusal carries its code (never shown), a request has no answer time. */
+function lenderBlock(answer: HolidayStatus): ReceiptEdi {
+  return {
+    request_id: 'HR-000001',
+    status: answer,
+    reason_code: answer === 'REFUSED' ? 'IN_ARREARS' : null,
+    instalment_date: '2025-08-20',
+    instalment_label: '₹600',
+    decided_at: answer === 'REQUESTED' ? null : '2025-08-19T17:05:00+05:30',
+    lender: 'Demo Lender',
+  }
+}
+
+const nextIds = () => within(screen.getByTestId('claim-next-steps')).getAllByRole('listitem').map((step) => step.getAttribute('data-step'))
+
+describe('what happens next, once the payout is credited', () => {
+  it('lists the money, what to do if the amount looks wrong and the cover, above the steps, from the receipt and the cover', async () => {
+    const kit = await session('monsoon', '17:05')
+    const receipt = await kit.api.receipt('D-000142')
+    await openClaim(kit)
+    const card = await screen.findByTestId('claim-next-steps')
+    expect(within(card).getByRole('heading').textContent).toBe('What happens next')
+    expect(card.compareDocumentPosition(screen.getByTestId('claim-stepper')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await waitFor(() => expect(nextIds()).toEqual(['money', 'wrong', 'cover']))
+    expect(text('claim-next-money')).toContain('₹1,380 was credited with your settlement on 19 August, 17:04.')
+    expect(text('claim-next-money')).toContain('SIMULATED payment')
+    expect(text('claim-next-wrong')).toContain('If the amount looks wrong, tap This is wrong.')
+    expect(text('claim-next-wrong')).toContain(`We reply within ${receipt.grievance.first_step_hours} hours.`)
+    expect(text('claim-next-cover')).toContain('Your cover continues. The premium is paid up to 22 August.')
+  })
+
+  it('has no lender step while the receipt has no lender block, though the instalment step has its own line', async () => {
+    await openClaim(await session('monsoon', '17:05'))
+    await screen.findByTestId('claim-next-money')
+    expect(screen.queryByTestId('claim-next-lender')).toBeNull()
+    expect(text('claim-step-edi')).toContain("Tomorrow's ₹600 instalment is paused.")
+  })
+
+  it.each([
+    ['GRANTED', 'Your lender has paused the ₹600 instalment due on 20 August. It moves to the end of your loan with no penalty.'],
+    ['REQUESTED', 'We asked your lender. The lender decides.'],
+    ['REFUSED', 'Not available. Your instalment is due as usual.'],
+    ['NO_RESPONSE', 'We could not reach your lender. Your instalment is due as usual.'],
+  ] as const)('words the lender answer %s with the fixed line for it, after the money, and never says Chhatri paused it', async (answer, line) => {
+    const kit = await session('monsoon', '17:05')
+    const receipt = await kit.api.receipt('D-000142')
+    stubReceipt({ ...receipt, edi: lenderBlock(answer) })
+    await openClaim(kit)
+    const lender = await screen.findByTestId('claim-next-lender')
+    expect(lender.textContent).toContain(line)
+    expect(lender.textContent).toContain('SIMULATED lender')
+    expect(nextIds().slice(0, 2)).toEqual(['money', 'lender'])
+    expect(document.body.textContent).not.toMatch(/chhatri\s+(has\s+)?paused/i)
+    expect(document.body.textContent).not.toContain('IN_ARREARS')
+  })
+
+  it('leaves out "If the amount looks wrong" while a question about the payout is open', async () => {
+    const kit = await session('monsoon', '17:12')
+    await kit.api.sendText('S-0142', DISPUTE_PHRASE)
+    await openClaim(kit)
+    await screen.findByTestId('claim-next-money')
+    expect(screen.getByTestId('claim-dispute-card')).toBeTruthy()
+    expect(screen.queryByTestId('claim-next-wrong')).toBeNull()
+  })
+
+  it('holds its place while the receipt loads, and draws nothing when the receipt fails: the steps already say what happened', async () => {
+    const real = ApiClient.prototype.get
+    let answer: 'hang' | 'fail' = 'hang'
+    vi.spyOn(ApiClient.prototype, 'get').mockImplementation(function (this: ApiClient, path: string, signal?: AbortSignal) {
+      if (path.endsWith('/receipt')) return (answer === 'hang' ? new Promise(() => undefined) : Promise.reject(new ApiError('internal_error', 'boom', 500))) as never
+      return real.call(this, path, signal)
+    })
+    const view = await openClaim(await session('monsoon', '17:05'))
+    expect(await screen.findByTestId('claim-next-loading')).toBeTruthy()
+    expect(screen.queryByTestId('claim-next-steps')).toBeNull()
+    view.unmount()
+    backend.dispose()
+    answer = 'fail'
+    await openClaim(await session('monsoon', '17:05'))
+    await waitFor(() => expect(screen.queryByTestId('claim-next-loading')).toBeNull())
+    expect(screen.queryByTestId('claim-next-steps')).toBeNull()
+    expect(screen.getByTestId('claim-stepper')).toBeTruthy()
+  })
+
+  it('is not there while the credit is on its way', async () => {
+    stubClaims([areaCreditPending()])
+    await openClaim(await session('monsoon', '17:00'))
+    expect(screen.getByTestId('claim-step-paid').getAttribute('data-status')).toBe('current')
+    expect(screen.queryByTestId('claim-next-steps')).toBeNull()
+  })
+
+  it('is not there for a claim that was not paid', async () => {
+    stubClaims([areaDeclined()])
+    await openClaim(await session('monsoon', '17:05'))
+    expect(screen.queryByTestId('claim-next-steps')).toBeNull()
+  })
+
+  it('speaks Hindi by default', async () => {
+    await openClaim(await session('monsoon', '17:05'), 'CL-000142', '?')
+    const card = await screen.findByTestId('claim-next-steps')
+    expect(within(card).getByRole('heading').textContent).toBe(hi['claim.next.title'])
+    await waitFor(() => expect(text('claim-next-cover')).toContain('22 अगस्त'))
+    expect(text('claim-next-wrong')).toContain(hi['claim.next.wrong'])
+    expect(text('claim-next-money')).toContain('₹1,380')
   })
 })
 

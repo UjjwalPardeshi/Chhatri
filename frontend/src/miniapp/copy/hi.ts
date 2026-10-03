@@ -353,6 +353,10 @@ export const hi: Readonly<Record<CopyKey, string>> = {
   'tracker.live_step': '{step}: {state}', // proposed
   'tracker.about_claim': 'दावा {claim_id} के बारे में', // proposed
   'tracker.officer_note': 'हमारी टीम का नोट', // proposed
+  'claim.next.title': 'आगे क्या होगा', // proposed
+  'claim.next.money': '{amount} आपके सेटलमेंट के साथ {time} को जमा हुए।', // proposed
+  'claim.next.wrong': 'अगर रकम गलत लगे, तो “यह ग़लत है” दबाएँ।', // proposed
+  'claim.next.cover': 'आपका कवर जारी है। प्रीमियम {date} तक जमा है।', // proposed
   'why.row.expected_day': 'आपका आम दिन', // proposed
   'why.row.area_index': 'इलाके का इंडेक्स', // proposed
   'why.row.area_drop': 'इलाके की गिरावट', // proposed
@@ -392,6 +396,12 @@ export const hi: Readonly<Record<CopyKey, string>> = {
   'receipt.check.observed': 'हमें क्या मिला', // proposed
   'receipt.check.required': 'क्या ज़रूरी था', // proposed
   'receipt.lender.granted': 'आपके लेंडर ने {date} की {instalment} की किस्त रोक दी है। वह आपके लोन के अंत में चली जाती है, कोई जुर्माना नहीं।', // adapted from HOLIDAY_GRANTED_ON
+  'receipt.authority.title': 'इस भुगतान का फ़ैसला किसने किया', // proposed
+  'receipt.authority.title.record': 'यह फ़ैसला किसने किया', // proposed
+  'receipt.authority.engine': 'पॉलिसी इंजन', // proposed
+  'receipt.authority.ai_label': 'AI का अधिकार', // proposed
+  'receipt.authority.ai': 'कोई नहीं। AI इस फ़ैसले को समझा सकता है, पर भुगतान तय नहीं कर सकता और उसे बदल भी नहीं सकता।', // proposed
+  'receipt.authority.verify': 'इस फ़ैसले की जाँच करें', // proposed
   'src.RULES': 'छतरी के नियम {rules_version}',
   'src.CLAUSE': 'पॉलिसी का खंड {clause}',
   'src.ALERT': 'मौसम अलर्ट {alert_id}',

@@ -2,9 +2,10 @@
  * The receipt on paper (fs-04 10.5, AC-30, AC-06). Everything is inside `@media print` and under `.miniapp`, so the
  * console is never touched, and it uses no `!important`. In print the app bar, the next-best bar, the tab bar and the
  * toast host are hidden, the frame stops clipping and uses the width of the page (the phone column is for the screen),
- * and the header line `receipt.print.header` (hidden on screen) prints at the top. The document runs in two columns,
- * with the wide blocks (numbers, checks, the counterfactual, the clauses, the way up) across both, so a receipt of a
- * clean decision fits one A4 page. Buttons carry `print:hidden` themselves, and a block is never split across pages.
+ * and the header line `receipt.print.header` (hidden on screen) prints at the top. Who authorised the money prints as
+ * one band of three facts, and the document runs in two columns, with the wide blocks (numbers, checks, the
+ * counterfactual, the clauses, the way up) across both, so a receipt of a clean decision fits one A4 page. Buttons
+ * carry `print:hidden` themselves, and a block is never split across pages.
  * The root rule repeats `.miniapp` once to outrank the `h-full w-full` utilities, which are not in a cascade layer.
  */
 @media print {
@@ -51,6 +52,20 @@
     padding-block: 2px;
     gap: 1px;
     break-inside: avoid;
+  }
+  .miniapp [data-testid='receipt-authority'] {
+    padding: 4px 8px;
+    gap: 2px;
+  }
+  .miniapp [data-testid='receipt-authority'] > dl {
+    display: grid;
+    grid-template-columns: 1fr auto 1.5fr;
+    column-gap: 24px;
+  }
+  .miniapp [data-testid='receipt-authority'] > dl > div {
+    padding-block: 2px;
+    gap: 1px;
+    border-width: 0;
   }
   .miniapp [data-testid='receipt-sources'],
   .miniapp [data-testid='receipt-checks-row'],

@@ -3,13 +3,16 @@
  * of a number are the ones the API names for it, the clauses are the ones the API names on its facts and checks, and
  * the lender's line is the fixed line for the lender's answer (never a reason code, and never "Chhatri paused").
  */
-import type { CheckStatus, ClaimItem, Receipt, ReceiptCheck, ReceiptEdi } from '../../api/types'
+import type { CheckStatus, ClaimItem, Receipt, ReceiptCheck, ReceiptDecision, ReceiptEdi } from '../../api/types'
 import type { Line } from '../hooks/trackerModel'
 import { formatDate } from '../lib/format'
 import type { Lang } from '../lib/lang'
 
 /** A receipt exists once the payout is credited; before that, and for a decision with no payout, it is a record. */
 export const isCredited = (receipt: Receipt): boolean => receipt.payout?.status === 'CREDITED'
+
+/** A claims officer made this decision (`decided_by` is `officer:…`); otherwise the policy engine did. */
+export const isOfficerDecision = (decision: ReceiptDecision): boolean => decision.decided_by.startsWith('officer:')
 
 const clauseNumbers = (clause: string): number[] => clause.replace(/^C/, '').split('.').map(Number)
 

@@ -1,12 +1,14 @@
 /**
  * The audit entry of a decision (fs-04 10.2, AC-31): the first characters of the entry's hash, as a display choice,
- * and "Check the log", which asks `GET /api/audit/verify` and shows how many entries the log holds when it is
- * unbroken, or the first entry that is broken. A broken log is never hidden. The button needs the network, so it is
- * disabled with its reason while offline; printing does not.
+ * and its place in the log. `VerifyDecision` is the "Verify this decision" action at the top of the receipt: "Check
+ * the log" asks `GET /api/audit/verify` and shows how many entries the log holds when it is unbroken, or the first
+ * entry that is broken. A broken log is never hidden. The button needs the network, so it is disabled with its reason
+ * while offline; printing does not, and a result already on screen prints with the receipt.
  */
 import { useCallback, useState } from 'react'
 
 import type { AuditVerify, ReceiptAudit as Audit } from '../../api/types'
+import { cn } from '../lib/cn'
 import { t } from '../lib/copy'
 import { useLive } from '../../state/live'
 import { useMiniapp } from '../shell/MiniappContext'
@@ -34,6 +36,17 @@ function LogResult({ check }: { check: Check }) {
 }
 
 export function ReceiptAudit({ audit }: { audit: Audit }) {
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <code data-testid="receipt-audit-prefix" className="font-code text-sm break-all text-foreground">
+        {audit.hash_short}
+      </code>
+      <p className="text-caption text-ink-3">#{audit.seq}</p>
+    </div>
+  )
+}
+
+export function VerifyDecision() {
   const { lang } = useMiniapp()
   const { api } = useLive()
   const [check, setCheck] = useState<Check>({ phase: 'idle' })
@@ -45,12 +58,9 @@ export function ReceiptAudit({ audit }: { audit: Audit }) {
       .catch(() => setCheck({ phase: 'failed' }))
   }, [api])
   return (
-    <div className="flex flex-col items-start gap-2">
-      <code data-testid="receipt-audit-prefix" className="font-code text-sm break-all text-foreground">
-        {audit.hash_short}
-      </code>
-      <p className="text-caption text-ink-3">#{audit.seq}</p>
+    <div data-testid="receipt-verify" className={cn('flex flex-col items-start gap-1.5 border-t pt-3', check.phase !== 'done' && 'print:hidden')}>
       <div className="flex flex-col items-start gap-1.5 print:hidden">
+        <p className="text-caption font-medium text-muted-foreground">{t('receipt.authority.verify', lang)}</p>
         <NetworkButton
           type="button"
           variant="outline"

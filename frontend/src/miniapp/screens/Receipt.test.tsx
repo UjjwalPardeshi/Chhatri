@@ -143,6 +143,60 @@ describe("Anil's receipt (AC-27)", () => {
   })
 })
 
+describe('who authorised this money', () => {
+  it('leads the document: the policy engine, the rules version, no authority for AI, and "Verify this decision"', async () => {
+    await openReceipt(await session('monsoon', '17:05'))
+    const block = screen.getByTestId('receipt-authority')
+    expect(screen.getByTestId('receipt-document').contains(block)).toBe(true)
+    expect(block.compareDocumentPosition(screen.getByTestId('receipt-decision')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(block.getAttribute('data-decided-by')).toBe('engine')
+    expect(text('receipt-authority-title')).toBe('Who authorised this money')
+    expect(text('receipt-decided-by')).toContain('The policy engine')
+    expect(text('receipt-decided-by')).toContain('An automatic rules check (code, not AI)')
+    expect(within(block).getByTestId('receipt-rules-version').textContent).toBe('pilot-0.1')
+    expect(screen.getAllByTestId('receipt-rules-version')).toHaveLength(1)
+    expect(text('receipt-ai-authority')).toContain('AI authority')
+    expect(text('receipt-ai-authority')).toContain('None. AI can explain this decision, but it cannot decide or change a payout.')
+    expect(within(block).getByTestId('receipt-verify').textContent).toContain('Verify this decision')
+    expect(within(block).getByTestId('receipt-check-log').textContent).toBe('Check the log')
+    expect(screen.getByTestId('receipt-verify').className).toContain('print:hidden')
+  })
+
+  it('names a claims officer when an officer decided, under the rules version of that decision, and still gives AI none', async () => {
+    const kit = await referredSession()
+    await kit.api.approve('C-2291', '')
+    kit.backend.step(5)
+    const { items } = await kit.api.claims('S-0142')
+    const receipt = await kit.api.receipt(items[0].decision_id ?? '')
+    await openReceipt(kit, receipt.decision.id)
+    const block = screen.getByTestId('receipt-authority')
+    expect(block.getAttribute('data-decided-by')).toBe('officer')
+    expect(text('receipt-authority-title')).toBe('Who authorised this money')
+    expect(text('receipt-decided-by')).toContain('A claims officer')
+    expect(text('receipt-decided-by')).not.toContain('The policy engine')
+    expect(within(block).getByTestId('receipt-rules-version').textContent).toBe(receipt.decision.rules_version)
+    expect(text('receipt-ai-authority')).toContain('None. AI can explain this decision')
+  })
+
+  it('asks "Who decided this" on a record with no money yet, and the engine decided it', async () => {
+    const kit = await referredSession()
+    const { items } = await kit.api.claims('S-0142')
+    await openReceipt(kit, items[0].decision_id ?? '')
+    expect(text('receipt-authority-title')).toBe('Who decided this')
+    expect(screen.getByTestId('receipt-authority').getAttribute('data-decided-by')).toBe('engine')
+    expect(text('receipt-decided-by')).toContain('The policy engine')
+  })
+
+  it('speaks Hindi by default and keeps the rules version as the receipt wrote it', async () => {
+    await openReceipt(await session('monsoon', '17:05'), 'D-000142', 'x=1')
+    expect(text('receipt-authority-title')).toBe(hi['receipt.authority.title'])
+    expect(text('receipt-decided-by')).toContain(hi['receipt.authority.engine'])
+    expect(text('receipt-ai-authority')).toContain(hi['receipt.authority.ai'])
+    expect(text('receipt-verify')).toContain(hi['receipt.authority.verify'])
+    expect(text('receipt-rules-version')).toBe('pilot-0.1')
+  })
+})
+
 describe('the checks', () => {
   it('collapse under one sentence when all passed, and open with every check, its words and its sources', async () => {
     await openReceipt(await session('monsoon', '17:05'))
@@ -304,7 +358,7 @@ describe('printing (AC-30)', () => {
 })
 
 describe('Check the log (AC-31)', () => {
-  it('shows the entry count from the audit verify route', async () => {
+  it('shows the entry count from the audit verify route, under "Verify this decision", and prints the result', async () => {
     const kit = await session('monsoon', '17:05')
     const verify = await kit.api.verifyAudit()
     await openReceipt(kit)
@@ -313,6 +367,10 @@ describe('Check the log (AC-31)', () => {
     await waitFor(() => expect(text('receipt-log-result')).toBe(`Log unbroken, ${verify.entries} entries`))
     expect(screen.getByTestId('receipt-log-result').getAttribute('data-valid')).toBe('true')
     expect(verify.entries).toBeGreaterThan(0)
+    expect(screen.getByTestId('receipt-authority').contains(screen.getByTestId('receipt-log-result'))).toBe(true)
+    expect(screen.getByTestId('receipt-verify').className).not.toContain('print:hidden')
+    expect(within(screen.getByTestId('receipt-audit')).queryByTestId('receipt-check-log')).toBeNull()
+    expect(text('receipt-audit')).toContain(`#${(await kit.api.receipt('D-000142')).audit.seq}`)
   })
 
   it('shows the first broken entry and never hides it', async () => {

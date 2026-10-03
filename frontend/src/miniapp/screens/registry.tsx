@@ -27,7 +27,8 @@ export type Tab = 'home' | 'claims' | 'help'
 export type ScreenDef = { tab: Tab; titleKey: CopyKey; parent: Screen | null; Component: ComponentType }
 
 export const SCREEN_DEFS: Readonly<Record<Screen, ScreenDef>> = {
-  home: { tab: 'home', titleKey: 'home.title', parent: null, Component: Home },
+  // The brand, not "Your cover": the cover card right under the app bar carries that heading.
+  home: { tab: 'home', titleKey: 'app.name', parent: null, Component: Home },
   coverage: { tab: 'home', titleKey: 'explain.title', parent: 'home', Component: Coverage },
   buy: { tab: 'home', titleKey: 'buy.title', parent: 'home', Component: Buy },
   claims: { tab: 'claims', titleKey: 'tracker.title', parent: null, Component: Claims },

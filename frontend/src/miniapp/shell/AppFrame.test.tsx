@@ -55,7 +55,9 @@ describe('AppFrame', () => {
     await screen.findByTestId('screen-home')
     expect(frame.querySelector('main')).toBeNull()
     expect(frame.querySelector('h1')).toBeNull()
-    expect(frame.querySelector('h2')?.textContent).toBe('Your cover')
+    expect(frame.querySelector('h2')?.textContent).toBe('Chhatri')
+    await screen.findByTestId('home-cover-card')
+    expect(frame.querySelector('h3')?.textContent).toBe('Your cover')
   })
 
   it('links to the full screen with mock, presenter, language and the open screen kept', async () => {

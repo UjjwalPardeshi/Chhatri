@@ -30,7 +30,9 @@ test('flag on: Home offers Ask only with n2_ask_chhatri and the slip row only wi
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`${APP}?lang=en`)
   await expect(page.getByTestId('screen-home')).toBeVisible()
-  await expect(page.getByTestId('home-open-ask')).toHaveCount(has('n2_ask_chhatri') ? 1 : 0)
+  // Home says Ask once: the shortcut row, or the next-step bar while asking is the next step (then the row is left out).
+  const ask = page.getByTestId('home-open-ask').or(page.locator('[data-testid="app-nba"][data-nba="ask"]'))
+  await expect(ask).toHaveCount(has('n2_ask_chhatri') ? 1 : 0)
   await page.getByTestId('app-tab-help').click()
   await expect(page.getByTestId('help-slip')).toHaveCount(has('n3_slip_precheck') ? 1 : 0)
 })

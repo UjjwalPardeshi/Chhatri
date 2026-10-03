@@ -61,9 +61,20 @@ describe('Home on a paid day (AC-07)', () => {
     backend.dispose()
     vi.stubEnv('VITE_FEATURES', 'n1_miniapp,n2_ask_chhatri')
     await openHome('S-0142', '17:05')
+    await waitFor(() => expect(screen.getByTestId('app-nba').getAttribute('data-nba')).toBe('see_why'))
     const ask = screen.getByTestId('home-open-ask')
     expect(ask.textContent).toBe('Ask Chhatri')
     expect(ask.getAttribute('href')).toBe('/merchant/S-0142/app?lang=en&screen=ask')
+  })
+
+  it('says Ask Chhatri once: when it is the next step, the bar carries it and the shortcut row is left out', async () => {
+    vi.stubEnv('VITE_FEATURES', 'n1_miniapp,n2_ask_chhatri')
+    await openHome('S-0142', '10:00')
+    await waitFor(() => expect(screen.getByTestId('app-nba').getAttribute('data-nba')).toBe('ask'))
+    expect(screen.queryByTestId('home-open-ask')).toBeNull()
+    expect(text('app-nba-action')).toBe('Ask Chhatri')
+    expect(screen.getAllByText('Ask Chhatri')).toHaveLength(1)
+    expect(screen.getByTestId('home-open-coverage')).toBeTruthy()
   })
 
   it('shows the per-day price and the zone, and the loan instalment the merchant already has', async () => {
@@ -85,10 +96,12 @@ describe('Home on a paid day (AC-07)', () => {
     expect(screen.getByTestId('home-latest-claim').textContent).toContain('भुगतान हुआ')
   })
 
-  it('has a heading for the cover card and none above the app bar title', async () => {
+  it('names the brand in the app bar, so the heading of the cover card under it is not said twice', async () => {
     await openHome('S-0142', '17:05')
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Chhatri')
     expect(within(screen.getByTestId('home-cover-card')).getByRole('heading').textContent).toBe('Your cover')
+    expect(screen.getAllByText('Your cover')).toHaveLength(1)
   })
 })
 

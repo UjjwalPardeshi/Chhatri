@@ -1,8 +1,9 @@
 /**
  * S1 Home (fs-04 section 8): am I covered, what is happening, what next, at a glance. The greeting, the alert banner
  * while an alert is in force in the zone, the cover card, the expected day, the latest claim and the shortcuts, then
- * one next step from the global list of the rules (H21). Everything is an API field: the cover sentence is the
- * catalogue's, the amounts are the API's labels. Home creates no payment link and shows no offer of any kind (X8).
+ * one next step from the global list of the rules (H21). Ask Chhatri is a shortcut only while the next-step bar does
+ * not already offer it, so Home says it once. Everything is an API field: the cover sentence is the catalogue's, the
+ * amounts are the API's labels. Home creates no payment link and shows no offer of any kind (X8).
  */
 import { CloudRain } from 'lucide-react'
 import { Link } from 'react-router'
@@ -98,7 +99,9 @@ function ExpectedDay({ label }: { label: string }) {
   )
 }
 
-function HomeBody({ cover, claims }: { cover: Cover; claims: Resource<ClaimItem[]> }) {
+type BodyProps = { cover: Cover; claims: Resource<ClaimItem[]>; showAsk: boolean }
+
+function HomeBody({ cover, claims, showAsk }: BodyProps) {
   const { lang, merchant, url } = useMiniapp()
   const loan = merchant.data?.loan ?? null
   const extraRows: CoverRow[] = loan ? [{ key: 'instalment', label: t('home.row.instalment', lang), value: loan.daily_instalment_label, testId: 'home-instalment' }] : []
@@ -119,7 +122,7 @@ function HomeBody({ cover, claims }: { cover: Cover; claims: Resource<ClaimItem[
       ) : null}
       <ListGroup>
         <ListRowLink to={url.href({ screen: 'coverage' })} data-testid="home-open-coverage" title={t('home.btn.coverage', lang)} />
-        {isFeatureEnabled('n2_ask_chhatri') ? <ListRowLink to={url.href({ screen: 'ask' })} data-testid="home-open-ask" title={t('home.btn.ask', lang)} /> : null}
+        {showAsk ? <ListRowLink to={url.href({ screen: 'ask' })} data-testid="home-open-ask" title={t('home.btn.ask', lang)} /> : null}
       </ListGroup>
     </>
   )
@@ -131,7 +134,8 @@ export function Home() {
   const claims = useClaims(merchantId)
   const shown = (cover.state === 'ready' || cover.state === 'offline') && cover.data !== null
   const settled = claims.state !== 'loading' && (merchant.data !== null || merchant.error !== null)
-  useNextBest(shown && settled && cover.data ? { screen: 'home', cover: cover.data, claims: claims.data ?? [] } : null)
+  const nba = useNextBest(shown && settled && cover.data ? { screen: 'home', cover: cover.data, claims: claims.data ?? [] } : null)
+  const showAsk = isFeatureEnabled('n2_ask_chhatri') && nba?.id !== 'ask'
 
   if (cover.state !== 'error' && merchant.error && merchant.data === null) {
     return (
@@ -142,7 +146,7 @@ export function Home() {
   }
   return (
     <ResourceScreen name="home" resource={cover} skeleton={<HomeSkeleton />}>
-      {(data) => <HomeBody cover={data} claims={claims} />}
+      {(data) => <HomeBody cover={data} claims={claims} showAsk={showAsk} />}
     </ResourceScreen>
   )
 }
