@@ -15,10 +15,10 @@ Five moments, nothing else: **1** the trigger and the 312 shops, **2** Anil's ph
 
 ## 2. The flag set and the start command
 
-The seven flags below are the same in the backend (`CHHATRI_FEATURES`) and the console (`VITE_FEATURES`). `make demo-stage` sets both from one variable, `STAGE_FLAGS`, and adds `CHHATRI_DATA_IS_SYNTHETIC=true`.
+The eight flags below are the same in the backend (`CHHATRI_FEATURES`) and the console (`VITE_FEATURES`). `make demo-stage` sets both from one variable, `STAGE_FLAGS`, and adds `CHHATRI_DATA_IS_SYNTHETIC=true`.
 
 ```
-n1_miniapp, n2_ask_chhatri, n3_slip_precheck, x4_lender_request, x6_provider_panel, h24_whatif, console_polish
+n1_miniapp, n2_ask_chhatri, n3_slip_precheck, x4_lender_request, x6_provider_panel, h24_whatif, console_polish, telegram_channel
 ```
 
 | Flag | Why it is on |
@@ -28,8 +28,9 @@ n1_miniapp, n2_ask_chhatri, n3_slip_precheck, x4_lender_request, x6_provider_pan
 | `n3_slip_precheck` | The slip pre-check: what the reader found, a three-line checklist, one tap to confirm |
 | `n2_ask_chhatri` | Ask Chhatri with clause chips and a footer that names what answered |
 | `x6_provider_panel` | The header chip and the Integrations panel: the one-click way to force a component to FALLBACK if a live AI call misbehaves |
-| `h24_whatif` | The spare 15 seconds on Zone 9 |
+| `h24_whatif` | The spare 15 seconds on Zone 9, and the pricing simulator on Backtest for questions |
 | `console_polish` | The moment card on the map while the payout runs |
+| `telegram_channel` | The chat-app switch on the console phone and in the app (WhatsApp or Telegram). With `TELEGRAM_BOT_TOKEN` in `.env` the presenting machine polls the real bot; every other machine runs `TELEGRAM_POLLING=false`. Without a token the messages stay on the console phone |
 
 Left off on purpose: `n6_consents` (it adds a tick before the slip and a tick before a purchase, which costs seconds the 3 minutes do not have), `n4_voice` (needs a microphone and a quiet room), `n5_grievances`, `n8_marathi` (a draft that waits for a native speaker's review), `x8_distress_guard`, `h8_ops_strip`, `h25_evals`. `make demo-check` must still be run with its own flag set (`x4_lender_request` only); it is never run against this stack, and never with `n3_slip_precheck` or `n6_consents` on.
 
@@ -53,7 +54,7 @@ Three checks before choosing Gemini live, at T-30 on the venue network: `make ch
 
 Pre-flight at T-30, after the stack is up:
 
-1. `curl -s localhost:8000/api/health` lists exactly the seven flags above. `curl -s localhost:8000/api/preflight` has every item `"ok": true`.
+1. `curl -s localhost:8000/api/health` lists exactly the eight flags above. `curl -s localhost:8000/api/preflight` has every item `"ok": true`.
 2. Console at 1280×720, browser zoom 100%, full screen, Chrome. Click **Enable sound** once. Presenter mode stays off (the spec runs without it).
 3. Copy `backend/data/slips/anil_admission_slip.png` to the Desktop so the file dialog finds it in one click.
 4. Park: pick **Monsoon replay**, seek **16:40**, stay paused on **Live map**. The clock reads `Mumbai · monsoon replay · 16:40`. Slow near payout stays on.
