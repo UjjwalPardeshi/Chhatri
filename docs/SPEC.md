@@ -521,7 +521,8 @@ subject_id, data, prev_hash}))` with `canonical_json = json.dumps(sort_keys=True
 separators=(",",":"), ensure_ascii=False, default=str)`. Genesis `prev_hash` = 64 zeros.
 `verify()` recomputes the chain and returns `{valid, entries, head_hash, first_bad_seq}`.
 Actors: `system`, `model`, `policy-engine`, `ai-agent`, `officer:<id>`, `merchant:<id>`,
-`workflow:<name>`. Every decision stores all checks in `data`.
+`workflow:<name>`, `doctor:<registration-no>` (the treating doctor who answers a §9.2
+confirmation; the question is asked by `system`, the answer is recorded as the doctor's own). Every decision stores all checks in `data`.
 
 ## 12. Cases (`chhatri/cases/service.py`)
 
@@ -758,11 +759,11 @@ seeking backward = reset + seek.
 - `illness` — Anil silent all of **Wed 2025-08-20** (zone normal); replay **Thu 2025-08-21**
   10:30→13:00; outreach 11:20; voice reply; slip `anil_admission_slip.png` (patient
   "Anil R. Jadhav", admitted 2025-08-20, "Viral fever", KEM Hospital, Parel, **Dr S. Rao,
-  reg. MMC-2011-45817**). Consent to confirm at **11:21**; the doctor is asked at **11:22** on the
-  directory's chat id and confirms at **11:24** ⇒ APPROVED ₹1,500 at 11:24; credit **11:28**;
-  Thursday's (next day's) instalment paused at **11:29**.
+  reg. MMC-2011-45817**). Consent to confirm, the doctor asked on the chat the officer's link
+  enrolled, and the confirmation back, all at **11:21** ⇒ APPROVED ₹1,500 at 11:21; credit
+  **11:25**; Thursday's (next day's) instalment paused at **11:26**.
 - `illness_denied` — the same timeline with the hospital register showing no such visit: the doctor
-  answers no at 11:24 ⇒ DECLINED, nothing is paid, and the merchant is told the hospital's answer.
+  answers no at 11:21 ⇒ DECLINED, nothing is paid, and the merchant is told the hospital's answer.
 - `illness_no_answer` — the doctor does not answer within `doctor_reply_sla_hours` ⇒ REFERRED with
   the amount already computed; an officer calls the hospital on the directory number.
 - `illness_mismatch` — same timeline, slip `mismatch_admission_slip.png` (patient "Sunil Pawar")

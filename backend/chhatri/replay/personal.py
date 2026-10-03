@@ -241,13 +241,13 @@ class PersonalFlow:
         )
         rt.audit.append(
             at=now,
-            actor="chhatri",
+            actor="system",
             action="doctor.asked",
             subject_type="claim",
             subject_id=claim.id,
             data={"hospital_id": hospital.id, "doctor_registration_no": doctor.registration_no},
         )
-        answered_at = now + timedelta(minutes=rules.doctor_reply_delay_minutes)
+        answered_at = now
         try:
             answer = await rt.integrations.doctor.ask(request)
             status, answered_by = answer.status, answer.answered_by

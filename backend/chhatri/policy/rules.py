@@ -34,7 +34,6 @@ class PersonalRules(_Frozen):
     name_match_min_score: int = Field(ge=0, le=100)
     slip_confidence_min: float = Field(ge=0.0, le=1.0)
     require_doctor_confirmation: bool = False
-    doctor_reply_delay_minutes: int = Field(default=2, ge=0)
     doctor_reply_sla_hours: int = Field(default=24, gt=0)
 
     @property

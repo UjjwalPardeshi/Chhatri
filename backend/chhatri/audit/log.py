@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 GENESIS_HASH: Final = "0" * 64
 MAX_PAGE: Final = 5000
 ACTOR_PATTERN: Final = re.compile(
-    r"^(system|model|policy-engine|ai-agent)$|^(officer|merchant|workflow):[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$"
+    r"^(system|model|policy-engine|ai-agent)$"
+    r"|^(officer|merchant|workflow|doctor):[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$"
 )
 _SCHEMA: Final = (
     """CREATE TABLE IF NOT EXISTS audit_entries (
