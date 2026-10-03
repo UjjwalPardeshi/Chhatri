@@ -58,8 +58,6 @@ DIGITS_ALLOWED: Final[dict[str, frozenset[str]]] = {
     "SLIP_TO_HUMAN_DOCTOR": ANSWER_CLOCK_HOURS,
     "SLIP_TO_HUMAN_HOSPITAL": ANSWER_CLOCK_HOURS,
     "SLIP_TO_HUMAN_DOCTOR_MISSING": ANSWER_CLOCK_HOURS,
-    "TRACK_REFERRED_CONSENT": ANSWER_CLOCK_HOURS,
-    "TRACK_REFERRED_DOCTOR": ANSWER_CLOCK_HOURS,
 }
 
 # Keys without a Hindi line, and why (copy deck: the deck shows no Hindi for them).
