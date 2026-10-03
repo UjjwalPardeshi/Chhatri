@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -66,6 +67,15 @@ async def test_the_levers_come_from_the_query(real_state: AppState, small_table:
     full = (await get(app_for(real_state), "/api/pricing")).json()["data"]
     price = lambda body: next(z for z in body["zones"] if z["zone_id"] == "Z7")["premium_per_day_paise"]  # noqa: E731
     assert lean["levers"]["share_pct"] == 30 and price(lean) < price(full)
+
+
+async def test_a_lever_left_out_is_the_published_rules_value(
+    real_state: AppState, small_table: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lower_share = real_state.static.rules.model_copy(update={"payout_share": 0.4})
+    monkeypatch.setattr(real_state, "static", replace(real_state.static, rules=lower_share))
+    body = (await get(app_for(real_state), "/api/pricing?cap=2000")).json()["data"]
+    assert body["levers"] == {"floor_pct": 50, "share_pct": 40, "cap_rupees": 2000, "loading_pct": 35}
 
 
 @pytest.mark.parametrize("query", ["floor=45", "share=5", "cap=100", "loading=90"])

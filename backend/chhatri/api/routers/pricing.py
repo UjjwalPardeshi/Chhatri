@@ -51,24 +51,31 @@ def _current(path: Path = PREMIUMS_PATH) -> dict[str, int]:
 @router.get("")
 async def get_pricing(
     state: StateDep,
-    floor: Annotated[int, Query(ge=1, le=100)] = 50,
-    share: Annotated[int, Query(ge=10, le=100, description="payout share, % of the lost sales")] = 50,
-    cap: Annotated[int, Query(ge=500, le=10_000, description="area daily cap, ₹")] = 2500,
-    loading: Annotated[int, Query(ge=0, le=60, description="loading, % of the premium")] = 35,
+    floor: Annotated[int | None, Query(ge=1, le=100)] = None,
+    share: Annotated[
+        int | None, Query(ge=10, le=100, description="payout share, % of the lost sales")
+    ] = None,
+    cap: Annotated[int | None, Query(ge=500, le=10_000, description="area daily cap, ₹")] = None,
+    loading: Annotated[int | None, Query(ge=0, le=60, description="loading, % of the premium")] = None,
 ) -> dict[str, Any]:
-    """Every zone's premium, expected payout and loss ratio at today's price, and the trigger's quality."""
+    """Every zone's premium, expected payout and loss ratio at today's price, and the trigger's quality. A lever left
+    out of the query is the published rules' value."""
     table = _load(TABLE_PATH)
     if table is None:
         raise ApiError(
             404, "the pricing table is not built yet (python -m chhatri.backtest.pricing)", code="not_found"
         )
+    rules = state.static.rules
+    defaults = levers_from_rules(rules)
+    floor = defaults.floor_pct if floor is None else floor
+    share = defaults.share_pct if share is None else share
+    cap = defaults.cap_rupees if cap is None else cap
+    loading = defaults.loading_pct if loading is None else loading
     if floor not in table["floors"]:
         raise ApiError(422, "invalid request", fields={"floor": f"one of {table['floors']}"})
-    rules = state.static.rules
     levers = Levers(floor, share, cap, loading, rules.premium.min_per_day_rupees)
     names = {z.id: z.name for z in state.static.city.zones}
     result = price(table, levers, _current())
-    defaults = levers_from_rules(rules)
     return ok(
         {
             **result,
