@@ -22,11 +22,11 @@
     },
     {
       "id": "034b29b5-1932-52c9-b3b3-aec2d0954cb2",
-      "name": "Verify X-Chhatri-Secret",
+      "name": "Secret OK?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        220,
+        192,
         320
       ],
       "parameters": {
@@ -70,7 +70,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        440,
+        560,
         320
       ],
       "parameters": {
@@ -106,7 +106,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        660,
+        768,
         320
       ],
       "parameters": {
@@ -142,7 +142,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        880,
+        960,
         320
       ],
       "parameters": {
@@ -159,8 +159,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        220,
-        520
+        288,
+        496
       ],
       "parameters": {
         "respondWith": "json",
@@ -176,13 +176,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -50,
+        -32,
         0
       ],
       "parameters": {
-        "content": "## Chhatri · Human review (referred claim or dispute)\n\n**What starts it:** Chhatri opened a case for a claims officer: its policy engine referred a personal claim to a person, or a merchant disputed a decision.\n\n**n8n never decides.** The officer approves or declines the case in Chhatri's console. n8n runs the checklist and reports every step back to Chhatri, which re-checks each report.",
-        "height": 110,
-        "width": 1520,
+        "content": "## Chhatri · Human review (referred claim or dispute)\n\n**What starts it:** Chhatri opened a case for a claims officer: its policy engine referred a personal claim to a person, or a merchant disputed a decision.\n\n**n8n never decides.** A claims officer decides in Chhatri's console: approve or decline a referred claim, or confirm or reject a dispute (either closes it; the disputed decision stands). n8n runs the checklist and reports every step back to Chhatri, which re-checks each report.",
+        "height": 128,
+        "width": 1536,
         "color": 5
       }
     },
@@ -192,13 +192,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -50,
-        130
+        -32,
+        144
       ],
       "parameters": {
-        "content": "### Security check\n\nEvery run must carry the shared secret in its X-Chhatri-Secret header. A wrong or missing secret is refused with 403 and n8n calls no step. If n8n has no secret set, every run is refused.\n\nEach step report carries the same secret, and Chhatri checks it.",
-        "height": 570,
-        "width": 420,
+        "content": "### Security check\n\nEvery run must carry the shared secret in its X-Chhatri-Secret header; **Secret OK?** checks it. A wrong or missing secret is refused with 403 and n8n calls no step. If n8n has no secret set, every run is refused.\n\nEach step report carries the same secret, and Chhatri checks it.",
+        "height": 560,
+        "width": 512,
         "color": 3
       }
     },
@@ -208,13 +208,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        390,
-        130
+        496,
+        144
       ],
       "parameters": {
-        "content": "### Checklist: n8n reports each step, Chhatri does it\n\nNo Wait nodes: n8n reports the steps right away, one after another; Chhatri runs each one at its simulated time after the case opened.\n\n1. **Queue for an officer** · +0 min: Chhatri publishes the case to the console's officer queue; the live feed shows its due time.\n2. **Notify the officer** · +0 min: Chhatri records the alert in the audit log (case.officer_notified).\n\nThen **Completed (200)** answers Chhatri, only after the last step was reported.",
-        "height": 370,
-        "width": 1080,
+        "content": "### Checklist: n8n reports each step, Chhatri runs it at its simulated time after the case opened\n\nNo Wait nodes: n8n reports the steps right away, in order, and **Completed (200)** answers Chhatri only after the last one was reported.\n\n1. **Queue for an officer** · +0 min: Chhatri publishes the case to the console's officer queue; the live feed shows its due time.\n2. **Notify the officer** · +0 min: Chhatri records the alert in the audit log (case.officer_notified).",
+        "height": 352,
+        "width": 1008,
         "color": 4
       }
     },
@@ -224,13 +224,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        390,
-        520
+        496,
+        512
       ],
       "parameters": {
-        "content": "### If a step fails\n\n- A step report that errors, times out after 10 s or gets a non-2xx answer is tried again after a 1 s wait: 3 tries in all.\n- If all 3 fail, the run stops there: later steps are not called and the webhook answers 500.\n- If the webhook answers with an error or without the completion, or n8n cannot be reached, Chhatri hands the run to its built-in runner. It schedules only the steps n8n did not report, so no step runs twice.\n- Chhatri waits at most 30 s for the answer (3 timed-out tries take 32 s). If none comes, it does not take over, because n8n may still be running: it records workflow.start_failed in the audit log.",
-        "height": 180,
-        "width": 1080,
+        "content": "### If a step fails\n\n- A step report that errors, times out after 10 s or gets an error status is tried again after a 1 s wait: 3 tries in all.\n- If all 3 fail, the run stops there: later steps are not called and the webhook answers 500.\n- If the webhook answers with an error status or without the completion, or connecting to n8n fails outright (refused, unknown host), Chhatri's built-in runner takes over. It schedules only the steps Chhatri has not already accepted from n8n, so no step runs twice.\n- Chhatri waits at most 30 s for the answer (3 timed-out tries take 32 s). On a timeout (connecting included) or another transport error, it does not take over (if the request reached n8n, n8n may still be running it): it records workflow.start_failed in the audit log.",
+        "height": 192,
+        "width": 1008,
         "color": 2
       }
     }
@@ -240,14 +240,14 @@
       "main": [
         [
           {
-            "node": "Verify X-Chhatri-Secret",
+            "node": "Secret OK?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verify X-Chhatri-Secret": {
+    "Secret OK?": {
       "main": [
         [
           {

@@ -121,7 +121,7 @@ def test_true_branch_calls_back_every_step_in_order(name: str, workflows: dict[s
     assert _steps(doc) == list(workflows[name])
     path = _true_path(doc)
     step_names = [n for n in path if CALLBACK.search(_index(doc)[n]["parameters"].get("url", ""))]
-    assert path == [gen.WEBHOOK_NODE, gen.VERIFY_NODE, *step_names, gen.DONE_NODE]
+    assert path == [gen.WEBHOOK_NODE, gen.CHECK_NODE, *step_names, gen.DONE_NODE]
     assert step_names == [text.step_node_name(name, i, s) for i, s in enumerate(workflows[name], start=1)]
 
 
@@ -130,7 +130,7 @@ def test_false_branch_rejects_with_403_and_calls_nothing(
     name: str, specs: dict[str, tuple[text.Step, ...]]
 ) -> None:
     doc = gen.build_workflow(name, specs[name])
-    assert _next(doc, gen.VERIFY_NODE, output=1) == [gen.REJECT_NODE]
+    assert _next(doc, gen.CHECK_NODE, output=1) == [gen.REJECT_NODE]
     reject = _index(doc)[gen.REJECT_NODE]
     assert reject["parameters"]["options"]["responseCode"] == 403
     assert json.loads(reject["parameters"]["responseBody"])["ok"] is False
@@ -241,9 +241,9 @@ def test_canvas_layout_has_no_overlaps_and_frames_its_nodes(
         if n["type"] == STICKY
     ]
     zones = {
-        n["name"]: canvas.node_zone(
-            n["position"], canvas.LABEL_DEPTH if n.get("notesInFlow") else canvas.PLAIN_LABEL_DEPTH
-        )
+        n["name"]: canvas.node_zone(n["position"])
+        if n.get("notesInFlow")
+        else canvas.plain_zone(n["position"], n["name"])
         for n in doc["nodes"]
         if n["type"] != STICKY
     }
@@ -267,11 +267,52 @@ def test_canvas_reads_left_to_right_with_the_reject_branch_below(
     row = [index[n]["position"] for n in _true_path(doc)]
     assert len({y for _, y in row}) == 1
     xs = [x for x, _ in row]
-    assert xs == sorted(xs) and {b - a for a, b in zip(xs, xs[1:], strict=False)} == {canvas.PITCH}
-    verify_x, verify_y = index[gen.VERIFY_NODE]["position"]
-    assert index[gen.REJECT_NODE]["position"][0] == verify_x
-    assert index[gen.REJECT_NODE]["position"][1] > verify_y + canvas.NODE_SIZE + canvas.LABEL_DEPTH
+    gaps = [b - a for a, b in zip(xs, xs[1:], strict=False)]
+    assert xs == sorted(xs) and gaps[0] == gaps[-1] == canvas.SHORT_PITCH and gaps[1] >= canvas.PITCH
+    assert set(gaps[2:-1]) <= {canvas.PITCH}  # step to step (none with a single step)
+    check_x, check_y = index[gen.CHECK_NODE]["position"]
+    reject_x, reject_y = index[gen.REJECT_NODE]["position"]
+    assert canvas.draws_forward(check_x, reject_x)  # no loop back to the left
+    assert reject_x >= check_x + canvas.NODE_SIZE and canvas.label_width(gen.CHECK_NODE) <= canvas.NODE_SIZE
+    assert reject_y >= check_y + canvas.NODE_SIZE + canvas.PLAIN_LABEL_DEPTH
     assert all(v % canvas.GRID == 0 for n in doc["nodes"] for v in n["position"] if n["type"] != STICKY)
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_secret_check_has_a_short_name_and_keeps_its_id(
+    name: str, specs: dict[str, tuple[text.Step, ...]]
+) -> None:
+    """Renamed for the canvas ("Secret OK?" fits under the node); its id still comes from the old name."""
+    doc = gen.build_workflow(name, specs[name])
+    check = _index(doc)[gen.CHECK_NODE]
+    namespace = uuid.uuid5(uuid.NAMESPACE_URL, "urn:chhatri:n8n")
+    assert check["id"] == str(uuid.uuid5(namespace, f"{name}/Verify X-Chhatri-Secret"))
+    assert check["type"] == "n8n-nodes-base.if" and gen.CHECK_NODE == "Secret OK?"
+    assert set(doc["connections"]) == {gen.WEBHOOK_NODE, gen.CHECK_NODE, *_true_path(doc)[2:-1]}
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_every_expression_and_link_names_an_existing_node(
+    name: str, specs: dict[str, tuple[text.Step, ...]]
+) -> None:
+    doc = gen.build_workflow(name, specs[name])
+    names = {n["name"] for n in doc["nodes"]}
+    referenced = set(re.findall(r"\$\('([^']+)'\)", json.dumps(doc, ensure_ascii=False)))
+    assert referenced == {gen.WEBHOOK_NODE}
+    linked = {link["node"] for v in doc["connections"].values() for out in v["main"] for link in out}
+    assert set(doc["connections"]) <= names and linked <= names
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_zoom_to_fit_keeps_the_text_readable(name: str, specs: dict[str, tuple[text.Step, ...]]) -> None:
+    """At 1280 x 720, zoom to fit shows 14 px sticky text at 9 px or more (0.65 x 14)."""
+    doc = gen.build_workflow(name, specs[name])
+    frames = [
+        canvas.Rect(*n["position"], n["parameters"]["width"], n["parameters"]["height"])
+        for n in doc["nodes"]
+        if n["type"] == STICKY
+    ]
+    assert canvas.fit_zoom(canvas.bounds(frames)) >= 0.65
 
 
 def test_all_three_canvases_are_equally_wide(specs: dict[str, tuple[text.Step, ...]]) -> None:
@@ -300,7 +341,7 @@ def test_unknown_step_stops_main_before_writing(tmp_path: Path, monkeypatch: pyt
 
 def test_secret_check_requires_a_configured_secret(specs: dict[str, tuple[text.Step, ...]]) -> None:
     doc = gen.build_workflow("payout", specs["payout"])
-    cond = _index(doc)[gen.VERIFY_NODE]["parameters"]["conditions"]
+    cond = _index(doc)[gen.CHECK_NODE]["parameters"]["conditions"]
     assert cond["combinator"] == "and"
     ops = [c["operator"]["operation"] for c in cond["conditions"]]
     assert ops == ["notEmpty", "equals"]

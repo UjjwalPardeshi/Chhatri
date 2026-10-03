@@ -2,10 +2,16 @@
 
 Every sentence here must stay true of the code it describes:
 
-- `chhatri.replay.runs` / `area` / `personal` / `officer` / `cases_flow`: what starts each workflow;
+- `chhatri.replay.runs` / `area` / `personal` / `officer` / `cases_flow`: what starts each workflow
+  (`chhatri.detect.triggers`: an area trigger needs a RAIN or CIVIC, i.e. bandh, alert);
 - `chhatri.replay.orchestrator.handle_callback` and `chhatri.replay.steps`: what each step does, and
   that each report is re-checked and run at the run's start + the step's simulated offset;
-- `chhatri.integrations.n8n` and `chhatri.workflows.runner`: what happens when a run fails;
+- `chhatri.integrations.n8n`, `chhatri.integrations.retry` and `chhatri.workflows.runner`: what happens
+  when a run fails (only a refused or unresolvable connection, an error status or a missing completion
+  is handed over; a timeout, connecting included, or another transport error is not), and that the
+  built-in runner skips only the steps already on the scheduler (a refused report was never scheduled);
+- `chhatri.integrations.statuses.ALWAYS_SIMULATED` and `chhatri.conversation.outbox`: what is simulated,
+  and which channel carries the merchant's message (Telegram only with the `telegram_channel` flag);
 - `scripts/n8n_workflows.py`: the secret check and the callback retry settings.
 
 Times are derived from the StepSpec offsets, never written by hand. A step without a plain-words text
@@ -63,8 +69,9 @@ WORKFLOW_TEXT: Final[Mapping[str, WorkflowText]] = MappingProxyType(
             display_name="Chhatri · Payout (approved claim)",
             anchor="the decision",
             anchor_short="decision",
-            starts="**What starts it:** Chhatri approved a claim: an area claim from a weather trigger "
-            "such as the monsoon storm, a personal claim, or a referred claim a claims officer approved.",
+            starts="**What starts it:** Chhatri approved a claim: an area claim (sales in the merchant's zone "
+            "dropped under a rain or bandh alert, as in the monsoon storm), a personal claim, or a referred "
+            "claim a claims officer approved.",
             decides="**n8n never decides money.** Chhatri's policy engine made the decision, amount included, "
             "before this run starts. n8n runs the checklist and reports every step back to Chhatri, "
             "which re-checks each report.",
@@ -75,7 +82,8 @@ WORKFLOW_TEXT: Final[Mapping[str, WorkflowText]] = MappingProxyType(
             anchor_short="case opened",
             starts="**What starts it:** Chhatri opened a case for a claims officer: its policy engine "
             "referred a personal claim to a person, or a merchant disputed a decision.",
-            decides="**n8n never decides.** The officer approves or declines the case in Chhatri's console. "
+            decides="**n8n never decides.** A claims officer decides in Chhatri's console: approve or decline "
+            "a referred claim, or confirm or reject a dispute (either closes it; the disputed decision stands). "
             "n8n runs the checklist and reports every step back to Chhatri, which re-checks each report.",
         ),
         "follow-up": WorkflowText(
@@ -100,12 +108,11 @@ STEP_TEXT: Final[Mapping[tuple[str, str], StepText]] = MappingProxyType(
         ),
         ("payout", "notify_merchant"): StepText(
             "Tell merchant: WhatsApp + Soundbox",
-            "the merchant gets the payout message and a Soundbox announcement.",
+            "a payout message on WhatsApp (or Telegram, if chosen) and a Soundbox announcement.",
         ),
         ("payout", "request_holiday"): StepText(
             "Ask lender to pause next instalment",
-            "the lender decides on the next day's instalment (with x4_lender_request off, Chhatri "
-            "pauses it).",
+            "the lender decides on the next day's instalment (x4_lender_request off: Chhatri pauses it).",
         ),
         ("human-review", "open_case"): StepText(
             "Queue for an officer",
@@ -193,11 +200,12 @@ def title_markdown(workflow: str) -> str:
     return f"## {text.display_name}\n\n{text.starts}\n\n{text.decides}"
 
 
-def security_markdown(header: str) -> str:
+def security_markdown(header: str, check_node: str) -> str:
     return (
         "### Security check\n\n"
-        f"Every run must carry the shared secret in its {header} header. A wrong or missing secret is "
-        "refused with 403 and n8n calls no step. If n8n has no secret set, every run is refused.\n\n"
+        f"Every run must carry the shared secret in its {header} header; **{check_node}** checks it. "
+        "A wrong or missing secret is refused with 403 and n8n calls no step. If n8n has no secret set, "
+        "every run is refused.\n\n"
         "Each step report carries the same secret, and Chhatri checks it."
     )
 
@@ -233,17 +241,16 @@ def checklist_markdown(workflow: str, steps: Sequence[Step], done_node: str) -> 
         for index, step in enumerate(steps, start=1)
     ]
     blocks = [
-        "### Checklist: n8n reports each step, Chhatri does it",
-        "No Wait nodes: n8n reports the steps right away, one after another; Chhatri runs each one at "
-        f"its simulated time after {anchor}.",
+        f"### Checklist: n8n reports each step, Chhatri runs it at its simulated time after {anchor}",
+        f"No Wait nodes: n8n reports the steps right away, in order, and **{done_node}** answers Chhatri "
+        "only after the last one was reported.",
         "\n".join(lines),
-        f"Then **{done_node}** answers Chhatri, only after the last step was reported.",
     ]
     if workflow == "payout":
         blocks += [
             monsoon_line(steps),
-            "*Simulated in this prototype: the settlement rail and the Soundbox; WhatsApp is live only "
-            "with its keys and a demo recipient.*",
+            "*Simulated in this prototype: the settlement rail, the lender and the Soundbox; WhatsApp is live "
+            "only with its keys and a demo recipient.*",
         ]
     return "\n\n".join(blocks)
 
@@ -252,14 +259,15 @@ def failure_markdown(retry: RetryPolicy) -> str:
     tries, wait, timeout = retry.max_tries, _seconds(retry.wait_ms), _seconds(retry.timeout_ms)
     return (
         "### If a step fails\n\n"
-        f"- A step report that errors, times out after {timeout} or gets a non-2xx answer is tried again "
+        f"- A step report that errors, times out after {timeout} or gets an error status is tried again "
         f"after a {wait} wait: {tries} tries in all.\n"
         f"- If all {tries} fail, the run stops there: later steps are not called and the webhook "
         "answers 500.\n"
-        "- If the webhook answers with an error or without the completion, or n8n cannot be reached, "
-        "Chhatri hands the run to its built-in runner. It schedules only the steps n8n did not report, "
-        "so no step runs twice.\n"
+        "- If the webhook answers with an error status or without the completion, or connecting to n8n "
+        "fails outright (refused, unknown host), Chhatri's built-in runner takes over. It schedules only "
+        "the steps Chhatri has not already accepted from n8n, so no step runs twice.\n"
         f"- Chhatri waits at most {BACKEND_WAIT_S} s for the answer ({tries} timed-out tries take "
-        f"{_seconds(retry.worst_case_ms)}). If none comes, it does not take over, because n8n may still be "
-        "running: it records workflow.start_failed in the audit log."
+        f"{_seconds(retry.worst_case_ms)}). On a timeout (connecting included) or another transport error, "
+        "it does not take over (if the request reached n8n, n8n may still be running it): it records "
+        "workflow.start_failed in the audit log."
     )

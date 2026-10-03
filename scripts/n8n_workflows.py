@@ -5,15 +5,16 @@
 the n8n step order can never drift from the in-process runner. Each workflow is:
 
     Chhatri webhook (POST /webhook/chhatri-{workflow}, body {run_id, workflow, payload})
-      -> Verify X-Chhatri-Secret (header == $env.CHHATRI_INTERNAL_SECRET, secret non-empty)
+      -> Secret OK? (header X-Chhatri-Secret == $env.CHHATRI_INTERNAL_SECRET, secret non-empty)
            true  -> 1 · <step> -> 2 · <step> -> ... -> Completed (200)   (one HTTP callback per WORKFLOWS step)
            false -> Reject (403)
 
 Every step node POSTs `{run_id, workflow, step, payload}` (payload passed through unchanged) to
 `$env.CHHATRI_PUBLIC_URL/internal/workflows/{step}` with header `X-Chhatri-Secret`. There are no Wait
 nodes: step offsets are *simulated* minutes, and the backend schedules each effect at decision time +
-offset on the simulated scheduler (B1). An HTTP node fails on any non-2xx answer (after 3 tries), which
-stops the run (SPEC §14.5); the webhook then answers 500.
+offset on the simulated scheduler (B1). An HTTP node fails on an error, a 10 s timeout or a 4xx/5xx
+answer (after 3 tries; n8n follows redirects), which stops the run (SPEC §14.5); the webhook then
+answers 500.
 
 The webhook answers only from the last node, `Completed (200)`, with
 `{"ok": true, "data": {"run_id", "status": "completed", "steps": [...]}}`: the backend's start call
@@ -23,7 +24,10 @@ a step's due minute before n8n reported it and the n8n timeline equals the in-pr
 The canvas explains itself to a reader (`n8n_canvas_text`, `n8n_canvas`): plain-words step names
 (`2 · Credit ₹ to merchant`), node notes with the step key, callback, retry policy and simulated
 time, and four sticky notes (what starts it, the security check, the checklist, what happens when a step
-fails). None of that changes what runs: step node ids are still derived from the technical step key.
+fails). The secret check is named `Secret OK?` so its name fits under the node and the reject edge can
+curve down past it to Reject (403). None of that changes what runs: node ids still come from the
+technical names (the step key, and `Verify X-Chhatri-Secret` for the check), and no expression names
+the check.
 
 Usage (backend venv):
     python scripts/n8n_workflows.py          # write the files
@@ -41,7 +45,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
-from n8n_canvas import Markdown, Sticky, plan
+from n8n_canvas import Markdown, RowNames, Sticky, plan
 from n8n_canvas_text import (
     RetryPolicy,
     Step,
@@ -63,9 +67,11 @@ SECRET_ENV: Final = "CHHATRI_INTERNAL_SECRET"  # noqa: S105 - variable name, not
 PUBLIC_URL_ENV: Final = "CHHATRI_PUBLIC_URL"
 CALLBACK_PATH: Final = "/internal/workflows"
 WEBHOOK_NODE: Final = "Chhatri webhook"
-VERIFY_NODE: Final = "Verify X-Chhatri-Secret"
+CHECK_NODE: Final = "Secret OK?"  # short enough to sit under the node (the reject edge passes right of it)
+CHECK_ID_KEY: Final = "Verify X-Chhatri-Secret"  # the check's id seed: its name before the canvas work
 DONE_NODE: Final = "Completed (200)"
 REJECT_NODE: Final = "Reject (403)"
+ROW_NAMES: Final = RowNames(webhook=WEBHOOK_NODE, check=CHECK_NODE, done=DONE_NODE, reject=REJECT_NODE)
 HTTP_OK: Final = 200
 HTTP_FORBIDDEN: Final = 403
 CALLBACK_TIMEOUT_MS: Final = 10_000  # SPEC §14: 10 s default timeout for live calls
@@ -150,7 +156,7 @@ def webhook_node(workflow: str, position: Sequence[int]) -> dict[str, Any]:
     return node
 
 
-def verify_node(workflow: str, position: Sequence[int]) -> dict[str, Any]:
+def check_node(workflow: str, position: Sequence[int]) -> dict[str, Any]:
     """True branch only when the secret is configured and the header equals it (SPEC §14.5, §21)."""
     secret = f"={{{{ $env.{SECRET_ENV} ?? '' }}}}"
     conditions = [
@@ -173,9 +179,10 @@ def verify_node(workflow: str, position: Sequence[int]) -> dict[str, Any]:
     ]
     return _node(
         workflow,
-        VERIFY_NODE,
+        CHECK_NODE,
         IF_TYPE,
         position,
+        id_key=CHECK_ID_KEY,
         conditions={
             "options": {
                 "caseSensitive": True,
@@ -275,7 +282,7 @@ def sticky_node(workflow: str, sticky: Sticky) -> dict[str, Any]:
 def canvas_markdown(workflow: str, steps: Sequence[Step]) -> Markdown:
     return Markdown(
         title=title_markdown(workflow),
-        security=security_markdown(SECRET_HEADER),
+        security=security_markdown(SECRET_HEADER, CHECK_NODE),
         checklist=checklist_markdown(workflow, steps, DONE_NODE),
         failure=failure_markdown(RETRY),
     )
@@ -286,11 +293,11 @@ def _link(target: str) -> dict[str, Any]:
 
 
 def _connections(step_names: Sequence[str]) -> dict[str, Any]:
-    chain = [VERIFY_NODE, *step_names, DONE_NODE]
-    connections: dict[str, Any] = {WEBHOOK_NODE: {"main": [[_link(VERIFY_NODE)]]}}
+    chain = [CHECK_NODE, *step_names, DONE_NODE]
+    connections: dict[str, Any] = {WEBHOOK_NODE: {"main": [[_link(CHECK_NODE)]]}}
     for source, target in zip(chain, chain[1:], strict=False):
         connections[source] = {"main": [[_link(target)]]}
-    connections[VERIFY_NODE] = {"main": [[_link(step_names[0])], [_link(REJECT_NODE)]]}
+    connections[CHECK_NODE] = {"main": [[_link(step_names[0])], [_link(REJECT_NODE)]]}
     return connections
 
 
@@ -298,14 +305,14 @@ def build_workflow(workflow: str, steps: Sequence[Step]) -> dict[str, Any]:
     """The importable n8n workflow document for one Chhatri workflow."""
     if not steps:
         raise ValueError(f"workflow {workflow!r} has no steps")
-    layout = plan(len(steps), canvas_markdown(workflow, steps))
+    layout = plan(len(steps), canvas_markdown(workflow, steps), ROW_NAMES)
     step_nodes = [
         step_node(workflow, i, step, position)
         for i, (step, position) in enumerate(zip(steps, layout.steps, strict=True), start=1)
     ]
     nodes = [
         webhook_node(workflow, layout.webhook),
-        verify_node(workflow, layout.verify),
+        check_node(workflow, layout.check),
         *step_nodes,
         respond_node(workflow, DONE_NODE, HTTP_OK, done_body([s.name for s in steps]), layout.done),
         respond_node(workflow, REJECT_NODE, HTTP_FORBIDDEN, REJECT_BODY, layout.reject),
