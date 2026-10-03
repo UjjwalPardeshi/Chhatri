@@ -307,6 +307,13 @@ FLIP_TABLE: Final[Mapping[CheckCode, FlipFn | None]] = MappingProxyType(
         CheckCode.NAME_MATCHES_KYC: _flip_name_matches_kyc,
         CheckCode.DATES_MATCH: _flip_dates_match,
         CheckCode.WITHIN_AUTO_LIMIT: _flip_within_auto_limit,
+        # A confirmation cannot honestly be counterfactualised: "if the doctor had said yes" is not
+        # a fact about the claim, it is a different claim. Same for consent and the directory.
+        CheckCode.HOSPITAL_IDENTIFIED: None,
+        CheckCode.DOCTOR_IDENTIFIED: None,
+        CheckCode.VERIFICATION_CONSENT: None,
+        CheckCode.DOCTOR_NOT_DENIED: None,
+        CheckCode.DOCTOR_CONFIRMED: None,
         CheckCode.NOT_ALREADY_PAID: None,
         CheckCode.WITHIN_ANNUAL_LIMIT: None,
     }

@@ -8,7 +8,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from chhatri.domain.models import Alert, AreaTrigger, Claim, Cover, Merchant
+from datetime import datetime
+
+from chhatri.domain.models import (
+    Alert,
+    AreaTrigger,
+    Claim,
+    Cover,
+    Doctor,
+    DoctorVerification,
+    Hospital,
+    Merchant,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,3 +44,11 @@ class PersonalClaimFacts:
     paid_last_365_days_paise: int
     already_paid_dates: tuple[date, ...]
     weekday: int
+    # Doctor confirmation (rule `personal.require_doctor_confirmation`). The orchestrator resolves
+    # the hospital and the doctor against the independent directory before calling the engine, so
+    # nothing here is taken from the slip except *which* hospital and doctor to look up.
+    hospital: Hospital | None = None
+    doctor: Doctor | None = None
+    verification_consent: bool | None = None  # None = not asked yet, False = the merchant said no
+    verification_consent_at: datetime | None = None
+    verification: DoctorVerification | None = None
