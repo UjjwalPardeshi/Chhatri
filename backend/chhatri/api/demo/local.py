@@ -28,6 +28,7 @@ IN_PROCESS_URL: Final = "http://demo-check.local"
 # Flags the rehearsal needs: the golden numbers and strings of `chhatri.api.demo.golden` assume them (CP1: X4).
 DEMO_FEATURES: Final = ("x4_lender_request",)
 OFFLINE_OVERRIDES: Final[dict[str, Any]] = {
+    "google_api_key": None,
     "sarvam_api_key": None,
     "whatsapp_access_token": None,
     "whatsapp_phone_number_id": None,

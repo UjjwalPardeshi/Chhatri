@@ -218,3 +218,17 @@ def test_live_is_refused_with_exit_one_and_a_reason(
     monkeypatch.setattr(cli, "_confirm", lambda calls: False)
     assert cli.main(["--live"]) == 1
     assert "stopped before any provider call" in capsys.readouterr().err
+
+
+def test_the_live_run_keeps_only_the_ai_keys_and_demo_check_keeps_none(tmp_path: Path) -> None:
+    from pydantic import SecretStr
+
+    from chhatri.api.demo.local import offline_settings
+
+    keyed = offline_settings().model_copy(
+        update={"google_api_key": SecretStr("g"), "sarvam_api_key": SecretStr("s"), "telegram_bot_token": "t"}
+    )
+    live = cli._live_settings(keyed, tmp_path)
+    assert live.gemini_key_set and live.sarvam_live
+    assert live.telegram_bot_token is None and live.chhatri_var_dir == tmp_path
+    assert offline_settings(google_api_key=None).google_api_key is None

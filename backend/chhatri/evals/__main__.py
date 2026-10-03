@@ -67,7 +67,8 @@ def _live_refusal(settings: Settings) -> str | None:
 def _live_settings(settings: Settings, var_dir: Path) -> Settings:
     """The environment's AI keys, every other live integration off, Ask on, demo mode on, and a run state of its
     own (``var_dir``), so a backend serving the console at the same time is not touched."""
-    overrides = {**OFFLINE_OVERRIDES, "chhatri_features": LIVE_FEATURES, "chhatri_var_dir": var_dir}
+    keys = {"google_api_key": settings.google_api_key, "sarvam_api_key": settings.sarvam_api_key}
+    overrides = {**OFFLINE_OVERRIDES, **keys, "chhatri_features": LIVE_FEATURES, "chhatri_var_dir": var_dir}
     return settings.model_copy(update=overrides)
 
 
