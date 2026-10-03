@@ -21,7 +21,9 @@ Documented choices:
   merchants only, because the console auto-plays every ``soundbox`` event and the deck shows one.
 - Telegram: with the ``telegram_channel`` flag on, a merchant whose preferred channel is Telegram gets every message on
   channel TELEGRAM through the Telegram channel (live or simulated), voiced as OGG/Opus, never as a template (Telegram has
-  no 24-hour window), and a payout card carries its quick-reply buttons. A message that answers a Telegram or WhatsApp
+  no 24-hour window), and a message carries its own inline buttons (``Outgoing.buttons``: the pre-check and the doctor
+  question) or its key's quick replies (a payout card), plus ``Outgoing.wire_extra`` (lines only a phone needs, such as
+  what was read on a slip; the console draws the card instead). A message that answers a Telegram or WhatsApp
   inbound goes back the way it came (``reply_via``), whatever the preference. Without the flag nothing changes.
 - A delivery failure (``IntegrationError``) is logged and audited (``delivered: false``); the
   message stays in the log so the console still shows it.
@@ -145,6 +147,12 @@ class Outgoing:
     meta: Mapping[str, Any] = (
         _NO_META  # extra message meta (the slip pre-check's label), merged into the message
     )
+    # Telegram inline buttons (callback data, title); never on WhatsApp
+    buttons: tuple[tuple[str, str], ...] = ()
+    # Telegram lines after the text; the stored message and the console never show them
+    wire_extra: str | None = None
+    # the Hindi line a phone shows when the message itself has none (the case chip)
+    wire_hi: str | None = None
 
     @classmethod
     def text(cls, key: str, *, template: WhatsAppTemplate | None = None, **facts: object) -> Outgoing:
@@ -161,7 +169,8 @@ class Outgoing:
         if self.card is not None and "amount_label" in self.card:
             card = self.card
             return f"{card['amount_label']} · {card['subtitle_hi']}\n{card['subtitle_en']} · {card['badge']}"
-        return "\n".join(line for line in (self.text_hi, self.text_en) if line)
+        lines = (self.text_hi or self.wire_hi, self.text_en, self.wire_extra)
+        return "\n".join(line for line in lines if line)
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,7 +413,7 @@ class Outbox:
             template_params=out.template.params if templated and out.template else (),
             audio=voice.audio if ogg else None,
             audio_mime=voice.mime if ogg else None,
-            buttons=QUICK_REPLIES.get(out.key, ()) if telegram else (),
+            buttons=(out.buttons or QUICK_REPLIES.get(out.key, ())) if telegram else (),
         )
         channel = self._telegram if telegram and self._telegram is not None else self._channel
         try:

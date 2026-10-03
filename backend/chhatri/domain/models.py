@@ -36,6 +36,7 @@ from chhatri.domain.enums import (
     ShopType,
     SourceKind,
     SourceOrigin,
+    VerificationStatus,
 )
 from chhatri.money import round_to_ten_rupees
 
@@ -148,14 +149,53 @@ class AreaTrigger(Frozen):
 
 
 class SlipExtraction(Frozen):
+    """What was read off a hospital slip (SPEC §9.2).
+
+    There is deliberately no phone, chat or contact field here. A number printed on a slip the
+    claimant supplied proves nothing — the slip says *which* doctor, and the chat id used to ask
+    them always comes from the independent directory (`chhatri.directory`).
+    """
+
     patient_name: str | None = None
     admission_date: date | None = None
     discharge_date: date | None = None
     hospital_name: str | None = None
+    doctor_name: str | None = None
+    doctor_registration_no: str | None = None
     document_type: str | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     source: str  # "sarvam-doc-ai" | "simulated"
     raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class Hospital(Frozen):
+    """A hospital as the independent directory knows it, not as a slip claims it."""
+
+    id: str
+    name: str
+    city: str
+
+
+class Doctor(Frozen):
+    """A doctor on a hospital's register. `verify_chat_id` is the only way Chhatri ever contacts them."""
+
+    registration_no: str  # state medical council number: the identity key
+    name: str
+    hospital_id: str
+    verify_chat_id: str | None = None
+
+
+class DoctorVerification(Frozen):
+    """One confirmation round-trip with a treating doctor (SPEC §9.2)."""
+
+    id: str
+    claim_id: str
+    hospital_id: str
+    doctor_registration_no: str
+    status: VerificationStatus
+    requested_at: datetime
+    answered_at: datetime | None = None
+    answered_by: str | None = None
 
 
 class Claim(Frozen):

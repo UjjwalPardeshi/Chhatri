@@ -11,10 +11,12 @@ import pytest
 
 from chhatri.clock import ist
 from chhatri.config import DATA_DIR, Settings
-from chhatri.domain.enums import HolidayStatus, IntegrationMode
+from chhatri.domain.enums import HolidayStatus, IntegrationMode, VerificationStatus
 from chhatri.domain.models import Loan
 from chhatri.integrations import registry
-from chhatri.integrations.base import LenderRequest
+from chhatri.integrations.base import DoctorVerificationRequest, DoctorVerifier, LenderRequest
+from chhatri.integrations.doctor import SimulatedDoctor
+from chhatri.integrations.doctor_telegram import TelegramDoctorVerifier
 from chhatri.integrations.free_tier import GATE_CLOSED_DETAIL
 from chhatri.integrations.lender import SimulatedLender
 from chhatri.integrations.memory import SimulatedMemoryGraph
@@ -34,6 +36,7 @@ from chhatri.integrations.sarvam import (
 from chhatri.integrations.soundbox import SimulatedSoundbox
 from chhatri.integrations.statuses import STATUS_NAMES, ordered
 from chhatri.integrations.whatsapp import InboundGate, LiveWhatsAppChannel, SimulatorChannel, TextEvent
+from chhatri.store.doctor_chats import LIVE_DOCTOR_DESK, DoctorDesk
 from chhatri.workflows.runner import InProcessWorkflowEngine
 
 from ..workflows.fakes import FakeScheduler, RecordingHandlers
@@ -263,3 +266,58 @@ def test_a_closed_data_gate_keeps_every_free_tier_ai_component_simulated(
     assert (
         modes(built)["whatsapp"] is IntegrationMode.LIVE
     )  # not a free-tier AI service: the gate leaves it alone
+
+
+def _doctor_request(patient: str) -> DoctorVerificationRequest:
+    return DoctorVerificationRequest(
+        request_id="DR-000001",
+        claim_id="CL-000001",
+        hospital_id="H-KEM",
+        doctor_registration_no="MMC-2011-45817",
+        verify_chat_id="tg:482913",
+        patient_name=patient,
+        visit_date=date(2025, 8, 20),
+        requested_at=ist(2025, 8, 20, 11, 22),
+    )
+
+
+async def test_the_default_build_has_the_stage_doctor_who_confirms_anil_and_denies_sunil() -> None:
+    """Design 2.9: the app's real build path fills chhatri-61's `Integrations.doctor` with the Telegram verifier over
+    the seeded register; the dataclass default (an empty register) would deny everyone and decline the illness demo."""
+    built = build(offline())
+    assert isinstance(built.doctor, TelegramDoctorVerifier) and isinstance(built.doctor, DoctorVerifier)
+    anil = await built.doctor.ask(_doctor_request("Anil R. Jadhav"))
+    assert (anil.status, anil.answered_by) == (VerificationStatus.CONFIRMED, "Dr S. Rao")
+    assert (await built.doctor.ask(_doctor_request("Sunil Pawar"))).status is VerificationStatus.DENIED
+    assert built.doctor_status is not None
+    row = built.doctor_status()
+    assert (row.name, row.mode) == ("doctor", IntegrationMode.SIMULATED)
+    assert "doctor" not in {s.name for s in built.statuses}  # the 15 never change
+    assert built.doctor.timeout_s == 90.0
+
+
+def test_the_doctor_desk_is_the_process_wide_one_unless_one_is_given() -> None:
+    assert build(offline()).doctor.desk is LIVE_DOCTOR_DESK  # type: ignore[attr-defined]
+    own = DoctorDesk()
+    built = registry.build_integrations(
+        offline(),
+        scheduler=FakeScheduler(ist(2025, 8, 19, 8, 0)),
+        step_handlers=RecordingHandlers(),
+        data_dir=DATA_DIR,
+        env={},
+        doctor_desk=own,
+    )
+    assert built.doctor.desk is own  # type: ignore[attr-defined]
+
+
+def test_the_dataclass_keeps_its_simulated_doctor_default() -> None:
+    field = registry.Integrations.__dataclass_fields__["doctor"]
+    assert isinstance(field.default_factory(), SimulatedDoctor)  # type: ignore[misc]
+    assert registry.Integrations.__dataclass_fields__["doctor_status"].default is None
+
+
+def test_the_doctor_timeout_is_configurable_within_bounds() -> None:
+    assert Settings(_env_file=None).chhatri_doctor_timeout_seconds == 90.0  # type: ignore[call-arg]
+    for bad in (0, -1, 601):
+        with pytest.raises(ValueError):
+            Settings(_env_file=None, chhatri_doctor_timeout_seconds=bad)  # type: ignore[call-arg]

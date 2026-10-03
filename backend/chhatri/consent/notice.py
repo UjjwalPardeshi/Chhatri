@@ -14,6 +14,9 @@ NOTICE_VERSION: Final = "notice-1"
 SALES: Final = "SALES_DATA_FOR_CLAIM"
 SLIP: Final = "SLIP_DATA_FOR_HOSPITAL_CLAIM"
 SETTLEMENT: Final = "SETTLEMENT_DEDUCTION"
+# Asking the treating doctor to confirm a hospital visit (SPEC §9.2). Not in PURPOSES yet:
+# the consent-centre list and its notice text are added with the chat step that asks for it.
+DOCTOR: Final = "DOCTOR_CONFIRMATION"
 PURPOSES: Final = (SALES, SLIP, SETTLEMENT)  # the fixed order of every list
 REQUIRED_TO_BUY: Final = frozenset({SALES, SETTLEMENT})
 SOURCES: Final = ("PAYMENT_APP", "PAYMENT_CHAT", "SLIP_UPLOAD", "SEEDED")

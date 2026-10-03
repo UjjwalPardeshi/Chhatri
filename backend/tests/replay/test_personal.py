@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import Any
 
 import pytest
 
@@ -214,3 +215,33 @@ async def test_case_workflow_callbacks_check_the_merchant_and_run_once(static: S
         "follow-up:C-2291", FOLLOW_UP, "check_case_sla", {"case_id": "C-2291"}
     )
     assert answer == {"step": "check_case_sla", "status": "skipped"}  # already scheduled in process
+
+
+async def test_the_doctor_is_asked_about_the_kyc_name_not_the_slips(static: StaticContext) -> None:
+    """The safety property the mismatch golden rests on (SPEC §9.2).
+
+    A denial is the one HARD way a medical claim can be turned down, so the question must never
+    carry a name an AI read off a photograph. If it did, a misread name would decline the claim
+    through a denial it had provoked itself, and the register here would supply exactly that: it
+    holds KEM's list for the day, and the misread name is not on it. The insured person is the
+    merchant, so the merchant is who the doctor is asked about.
+    """
+    rt = await loaded(static, "illness_mismatch", seek="11:21")
+    asked: list[str] = []
+    real = rt.integrations.doctor
+
+    class Recording:
+        async def ask(self, request: Any) -> Any:
+            asked.append(request.patient_name)
+            return await real.ask(request)
+
+    object.__setattr__(rt.integrations, "doctor", Recording())
+    await rt.conversation.handle_text(ANIL, "मैं अस्पताल में हूँ, बुखार है।")
+    await rt.conversation.handle_image(ANIL, slip_bytes(rt), "image/png", rt.ids.next("media"))
+
+    kyc_name = static.city.merchant(ANIL).kyc_name
+    [decision] = rt.store.decisions_for(ANIL)
+    slip = rt.store.claim(decision.claim_id).slip
+    assert slip is not None and slip.patient_name != kyc_name  # the AI read somebody else
+    assert asked == [kyc_name]
+    assert decision.outcome is DecisionOutcome.REFERRED  # the wrong name refers, it never declines

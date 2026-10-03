@@ -29,6 +29,19 @@ async function openHome(merchant: string, at: string | null, search = '?lang=en'
 
 const text = (id: string) => screen.getByTestId(id).textContent ?? ''
 
+describe('Home while the check-in waits for the slip (n3_slip_precheck)', () => {
+  it('offers "Send the slip photo" from the open check-in, and opens the slip sheet', async () => {
+    vi.stubEnv('VITE_FEATURES', 'n1_miniapp,n3_slip_precheck')
+    const kit = testApi()
+    backend = kit.backend
+    await kit.api.load('illness')
+    await kit.api.seek('11:30')
+    renderStandalone('/merchant/S-0142/app?lang=en', kit.backend)
+    await waitFor(() => expect(screen.getByTestId('app-nba').getAttribute('data-nba')).toBe('send_slip'))
+    expect(text('app-nba-action')).toBe('Send the slip photo')
+  })
+})
+
 describe('Home on a paid day (AC-07)', () => {
   it('says the cover sentence, the latest claim and why next', async () => {
     await openHome('S-0142', '17:05')

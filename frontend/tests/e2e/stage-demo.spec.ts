@@ -163,6 +163,8 @@ test('the 3-minute stage script, beat by beat', async ({ page }) => {
     await expect(fields).toContainText('Anil R. Jadhav')
     await expect(fields).toContainText('KEM Hospital, Parel')
     await expect(fields).toContainText('20 अगस्त')
+    await expect(fields).toContainText('Dr S. Rao')
+    await expect(fields).toContainText('MMC-2011-45817')
     for (const id of ['photo_readable', 'name_on_slip', 'dates_on_slip']) await expect(page.getByTestId(`slip-check-${id}`)).toHaveAttribute('data-state', 'PASS')
     if (LIVE_AI) {
       await expect(page.getByTestId('slip-footer')).toContainText('LIVE')
@@ -170,6 +172,9 @@ test('the 3-minute stage script, beat by beat', async ({ page }) => {
     } else await expect(page.getByTestId('slip-footer')).toContainText('SIMULATED')
     await expect(page.getByTestId('screen-slip')).not.toContainText(/confidence|\d+\s?%/i)
     await page.getByTestId('slip-confirm').click()
+    /** The doctor question (design 2.4): the merchant agrees that Dr S. Rao may be asked, then the claim opens. */
+    await expect(page.getByTestId('slip-consent-question')).toContainText('Dr S. Rao', { timeout: REPLAY_TIMEOUT_MS })
+    await page.getByTestId('slip-consent-yes').click()
     await expect(page).toHaveURL(/screen=claim&claim=CL-\d+/)
     await expect(page.getByTestId('claim-amount')).toContainText('₹1,500')
     await expect(page.getByTestId('claim-step-decided')).toContainText('मंज़ूर ₹1,500')
@@ -261,8 +266,9 @@ test('the spare 30 seconds: slide 8 live tests, a name mismatch goes to case C-2
     await expect(bubble(phone, 'Get well soon. Please send one photo of the hospital slip.')).toBeVisible({ timeout: REPLAY_TIMEOUT_MS })
     await phone.getByRole('button', { name: 'Send a photo' }).click()
     await phone.getByRole('menuitem', { name: 'Slip with a different name' }).click()
-    /** With the slip pre-check on (n3), the phone first asks "Is this slip right?"; one tap sends it on. */
-    await phone.getByRole('button', { name: 'Yes, this is right' }).click()
+    /** With the slip pre-check on (n3), the phone first asks "Is this slip right?", then whether the doctor may be asked. */
+    await phone.getByRole('button', { name: /Yes, this is right/ }).click()
+    await phone.getByRole('button', { name: /Yes, ask them/ }).click()
     await expect(bubble(phone, LINES.slipToHuman)).toBeVisible({ timeout: REPLAY_TIMEOUT_MS })
     await expect(phone.getByRole('link', { name: /case C-2291/ })).toBeVisible()
     await goTo(page, 'Claims')

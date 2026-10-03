@@ -104,7 +104,7 @@ def test_area_invalid_facts_rejected(kw: dict, message: str) -> None:
 def test_personal_approved_anil_1500() -> None:
     d = personal()
     assert (d.outcome, d.amount_paise) == (A, rupees(1500))
-    assert len(d.checks) == 9
+    assert len(d.checks) == 14
     assert d.explanation is not None
     assert d.explanation.formula_en == "½ × ₹4,380 = ₹2,190 a day, capped at ₹1,500 × 1 day = ₹1,500"
     assert d.explanation.weekday_en == "Wednesday"

@@ -45,6 +45,7 @@ SPEC_ROUTES: tuple[tuple[str, str, str | None], ...] = (
     ("POST", "/api/merchants/{merchant_id}/photo", None),
     ("POST", "/api/merchants/{merchant_id}/slip-precheck", None),
     ("POST", "/api/merchants/{merchant_id}/slip-precheck/{precheck_id}/confirm", None),
+    ("GET", "/api/merchants/{merchant_id}/slip-precheck/open", None),  # flag n3_slip_precheck
     ("GET", "/api/cases", None),
     ("GET", "/api/cases/{case_id}", None),
     ("POST", "/api/cases/{case_id}/approve", "officer"),
@@ -86,6 +87,16 @@ SPEC_ROUTES: tuple[tuple[str, str, str | None], ...] = (
         "/api/merchants/{merchant_id}/channel",
         None,
     ),  # officer token and flag telegram_channel; the token is tested in test_channel_route
+    (
+        "POST",
+        "/api/doctors/enrolment-links",
+        None,
+    ),  # officer token and flag telegram_channel; the token is tested in test_doctor_enrolment
+    (
+        "POST",
+        "/api/doctors/{registration_no}/enrolment-link/reset",
+        None,
+    ),  # officer token and flag telegram_channel; the token is tested in test_doctor_enrolment
 )
 EXAMPLES = {
     "{zone_id}": "Z7",
@@ -97,6 +108,7 @@ EXAMPLES = {
     "{precheck_id}": "PC-000001",
     "{consent_id}": "CN-000001",
     "{slip_id}": "MD-000001",
+    "{registration_no}": "MMC-2011-45817",
 }
 
 
@@ -111,7 +123,7 @@ def test_route_table_matches_spec_exactly(app: FastAPI) -> None:
         (method.upper(), path) for path, operations in app.openapi()["paths"].items() for method in operations
     }
     assert served == {(method, path) for method, path, _ in SPEC_ROUTES}
-    assert len(SPEC_ROUTES) == 60
+    assert len(SPEC_ROUTES) == 63
 
 
 @pytest.mark.parametrize(("method", "path"), [(m, p) for m, p, auth in SPEC_ROUTES if auth == "officer"])

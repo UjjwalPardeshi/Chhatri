@@ -16,13 +16,14 @@ from chhatri.integrations.demo_voice import DEMO_UTTERANCES
 
 __all__ = ["QUICK_REPLIES", "QUICK_REPLY_KEYS", "quick_reply_text"]
 
-# (callback id, button title): the ids are the keys of `DEMO_UTTERANCES`, so every button has a deck sentence.
-_WHY: Final = ("why", "Why this amount?")
-_DISPUTE: Final = ("dispute", "My loss was bigger")
-_ILL: Final = ("ill", "I am in hospital")
-# Outbound message key -> buttons it carries on Telegram (a payout card is where a merchant asks why, or disagrees).
+# (callback id, button title): the ids are the keys of `DEMO_UTTERANCES`, so every button has a deck sentence. Titles
+# are Hindi first, then English, like every line the merchant reads.
+_WHY: Final = ("why", "रकम क्यों? / Why this amount?")
+_DISPUTE: Final = ("dispute", "नुकसान ज़्यादा / My loss was bigger")
+# Outbound message key -> buttons it carries on Telegram (a payout card is where a merchant asks why, or disagrees;
+# "I am in hospital" is not offered under money that just arrived).
 QUICK_REPLIES: Final[Mapping[str, tuple[tuple[str, str], ...]]] = MappingProxyType(
-    {"PAYOUT_CARD": (_WHY, _DISPUTE, _ILL)}
+    {"PAYOUT_CARD": (_WHY, _DISPUTE)}
 )
 QUICK_REPLY_KEYS: Final = frozenset(
     callback_id for buttons in QUICK_REPLIES.values() for callback_id, _ in buttons

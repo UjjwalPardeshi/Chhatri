@@ -29,6 +29,7 @@ FORCEABLE: Final[frozenset[str]] = frozenset(
         "whatsapp",
         "telegram",
         "paytm",
+        "doctor",  # the treating doctor: forced, nobody answers and the claim goes to a person (design 2.9)
     }
 )
 

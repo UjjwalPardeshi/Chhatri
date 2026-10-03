@@ -114,6 +114,7 @@ const RULE_CASES: Case[] = [
   // Wave 2 and 3 rules, each behind its flag
   { name: 'S3 with the consent block incomplete', input: { screen: 'buy', cover: cover('NONE'), buy: { phase: 'idle', simulated: true, consent: { firstUnticked: 'buy-consent-SALES_DATA_FOR_CLAIM' } } }, id: 'tick_consent', kind: 'FOCUS' },
   { name: 'global 3: a personal claim waits for the slip', input: { screen: 'home', claims: [waitingForSlip], features: { slip: true } }, id: 'send_slip', kind: 'SEND_SLIP' },
+  { name: 'global 3: the check-in waits for the slip (GET slip-precheck/open)', input: { screen: 'home', slipOpen: true, features: { slip: true } }, id: 'send_slip', kind: 'SEND_SLIP' },
   { name: 'global 9: Ask Chhatri is on', input: { screen: 'home', features: { ask: true } }, id: 'ask', kind: 'ASK' },
 ]
 
@@ -197,6 +198,11 @@ describe('nextBestAction: the rules behind a flag', () => {
   it('opens the ask screen and the slip screen', () => {
     expect(run({ screen: 'help', features: { ask: true } }).target).toEqual({ type: 'screen', screen: 'ask' })
     expect(run({ screen: 'home', claims: [waitingForSlip], features: { slip: true } }).target).toEqual({ type: 'screen', screen: 'slip' })
+  })
+
+  it('offers the slip only with the pre-check on, while the check-in waits', () => {
+    expect(winner({ screen: 'home', slipOpen: true })).not.toBe('send_slip')
+    expect(winner({ screen: 'home', slipOpen: false, features: { slip: true } })).not.toBe('send_slip')
   })
 
   it('puts the slip before a paid claim, and a dispute before the slip', () => {

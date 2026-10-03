@@ -27,6 +27,7 @@ const SUBJECTS: Readonly<Record<string, string>> = Object.freeze({
   consent: 'Consent',
   cover: 'Cover',
   decision: 'Decision',
+  doctor: 'Doctor',
   grievance: 'Complaint',
   holiday_request: 'Instalment holiday request',
   instalment_pause: 'Instalment pause',
@@ -158,7 +159,7 @@ const DESCRIBERS: Readonly<Record<string, Describer>> = Object.freeze({
   'ask.answered': (data) => ({ text: `Answered a question from ${merchant(data)}`, detail: join(str(data.fallback_reason) ? 'safe fallback answer' : 'AI answer', data.handoff ? 'passed to a person' : null) }),
   'intent.detected': (data) => ({ text: `Understood a message from ${merchant(data)}`, detail: str(data.intent) ? words(String(data.intent)) : null }),
   'precheck.shown': (data) => ({ text: `Showed ${merchant(data)} the slip check`, detail: null }),
-  'precheck.confirmed': (data) => ({ text: `${sentence(merchant(data))} confirmed the slip details`, detail: null }),
+  'precheck.confirmed': precheckAnswer,
   'slip.read': (data) => ({ text: `Read the hospital slip from ${merchant(data)}`, detail: null }),
   'slip.erased': () => ({ text: 'Deleted the slip photo after reading it', detail: 'privacy' }),
   'voice.transcribed': (data) => ({ text: `Turned a voice note from ${merchant(data)} into text`, detail: null }),
@@ -171,6 +172,7 @@ const DESCRIBERS: Readonly<Record<string, Describer>> = Object.freeze({
   'grievance.escalate': (data) => ({ text: `Complaint of ${merchant(data)} escalated`, detail: null }),
   'grievance.resolve': (data) => ({ text: `Complaint of ${merchant(data)} resolved`, detail: null }),
   'consent.granted': (data) => ({ text: `${sentence(merchant(data))} gave consent`, detail: str(data.purpose) ? words(String(data.purpose)) : null }),
+  'consent.refused': (data) => ({ text: `${sentence(merchant(data))} said no`, detail: str(data.purpose) ? words(String(data.purpose)) : null }),
   'consent.withdrawn': (data) => ({ text: `${sentence(merchant(data))} withdrew consent`, detail: str(data.purpose) ? words(String(data.purpose)) : null }),
   'cover.quoted': (data) => ({ text: `Quoted a cover price for ${merchant(data)}`, detail: null }),
   'cover.cancelled': (data) => ({ text: `Cover of ${merchant(data)} cancelled`, detail: null }),
@@ -184,7 +186,27 @@ const DESCRIBERS: Readonly<Record<string, Describer>> = Object.freeze({
   'integration.fallback_set': (data, entry) => ({ text: data.forced ? `Switched ${words(entry.subject_id)} to its fallback` : `Put ${words(entry.subject_id)} back on its normal mode`, detail: null }),
   'telegram.bound': (data) => ({ text: `Linked a Telegram chat to ${merchant(data)}`, detail: null }),
   'telegram.unbound': (data) => ({ text: `Unlinked the Telegram chat of ${merchant(data)}`, detail: null }),
+  'doctor.asked': (data) => ({ text: 'Asked the treating doctor to confirm the visit', detail: str(data.doctor_registration_no) ? String(data.doctor_registration_no) : null }),
+  'doctor.answered': (data) => ({ text: 'The treating doctor answered', detail: str(data.status) ? words(String(data.status)) : null }),
+  'doctor.enrolled': (data) => ({ text: "Linked a doctor's Telegram chat", detail: str(data.registration_no) ? String(data.registration_no) : null }),
+  'doctor.unenrolled': (data) => ({ text: "Unlinked a doctor's Telegram chat", detail: str(data.registration_no) ? String(data.registration_no) : null }),
+  'doctor.enrolment_reset': (data) => ({ text: 'Made a new doctor enrolment link', detail: str(data.registration_no) ? String(data.registration_no) : null }),
 })
+
+/** The merchant's answer to the slip check (design 2.3): confirm, the doctor question, or the team. */
+function precheckAnswer(data: Readonly<Record<string, unknown>>): Described {
+  const who = sentence(merchant(data))
+  switch (data.action) {
+    case 'CONSENT_YES':
+      return { text: `${who} agreed that we may ask the doctor`, detail: null }
+    case 'CONSENT_NO':
+      return { text: `${who} said no to asking the doctor`, detail: null }
+    case 'SEND_TO_TEAM':
+      return { text: `${who} sent the slip to the team`, detail: null }
+    default:
+      return { text: `${who} confirmed the slip details`, detail: data.awaiting_consent ? 'asked about the doctor next' : null }
+  }
+}
 
 /** Who acted, in words: "Payout workflow", "Chhatri assistant", "Claims officer", "Merchant S-0142". */
 export function actorLabel(actor: string): string {
@@ -194,6 +216,7 @@ export function actorLabel(actor: string): string {
   if (kind === 'officer') return 'Claims officer'
   if (kind === 'merchant') return id ? `Merchant ${id}` : 'Merchant'
   if (kind === 'lender') return 'Lender'
+  if (kind === 'doctor') return id ? `Doctor ${id}` : 'Doctor'
   return sentence(words(actor))
 }
 

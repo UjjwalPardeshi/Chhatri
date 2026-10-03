@@ -136,6 +136,22 @@ _ENTRIES: Final[dict[str, Template]] = {
         "धन्यवाद। पर्ची साफ़ नहीं पढ़ी जा सकी" + _SLIP_HI_TAIL,
         "Thank you. We couldn't read the slip clearly" + _SLIP_EN_TAIL,
     ),
+    "SLIP_TO_HUMAN_HOSPITAL": Template(
+        "धन्यवाद। पर्ची पर लिखा अस्पताल हमारी सूची में नहीं मिला" + _SLIP_HI_TAIL,
+        "Thank you. We couldn't find that hospital in our directory" + _SLIP_EN_TAIL,
+    ),
+    "SLIP_TO_HUMAN_DOCTOR_MISSING": Template(
+        "धन्यवाद। पर्ची पर डॉक्टर का नाम या रजिस्ट्रेशन नंबर साफ़ नहीं है" + _SLIP_HI_TAIL,
+        "Thank you. The doctor's name or registration number isn't clear on the slip" + _SLIP_EN_TAIL,
+    ),
+    "SLIP_TO_HUMAN_CONSENT": Template(
+        "धन्यवाद। आप नहीं चाहते कि हम अस्पताल से पुष्टि करें" + _SLIP_HI_TAIL,
+        "Thank you. You'd rather we didn't confirm this with the hospital" + _SLIP_EN_TAIL,
+    ),
+    "SLIP_TO_HUMAN_DOCTOR": Template(
+        "धन्यवाद। डॉक्टर का जवाब अभी नहीं आया है" + _SLIP_HI_TAIL,
+        "Thank you. The doctor hasn't answered us yet" + _SLIP_EN_TAIL,
+    ),
     "SLIP_TO_HUMAN_DAYS": Template(
         "धन्यवाद। यह दावा अपने-आप भुगतान की दिनों की सीमा से लंबा है" + _SLIP_HI_TAIL,
         "Thank you. This claim covers more days than we pay automatically" + _SLIP_EN_TAIL,
@@ -199,6 +215,10 @@ _ENTRIES: Final[dict[str, Template]] = {
     "REASON_SILENCE_VERIFIED": Template(
         "हमारे रिकॉर्ड में उस दिन दुकान पूरे दिन बंद नहीं दिखी।",
         "Our records don't show your shop closed for that whole day.",
+    ),
+    "REASON_DOCTOR_NOT_DENIED": Template(
+        "अस्पताल ने बताया कि उस दिन आपका इलाज वहाँ नहीं हुआ।",
+        "The hospital told us you were not treated there on that day.",
     ),
     "REASON_NOT_ALREADY_PAID": Template(
         "उस दिन का भुगतान पहले ही हो चुका है।", "That day has already been paid."
@@ -278,6 +298,20 @@ _ENTRIES: Final[dict[str, Template]] = {
     "TRACK_REFERRED_DAYS": Template(
         "यह दावा अपने-आप भुगतान के दिनों से ज़्यादा दिनों का है।",
         "This claim covers more days than are paid automatically.",
+    ),
+    "TRACK_REFERRED_HOSPITAL": Template(
+        "पर्ची का अस्पताल हमारी सूची में नहीं मिला।", "That hospital is not in our directory."
+    ),
+    "TRACK_REFERRED_DOCTOR_MISSING": Template(
+        "पर्ची पर डॉक्टर की जानकारी अधूरी है।", "The doctor's details on the slip are incomplete."
+    ),
+    "TRACK_REFERRED_CONSENT": Template(
+        "अस्पताल से पुष्टि की अनुमति नहीं है, इसलिए हमारी टीम देख रही है।",
+        "We don't have your permission to confirm with the hospital, so our team is checking it.",
+    ),
+    "TRACK_REFERRED_DOCTOR": Template(
+        "डॉक्टर के जवाब का इंतज़ार है।",
+        "We are waiting for the doctor to answer.",
     ),
     "TRACK_PAID_ETA": Template(
         "लगभग {minutes} मिनट में जमा होगा (डेमो घड़ी)।", "Credit in about {minutes} minutes (demo clock)."
@@ -379,6 +413,26 @@ _ENTRIES: Final[dict[str, Template]] = {
         "Payouts in the past {window_days} days add up to {paid_total}. "
         "With this claim the total would pass the yearly limit of {annual_limit}.",
     ),
+    "CF_EXPLAIN_HOSPITAL_IDENTIFIED": Template(
+        "पर्ची पर लिखा अस्पताल हमारी सूची में नहीं मिला, इसलिए पुष्टि के लिए हम किसी से पूछ नहीं सके।",
+        "The hospital named on the slip is not one in our directory, so there was nobody to check with.",
+    ),
+    "CF_EXPLAIN_DOCTOR_IDENTIFIED": Template(
+        "पर्ची पर लिखे डॉक्टर का नाम उस अस्पताल की सूची में नहीं मिला, इसलिए पूछने के लिए कोई नहीं था।",
+        "The doctor named on the slip is not on that hospital's register, so there was nobody to ask.",
+    ),
+    "CF_EXPLAIN_VERIFICATION_CONSENT": Template(
+        "डॉक्टर से पूछने की आपकी अनुमति हमारे पास नहीं थी, इसलिए हमारी टीम यह दावा देखेगी।",
+        "We did not have your permission to ask the doctor, so our team will look at this claim.",
+    ),
+    "CF_EXPLAIN_DOCTOR_NOT_DENIED": Template(
+        "इलाज करने वाले डॉक्टर ने बताया कि उस तारीख की आपकी विज़िट उनके रिकॉर्ड में नहीं है।",
+        "The treating doctor told us they have no record of your visit on that date.",
+    ),
+    "CF_EXPLAIN_DOCTOR_CONFIRMED": Template(
+        "इलाज करने वाले डॉक्टर ने अभी तक पुष्टि नहीं की है, इसलिए हमारी टीम यह दावा देखेगी।",
+        "The treating doctor has not confirmed the visit yet, so our team will look at this claim.",
+    ),
     "CF_AMOUNT_ONE_POINT": Template(
         "इलाके की गिरावट एक प्रतिशत और होती, तो लगभग {delta} और जुड़ते।",
         "One more point of area drop would have added about {delta}.",
@@ -442,6 +496,10 @@ SLIP_TO_HUMAN_KEYS: Final[tuple[str, ...]] = (
     "SLIP_TO_HUMAN_DATES",
     "SLIP_TO_HUMAN_UNREADABLE",
     "SLIP_TO_HUMAN_DAYS",
+    "SLIP_TO_HUMAN_CONSENT",
+    "SLIP_TO_HUMAN_DOCTOR",
+    "SLIP_TO_HUMAN_HOSPITAL",
+    "SLIP_TO_HUMAN_DOCTOR_MISSING",
 )
 MONTHS_HI: Final[tuple[str, ...]] = (
     "जनवरी", "फ़रवरी", "मार्च", "अप्रैल", "मई", "जून",

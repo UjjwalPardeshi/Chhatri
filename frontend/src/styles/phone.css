@@ -667,6 +667,71 @@
   border: 0;
 }
 
+.precheck-actions__done,
+.precheck-actions__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+
+.precheck-actions__error {
+  color: var(--blocked);
+}
+
+/* What the slip reader saw, on every pre-check card (design 2.6): six fields and the checklist, no confidence. */
+.precheck-fields {
+  margin-top: var(--s-2, 8px);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+
+.precheck-fields__list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--s-2, 8px);
+  margin: 0;
+}
+
+.precheck-fields__row {
+  display: contents;
+}
+
+.precheck-fields__row dt {
+  color: var(--ink-3);
+}
+
+.precheck-fields__row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.precheck-fields__row dd.muted {
+  font-weight: 400;
+}
+
+.precheck-fields__checks {
+  margin: var(--s-1, 4px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.precheck-fields__checks li[data-state='WARN'] {
+  color: var(--referred-ink);
+}
+
+.doctor-tag {
+  display: inline-block;
+  margin-right: var(--s-1, 4px);
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--decided);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+}
+
 /* Telegram (flag telegram_channel): the same phone in Telegram's colours, the bot named in the header. */
 .phone--telegram {
   --wa-header: #517da2;

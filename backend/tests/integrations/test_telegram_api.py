@@ -179,3 +179,16 @@ def test_the_client_needs_a_token_and_never_shows_it() -> None:
 
 def test_httpx_request_logging_is_kept_below_info_because_urls_carry_the_token() -> None:
     assert logging.getLogger("httpx").level >= logging.WARNING
+
+
+async def test_a_429_waits_what_telegram_asks_capped_at_ten_seconds() -> None:
+    answers = iter(
+        [
+            httpx.Response(429, json={"ok": False, "error_code": 429, "parameters": {"retry_after": 30}}),
+            httpx.Response(200, json={"ok": True, "result": {"message_id": 5}}),
+        ]
+    )
+    sleeps = SleepRecorder()
+    client = TelegramBotClient(TOKEN, transport=httpx.MockTransport(lambda _r: next(answers)), sleep=sleeps)
+    assert await client.send_message(1, "hi") == 5
+    assert sleeps.delays == [10.0]

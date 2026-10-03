@@ -10,6 +10,7 @@
 | n8n       | N8N_BASE_URL                                                        | in-process runner           |
 | memory    | COGNEE_ENABLED + cognee installed + LLM configured                  | networkx graph              |
 | weather   | OPENMETEO_LIVE (live widget only; replay reads fixtures)            | cached real fixtures        |
+| doctor    | Telegram live and polling + flag + a doctor chat enrolled by the officer's link | stage attendance register |
 
 WhatsApp without a demo recipient cannot send anything live (SPEC §14.2 recipient safety), so it is
 reported SIMULATED rather than LIVE. In simulated mode `chat` is None: the conversation uses its
@@ -30,7 +31,7 @@ reader) are the labelled chains that cards 4.2 to 4.4 call; the BUILT flows stil
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -40,6 +41,7 @@ from chhatri.config import Settings
 from chhatri.domain.models import Loan
 from chhatri.integrations.base import (
     ChatModel,
+    DoctorVerifier,
     IntegrationStatus,
     Lender,
     MemoryGraph,
@@ -54,6 +56,8 @@ from chhatri.integrations.base import (
 )
 from chhatri.integrations.chat_chain import ChatChain, build_chat_chain
 from chhatri.integrations.demo_voice import DEMO_UTTERANCES, DemoUtterance, demo_voice_note
+from chhatri.integrations.doctor import SimulatedDoctor
+from chhatri.integrations.doctor_telegram import build_doctor
 from chhatri.integrations.free_tier import GATE_CLOSED_DETAIL
 from chhatri.integrations.gemini_chat import LiveGeminiChat
 from chhatri.integrations.gemini_client import INTERACTIVE_POLICY
@@ -93,9 +97,11 @@ from chhatri.integrations.switched import (
     SwitchedWorkflows,
 )
 from chhatri.integrations.telegram import build_telegram
+from chhatri.integrations.telegram_health import TELEGRAM_HEALTH
 from chhatri.integrations.telegram_sim import TelegramSimulatorChannel
 from chhatri.integrations.whatsapp import InboundGate, LiveWhatsAppChannel, SimulatorChannel
 from chhatri.policy.rules import PolicyRules, default_rules
+from chhatri.store.doctor_chats import LIVE_DOCTOR_DESK, DoctorDesk
 from chhatri.store.telegram_bindings import LIVE_TELEGRAM_BINDINGS, TelegramBindings
 from chhatri.workflows.definitions import Scheduler, StepHandlers, build_workflows
 from chhatri.workflows.runner import InProcessWorkflowEngine, N8nWorkflowEngine
@@ -138,6 +144,12 @@ class Integrations:
     telegram: MessagingChannel = field(default_factory=TelegramSimulatorChannel)
     telegram_statuses: tuple[IntegrationStatus, ...] = ()
     telegram_bindings: TelegramBindings = field(default_factory=lambda: LIVE_TELEGRAM_BINDINGS)
+    # The treating doctor who confirms a medical claim (SPEC §9.2). Simulated by default with an
+    # empty attendance register, so nothing is confirmed until the stage fixtures seed it.
+    doctor: DoctorVerifier = field(default_factory=SimulatedDoctor)
+    # Its status row `doctor` (design 2.9), read at request time: LIVE while an enrolled doctor would be asked on
+    # Telegram, SIMULATED (the stage register) otherwise, FALLBACK while X6 forces it. None: no row.
+    doctor_status: Callable[[], IntegrationStatus] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -386,12 +398,15 @@ def build_integrations(
     loans: Mapping[str, Loan] | None = None,
     switch: FallbackSwitch | None = None,
     telegram_bindings: TelegramBindings | None = None,
+    doctor_desk: DoctorDesk | None = None,
 ) -> Integrations:
     """SPEC §24.5 builder; `rules` defaults to rules.yaml, `env` to the process environment and
     `whatsapp_gate` to the process-wide `LIVE_WHATSAPP_GATE`. `loans` is the city's loan book by merchant: the
     simulated lender's own records (X4). Without it the lender knows no loan and every request is refused.
     `switch` is the X6 demo switch, the process-wide one by default. `telegram_bindings` are the Telegram chats bound to
-    demo merchants, the process-wide ones by default (a chat outlives a scenario load)."""
+    demo merchants, the process-wide ones by default (a chat outlives a scenario load). `doctor_desk` holds the doctors'
+    enrolled chats and open questions, the process-wide `LIVE_DOCTOR_DESK` by default: `doctor` asks an enrolled doctor
+    on Telegram and otherwise answers from the stage attendance register (design 2.9)."""
     switch = PROCESS_SWITCH if switch is None else switch
     speech = build_speech(settings, switch)
     gate_open = settings.chhatri_data_is_synthetic
@@ -408,6 +423,12 @@ def build_integrations(
         settings, scheduler, step_handlers, rules or default_rules(), switch
     )
     memory, memory_status = build_memory(settings, os.environ if env is None else env)
+    doctor = build_doctor(
+        settings,
+        switch=switch,
+        desk=LIVE_DOCTOR_DESK if doctor_desk is None else doctor_desk,
+        health=TELEGRAM_HEALTH,
+    )
     soundbox_detail = "no public Soundbox API; shown in console" + (
         ", voiced by Sarvam" if settings.sarvam_live and gate_open else ""
     )
@@ -454,4 +475,6 @@ def build_integrations(
             forced_source=lambda: switch.forced,
         ),
         switch=switch,
+        doctor=doctor,
+        doctor_status=doctor.status,
     )

@@ -138,3 +138,41 @@ def test_mask_phone() -> None:
     assert mask_phone("+919812345678") == "+91•••••45678"
     assert mask_phone(None) == "<none>"
     assert mask_phone("123") == "•••••"
+
+
+# ------------------------------------------------------------------ 429 Retry-After (Telegram passes a 10 s cap)
+
+
+def _rate_limited_then_ok(response_429: httpx.Response) -> httpx.MockTransport:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return response_429 if calls["n"] == 1 else httpx.Response(200, json={"ok": True})
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.parametrize(
+    ("response", "cap", "waited"),
+    [
+        (httpx.Response(429, headers={"Retry-After": "3"}), 10.0, 3.0),
+        (httpx.Response(429, json={"ok": False, "parameters": {"retry_after": 30}}), 10.0, 10.0),
+        (httpx.Response(429, json={"ok": False, "parameters": {"retry_after": 0.1}}), 10.0, 0.5),
+        (httpx.Response(429, headers={"Retry-After": "3"}), 0.0, 0.5),  # every other adapter: unchanged
+        (httpx.Response(429, text="not json"), 10.0, 0.5),
+    ],
+)
+async def test_retry_after_is_honoured_up_to_the_cap(
+    response: httpx.Response, cap: float, waited: float, sleeps: SleepRecorder
+) -> None:
+    async with httpx.AsyncClient(transport=_rate_limited_then_ok(response)) as client:
+        answer = await http_request(
+            client, "POST", "https://example.test/x", integration="t", sleep=sleeps, retry_after_cap_s=cap
+        )
+    assert answer.status_code == 200 and sleeps.delays == [waited]
+
+
+def test_a_429_error_carries_its_retry_after() -> None:
+    assert HttpStatusError("t", 429, retry_after_s=3.0).retry_after_s == 3.0
+    assert HttpStatusError("t", 500).retry_after_s is None

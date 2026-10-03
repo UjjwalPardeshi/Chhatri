@@ -4,6 +4,10 @@ Every live client: timeouts (10 s default, 60 s for Sarvam doc-ai), retries **on
 5xx with exponential backoff, at most `RetryPolicy.max_attempts` attempts (3), never logs secrets and
 raises `IntegrationError` with a safe message (status codes and exception type names only — never a
 provider body, URL with credentials or header value).
+
+A 429 may say how long to wait (`Retry-After` header, or Telegram's JSON `parameters.retry_after`). A caller that
+passes `retry_after_cap_s` > 0 (Telegram: 10 s) then waits `max(backoff, min(retry_after, cap))` before the next
+attempt; with the default 0 every other adapter keeps the plain backoff.
 """
 
 from __future__ import annotations
@@ -37,9 +41,10 @@ Sleep = Callable[[float], Awaitable[None]]
 class HttpStatusError(IntegrationError):
     """The provider answered with a non-2xx status (the request reached it)."""
 
-    def __init__(self, integration: str, status: int) -> None:
+    def __init__(self, integration: str, status: int, *, retry_after_s: float | None = None) -> None:
         super().__init__(integration, status_message(status), retryable=is_retryable_status(status))
         self.status = status
+        self.retry_after_s = retry_after_s  # what a 429 asked us to wait, when it said
 
 
 class ConnectionFailed(IntegrationError):
@@ -86,12 +91,38 @@ def status_message(status: int) -> str:
     return f"request rejected (HTTP {status})"
 
 
+def retry_after_s(response: httpx.Response) -> float | None:
+    """Seconds a 429 asks to wait: the `Retry-After` header (seconds), else JSON `parameters.retry_after`."""
+    header = response.headers.get("retry-after")
+    if header is not None:
+        try:
+            return max(0.0, float(header))
+        except ValueError:
+            return None
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    parameters = body.get("parameters") if isinstance(body, dict) else None
+    value = parameters.get("retry_after") if isinstance(parameters, dict) else None
+    return float(value) if isinstance(value, int | float) and value >= 0 else None
+
+
+def _delay(policy: RetryPolicy, attempt: int, exc: IntegrationError, cap_s: float) -> float:
+    delay = policy.delay_after(attempt)
+    asked = exc.retry_after_s if isinstance(exc, HttpStatusError) else None
+    if cap_s > 0 and asked is not None:
+        return max(delay, min(asked, cap_s))
+    return delay
+
+
 async def with_retry[T](
     operation: Callable[[], Awaitable[T]],
     *,
     integration: str,
     policy: RetryPolicy = DEFAULT_RETRY,
     sleep: Sleep = asyncio.sleep,
+    retry_after_cap_s: float = 0.0,
 ) -> T:
     """Run `operation`, retrying only `IntegrationError(retryable=True)` up to the policy limit."""
     for attempt in range(1, policy.max_attempts + 1):
@@ -100,7 +131,7 @@ async def with_retry[T](
         except IntegrationError as exc:
             if not exc.retryable or attempt == policy.max_attempts:
                 raise
-            delay = policy.delay_after(attempt)
+            delay = _delay(policy, attempt, exc, retry_after_cap_s)
             logger.warning(
                 "%s: attempt %d/%d failed (%s); retrying in %.2fs",
                 integration,
@@ -121,6 +152,7 @@ async def http_request(
     integration: str,
     policy: RetryPolicy = DEFAULT_RETRY,
     sleep: Sleep = asyncio.sleep,
+    retry_after_cap_s: float = 0.0,
     **kwargs: Any,
 ) -> httpx.Response:
     """One logical HTTP call with SPEC §14 retry semantics; returns only 2xx/3xx responses."""
@@ -134,11 +166,15 @@ async def http_request(
             raise ConnectionFailed(integration) from exc
         except httpx.HTTPError as exc:
             raise IntegrationError(integration, f"transport error ({type(exc).__name__})") from exc
+        if response.status_code == HTTP_TOO_MANY_REQUESTS:
+            raise HttpStatusError(integration, response.status_code, retry_after_s=retry_after_s(response))
         if response.status_code >= HTTP_CLIENT_ERROR_MIN:
             raise HttpStatusError(integration, response.status_code)
         return response
 
-    return await with_retry(attempt, integration=integration, policy=policy, sleep=sleep)
+    return await with_retry(
+        attempt, integration=integration, policy=policy, sleep=sleep, retry_after_cap_s=retry_after_cap_s
+    )
 
 
 def json_object(response: httpx.Response, *, integration: str) -> Mapping[str, Any]:

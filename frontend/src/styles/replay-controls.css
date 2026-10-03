@@ -118,8 +118,35 @@
 }
 
 .seek {
+  position: relative;
   display: flex;
   gap: 4px;
+}
+
+/* What to type, in Hindi and English, under the seek box (a time outside the window or not HH:MM). */
+.seek__problem {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--z-toast);
+  width: max-content;
+  max-width: min(320px, 80vw);
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border: 1px solid var(--red-line);
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  white-space: normal;
+  box-shadow: var(--shadow-lg);
+}
+
+.control-bar__error .seek__problem {
+  position: static;
+  width: auto;
+  margin: 0;
 }
 
 .seek__input {

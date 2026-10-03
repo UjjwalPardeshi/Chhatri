@@ -24,8 +24,10 @@ from chhatri.integrations.chat_chain import ChatChain
 __all__ = ["ModelOutcome", "SCHEMA", "SCHEMA_NAME", "accept_reply", "ask_model", "build_system_prompt"]
 
 SCHEMA_NAME: Final = "ask_answer"
-LINK_TIMEOUT_S: Final = 3.0
-TOTAL_TIMEOUT_S: Final = 5.0
+# Demo-day L3: gemini-3.5-flash-lite measured 1.2-3 s per chat answer, on the edge of a 3 s link; 4 s per link and 7 s
+# in all leave the backup model about 3 s. A timeout is still labelled FALLBACK / TIMEOUT by the chain.
+LINK_TIMEOUT_S: Final = 4.0
+TOTAL_TIMEOUT_S: Final = 7.0
 MAX_CLAUSE_IDS: Final = 4
 MAX_FACT_KEYS: Final = 8
 MAX_TEXT: Final = 600

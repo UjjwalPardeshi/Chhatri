@@ -4,17 +4,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 import pytest
 
 from chhatri.integrations.base import IntegrationError
+from chhatri.integrations.retry import ConnectionFailed, HttpStatusError
 from chhatri.integrations.telegram_api import TelegramBotClient
+from chhatri.integrations.telegram_health import TELEGRAM_HEALTH, TelegramHealth
 from chhatri.integrations.telegram_poller import Backoff, TelegramPoller
 from chhatri.integrations.telegram_updates import TgEvent, TgText
 from tests.fake_telegram import TOKEN, FakeBotApi, text_update
 from tests.integrations.conftest import SleepRecorder
+
+
+@pytest.fixture(autouse=True)
+def _healthy() -> Iterator[None]:
+    """The process-wide Telegram health starts and ends clean in every test of this file."""
+    TELEGRAM_HEALTH.reset()
+    yield
+    TELEGRAM_HEALTH.reset()
 
 
 class ScriptedSource:
@@ -215,3 +225,40 @@ def test_backoff_validates_and_caps() -> None:
 
 def test_the_text_event_type_is_exported_for_handlers() -> None:
     assert issubclass(TgText, TgEvent)
+
+
+# ------------------------------------------------------------------ health: the status row stops reading LIVE in an outage
+
+
+async def test_a_409_poll_is_an_outage_at_once() -> None:
+    health = TelegramHealth()
+    source = ScriptedSource(HttpStatusError("telegram", 409))
+    poller = TelegramPoller(source, Collector(), sleep=SleepRecorder(), health=health)
+    await run_until_idle(poller, source)
+    outage = health.outage()
+    assert outage is not None and outage.kind == "CONFLICT"
+    await poller.stop()
+
+
+async def test_a_good_poll_clears_the_outage() -> None:
+    health = TelegramHealth()
+    source = ScriptedSource(HttpStatusError("telegram", 409), [])
+    poller = TelegramPoller(source, Collector(), sleep=SleepRecorder(), health=health)
+    await run_until_idle(poller, source)
+    assert health.outage() is None
+    await poller.stop()
+
+
+async def test_poll_outcomes_are_recorded() -> None:
+    health = TelegramHealth()
+    poller = TelegramPoller(ScriptedSource(), Collector(), sleep=SleepRecorder(), health=health)
+    poller._record_failure(HttpStatusError("telegram", 401))
+    outage = health.outage()
+    assert outage is not None and outage.kind == "AUTH"
+    poller._record_ok()
+    assert health.outage() is None
+    poller._record_failure(ConnectionFailed("telegram"))
+    assert health.outage() is None  # one network blip is not an outage
+    poller._record_failure(ConnectionFailed("telegram"))
+    outage = health.outage()
+    assert outage is not None and outage.kind == "NETWORK"

@@ -57,6 +57,17 @@
   overflow: clip;
 }
 
+/* "Show earlier entries" under the newest page of a long run. */
+.audit-earlier {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  font-size: var(--fs-sm);
+}
+
 .audit-table td {
   font-size: var(--fs-xs);
   white-space: nowrap;

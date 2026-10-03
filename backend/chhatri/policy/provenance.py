@@ -63,6 +63,11 @@ CHECK_SOURCE_KINDS: Final[Mapping[CheckCode, tuple[SourceKind, ...]]] = MappingP
         _C.SLIP_READABLE: (_K.SLIP, _K.RULES),
         _C.NAME_MATCHES_KYC: (_K.SLIP, _K.KYC, _K.RULES),
         _C.DATES_MATCH: (_K.SLIP, _K.SALES_DAY),
+        _C.HOSPITAL_IDENTIFIED: (_K.SLIP,),
+        _C.DOCTOR_IDENTIFIED: (_K.SLIP,),
+        _C.VERIFICATION_CONSENT: (_K.DOCTOR,),
+        _C.DOCTOR_NOT_DENIED: (_K.DOCTOR,),
+        _C.DOCTOR_CONFIRMED: (_K.DOCTOR,),
         _C.WITHIN_AUTO_LIMIT: (_K.RULES,),
         _C.NOT_ALREADY_PAID: (_K.PAYOUT_HISTORY,),
         _C.WITHIN_ANNUAL_LIMIT: (_K.PAYOUT_HISTORY, _K.RULES),
@@ -81,6 +86,11 @@ CHECK_CLAUSE: Final[Mapping[CheckCode, str]] = MappingProxyType(
         _C.SLIP_READABLE: "C3",
         _C.NAME_MATCHES_KYC: "C3",
         _C.DATES_MATCH: "C3",
+        _C.HOSPITAL_IDENTIFIED: "C3",
+        _C.DOCTOR_IDENTIFIED: "C3",
+        _C.VERIFICATION_CONSENT: "C3",
+        _C.DOCTOR_NOT_DENIED: "C3",
+        _C.DOCTOR_CONFIRMED: "C3",
         _C.WITHIN_AUTO_LIMIT: "C3",
         _C.NOT_ALREADY_PAID: "C7",
         _C.WITHIN_ANNUAL_LIMIT: "C4",
@@ -297,8 +307,29 @@ def _payout_history(ctx: _Ctx, clause: str) -> list[Source]:
     ]
 
 
+def _doctor(ctx: _Ctx, clause: str) -> list[Source]:
+    """The directory record and the doctor's own answer — never anything printed on the slip."""
+    facts = ctx.facts
+    doctor = getattr(facts, "doctor", None)
+    verification = getattr(facts, "verification", None)
+    if doctor is None:
+        return []
+    status = verification.status.value if verification is not None else "NOT_ASKED"
+    return [
+        Source(
+            kind=SourceKind.DOCTOR,
+            label=f"{doctor.name}, {status.lower().replace('_', ' ')}",
+            ref=f"doctor:{doctor.registration_no}",
+            as_of=verification.answered_at if verification is not None else None,
+            origin=SourceOrigin.SIMULATED,
+            clause=clause,
+        )
+    ]
+
+
 _MAKERS: Final[Mapping[SourceKind, Maker]] = MappingProxyType(
     {
+        _K.DOCTOR: _doctor,
         _K.ALERT: _alert,
         _K.SALES_INDEX: _sales_index,
         _K.ZONE_BOUND: _zone_bound,

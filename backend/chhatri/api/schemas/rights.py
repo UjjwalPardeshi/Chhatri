@@ -12,17 +12,22 @@ from typing import Annotated, Final, Literal
 from pydantic import Field
 
 from chhatri.api.schemas.ask import AttemptView
-from chhatri.api.schemas.base import AwareTimestamp, Schema
-from chhatri.api.schemas.records import Message
+from chhatri.api.schemas.base import AwareTimestamp, Schema, absent
+from chhatri.api.schemas.records import Message, MessageCard, MessageMeta
 
 __all__ = [
     "ConsentActivityItem",
+    "ConsentCard",
     "ConsentItem",
     "ConsentWithdrawal",
     "Grievance",
     "PrecheckConfirmation",
+    "PrecheckConsent",
+    "PrecheckDoctorCheck",
+    "PrecheckOpen",
     "PrecheckView",
     "SlipForgetResult",
+    "StepMessage",
 ]
 
 PRECHECK_ID_PATTERN: Final = r"^PC-\d{6,}$"
@@ -87,7 +92,7 @@ class PrecheckView(Schema):
 
     precheck_id: str = Field(pattern=PRECHECK_ID_PATTERN)
     merchant_id: str = Field(pattern=MERCHANT_ID_PATTERN)
-    status: Literal["READY", "RETAKE", "NEEDS_TEAM", "SUPERSEDED", "CONFIRMED"]
+    status: Literal["READY", "RETAKE", "NEEDS_TEAM", "SUPERSEDED", "CONFIRMED", "AWAITING_CONSENT"]
     attempt: int = Field(ge=1)
     retakes_left: int = Field(ge=0)
     media_id: str
@@ -103,6 +108,7 @@ class PrecheckView(Schema):
             "LOW_CONFIDENCE",
             "NAME_MISSING",
             "DATES_NOT_CLEAR",
+            "DOCTOR_MISSING",
         ]
         | None
     )
@@ -116,17 +122,83 @@ class PrecheckView(Schema):
     attempts: list[AttemptView]
 
 
+class PrecheckConsent(Schema):
+    """The doctor question of a pre-check and the merchant's answer (rule personal.require_doctor_confirmation)."""
+
+    purpose: Literal["doctor_verification"]
+    status: Literal["ASKED", "GIVEN", "REFUSED"]
+    precheck_id: str = Field(pattern=PRECHECK_ID_PATTERN)
+    doctor_name: str | None
+    hospital_name: str | None
+    question_hi: str
+    question_en: str
+    answered_at: AwareTimestamp | None
+
+
+class PrecheckDoctorCheck(Schema):
+    status: Literal["PENDING"]
+    doctor_name: str | None
+    hospital_name: str | None
+
+
+class ConsentCardAction(Schema):
+    kind: Literal["CONSENT_YES", "CONSENT_NO"]
+    label_hi: str
+    label_en: str
+
+
+class ConsentCard(Schema):
+    """The card of the doctor question (DOCTOR_CONSENT_ASK[_GENERIC]): the console draws its two buttons."""
+
+    consent_for: str = Field(pattern=PRECHECK_ID_PATTERN)
+    purpose: Literal["doctor_verification"]
+    doctor_name: str | None
+    hospital_name: str | None
+    actions: list[ConsentCardAction] = Field(min_length=2, max_length=2)
+
+
+class StepMessageMeta(MessageMeta):
+    """`meta` of the messages a confirm step sends: the doctor question and the doctor-check lines."""
+
+    precheck_id: absent(str) = None
+    consent_purpose: absent(Literal["doctor_verification"]) = None
+    doctor_check: absent(Literal["STARTED", "ASKED", "CONFIRMED"]) = None
+    doctor_name: absent(str) = None
+    hospital_name: absent(str) = None
+    mode: absent(Mode) = None
+    provider: absent(str) = None
+
+
+class StepMessage(Message):
+    """A §19.2 message sent by a confirm step: the payout-card shape, or the doctor question's card."""
+
+    card: MessageCard | ConsentCard | None
+    meta: StepMessageMeta
+
+
 class PrecheckConfirmation(Schema):
-    """POST /api/prechecks/{id}/confirm: the claim and decision the confirmed pre-check made."""
+    """POST /api/merchants/{id}/slip-precheck/{pc}/confirm: the doctor question (nothing filed) or the filed claim."""
 
     precheck_id: str = Field(pattern=PRECHECK_ID_PATTERN)
-    status: Literal["CONFIRMED"]
+    status: Literal["CONFIRMED", "AWAITING_CONSENT"]
     confirmed_as: Literal["FIELDS_CONFIRMED", "SENT_TO_TEAM"]
-    claim_id: str
-    decision_id: str
-    outcome: str
+    claim_id: str | None
+    decision_id: str | None
+    outcome: Literal["APPROVED", "REFERRED", "DECLINED"] | None
     case_id: str | None
-    messages: list[Message]
+    messages: list[StepMessage]
+    consent: PrecheckConsent | None
+    doctor_check: PrecheckDoctorCheck | None
+
+
+class PrecheckOpen(Schema):
+    """GET /api/merchants/{id}/slip-precheck/open: what waits for the merchant now."""
+
+    merchant_id: str = Field(pattern=MERCHANT_ID_PATTERN)
+    checkin_open: bool
+    first_silent_day: str | None = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    precheck: PrecheckView | None
+    awaiting_consent: PrecheckConsent | None
 
 
 # --- 5.4 grievances -----------------------------------------------------------------------------------------------

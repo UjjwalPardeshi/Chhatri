@@ -76,6 +76,11 @@ RESULT_KEY: Final = {
 EXPLAIN_KEY: Final = {
     CheckCode.NOT_ALREADY_PAID: "CF_EXPLAIN_NOT_ALREADY_PAID",
     CheckCode.WITHIN_ANNUAL_LIMIT: "CF_EXPLAIN_WITHIN_ANNUAL_LIMIT",
+    CheckCode.HOSPITAL_IDENTIFIED: "CF_EXPLAIN_HOSPITAL_IDENTIFIED",
+    CheckCode.DOCTOR_IDENTIFIED: "CF_EXPLAIN_DOCTOR_IDENTIFIED",
+    CheckCode.VERIFICATION_CONSENT: "CF_EXPLAIN_VERIFICATION_CONSENT",
+    CheckCode.DOCTOR_NOT_DENIED: "CF_EXPLAIN_DOCTOR_NOT_DENIED",
+    CheckCode.DOCTOR_CONFIRMED: "CF_EXPLAIN_DOCTOR_CONFIRMED",
 }
 _FLIP_KINDS: Final = {
     DecisionOutcome.DECLINED: CounterfactualKind.FLIP_FROM_DECLINED,
@@ -307,6 +312,13 @@ FLIP_TABLE: Final[Mapping[CheckCode, FlipFn | None]] = MappingProxyType(
         CheckCode.NAME_MATCHES_KYC: _flip_name_matches_kyc,
         CheckCode.DATES_MATCH: _flip_dates_match,
         CheckCode.WITHIN_AUTO_LIMIT: _flip_within_auto_limit,
+        # A confirmation cannot honestly be counterfactualised: "if the doctor had said yes" is not
+        # a fact about the claim, it is a different claim. Same for consent and the directory.
+        CheckCode.HOSPITAL_IDENTIFIED: None,
+        CheckCode.DOCTOR_IDENTIFIED: None,
+        CheckCode.VERIFICATION_CONSENT: None,
+        CheckCode.DOCTOR_NOT_DENIED: None,
+        CheckCode.DOCTOR_CONFIRMED: None,
         CheckCode.NOT_ALREADY_PAID: None,
         CheckCode.WITHIN_ANNUAL_LIMIT: None,
     }

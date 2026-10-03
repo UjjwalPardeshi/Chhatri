@@ -8,6 +8,7 @@ from datetime import timedelta
 import pytest
 
 from chhatri.ai.labels import AiMode, AiProvider, FallbackReason
+from chhatri.ask import model_path
 from chhatri.ask.service import MentionsUnconfirmed, UnknownSpeechResult, VoiceQuestion
 from chhatri.clock import at
 from tests.api.fake_services import DAY
@@ -297,3 +298,8 @@ def test_the_clock_gives_the_chips_their_dates() -> None:
     rig = make_rig()
     [mention] = rig.service.mentions_of("yesterday")
     assert mention.value_date == at(DAY, 0).date() - timedelta(days=1)
+
+
+def test_the_model_budget_fits_the_measured_chat_latency() -> None:
+    """Demo-day L3: gemini-3.5-flash-lite answers chat in 1.2-3 s, so a 3 s link timed out; 7 s leaves the backup ~3 s."""
+    assert (model_path.LINK_TIMEOUT_S, model_path.TOTAL_TIMEOUT_S) == (4.0, 7.0)

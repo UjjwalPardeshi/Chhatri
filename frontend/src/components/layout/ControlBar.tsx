@@ -3,12 +3,12 @@
  * play/pause, speed (1–120 simulated minutes per real second), step, seek HH:MM, reset, the
  * "Slow near payout" switch, and the scrubber with the scenario's chapters underneath.
  */
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
-import { isHhmm, MAX_SPEED, MIN_SPEED } from '../../api/endpoints'
+import { MAX_SPEED, MIN_SPEED } from '../../api/endpoints'
 import { SCENARIO_NAMES, type ClockState, type ScenarioName } from '../../api/types'
-import { hhmm, minutesBetween } from '../../lib/time'
+import { minutesBetween } from '../../lib/time'
 import { useLive } from '../../state/live'
 import { useSlowNearPayout, type SlowNearPayout } from '../../state/useSlowNearPayout'
 import { Icon } from '../common/Icon'
@@ -17,6 +17,7 @@ import { Feature } from '../common/Feature'
 import { ClockLabel } from './ClockLabel'
 import { PresenterKeysButton } from './PresenterControls'
 import { Scrubber } from './Scrubber'
+import { friendlyReplayError, SeekForm, SeekLineText } from './SeekForm'
 import { usePresenterKeys } from './usePresenterKeys'
 
 export { clockParts, splitClockLabel } from './ClockLabel'
@@ -43,42 +44,6 @@ export function progressPct(clock: ClockState): number {
   const done = minutesBetween(clock.start, clock.now)
   if (!span || done === null) return 0
   return Math.min(FULL_PCT, Math.max(0, (done / span) * FULL_PCT))
-}
-
-function SeekForm({ clock, onSeek, busy }: { clock: ClockState; onSeek: (to: string) => void; busy: boolean }) {
-  const [value, setValue] = useState('')
-  const [invalid, setInvalid] = useState(false)
-  const submit = (event: FormEvent) => {
-    event.preventDefault()
-    const to = value.trim()
-    if (!isHhmm(to)) {
-      setInvalid(true)
-      return
-    }
-    setInvalid(false)
-    onSeek(to)
-  }
-  return (
-    <form className="seek" onSubmit={submit}>
-      <label className="visually-hidden" htmlFor="seek-input">
-        Seek to time (HH:MM)
-      </label>
-      <input
-        id="seek-input"
-        className={`input seek__input ${invalid ? 'is-invalid' : ''}`}
-        value={value}
-        placeholder="HH:MM"
-        inputMode="numeric"
-        maxLength={5}
-        aria-invalid={invalid}
-        title={`Seek between ${hhmm(clock.start)} and ${hhmm(clock.end)} (HH:MM)`}
-        onChange={(event) => setValue(event.target.value)}
-      />
-      <button type="submit" className="btn" disabled={busy}>
-        Seek
-      </button>
-    </form>
-  )
 }
 
 /** Rendered twice: beside the scrubber on wide screens, inside the "More" popover on phones (CSS). */
@@ -164,6 +129,25 @@ function Transport({ clock, busy, speed, slow, onSpeed }: TransportProps) {
   )
 }
 
+/** A failed replay control: a refused seek in plain words (Hindi and English), anything else as the API said it. */
+function ReplayError({ error, clock, onDismiss }: { error: NonNullable<ReturnType<typeof useLive>['replayError']>; clock: ClockState; onDismiss: () => void }) {
+  const friendly = friendlyReplayError(error, clock)
+  return (
+    <div className="control-bar__error">
+      {friendly ? (
+        <p role="alert" className="seek__problem">
+          <SeekLineText line={friendly} />{' '}
+          <button type="button" className="btn" onClick={onDismiss}>
+            Dismiss
+          </button>
+        </p>
+      ) : (
+        <InlineError error={error} onDismiss={onDismiss} />
+      )}
+    </div>
+  )
+}
+
 export function ControlBar() {
   const { snapshot, replay, replayBusy, replayError } = useLive()
   const navigate = useNavigate()
@@ -206,11 +190,7 @@ export function ControlBar() {
         <Transport clock={clock} busy={busy} speed={speed} slow={slow} onSpeed={changeSpeed} />
       </div>
       <Scrubber clock={clock} busy={busy} onSeek={(to) => void replay('seek', to)} extra={<SlowToggle slow={slow} placement="bar" />} />
-      {replayError && replayError !== dismissed ? (
-        <div className="control-bar__error">
-          <InlineError error={replayError} onDismiss={() => setDismissed(replayError)} />
-        </div>
-      ) : null}
+      {replayError && replayError !== dismissed ? <ReplayError error={replayError} clock={clock} onDismiss={() => setDismissed(replayError)} /> : null}
     </div>
   )
 }

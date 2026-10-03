@@ -1,11 +1,12 @@
 /**
- * The parts of the slip sheet (screens-and-flows 6.2 and 6.3): the four fields as plain text, the three checklist
- * lines, the notes, the buttons and the footer with the H26 label. No part shows a confidence number, a percentage or
- * a match with the KYC name, and no field can be edited: the way out of a wrong read is another photo.
+ * The parts of the slip sheet (screens-and-flows 6.2 and 6.3, design 2.4): the six fields as plain text, the three
+ * checklist lines, the notes, the buttons, the doctor question and the footer with the H26 label. No part shows a
+ * confidence number, a percentage or a match with the KYC name, and no field can be edited: the way out of a wrong read
+ * is another photo.
  */
 import { Check, TriangleAlert } from 'lucide-react'
 
-import type { SlipChecklistId, SlipChecklistLine, SlipPrecheck, SlipSlot, SlipSlotKey } from '../../api/types'
+import type { DoctorConsent, SlipChecklistId, SlipChecklistLine, SlipPrecheck, SlipSlot, SlipSlotKey } from '../../api/types'
 import { ModeBadge } from '../components/ModeBadge'
 import type { CopyKey } from '../lib/copy'
 import { t } from '../lib/copy'
@@ -19,6 +20,8 @@ const FIELD_LABEL: Readonly<Record<SlipSlotKey, CopyKey>> = {
   admission_date: 'SLIP_FIELD_ADMITTED',
   discharge_date: 'SLIP_FIELD_DISCHARGED',
   hospital_name: 'SLIP_FIELD_HOSPITAL',
+  doctor_name: 'SLIP_FIELD_DOCTOR',
+  doctor_registration_no: 'SLIP_FIELD_DOCTOR_REG',
 }
 
 const CHECK_LABEL: Readonly<Record<SlipChecklistId, { PASS: CopyKey; WARN: CopyKey }>> = {
@@ -103,6 +106,34 @@ export function SlipActions({ check, lang, busy, online, onConfirm, onRetake, on
         </Button>
       ) : null}
     </div>
+  )
+}
+
+type ConsentProps = { consent: DoctorConsent; lang: Lang; busy: boolean; online: boolean; onAnswer: (yes: boolean) => void }
+
+/**
+ * The doctor question (design 2.6) in the server's own words: Hindi for Hindi and Marathi (the question has no Marathi
+ * yet), English for English. Yes or No: either way the claim is filed, and No sends it to a person.
+ */
+export function ConsentStep({ consent, lang, busy, online, onAnswer }: ConsentProps) {
+  const english = lang === 'en'
+  const blocked = busy || !online
+  return (
+    <section data-testid="slip-consent-card" aria-labelledby="slip-consent-title" className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+      <h3 id="slip-consent-title" className="text-sm font-medium text-ink-2">{t('slip.consent.title', lang)}</h3>
+      <p data-testid="slip-consent-question" lang={english ? 'en' : 'hi'} className="text-md">
+        {english ? consent.question_en : consent.question_hi}
+      </p>
+      <p className="text-xs text-ink-3">{t('slip.consent.note', lang)}</p>
+      <div className="flex flex-col gap-2">
+        <Button data-testid="slip-consent-yes" size="lg" disabled={blocked} onClick={() => onAnswer(true)}>
+          {t('DOCTOR_CONSENT_YES', lang)}
+        </Button>
+        <Button data-testid="slip-consent-no" size="lg" variant="outline" disabled={blocked} onClick={() => onAnswer(false)}>
+          {t('DOCTOR_CONSENT_NO', lang)}
+        </Button>
+      </div>
+    </section>
   )
 }
 

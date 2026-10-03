@@ -12,6 +12,11 @@ personal:
   max_auto_days: 3
   name_match_min_score: 85
   slip_confidence_min: 0.80
+  # Every medical claim is confirmed with the treating doctor before it pays. The slip must name
+  # the hospital, the doctor and their registration number; the doctor is then reached on the
+  # contact in chhatri/directory.yaml, never on anything printed on the slip.
+  require_doctor_confirmation: true
+  doctor_reply_sla_hours: 24
 cover:
   waiting_period_days: 7
   alert_lookahead_hours: 72

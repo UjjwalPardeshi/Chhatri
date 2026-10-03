@@ -2,8 +2,10 @@
 
 One ``ConsentBook`` per ``Store`` (a reload makes a new Store, so it starts afresh). It is installed only while the
 flag ``n6_consents`` is on; with no book installed, or one that is not enabled, every gate passes, so Waves 1 and 2
-run exactly as today. A withdrawal replaces the record with ``model_copy`` and the book keeps every record, so an
-old receipt still opens. Seeded consents write no audit entry: they pre-date the replay.
+run exactly as today. One exception: the merchant's explicit answer to "may we ask your doctor?" is always written
+(`ConsentBook.answer`, via `ensure_consent_book`), into an empty, disabled book when the flag is off, so a recorded No
+binds while every gate stays open. A withdrawal replaces the record with ``model_copy`` and the book keeps every
+record, so an old receipt still opens. Seeded consents write no audit entry: they pre-date the replay.
 
 Consent is granted by an action that needs the data and never on its own. A paid payment link grants it, so the
 book looks at the run's paid link payments when it is read: the link's own grant if the app made one, otherwise the
@@ -27,18 +29,29 @@ from chhatri.domain.models import Frozen
 from chhatri.ids import IdFactory
 from chhatri.store.repositories import Store
 
-__all__ = ["Consent", "ConsentBook", "PendingGrant", "consent_book", "consent_gate_open", "install_consents"]
+__all__ = [
+    "Consent",
+    "ConsentBook",
+    "PendingGrant",
+    "consent_book",
+    "consent_gate_open",
+    "ensure_consent_book",
+    "install_consents",
+]
 
 
 class Consent(Frozen):
     id: str = Field(pattern=r"^CN-\d{6,}$")
     merchant_id: str
-    purpose: Literal["SALES_DATA_FOR_CLAIM", "SLIP_DATA_FOR_HOSPITAL_CLAIM", "SETTLEMENT_DEDUCTION"]
+    purpose: Literal[
+        "SALES_DATA_FOR_CLAIM", "SLIP_DATA_FOR_HOSPITAL_CLAIM", "SETTLEMENT_DEDUCTION", "DOCTOR_CONFIRMATION"
+    ]
     status: Literal["ACTIVE", "WITHDRAWN"]
     notice_version: str | None = None
     granted_at: datetime
     withdrawn_at: datetime | None = None
-    source: Literal["PAYMENT_APP", "PAYMENT_CHAT", "SLIP_UPLOAD", "SEEDED"]
+    # CLAIM_APP / CLAIM_CHAT: the merchant answered a question about one claim (the doctor confirmation)
+    source: Literal["PAYMENT_APP", "PAYMENT_CHAT", "SLIP_UPLOAD", "SEEDED", "CLAIM_APP", "CLAIM_CHAT"]
     payment_id: str | None = None
 
 
@@ -149,6 +162,56 @@ class ConsentBook:
         )
         return record
 
+    def answer(
+        self,
+        merchant_id: str,
+        purpose: str,
+        *,
+        granted: bool,
+        source: str,
+        at: datetime,
+        extra: dict[str, Any] | None = None,
+    ) -> Consent:
+        """The merchant's explicit answer to a question that asks for consent: a Yes is ACTIVE, a No is WITHDRAWN.
+
+        Unlike `grant`, a No is written too, so "said no" never reads as "never asked". A Yes while a Yes stands
+        keeps that record. Audited as ``consent.granted`` or ``consent.refused`` with `extra` (ids only)."""
+        with self._lock:
+            key = self._latest.get((merchant_id, purpose))
+            current = self._records[key] if key else None
+            if granted and current is not None and current.status == "ACTIVE":
+                record = current
+            elif not granted and current is not None and current.status == "ACTIVE":
+                record = current.model_copy(update={"status": "WITHDRAWN", "withdrawn_at": at})
+                self._records[record.id] = record
+            else:
+                record = Consent(
+                    id=self._ids.next("consent"),
+                    merchant_id=merchant_id,
+                    purpose=purpose,  # type: ignore[arg-type]
+                    status="ACTIVE" if granted else "WITHDRAWN",
+                    granted_at=at,
+                    withdrawn_at=None if granted else at,
+                    source=source,  # type: ignore[arg-type]
+                )
+                self._put(record)
+        self._audit.append(
+            at=at,
+            actor=f"merchant:{merchant_id}",
+            action="consent.granted" if granted else "consent.refused",
+            subject_type="consent",
+            subject_id=record.id,
+            data={
+                "merchant_id": merchant_id,
+                "purpose": purpose,
+                "source": source,
+                "notice_version": None,
+                "payment_id": None,
+                **(extra or {}),
+            },
+        )
+        return record
+
     def replace(self, record: Consent) -> None:
         with self._lock:
             self.get(record.id)
@@ -198,6 +261,21 @@ def install_consents(store: Store, ids: IdFactory, audit: AuditLog, settings: An
     book.seed()
     with _BOOKS_LOCK:
         _BOOKS[store] = book
+    return book
+
+
+def ensure_consent_book(store: Store, ids: IdFactory, audit: AuditLog, settings: Any = None) -> ConsentBook:
+    """The run's book, installing one when none is: seeded and enabled when ``n6_consents`` is on (and `settings` say
+    so), else empty and disabled, so every gate stays open and only explicit answers (the doctor question) live in it."""
+    book = consent_book(store)
+    if book is not None:
+        return book
+    if settings is not None:
+        book = install_consents(store, ids, audit, settings)
+    if book is None:
+        book = ConsentBook(store, ids, audit)
+        with _BOOKS_LOCK:
+            book = _BOOKS.setdefault(store, book)
     return book
 
 

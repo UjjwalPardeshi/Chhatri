@@ -8,6 +8,7 @@ import wave
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pytest
 from PIL import Image, PngImagePlugin
 
@@ -100,6 +101,7 @@ async def test_simulated_slip_reader_reads_sample_slips(sample: str, name: str) 
     assert slip.patient_name == name and slip.confidence == read_embedded_slip(png)["confidence"]
     assert slip.admission_date == date(2025, 8, 20) and slip.document_type == "admission_slip"
     assert slip.hospital_name == "KEM Hospital, Parel" and slip.source == "simulated"
+    assert (slip.doctor_name, slip.doctor_registration_no) == ("Dr S. Rao", "MMC-2011-45817")
 
 
 async def test_simulated_slip_reader_blurry_sample_is_unreadable() -> None:
@@ -141,3 +143,55 @@ async def test_simulated_slip_reader_is_deterministic_and_has_unreadable_fallbac
     assert unknown.confidence == 0.3 and unknown.patient_name is None and unknown.document_type is None
     with pytest.raises(IntegrationError):
         await reader.read_slip(b"", "image/png")
+
+
+def as_jpeg(png: bytes, *, quality: int = 87, scale: float = 1.0) -> bytes:
+    """The PNG as Telegram delivers a photo: re-encoded as a JPEG with no text chunk, optionally resized."""
+    with Image.open(io.BytesIO(png)) as opened:
+        image = opened.convert("RGB")
+    if scale != 1.0:
+        image = image.resize(
+            (round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS
+        )
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=quality)
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize(("quality", "scale"), [(87, 1.0), (70, 0.8), (95, 1.4)])
+@pytest.mark.parametrize(
+    ("sample", "name"),
+    [("anil_admission_slip.png", "Anil R. Jadhav"), ("mismatch_admission_slip.png", "Sunil Pawar")],
+)
+async def test_a_jpeg_of_a_sample_slip_reads_as_that_sample(
+    sample: str, name: str, quality: int, scale: float
+) -> None:
+    png = (SLIPS / sample).read_bytes()
+    slip = await SimulatedSlipReader().read_slip(as_jpeg(png, quality=quality, scale=scale), "image/jpeg")
+    assert slip.patient_name == name and slip.confidence == read_embedded_slip(png)["confidence"]
+    assert (slip.doctor_name, slip.doctor_registration_no) == ("Dr S. Rao", "MMC-2011-45817")
+    assert slip.source == "simulated"
+
+
+async def test_a_jpeg_of_the_blurry_sample_stays_unreadable() -> None:
+    slip = await SimulatedSlipReader().read_slip(
+        as_jpeg((SLIPS / "blurry_slip.png").read_bytes()), "image/jpeg"
+    )
+    assert slip.patient_name is None and slip.doctor_name is None and slip.confidence < 0.8
+
+
+async def test_an_image_that_is_no_sample_is_never_guessed() -> None:
+    noise = np.random.default_rng(7).integers(0, 256, (700, 900, 3), dtype=np.uint8)
+    other = render_slip("Ramesh Pawar", date(2025, 8, 21), "Sion Hospital", "Dengue")
+    cropped = Image.open(io.BytesIO((SLIPS / "anil_admission_slip.png").read_bytes())).crop((0, 0, 900, 400))
+    buffer = io.BytesIO()
+    cropped.convert("RGB").save(buffer, format="JPEG")
+    for image in (as_jpeg(_png_of(noise)), as_jpeg(other), buffer.getvalue()):
+        slip = await SimulatedSlipReader().read_slip(image, "image/jpeg")
+        assert (slip.confidence, slip.patient_name, slip.doctor_name) == (0.3, None, None)
+
+
+def _png_of(pixels: np.ndarray) -> bytes:
+    buffer = io.BytesIO()
+    Image.fromarray(pixels).save(buffer, format="PNG")
+    return buffer.getvalue()

@@ -30,11 +30,20 @@ STAGE_AI_ENV := GOOGLE_API_KEY= SARVAM_API_KEY=
 else
 STAGE_AI_ENV :=
 endif
+# STAGE_TELEGRAM=live (the default) uses TELEGRAM_BOT_TOKEN from .env: the merchant and the doctor chat on Telegram.
+# STAGE_TELEGRAM=sim blanks the token (independently of STAGE_AI): no poller, the console phone and the simulated doctor
+# carry the demo. Only one process may poll a bot token (a second one gets HTTP 409), so stop any other backend first.
+STAGE_TELEGRAM ?= live
+ifeq ($(STAGE_TELEGRAM),sim)
+STAGE_TELEGRAM_ENV := TELEGRAM_BOT_TOKEN=
+else
+STAGE_TELEGRAM_ENV :=
+endif
 COVERAGE_MIN ?= 80
 INFRA_COVERAGE_MIN ?= 90
 
 .PHONY: help setup data test test-backend test-frontend test-slow test-infra evals dev demo-check judge demo-stage stage-e2e e2e \
-	env check-keys up down lint n8n-workflows n8n-selftest clean
+	env check-keys up down lint n8n-workflows n8n-selftest clean node-modules-fresh
 
 help: ## List the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -67,7 +76,15 @@ test-infra: ## Infra checks: n8n workflows generated from WORKFLOWS, compose, Ma
 evals: ## H25 offline evaluation suites (no network, no key): writes backend/artifacts/evals/summary.json
 	cd $(ROOT)/backend && $(PY) -m chhatri.evals
 
-dev: ## Backend (uvicorn :8000, reload) + console (vite :5173, proxies /api); Ctrl+C stops both
+# npm ci writes node_modules/.package-lock.json; a lock file newer than it means a pull changed the dependencies and the
+# console may fail to start or render blank. This only reports it: it never installs anything.
+node-modules-fresh: ## Fail fast when frontend/node_modules is missing or older than package-lock.json (prints: run make setup)
+	@lock="$(ROOT)/frontend/package-lock.json"; installed="$(ROOT)/frontend/node_modules/.package-lock.json"; \
+	if [ ! -f "$$installed" ] || [ "$$lock" -nt "$$installed" ]; then \
+		echo "frontend/node_modules is missing or older than frontend/package-lock.json: run make setup" >&2; exit 1; \
+	fi
+
+dev: node-modules-fresh ## Backend (uvicorn :8000, reload) + console (vite :5173, proxies /api); Ctrl+C stops both
 	trap 'kill $$(jobs -p) 2>/dev/null || true' INT TERM EXIT; \
 	(cd $(ROOT)/backend && $(PY) -m uvicorn --factory chhatri.api.app:create_app --reload --host 127.0.0.1 --port $(BACKEND_PORT)) & \
 	(cd $(ROOT)/frontend && VITE_API_URL=http://127.0.0.1:$(BACKEND_PORT) $(NPM) run dev -- --host 127.0.0.1 --port $(CONSOLE_PORT) --strictPort) & \
@@ -80,9 +97,9 @@ demo-check: ## Every scenario through the HTTP API: python backend/scripts/demo_
 judge: ## One command for a judge: environment, keys (SET / NOT SET), artefacts vs MANIFEST.json, demo check, audit chain, typecheck; ends CHHATRI JUDGE READY or lists what failed
 	cd $(ROOT) && $(if $(wildcard $(PY)),$(PY),python3) scripts/judge.py
 
-demo-stage: ## The 3-minute stage demo: backend + console, stage flag set, synthetic data, no reload. Live Gemini by default; STAGE_AI=sim: no AI keys
+demo-stage: node-modules-fresh ## The 3-minute stage demo: backend + console, stage flag set, synthetic data, no reload. Live Gemini and Telegram by default; STAGE_AI=sim: no AI keys; STAGE_TELEGRAM=sim: no bot token
 	trap 'kill $$(jobs -p) 2>/dev/null || true' INT TERM EXIT; \
-	(cd $(ROOT)/backend && CHHATRI_FEATURES=$(STAGE_FLAGS) CHHATRI_DATA_IS_SYNTHETIC=true GEMINI_MODEL=$(STAGE_GEMINI_MODEL) GEMINI_BACKUP_MODELS=$(STAGE_GEMINI_BACKUPS) $(STAGE_AI_ENV) $(PY) -m uvicorn --factory chhatri.api.app:create_app --host 127.0.0.1 --port $(BACKEND_PORT)) & \
+	(cd $(ROOT)/backend && CHHATRI_FEATURES=$(STAGE_FLAGS) CHHATRI_DATA_IS_SYNTHETIC=true GEMINI_MODEL=$(STAGE_GEMINI_MODEL) GEMINI_BACKUP_MODELS=$(STAGE_GEMINI_BACKUPS) $(STAGE_AI_ENV) $(STAGE_TELEGRAM_ENV) $(PY) -m uvicorn --factory chhatri.api.app:create_app --host 127.0.0.1 --port $(BACKEND_PORT)) & \
 	(cd $(ROOT)/frontend && VITE_FEATURES=$(STAGE_FLAGS) VITE_API_URL=http://127.0.0.1:$(BACKEND_PORT) $(NPM) run dev -- --host 127.0.0.1 --port $(CONSOLE_PORT) --strictPort) & \
 	wait
 

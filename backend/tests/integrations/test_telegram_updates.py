@@ -96,3 +96,17 @@ def test_malformed_items_are_skipped_and_never_stop_the_batch() -> None:
     events = parse_updates(broken)
     assert [e.update_id for e in events] == [4]
     assert parse_updates("nope") == ()
+
+
+def test_an_image_sent_as_a_file_is_a_photo_and_other_files_are_unsupported() -> None:
+    picture = text_update(10, 5, "x")
+    del picture["message"]["text"]
+    picture["message"]["document"] = {"file_id": "DOC1", "mime_type": "image/jpeg", "file_name": "slip.jpg"}
+    picture["message"]["caption"] = "my slip"
+    event = parse_update(picture)
+    assert isinstance(event, TgPhoto) and (event.file_id, event.caption) == ("DOC1", "my slip")
+    pdf = text_update(11, 5, "x")
+    del pdf["message"]["text"]
+    pdf["message"]["document"] = {"file_id": "DOC2", "mime_type": "application/pdf"}
+    other = parse_update(pdf)
+    assert isinstance(other, TgUnsupported) and other.kind == "document"

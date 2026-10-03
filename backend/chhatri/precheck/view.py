@@ -12,6 +12,7 @@ from chhatri.clock import IST
 from chhatri.conversation.messages import bilingual
 from chhatri.policy.catalogue import MEDICAL_DOCUMENT_TYPES
 from chhatri.policy.provenance import slip_origin
+from chhatri.precheck.consent_step import ConsentQuestion, consent_view
 from chhatri.precheck.model import ConfirmedAs, Precheck, PrecheckStatus
 from chhatri.precheck.rules import checklist, slots
 
@@ -96,21 +97,47 @@ def precheck_view(pc: Precheck, *, minimum: float) -> dict[str, Any]:
     }
 
 
+def _consent(pc: Precheck, question: ConsentQuestion | None) -> dict[str, Any] | None:
+    if question is None:
+        return None
+    if pc.consent is None:
+        return consent_view(question, status="ASKED", answered_at=None)
+    return consent_view(question, status="GIVEN" if pc.consent else "REFUSED", answered_at=pc.consent_at)
+
+
 def confirmation_view(
-    pc: Precheck, *, outcome: str, case_id: str | None, messages: list[dict[str, Any]]
+    pc: Precheck,
+    *,
+    outcome: str | None,
+    case_id: str | None,
+    messages: list[dict[str, Any]],
+    consent: ConsentQuestion | None = None,
+    doctor_pending: bool = False,
 ) -> dict[str, Any]:
-    """The `data` of the confirm route."""
-    if pc.confirmed_as is None or pc.claim_id is None or pc.decision_id is None:
+    """The `data` of the confirm route: AWAITING_CONSENT (the doctor question, nothing filed) or CONFIRMED (filed)."""
+    if pc.confirmed_as is None:
         raise ValueError(f"pre-check {pc.id} is not confirmed")
+    waiting = pc.status is PrecheckStatus.AWAITING_CONSENT
+    if not waiting and (pc.claim_id is None or pc.decision_id is None or outcome is None):
+        raise ValueError(f"pre-check {pc.id} is not filed")
+    doctor = None
+    if doctor_pending and consent is not None:
+        doctor = {
+            "status": "PENDING",
+            "doctor_name": consent.doctor_name,
+            "hospital_name": consent.hospital_name,
+        }
     return {
         "precheck_id": pc.id,
-        "status": PrecheckStatus.CONFIRMED.value,
+        "status": (PrecheckStatus.AWAITING_CONSENT if waiting else PrecheckStatus.CONFIRMED).value,
         "confirmed_as": ConfirmedAs(pc.confirmed_as).value,
         "claim_id": pc.claim_id,
         "decision_id": pc.decision_id,
-        "outcome": outcome,
-        "case_id": case_id,
+        "outcome": None if waiting else outcome,
+        "case_id": None if waiting else case_id,
         "messages": messages,
+        "consent": _consent(pc, consent),
+        "doctor_check": doctor,
     }
 
 

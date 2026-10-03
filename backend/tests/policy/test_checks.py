@@ -26,10 +26,14 @@ def test_catalogue_matches_spec_table() -> None:
         CheckCode.SLIP_READABLE,
         CheckCode.NAME_MATCHES_KYC,
         CheckCode.DATES_MATCH,
+        CheckCode.HOSPITAL_IDENTIFIED,
+        CheckCode.DOCTOR_IDENTIFIED,
+        CheckCode.VERIFICATION_CONSENT,
+        CheckCode.DOCTOR_CONFIRMED,
         CheckCode.WITHIN_AUTO_LIMIT,
     }
     assert len(codes_for(Applies.AREA)) == 9
-    assert len(codes_for(Applies.PERSONAL)) == 9
+    assert len(codes_for(Applies.PERSONAL)) == 14
     assert CheckCode.SILENCE_VERIFIED not in codes_for(Applies.AREA)
     assert CheckCode.BELOW_FLOOR not in codes_for(Applies.PERSONAL)
     assert [r.alone for r in AUTHORITY_TABLE] == ["Pays", "Pays up to the daily cap", "Never", "Never"]

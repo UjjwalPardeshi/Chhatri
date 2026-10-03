@@ -4,6 +4,7 @@
  * console never re-derives money. Keep this file in lock-step with `chhatri/api/schemas.py`.
  */
 import type { FeatureCollection } from 'geojson'
+import type { DoctorCheckStep } from './doctorTypes'
 
 export type ApiErrorBody = { code: string; message: string; fields?: Record<string, string> }
 export type ListMeta = { total: number; limit: number; offset: number }
@@ -28,6 +29,7 @@ export const INTEGRATION_NAMES = [
   'gemini_chat',
   'gemini_vision',
   'telegram',
+  'doctor',
 ] as const
 export type IntegrationName = (typeof INTEGRATION_NAMES)[number]
 export type IntegrationMode = 'LIVE' | 'SIMULATED' | 'FALLBACK'
@@ -298,6 +300,15 @@ export type MessageMeta = {
   provider?: string
   model?: string | null
   fallback_reason?: string | null
+  /** A pre-check card or the doctor consent question (design 2.6): the pre-check it belongs to. */
+  precheck_id?: string
+  precheck_status?: PrecheckStatus
+  /** On the consent question: the consent-ledger purpose it asks for. */
+  consent_purpose?: string
+  /** On a doctor progress line: STARTED, ASKED or CONFIRMED, with the names it speaks of. */
+  doctor_check?: DoctorCheckStep
+  doctor_name?: string | null
+  hospital_name?: string | null
 }
 export type Message = {
   id: string
@@ -330,6 +341,18 @@ export type SlipEvidence = {
   provider?: string
   model?: string | null
   fallback_reason?: string | null
+  /** The treating doctor as printed on the slip (SPEC §9.2), when the server sends it. */
+  doctor_name?: string | null
+  doctor_registration_no?: string | null
+}
+/** How the treating doctor's confirmation went (SPEC §9.2, chhatri-61 R10); `via` says whether a real doctor answered. */
+export type DoctorVerificationEvidence = {
+  status: 'PENDING' | 'CONFIRMED' | 'DENIED' | 'NO_ANSWER'
+  doctor_name: string | null
+  hospital_name: string | null
+  requested_at: string | null
+  answered_at: string | null
+  via: string | null
 }
 export type CaseEvidence = {
   expected_vs_actual?: { hour: string; expected_paise: number; actual_paise: number }[]
@@ -339,6 +362,7 @@ export type CaseEvidence = {
   silent_days?: string[]
   merchant_text?: string
   precedents?: { subject_id: string; kind: string; at: string; text: string }[]
+  doctor_verification?: DoctorVerificationEvidence
 }
 export type Case = {
   id: string
@@ -551,6 +575,7 @@ export const SOURCE_KINDS = [
   'SALES_DAY',
   'PAYOUT_HISTORY',
   'LENDER',
+  'DOCTOR',
 ] as const
 export type SourceKind = (typeof SOURCE_KINDS)[number]
 export type SourceOrigin = 'LIVE' | 'SIMULATED' | 'CONFIG'
@@ -679,18 +704,19 @@ export type PremiumLinkResult = { quote: CoverQuote; premium: PremiumPayment | n
 /** POST /api/webhooks/paytm answers `paid`, `ignored` or `duplicate`. */
 export type PaytmAck = { status: 'paid' | 'ignored' | 'duplicate'; link_id: string }
 
-/** N3 slip pre-check (data-model 5.3, card 4.2). */
-export const PRECHECK_STATUSES = ['READY', 'RETAKE', 'NEEDS_TEAM', 'SUPERSEDED', 'CONFIRMED'] as const
+/** N3 slip pre-check (data-model 5.3, card 4.2). AWAITING_CONSENT: the read is confirmed and the doctor question is open. */
+export const PRECHECK_STATUSES = ['READY', 'RETAKE', 'NEEDS_TEAM', 'SUPERSEDED', 'CONFIRMED', 'AWAITING_CONSENT'] as const
 export type PrecheckStatus = (typeof PRECHECK_STATUSES)[number]
-export const PRECHECK_REASONS = ['READ_FAILED', 'INJECTION_SUSPECTED', 'NOT_A_HOSPITAL_DOCUMENT', 'LOW_CONFIDENCE', 'NAME_MISSING', 'DATES_NOT_CLEAR'] as const
+export const PRECHECK_REASONS = ['READ_FAILED', 'INJECTION_SUSPECTED', 'NOT_A_HOSPITAL_DOCUMENT', 'LOW_CONFIDENCE', 'NAME_MISSING', 'DATES_NOT_CLEAR', 'DOCTOR_MISSING'] as const
 export type PrecheckReason = (typeof PRECHECK_REASONS)[number]
-export const SLIP_SLOT_KEYS = ['patient_name', 'admission_date', 'discharge_date', 'hospital_name'] as const
+/** Six slots in a fixed order (design 2.3): the doctor and the registration number come last. */
+export const SLIP_SLOT_KEYS = ['patient_name', 'admission_date', 'discharge_date', 'hospital_name', 'doctor_name', 'doctor_registration_no'] as const
 export type SlipSlotKey = (typeof SLIP_SLOT_KEYS)[number]
 export type SlipSlot = { key: SlipSlotKey; value: string | null; state: 'READ' | 'MISSING' | 'NOT_ON_SLIP'; note: string | null }
 export const SLIP_CHECKLIST_IDS = ['photo_readable', 'name_on_slip', 'dates_on_slip'] as const
 export type SlipChecklistId = (typeof SLIP_CHECKLIST_IDS)[number]
 export type SlipChecklistLine = { id: SlipChecklistId; state: 'PASS' | 'WARN' }
-export const PRECHECK_GUIDANCE_KEYS = ['SLIP_RETAKE_CLEAR', 'SLIP_RETAKE_DOCUMENT', 'SLIP_RETAKE_NAME', 'SLIP_RETAKE_DATE', 'SLIP_NO_READ', 'SLIP_PHOTO_LIMIT'] as const
+export const PRECHECK_GUIDANCE_KEYS = ['SLIP_RETAKE_CLEAR', 'SLIP_RETAKE_DOCUMENT', 'SLIP_RETAKE_NAME', 'SLIP_RETAKE_DATE', 'SLIP_RETAKE_DOCTOR', 'SLIP_NO_READ', 'SLIP_PHOTO_LIMIT'] as const
 export type PrecheckGuidanceKey = (typeof PRECHECK_GUIDANCE_KEYS)[number]
 export const PRECHECK_ACTION_KINDS = ['CONFIRM_FIELDS', 'RETAKE_PHOTO', 'SEND_TO_TEAM'] as const
 export type PrecheckActionKind = (typeof PRECHECK_ACTION_KINDS)[number]
@@ -717,17 +743,11 @@ export type SlipPrecheck = {
   fallback_reason: string | null
   attempts: PrecheckAttempt[]
 }
-export type PrecheckAction = 'CONFIRM' | 'SEND_TO_TEAM'
-export type PrecheckConfirm = {
-  precheck_id: string
-  status: 'CONFIRMED'
-  confirmed_as: 'FIELDS_CONFIRMED' | 'SENT_TO_TEAM'
-  claim_id: string
-  decision_id: string
-  outcome: 'APPROVED' | 'REFERRED' | 'DECLINED'
-  case_id: string | null
-  messages: Message[]
-}
+/** CONFIRM the read, SEND_TO_TEAM, or answer the doctor question (design 2.3). */
+export const PRECHECK_ACTIONS = ['CONFIRM', 'SEND_TO_TEAM', 'CONSENT_YES', 'CONSENT_NO'] as const
+export type PrecheckAction = (typeof PRECHECK_ACTIONS)[number]
+/** The doctor question, the confirm and open answers and the doctor enrolment links (design 2.4, 2.9). */
+export * from './doctorTypes'
 /** The body of the pre-check route: a photo goes as a form, a sample slip as JSON. */
 /** No `sample` means the loaded scenario's own sample slip (data-model 5.3). */
 /** `consent` and `notice_version`: the merchant's OK to read a slip, sent when no slip consent is ACTIVE (n6_consents, fs-07 9.3). */

@@ -58,9 +58,23 @@ class CheckCode(StrEnum):
     SLIP_READABLE = "SLIP_READABLE"
     NAME_MATCHES_KYC = "NAME_MATCHES_KYC"
     DATES_MATCH = "DATES_MATCH"
+    HOSPITAL_IDENTIFIED = "HOSPITAL_IDENTIFIED"
+    DOCTOR_IDENTIFIED = "DOCTOR_IDENTIFIED"
+    VERIFICATION_CONSENT = "VERIFICATION_CONSENT"
+    DOCTOR_NOT_DENIED = "DOCTOR_NOT_DENIED"
+    DOCTOR_CONFIRMED = "DOCTOR_CONFIRMED"
     WITHIN_AUTO_LIMIT = "WITHIN_AUTO_LIMIT"
     NOT_ALREADY_PAID = "NOT_ALREADY_PAID"
     WITHIN_ANNUAL_LIMIT = "WITHIN_ANNUAL_LIMIT"
+
+
+class VerificationStatus(StrEnum):
+    """Where a doctor confirmation has got to (SPEC §9.2). Silence is never a confirmation."""
+
+    PENDING = "PENDING"  # asked, not answered yet
+    CONFIRMED = "CONFIRMED"  # the doctor says the patient attended
+    DENIED = "DENIED"  # the doctor says they did not
+    NO_ANSWER = "NO_ANSWER"  # the reply SLA ran out
 
 
 class CheckStatus(StrEnum):
@@ -188,6 +202,7 @@ class SourceKind(StrEnum):
     SALES_DAY = "SALES_DAY"
     PAYOUT_HISTORY = "PAYOUT_HISTORY"
     LENDER = "LENDER"
+    DOCTOR = "DOCTOR"
 
 
 class SourceOrigin(StrEnum):

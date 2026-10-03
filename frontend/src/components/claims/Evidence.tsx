@@ -1,12 +1,14 @@
 /**
  * Case evidence (SPEC §12): expected vs actual by hour, slip image (opens large) + extraction +
  * KYC name + match score, silent days, the merchant's words, precedents ("No similar past cases
- * yet").
+ * yet"). With the doctor rule (SPEC §9.2, chhatri-61 R10) the slip rows add the treating doctor and
+ * the registration number, and a block says how the doctor's confirmation went and whether a real
+ * doctor answered (`via`), when the server sends those keys.
  */
 import { useState } from 'react'
 
-import type { CaseEvidence } from '../../api/types'
-import { dayLabel } from '../../lib/time'
+import type { CaseEvidence, DoctorVerificationEvidence } from '../../api/types'
+import { dayLabel, hhmm } from '../../lib/time'
 import { Icon } from '../common/Icon'
 import { ModeChip } from '../common/ModeChip'
 import { HourlyChart } from './HourlyChart'
@@ -25,6 +27,12 @@ function SlipBlock({ evidence }: { evidence: CaseEvidence }) {
     ['Admitted', slip.admission_date ? dayLabel(slip.admission_date) : 'not readable'],
     ['Discharged', slip.discharge_date ? dayLabel(slip.discharge_date) : '—'],
     ['Hospital', slip.hospital_name ?? '—'],
+    ...(slip.doctor_name !== undefined || slip.doctor_registration_no !== undefined
+      ? ([
+          ['Doctor', slip.doctor_name ?? 'not readable'],
+          ['Registration no.', slip.doctor_registration_no ?? 'not readable'],
+        ] as [string, string][])
+      : []),
     ['Document', slip.document_type ?? 'unknown'],
     ['Read confidence', `${Math.round(slip.confidence * 100)}% (${slip.source})`],
   ]
@@ -78,6 +86,42 @@ function SlipBlock({ evidence }: { evidence: CaseEvidence }) {
   )
 }
 
+const VERIFICATION_WORDS: Readonly<Record<DoctorVerificationEvidence['status'], string>> = {
+  PENDING: 'Asked, waiting for the answer',
+  CONFIRMED: 'Confirmed the visit',
+  DENIED: 'Said the patient did not attend',
+  NO_ANSWER: 'No answer',
+}
+
+const VIA_WORDS: Readonly<Record<string, string>> = {
+  TELEGRAM: 'Telegram (a real doctor chat)',
+  SIMULATED: 'simulated doctor (attendance register)',
+  FALLBACK: 'simulated doctor (Telegram could not send)',
+  FORCED: 'forced for the demo: nobody answered',
+}
+
+/** How the treating doctor's confirmation went (R10), and whether a real doctor answered. */
+function DoctorVerification({ verification }: { verification: DoctorVerificationEvidence }) {
+  const who = [verification.doctor_name, verification.hospital_name].filter(Boolean).join(' · ')
+  const when = [verification.requested_at ? `asked ${hhmm(verification.requested_at)}` : null, verification.answered_at ? `answered ${hhmm(verification.answered_at)}` : null].filter(Boolean).join(' · ')
+  return (
+    <div className="doctor-verification" data-testid="doctor-verification" data-status={verification.status}>
+      <h4>Treating doctor</h4>
+      <p>
+        <strong>{VERIFICATION_WORDS[verification.status] ?? verification.status}</strong>
+        {who ? ` · ${who}` : null}
+      </p>
+      {when || verification.via ? (
+        <p className="muted num">
+          {when}
+          {when && verification.via ? ' · ' : null}
+          {verification.via ? `via ${VIA_WORDS[verification.via] ?? verification.via}` : null}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export function Evidence({ evidence, floorPct }: { evidence: CaseEvidence; floorPct?: number }) {
   const precedents = evidence.precedents ?? []
   return (
@@ -89,6 +133,7 @@ export function Evidence({ evidence, floorPct }: { evidence: CaseEvidence; floor
         </blockquote>
       ) : null}
       <SlipBlock evidence={evidence} />
+      {evidence.doctor_verification ? <DoctorVerification verification={evidence.doctor_verification} /> : null}
       {evidence.silent_days && evidence.silent_days.length > 0 ? (
         <p className="silent-days">
           Silent days (no payments during business hours):{' '}

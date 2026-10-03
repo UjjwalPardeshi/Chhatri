@@ -9,6 +9,7 @@ from chhatri.api.routers import (
     cases,
     channel,
     consents,
+    doctors,
     evals,
     fallback,
     grievances,
@@ -54,6 +55,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     grievances.router,
     consents.router,
     channel.router,
+    doctors.router,
 )
 
 __all__ = ["ROUTERS"]

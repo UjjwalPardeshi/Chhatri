@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from chhatri.domain.models import SlipExtraction
 from chhatri.integrations.base import IntegrationError
 from chhatri.integrations.sarvam_client import SarvamCaller
 from chhatri.integrations.sarvam_docai import (
@@ -196,3 +197,52 @@ def test_parse_slip_normalises_fields() -> None:
 
 def test_non_mapping_annotations_count_as_zero_confidence() -> None:
     assert parse_results({"result": RESULT, "annotations": ["x"]}).confidence == 0.0
+
+
+def test_parse_slip_reads_the_treating_doctor() -> None:
+    slip = parse_slip(
+        RESULT | {"doctor_name": "  Dr  S. Rao ", "doctor_registration_no": "MMC-2011-45817"}, 0.9, source="t"
+    )
+    assert (slip.doctor_name, slip.doctor_registration_no) == ("Dr S. Rao", "MMC-2011-45817")
+    bare = parse_slip(RESULT, 0.9, source="t")
+    assert bare.doctor_name is None and bare.doctor_registration_no is None
+
+
+@pytest.mark.parametrize(
+    ("printed", "expected"),
+    [
+        ("Reg. No: MMC-2011-45817", "MMC-2011-45817"),
+        ("reg no MMC-2011-45817", "MMC-2011-45817"),
+        ("Registration Number - MMC 2011  45817", "MMC 2011 45817"),
+        ("Reg.No.:mmc-2011-45817", "mmc-2011-45817"),  # case is kept as printed
+        ("  MMC-2011-45817 ", "MMC-2011-45817"),
+        ("Reg. No:", None),  # only a label
+        ("MMC-ABCD", None),  # no digit
+        ("M" * 30 + "-123", None),  # over 32 characters
+        ("+91 98200 12345", None),  # a phone number is never a registration number
+        ("9820012345", None),
+        ("022-2410-7000", None),
+        (12345, None),
+        (None, None),
+    ],
+)
+def test_registration_number_rules(printed: object, expected: str | None) -> None:
+    slip = parse_slip({"doctor_registration_no": printed}, 0.5, source="t")
+    assert slip.doctor_registration_no == expected
+
+
+def test_slip_extraction_has_no_contact_field() -> None:
+    """The contact used to reach a doctor comes from the directory, never from a slip a claimant supplied."""
+    fields = set(SlipExtraction.model_fields)
+    assert {"doctor_name", "doctor_registration_no"} <= fields
+    assert not {
+        f for f in fields if any(word in f for word in ("phone", "chat", "contact", "email", "mobile"))
+    }
+    assert set(parse_slip(RESULT, 0.5, source="t").model_dump()) == fields
+
+
+def test_slip_schema_asks_for_the_doctor_and_never_a_contact() -> None:
+    properties = SLIP_SCHEMA["properties"]
+    assert {"doctor_name", "doctor_registration_no"} <= set(properties)
+    assert "phone number" in properties["doctor_registration_no"]["description"].lower()
+    assert not [k for k in properties if any(w in k for w in ("phone", "chat", "contact", "email", "mobile"))]

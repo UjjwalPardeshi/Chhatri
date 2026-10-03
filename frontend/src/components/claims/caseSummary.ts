@@ -18,6 +18,11 @@ export const FAILURE_CLAUSES: Readonly<Record<string, string>> = Object.freeze({
   NAME_MATCHES_KYC: 'the name on the slip doesn’t match KYC',
   DATES_MATCH: 'the dates on the slip don’t match the silent days',
   SLIP_READABLE: 'the slip can’t be read clearly',
+  HOSPITAL_IDENTIFIED: 'the hospital on the slip isn’t in the directory',
+  DOCTOR_IDENTIFIED: 'the doctor on the slip isn’t on that hospital’s register',
+  VERIFICATION_CONSENT: 'the merchant would rather we didn’t ask the doctor',
+  DOCTOR_NOT_DENIED: 'the doctor said the patient did not attend',
+  DOCTOR_CONFIRMED: 'the doctor hasn’t confirmed the visit',
 })
 
 export type CaseHeadline = { text: string; rule: string | null }

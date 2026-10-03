@@ -1,9 +1,11 @@
 """The provider panel rows of `GET /api/integrations` (X6, fs-08 section 9.3, data-model 5.6).
 
-One row per component: the 15 BUILT statuses then `gemini_chat` and `gemini_vision` (17). Mode, provider, model and
-reason are worked out at read time, so a forced component shows FALLBACK with reason FORCED at once. `switchable` is
-true only in demo mode: always for the lender, and for the other components with a fallback path while they are LIVE
-(a forced one stays switchable, so it can be released). `last_call` is null: no live adapter records its calls yet.
+One row per component: the 15 BUILT statuses then `gemini_chat` and `gemini_vision` (17), `telegram` with the flag
+`telegram_channel`, then the treating doctor's `doctor` row (design 2.9). Mode, provider, model and reason are worked out
+at read time, so a forced component shows FALLBACK with reason FORCED at once. `switchable` is true only in demo mode:
+always for the lender and the doctor, and for the other components with a fallback path while they are LIVE (a forced
+one stays switchable, so it can be released). A live `telegram` row reads FALLBACK while Telegram is down
+(`telegram_health`), with the outage's reason. `last_call` is null: no live adapter records its calls yet.
 """
 
 from __future__ import annotations
@@ -16,10 +18,24 @@ from chhatri.config import Settings
 from chhatri.domain.enums import IntegrationMode
 from chhatri.features import is_enabled
 from chhatri.integrations.base import IntegrationStatus
-from chhatri.integrations.statuses import GEMINI_STATUS_NAMES, STATUS_NAMES, TELEGRAM_STATUS_NAMES
+from chhatri.integrations.doctor_telegram import FORCED_DETAIL as DOCTOR_FORCED_DETAIL
+from chhatri.integrations.statuses import (
+    DOCTOR_STATUS_NAMES,
+    GEMINI_STATUS_NAMES,
+    STATUS_NAMES,
+    TELEGRAM_STATUS_NAMES,
+)
 from chhatri.integrations.switch import FORCEABLE, FallbackSwitch
+from chhatri.integrations.telegram_health import TELEGRAM_HEALTH, apply_outage
 
-__all__ = ["LENDER_FORCED_DETAIL", "panel_row", "panel_rows", "telegram_rows"]
+__all__ = [
+    "DOCTOR_FORCED_DETAIL",
+    "LENDER_FORCED_DETAIL",
+    "doctor_rows",
+    "panel_row",
+    "panel_rows",
+    "telegram_rows",
+]
 
 LENDER_FORCED_DETAIL: Final = "Simulated lender (NBFC partner), not answering: forced for the demo"
 
@@ -43,6 +59,7 @@ _LIVE_PROVIDER: Final = {
     "gemini_vision": "gemini",
     "whatsapp": "whatsapp",
     "telegram": "telegram",
+    "doctor": "telegram",
     "paytm": "paytm",
     "n8n": "n8n",
     "memory": "cognee",
@@ -56,6 +73,10 @@ _ALTERNATE: Final = {  # the next link of the chain that takes over from a force
     "gemini_vision": ("sarvam_vision", "sarvam", "simulated"),
 }
 _FORCED_PROVIDER: Final = {"sarvam_stt": "browser", "sarvam_tts": "browser"}
+_ALWAYS_SWITCHABLE: Final = frozenset(
+    {"lender", "doctor"}
+)  # simulated, but the presenter can still mute them
+_FORCED_DETAIL: Final = {"lender": LENDER_FORCED_DETAIL, "doctor": DOCTOR_FORCED_DETAIL}
 
 
 def _model(name: str, settings: Settings) -> str | None:
@@ -109,18 +130,19 @@ def panel_row(
 ) -> dict[str, Any]:
     name = status.name
     is_live = status.mode is IntegrationMode.LIVE
+    is_down = status.mode is IntegrationMode.FALLBACK  # live, but not working right now (a Telegram outage)
     forced = name in FORCEABLE and switch.is_forced(name)
     switchable = settings.chhatri_demo_mode and (
-        name == "lender" or (name in FORCEABLE and (is_live or forced))
+        name in _ALWAYS_SWITCHABLE or (name in FORCEABLE and (is_live or is_down or forced))
     )
     if forced:
         provider = _forced_provider(name, statuses, switch)
-        detail = (
-            LENDER_FORCED_DETAIL
-            if name == "lender"
-            else f"{status.detail}; forced off for the demo, {provider} answers"
-        )
+        detail = _FORCED_DETAIL.get(name) or f"{status.detail}; forced off for the demo, {provider} answers"
         mode, model, reason = IntegrationMode.FALLBACK, None, _FORCED
+    elif is_down:
+        outage = TELEGRAM_HEALTH.outage()
+        mode, detail, provider, model = status.mode, status.detail, "simulated", None
+        reason = outage.fallback_reason if outage is not None else FallbackReason.PROVIDER_ERROR.value
     elif is_live:
         mode, detail, provider = status.mode, status.detail, _LIVE_PROVIDER.get(name, "live")
         model, reason = _model(name, settings), None
@@ -143,16 +165,26 @@ def panel_row(
 
 def panel_rows(integrations: HasStatuses, settings: Settings, switch: FallbackSwitch) -> list[dict[str, Any]]:
     """The 17 rows, in the order of `STATUS_NAMES` then `GEMINI_STATUS_NAMES`; with the flag `telegram_channel` on, a
-    18th row `telegram` follows."""
-    telegram = telegram_rows(integrations, settings)
-    statuses = {s.name: s for s in (*integrations.statuses, *integrations.gemini_statuses, *telegram)}
-    names = (*STATUS_NAMES, *GEMINI_STATUS_NAMES, *(s.name for s in telegram))
+    row `telegram` follows; then the `doctor` row when the integrations carry it (18 without the flag, 19 with it)."""
+    extra = (*telegram_rows(integrations, settings), *doctor_rows(integrations))
+    statuses = {s.name: s for s in (*integrations.statuses, *integrations.gemini_statuses, *extra)}
+    names = (*STATUS_NAMES, *GEMINI_STATUS_NAMES, *(s.name for s in extra))
     return [panel_row(statuses[name], statuses, settings, switch) for name in names]
 
 
 def telegram_rows(integrations: object, settings: Settings) -> tuple[IntegrationStatus, ...]:
-    """The `telegram` status row when the flag `telegram_channel` is on and the integrations carry it, else none."""
+    """The `telegram` status row when the flag `telegram_channel` is on and the integrations carry it, else none.
+    A LIVE row reads FALLBACK while Telegram is down (`telegram_health.apply_outage`)."""
     if not is_enabled("telegram_channel", settings):
         return ()
     rows: tuple[IntegrationStatus, ...] = tuple(getattr(integrations, "telegram_statuses", ()))
-    return tuple(row for row in rows if row.name in TELEGRAM_STATUS_NAMES)
+    return tuple(apply_outage(row) for row in rows if row.name in TELEGRAM_STATUS_NAMES)
+
+
+def doctor_rows(integrations: object) -> tuple[IntegrationStatus, ...]:
+    """The `doctor` status row, read now from the verifier, when the integrations carry it; else none."""
+    status = getattr(integrations, "doctor_status", None)
+    if status is None:
+        return ()
+    row: IntegrationStatus = status()
+    return (row,) if row.name in DOCTOR_STATUS_NAMES else ()

@@ -2,7 +2,8 @@
 
 Only private chats are served: a group or channel message is skipped, so Chhatri never binds a group or answers in one.
 A text that starts with `/` is a command (`/start S-0142`, `/stop`, `/help`, with or without `@botname`); a photo is the
-largest size Telegram made; a voice note or audio file carries its MIME type (`audio/ogg` for a voice note); a tap on an
+largest size Telegram made (an image sent "as a file", a document with an `image/*` type, counts as a photo: the content
+is validated after download anyway); a voice note or audio file carries its MIME type (`audio/ogg` for a voice note); a tap on an
 inline quick-reply button is a callback. Anything else (sticker, location, document) is `TgUnsupported` and gets help text.
 A malformed item is skipped with a warning and never stops the batch.
 """
@@ -114,6 +115,12 @@ def _largest_photo(sizes: Any) -> str | None:
     return best[1] if best else None
 
 
+def _image_document(message: Mapping[str, Any]) -> str | None:
+    document = _mapping(message, "document")
+    mime = (_str(document, "mime_type") or "").lower()
+    return _str(document, "file_id") if mime.startswith("image/") else None
+
+
 def _message_event(update_id: int, message: Mapping[str, Any]) -> TgEvent | None:
     chat = _mapping(message, "chat")
     chat_id, at = _int(chat, "id"), _at(message.get("date"))
@@ -130,7 +137,7 @@ def _message_event(update_id: int, message: Mapping[str, Any]) -> TgEvent | None
             argument = (command.group(2) or "").strip() or None
             return TgCommand(*head, command.group(1).lower(), argument)
         return TgText(*head, text)
-    photo = _largest_photo(message.get("photo"))
+    photo = _largest_photo(message.get("photo")) or _image_document(message)
     if photo is not None:
         return TgPhoto(*head, photo, _str(message, "caption"))
     for kind in ("voice", "audio"):

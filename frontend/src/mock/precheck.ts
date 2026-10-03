@@ -2,7 +2,8 @@
  * Mock N3 slip pre-check logic (data-model 5.3, fs-02 section 7.3): reads a sample slip with the simulator the browser
  * has (provider `mock`, reason MOCK_BACKEND), applies the status table (first row that applies) and keeps the checks of
  * one scenario load in memory. Nothing here decides money: a confirmed or sent slip goes to the BUILT mock personal
- * claim, whose checks run exactly as they do for a slip sent in the chat.
+ * claim, whose checks run exactly as they do for a slip sent in the chat. The doctor rule is on (as on stage), so a
+ * read slip without the doctor or the registration number is a retake (DOCTOR_MISSING, design D7).
  */
 import type { PrecheckGuidanceKey, PrecheckReason, SlipChecklistLine, SlipPrecheck, SlipSlot } from '../api/types'
 import { MockHttpError } from './http'
@@ -32,6 +33,10 @@ export const GUIDANCE: Readonly<Record<PrecheckGuidanceKey, Guidance>> = {
     text_en: 'The admission date is not clear. Please send a photo where the whole date is in view.',
     text_hi: 'भर्ती की तारीख़ साफ़ नहीं दिख रही। तारीख़ वाला हिस्सा पूरा दिखे, ऐसी फ़ोटो भेजिए।',
   },
+  SLIP_RETAKE_DOCTOR: {
+    text_en: "The doctor's name and registration number are not clear. Please send a photo where the doctor's name and number are fully in view.",
+    text_hi: 'डॉक्टर का नाम और रजिस्ट्रेशन नंबर साफ़ नहीं दिख रहा। डॉक्टर के नाम वाला हिस्सा पूरा दिखे, ऐसी फ़ोटो भेजिए।',
+  },
   SLIP_NO_READ: {
     text_en: 'We could not read the slip just now. You can send it to our team, who will look at it.',
     text_hi: 'अभी पर्ची पढ़ी नहीं जा सकी। आप इसे हमारी टीम को भेज सकते हैं, वे इसे देखेंगे।',
@@ -49,6 +54,7 @@ const REASON_GUIDANCE: Readonly<Record<PrecheckReason, PrecheckGuidanceKey>> = {
   LOW_CONFIDENCE: 'SLIP_RETAKE_CLEAR',
   NAME_MISSING: 'SLIP_RETAKE_NAME',
   DATES_NOT_CLEAR: 'SLIP_RETAKE_DATE',
+  DOCTOR_MISSING: 'SLIP_RETAKE_DOCTOR',
 }
 
 const ACTIONS = {
@@ -69,6 +75,7 @@ export function retakeReason(read: SlipReading, replayDay: string): PrecheckReas
   const badAdmission = !read.admission_date || read.admission_date > replayDay
   const dischargeBefore = read.admission_date !== null && read.discharge_date !== null && read.discharge_date < read.admission_date
   if (badAdmission || dischargeBefore) return 'DATES_NOT_CLEAR'
+  if (!read.doctor_name || !read.doctor_registration_no) return 'DOCTOR_MISSING'
   if (!accepted || read.confidence < SLIP_CONFIDENCE_MIN) return 'LOW_CONFIDENCE'
   return null
 }
@@ -88,6 +95,8 @@ function slots(read: SlipReading): SlipSlot[] {
     slot('admission_date', read.admission_date, 'MISSING'),
     slot('discharge_date', read.discharge_date, 'NOT_ON_SLIP'),
     slot('hospital_name', read.hospital_name, 'NOT_ON_SLIP'),
+    slot('doctor_name', read.doctor_name ?? null, 'NOT_ON_SLIP'),
+    slot('doctor_registration_no', read.doctor_registration_no ?? null, 'NOT_ON_SLIP'),
   ]
 }
 
@@ -128,7 +137,8 @@ export function buildPrecheck({ rt, merchantId, id, mediaId, attempt, read }: Pr
   }
 }
 
-export type StoredPrecheck = { view: SlipPrecheck; mediaUrl: string; sample: string | null; confirmed: boolean }
+/** `read` is what the reader saw (for the doctor question); `consent` the merchant's answer once given. */
+export type StoredPrecheck = { view: SlipPrecheck; mediaUrl: string; sample: string | null; confirmed: boolean; read: SlipReading; consent?: { granted: boolean; at: string } }
 export type MerchantPrechecks = { photos: number; checks: ReadonlyMap<string, StoredPrecheck> }
 
 const STORES = new WeakMap<MockRuntime, ReadonlyMap<string, MerchantPrechecks>>()
@@ -141,4 +151,7 @@ export function savePrechecks(rt: MockRuntime, merchantId: string, next: Merchan
   STORES.set(rt, new Map([...(STORES.get(rt) ?? []), [merchantId, next]]))
 }
 
-export const conflict = (message: string): MockHttpError => new MockHttpError('conflict', message, 409)
+/** The 409 codes of design 2.3 (D9): the screens say a true sentence for each. */
+export type ConflictCode = 'no_checkin' | 'photo_limit' | 'already_confirmed' | 'superseded' | 'not_ready' | 'ready_not_team' | 'consent_pending' | 'no_consent_question'
+
+export const conflict = (code: ConflictCode, message: string): MockHttpError => new MockHttpError(code, message, 409)

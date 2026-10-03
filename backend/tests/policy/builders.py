@@ -12,12 +12,16 @@ from chhatri.domain.enums import (
     ClaimKind,
     CoverStatus,
     ShopType,
+    VerificationStatus,
 )
 from chhatri.domain.models import (
     Alert,
     AreaTrigger,
     Claim,
     Cover,
+    Doctor,
+    DoctorVerification,
+    Hospital,
     Loan,
     Merchant,
     SlipExtraction,
@@ -27,6 +31,10 @@ from chhatri.money import rupees
 from chhatri.policy.facts import AreaClaimFacts, PersonalClaimFacts
 from chhatri.sim.types import City
 
+KEM = Hospital(id="H-KEM", name="KEM Hospital, Parel", city="Mumbai")
+DR_RAO = Doctor(
+    registration_no="MMC-2011-45817", name="Dr S. Rao", hospital_id="H-KEM", verify_chat_id="tg:482913"
+)
 MONSOON_DAY = date(2025, 8, 19)  # Tue
 ILLNESS_DAY = date(2025, 8, 20)  # Wed (silent day)
 ANIL_KYC = "ANIL RAMESH JADHAV"
@@ -135,11 +143,27 @@ def slip(**kw: Any) -> SlipExtraction:
         "admission_date": ILLNESS_DAY,
         "discharge_date": None,
         "hospital_name": "KEM Hospital, Parel",
+        "doctor_name": DR_RAO.name,
+        "doctor_registration_no": DR_RAO.registration_no,
         "document_type": "admission_slip",
         "confidence": 0.93,
         "source": "simulated",
     }
     return SlipExtraction(**{**base, **kw})
+
+
+def doctor_confirmed(claim_id: str = "CL-000002", **kw: Any) -> DoctorVerification:
+    base: dict[str, Any] = {
+        "id": "DV-000001",
+        "claim_id": claim_id,
+        "hospital_id": KEM.id,
+        "doctor_registration_no": DR_RAO.registration_no,
+        "status": VerificationStatus.CONFIRMED,
+        "requested_at": ist(2025, 8, 21, 11, 22),
+        "answered_at": ist(2025, 8, 21, 11, 24),
+        "answered_by": DR_RAO.name,
+    }
+    return DoctorVerification(**{**base, **kw})
 
 
 def personal_claim(days: tuple[date, ...] = (ILLNESS_DAY,), **kw: Any) -> Claim:
@@ -168,6 +192,13 @@ def personal_facts(**kw: Any) -> PersonalClaimFacts:
         "paid_last_365_days_paise": 0,
         "already_paid_dates": (),
         "weekday": 2,
+        # The doctor-confirmation loop has already run cleanly (SPEC §9.2); tests that care about
+        # it override one of these, so every other personal test stays about what it is about.
+        "hospital": KEM,
+        "doctor": DR_RAO,
+        "verification_consent": True,
+        "verification_consent_at": ist(2025, 8, 21, 11, 21),
+        "verification": doctor_confirmed(claim.id),
     }
     return PersonalClaimFacts(**{**base, **kw})
 

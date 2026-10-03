@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from chhatri.clock import ist
+from chhatri.conversation.messages import CATALOGUE
 from chhatri.detect.triggers import VerdictInputs, trigger_verdict
 from chhatri.domain.enums import (
     CheckCode,
@@ -22,6 +23,7 @@ from chhatri.domain.enums import (
 from chhatri.domain.models import Counterfactual, Decision
 from chhatri.money import format_inr, rupees
 from chhatri.policy.counterfactual import (
+    EXPLAIN_KEY,
     FLIP_TABLE,
     MAX_COUNTERFACTUALS,
     counterfactuals,
@@ -35,7 +37,16 @@ from tests.policy import builders as b
 RULES = default_rules()
 NOW = ist(2025, 8, 19, 17)
 A, R, D = DecisionOutcome.APPROVED, DecisionOutcome.REFERRED, DecisionOutcome.DECLINED
-EXPLAIN_ONLY = {CheckCode.NOT_ALREADY_PAID, CheckCode.WITHIN_ANNUAL_LIMIT}
+EXPLAIN_ONLY = {
+    CheckCode.NOT_ALREADY_PAID,
+    CheckCode.WITHIN_ANNUAL_LIMIT,
+    # "if the doctor had said yes" is not a fact about this claim, it is a different claim
+    CheckCode.HOSPITAL_IDENTIFIED,
+    CheckCode.DOCTOR_IDENTIFIED,
+    CheckCode.VERIFICATION_CONSENT,
+    CheckCode.DOCTOR_NOT_DENIED,
+    CheckCode.DOCTOR_CONFIRMED,
+}
 
 
 def area(**kw: Any) -> tuple[Any, Decision]:
@@ -94,9 +105,19 @@ def object_text(cf: Counterfactual) -> str:
 
 
 def test_flip_table_covers_every_check_code() -> None:
-    """One flip for each check, or an explicit None for the two that have no honest single change (fs-09 9.3)."""
+    """One flip for each check, or an explicit None for those with no honest single change (fs-09 9.3)."""
     assert set(FLIP_TABLE) == set(CheckCode)
     assert {code for code, flip in FLIP_TABLE.items() if flip is None} == EXPLAIN_ONLY
+
+
+def test_every_unflippable_check_has_a_sentence() -> None:
+    """A check with no flip has to be explainable, or the receipt raises instead of saying why.
+
+    This is how DOCTOR_NOT_DENIED first went in: unflippable, and with nothing to say about it, so
+    every declined medical claim died in the explainer rather than telling the merchant anything.
+    """
+    assert set(EXPLAIN_KEY) == EXPLAIN_ONLY
+    assert all(EXPLAIN_KEY[code] in CATALOGUE for code in EXPLAIN_KEY)
 
 
 def test_name_mismatch_flip() -> None:

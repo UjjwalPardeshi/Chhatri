@@ -24,6 +24,7 @@ GUIDANCE: Final[dict[Reason, str]] = {
     Reason.LOW_CONFIDENCE: "SLIP_RETAKE_CLEAR",
     Reason.NAME_MISSING: "SLIP_RETAKE_NAME",
     Reason.DATES_NOT_CLEAR: "SLIP_RETAKE_DATE",
+    Reason.DOCTOR_MISSING: "SLIP_RETAKE_DOCTOR",
 }
 PHOTO_LIMIT_KEY: Final = "SLIP_PHOTO_LIMIT"
 NOT_LATIN_NOTE: Final = "SLIP_NOTE_NAME_NOT_LATIN"
@@ -63,14 +64,19 @@ def decide(
     minimum: float,
     injected: bool = False,
     last_photo: bool = False,
+    require_doctor: bool = False,
 ) -> Verdict:
-    """The first row of the status table that applies. `slip` None means no reader produced a read."""
+    """The first row of the status table that applies. `slip` None means no reader produced a read.
+
+    `require_doctor` (rule `personal.require_doctor_confirmation`) adds the DOCTOR_MISSING row: without the treating
+    doctor's name and registration number nobody can be asked, so the merchant gets a second photo, not a decline.
+    """
     passed = gate_passed(slip, minimum)
     if injected:
         return _team(Reason.INJECTION_SUSPECTED, passed)
     if slip is None:
         return _team(Reason.READ_FAILED, passed)
-    reason = _retake_reason(slip, today, passed)
+    reason = _retake_reason(slip, today, passed, require_doctor=require_doctor)
     if reason is None:
         return Verdict(PrecheckStatus.READY, None, None, passed)
     if last_photo:
@@ -82,7 +88,9 @@ def _team(reason: Reason, passed: bool) -> Verdict:
     return Verdict(PrecheckStatus.NEEDS_TEAM, reason, GUIDANCE[reason], passed)
 
 
-def _retake_reason(slip: SlipExtraction, today: date, passed: bool) -> Reason | None:
+def _retake_reason(
+    slip: SlipExtraction, today: date, passed: bool, *, require_doctor: bool = False
+) -> Reason | None:
     if slip.document_type == OTHER:
         return Reason.NOT_A_HOSPITAL_DOCUMENT
     if slip.patient_name is None and slip.admission_date is None and slip.document_type is None:
@@ -91,6 +99,8 @@ def _retake_reason(slip: SlipExtraction, today: date, passed: bool) -> Reason | 
         return Reason.NAME_MISSING
     if not dates_clear(slip, today):
         return Reason.DATES_NOT_CLEAR
+    if require_doctor and (slip.doctor_name is None or slip.doctor_registration_no is None):
+        return Reason.DOCTOR_MISSING
     return None if passed else Reason.LOW_CONFIDENCE
 
 
@@ -99,7 +109,7 @@ def is_last_photo(attempt: int) -> bool:
 
 
 def slots(slip: SlipExtraction | None) -> tuple[Slot, ...]:
-    """The four slots in fixed order. A required slot is READ or MISSING, an optional one READ or NOT_ON_SLIP."""
+    """The six slots in fixed order. A required slot is READ or MISSING, an optional one READ or NOT_ON_SLIP."""
     read = slip or SlipExtraction(confidence=0.0, source="read-failed")
     name_note = NOT_LATIN_NOTE if read.patient_name and not is_latin(read.patient_name) else None
     return (
@@ -115,6 +125,8 @@ def slots(slip: SlipExtraction | None) -> tuple[Slot, ...]:
             required=False,
         ),
         _slot("hospital_name", read.hospital_name, required=False),
+        _slot("doctor_name", read.doctor_name, required=False),
+        _slot("doctor_registration_no", read.doctor_registration_no, required=False),
     )
 
 

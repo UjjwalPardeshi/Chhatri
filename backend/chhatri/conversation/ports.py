@@ -58,6 +58,13 @@ class ClaimsPort(Protocol):
 
 
 @runtime_checkable
+class DoctorCheckPort(Protocol):
+    """Optional on the orchestrator: True while a decision is interim because the treating doctor is still being asked."""
+
+    def doctor_check_pending(self, decision_id: str) -> bool: ...
+
+
+@runtime_checkable
 class ConversationStore(MessageLog, Protocol):
     """Messages + media (``MessageLog``), plus the cover and cases the replies read."""
 

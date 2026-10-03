@@ -121,6 +121,24 @@ def _evaluate_area(facts: AreaClaimFacts, rules: PolicyRules) -> Evaluation:
     return Evaluation(checks, breakdown.amount_paise, explain_area(breakdown, facts.weekday, rules))
 
 
+def _doctor_checks(facts: PersonalClaimFacts, rules: PolicyRules) -> tuple[CheckResult, ...]:
+    """The confirmation checks, only when `personal.require_doctor_confirmation` is on (SPEC §9.2).
+
+    Order matters: DOCTOR_NOT_DENIED is HARD and runs before the SOFT DOCTOR_CONFIRMED, so an
+    explicit "no" declines the claim while silence only sends it to a person.
+    """
+    if not rules.personal.require_doctor_confirmation:
+        return ()
+    slip = facts.claim.slip
+    return (
+        ck.hospital_identified(slip, facts.hospital),
+        ck.doctor_identified(slip, facts.doctor, facts.hospital),
+        ck.verification_consent(facts.verification_consent, facts.verification_consent_at),
+        ck.doctor_not_denied(facts.verification),
+        ck.doctor_confirmed(facts.verification),
+    )
+
+
 def _evaluate_personal(facts: PersonalClaimFacts, rules: PolicyRules) -> Evaluation:
     _validate_personal(facts)
     claimed, slip = facts.claim.silent_dates, facts.claim.slip
@@ -132,6 +150,7 @@ def _evaluate_personal(facts: PersonalClaimFacts, rules: PolicyRules) -> Evaluat
         ck.slip_readable(slip, rules),
         ck.name_matches_kyc(slip, facts.kyc_name, rules),
         ck.dates_match(slip, claimed),
+        *_doctor_checks(facts, rules),
         ck.within_auto_limit(claimed, rules),
         ck.not_already_paid_personal(claimed, facts.already_paid_dates),
         ck.within_annual_limit(facts.paid_last_365_days_paise, breakdown.amount_paise, rules),

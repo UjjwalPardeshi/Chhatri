@@ -6,7 +6,7 @@ the n8n step order can never drift from the in-process runner. Each workflow is:
 
     Chhatri webhook (POST /webhook/chhatri-{workflow}, body {run_id, workflow, payload})
       -> Verify X-Chhatri-Secret (header == $env.CHHATRI_INTERNAL_SECRET, secret non-empty)
-           true  -> Step 1 -> Step 2 -> ... -> Completed (200)   (one HTTP callback per WORKFLOWS step)
+           true  -> 1 · <step> -> 2 · <step> -> ... -> Completed (200)   (one HTTP callback per WORKFLOWS step)
            false -> Reject (403)
 
 Every step node POSTs `{run_id, workflow, step, payload}` (payload passed through unchanged) to
@@ -19,6 +19,11 @@ The webhook answers only from the last node, `Completed (200)`, with
 `{"ok": true, "data": {"run_id", "status": "completed", "steps": [...]}}`: the backend's start call
 (`chhatri.integrations.n8n`) returns once every step was reported, so the simulated clock can never pass
 a step's due minute before n8n reported it and the n8n timeline equals the in-process one.
+
+The canvas explains itself to a reader (`n8n_canvas_text`, `n8n_canvas`): plain-words step names
+(`2 · Credit ₹ to merchant`), node notes with the step key, callback, retry policy and simulated
+time, and four sticky notes (what starts it, the security check, the checklist, what happens when a step
+fails). None of that changes what runs: step node ids are still derived from the technical step key.
 
 Usage (backend venv):
     python scripts/n8n_workflows.py          # write the files
@@ -35,6 +40,19 @@ import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
+
+from n8n_canvas import Markdown, Sticky, plan
+from n8n_canvas_text import (
+    RetryPolicy,
+    Step,
+    checklist_markdown,
+    failure_markdown,
+    security_markdown,
+    step_node_name,
+    step_notes,
+    title_markdown,
+    workflow_text,
+)
 
 REPO_ROOT: Final = Path(__file__).resolve().parent.parent
 BACKEND_DIR: Final = REPO_ROOT / "backend"
@@ -53,42 +71,62 @@ HTTP_FORBIDDEN: Final = 403
 CALLBACK_TIMEOUT_MS: Final = 10_000  # SPEC §14: 10 s default timeout for live calls
 CALLBACK_MAX_TRIES: Final = 3  # SPEC §14: at most 3 attempts
 CALLBACK_RETRY_WAIT_MS: Final = 1_000
-NODE_SPACING_X: Final = 240
-ROW_Y: Final = 300
-REJECT_Y: Final = 500
-ORIGIN_X: Final = 0
+RETRY: Final = RetryPolicy(CALLBACK_TIMEOUT_MS, CALLBACK_MAX_TRIES, CALLBACK_RETRY_WAIT_MS)
 UUID_NAMESPACE: Final = uuid.uuid5(uuid.NAMESPACE_URL, "urn:chhatri:n8n")  # fixed: deterministic node ids
+STICKY_NAMES: Final = {
+    "title": "Note · what starts it",
+    "security": "Note · security check",
+    "checklist": "Note · checklist",
+    "failure": "Note · if a step fails",
+}
 
 # n8n 2.x node type versions verified against docker.n8n.io/n8nio/n8n:2.41.3 (`n8n export:nodes`).
 WEBHOOK_TYPE: Final = ("n8n-nodes-base.webhook", 2.1)
 IF_TYPE: Final = ("n8n-nodes-base.if", 2.3)
 RESPOND_TYPE: Final = ("n8n-nodes-base.respondToWebhook", 1.5)
 HTTP_TYPE: Final = ("n8n-nodes-base.httpRequest", 4.5)
+STICKY_TYPE: Final = ("n8n-nodes-base.stickyNote", 1)
 
 logger = logging.getLogger("n8n_workflows")
 
 
-def _load_workflows() -> Mapping[str, tuple[str, ...]]:
-    """Step names per workflow from the backend (single source of truth, B1)."""
+def _load_workflows() -> Mapping[str, tuple[Step, ...]]:
+    """Steps and their simulated offsets per workflow from the backend (single source of truth, B1)."""
     if str(BACKEND_DIR) not in sys.path:
         sys.path.insert(0, str(BACKEND_DIR))
     from chhatri.workflows.definitions import WORKFLOWS
 
-    return {name: tuple(spec.name for spec in specs) for name, specs in WORKFLOWS.items()}
+    return {
+        name: tuple(Step(spec.name, spec.delay_minutes_from_start) for spec in specs)
+        for name, specs in WORKFLOWS.items()
+    }
 
 
 def _stable_id(*parts: str) -> str:
     return str(uuid.uuid5(UUID_NAMESPACE, "/".join(parts)))
 
 
-def _node(workflow: str, name: str, kind: tuple[str, float], x: int, y: int, **params: Any) -> dict[str, Any]:
+def step_id_key(index: int, step: str) -> str:
+    """The id seed of a step node: its technical name, so renaming the node never changes its id."""
+    return f"Step {index} · {step}"
+
+
+def _node(
+    workflow: str,
+    name: str,
+    kind: tuple[str, float],
+    position: Sequence[int],
+    *,
+    id_key: str | None = None,
+    **params: Any,
+) -> dict[str, Any]:
     node_type, version = kind
     return {
-        "id": _stable_id(workflow, name),
+        "id": _stable_id(workflow, id_key or name),
         "name": name,
         "type": node_type,
         "typeVersion": version,
-        "position": [x, y],
+        "position": list(position),
         "parameters": params,
     }
 
@@ -97,13 +135,12 @@ def _body_ref(field: str) -> str:
     return f"$('{WEBHOOK_NODE}').first().json.body.{field}"
 
 
-def webhook_node(workflow: str) -> dict[str, Any]:
+def webhook_node(workflow: str, position: Sequence[int]) -> dict[str, Any]:
     node = _node(
         workflow,
         WEBHOOK_NODE,
         WEBHOOK_TYPE,
-        ORIGIN_X,
-        ROW_Y,
+        position,
         httpMethod="POST",
         path=f"chhatri-{workflow}",
         responseMode="responseNode",
@@ -113,7 +150,7 @@ def webhook_node(workflow: str) -> dict[str, Any]:
     return node
 
 
-def verify_node(workflow: str) -> dict[str, Any]:
+def verify_node(workflow: str, position: Sequence[int]) -> dict[str, Any]:
     """True branch only when the secret is configured and the header equals it (SPEC §14.5, §21)."""
     secret = f"={{{{ $env.{SECRET_ENV} ?? '' }}}}"
     conditions = [
@@ -138,8 +175,7 @@ def verify_node(workflow: str) -> dict[str, Any]:
         workflow,
         VERIFY_NODE,
         IF_TYPE,
-        ORIGIN_X + NODE_SPACING_X,
-        ROW_Y,
+        position,
         conditions={
             "options": {
                 "caseSensitive": True,
@@ -155,13 +191,12 @@ def verify_node(workflow: str) -> dict[str, Any]:
     )
 
 
-def respond_node(workflow: str, name: str, code: int, body: str, x: int, y: int) -> dict[str, Any]:
+def respond_node(workflow: str, name: str, code: int, body: str, position: Sequence[int]) -> dict[str, Any]:
     return _node(
         workflow,
         name,
         RESPOND_TYPE,
-        x,
-        y,
+        position,
         respondWith="json",
         responseBody=body,
         options={"responseCode": code},
@@ -188,20 +223,20 @@ REJECT_BODY: Final = json.dumps(
 )
 
 
-def step_node(workflow: str, index: int, step: str, x: int) -> dict[str, Any]:
+def step_node(workflow: str, index: int, step: Step, position: Sequence[int]) -> dict[str, Any]:
     """HTTP callback for one step: body {run_id, workflow, step, payload}; header X-Chhatri-Secret."""
     body = (
         f"={{{{ JSON.stringify({{ run_id: {_body_ref('run_id')}, workflow: '{workflow}', "
-        f"step: '{step}', payload: {_body_ref('payload')} }}) }}}}"
+        f"step: '{step.name}', payload: {_body_ref('payload')} }}) }}}}"
     )
     node = _node(
         workflow,
-        f"Step {index} · {step}",
+        step_node_name(workflow, index, step.name),
         HTTP_TYPE,
-        x,
-        ROW_Y,
+        position,
+        id_key=step_id_key(index, step.name),
         method="POST",
-        url=f"={{{{ $env.{PUBLIC_URL_ENV} }}}}{CALLBACK_PATH}/{step}",
+        url=f"={{{{ $env.{PUBLIC_URL_ENV} }}}}{CALLBACK_PATH}/{step.name}",
         sendHeaders=True,
         specifyHeaders="keypair",
         headerParameters={"parameters": [{"name": SECRET_HEADER, "value": f"={{{{ $env.{SECRET_ENV} }}}}"}]},
@@ -209,51 +244,82 @@ def step_node(workflow: str, index: int, step: str, x: int) -> dict[str, Any]:
         contentType="json",
         specifyBody="json",
         jsonBody=body,
-        options={"timeout": CALLBACK_TIMEOUT_MS},
+        options={"timeout": RETRY.timeout_ms},
     )
     node.update(
         retryOnFail=True,
-        maxTries=CALLBACK_MAX_TRIES,
-        waitBetweenTries=CALLBACK_RETRY_WAIT_MS,
+        maxTries=RETRY.max_tries,
+        waitBetweenTries=RETRY.wait_ms,
+        notes=step_notes(workflow, step, RETRY),
+        notesInFlow=True,
     )
     return node
+
+
+def sticky_node(workflow: str, sticky: Sticky) -> dict[str, Any]:
+    """A sticky note: text for the reader, never executed and never connected."""
+    rect = sticky.rect
+    return _node(
+        workflow,
+        STICKY_NAMES[sticky.key],
+        STICKY_TYPE,
+        (rect.x, rect.y),
+        id_key=f"sticky-{sticky.key}",
+        content=sticky.content,
+        height=rect.h,
+        width=rect.w,
+        color=sticky.color,
+    )
+
+
+def canvas_markdown(workflow: str, steps: Sequence[Step]) -> Markdown:
+    return Markdown(
+        title=title_markdown(workflow),
+        security=security_markdown(SECRET_HEADER),
+        checklist=checklist_markdown(workflow, steps, DONE_NODE),
+        failure=failure_markdown(RETRY),
+    )
 
 
 def _link(target: str) -> dict[str, Any]:
     return {"node": target, "type": "main", "index": 0}
 
 
-def build_workflow(workflow: str, steps: Sequence[str]) -> dict[str, Any]:
-    """The importable n8n workflow document for one Chhatri workflow."""
-    if not steps:
-        raise ValueError(f"workflow {workflow!r} has no steps")
-    first_x = ORIGIN_X + 2 * NODE_SPACING_X
-    step_nodes = [
-        step_node(workflow, i, step, first_x + (i - 1) * NODE_SPACING_X)
-        for i, step in enumerate(steps, start=1)
-    ]
-    done_x = first_x + len(steps) * NODE_SPACING_X
-    nodes = [
-        webhook_node(workflow),
-        verify_node(workflow),
-        *step_nodes,
-        respond_node(workflow, DONE_NODE, HTTP_OK, done_body(steps), done_x, ROW_Y),
-        respond_node(workflow, REJECT_NODE, HTTP_FORBIDDEN, REJECT_BODY, first_x, REJECT_Y),
-    ]
-    chain = [VERIFY_NODE, *(n["name"] for n in step_nodes), DONE_NODE]
+def _connections(step_names: Sequence[str]) -> dict[str, Any]:
+    chain = [VERIFY_NODE, *step_names, DONE_NODE]
     connections: dict[str, Any] = {WEBHOOK_NODE: {"main": [[_link(VERIFY_NODE)]]}}
     for source, target in zip(chain, chain[1:], strict=False):
         connections[source] = {"main": [[_link(target)]]}
-    connections[VERIFY_NODE] = {"main": [[_link(step_nodes[0]["name"])], [_link(REJECT_NODE)]]}
+    connections[VERIFY_NODE] = {"main": [[_link(step_names[0])], [_link(REJECT_NODE)]]}
+    return connections
+
+
+def build_workflow(workflow: str, steps: Sequence[Step]) -> dict[str, Any]:
+    """The importable n8n workflow document for one Chhatri workflow."""
+    if not steps:
+        raise ValueError(f"workflow {workflow!r} has no steps")
+    layout = plan(len(steps), canvas_markdown(workflow, steps))
+    step_nodes = [
+        step_node(workflow, i, step, position)
+        for i, (step, position) in enumerate(zip(steps, layout.steps, strict=True), start=1)
+    ]
+    nodes = [
+        webhook_node(workflow, layout.webhook),
+        verify_node(workflow, layout.verify),
+        *step_nodes,
+        respond_node(workflow, DONE_NODE, HTTP_OK, done_body([s.name for s in steps]), layout.done),
+        respond_node(workflow, REJECT_NODE, HTTP_FORBIDDEN, REJECT_BODY, layout.reject),
+        *(sticky_node(workflow, sticky) for sticky in layout.stickies),
+    ]
     return {
         "id": f"chhatri-{workflow}",
-        "name": f"chhatri-{workflow}",
+        "name": workflow_text(workflow).display_name,
         "active": True,
         "nodes": nodes,
-        "connections": connections,
+        "connections": _connections([n["name"] for n in step_nodes]),
         "settings": {"executionOrder": "v1", "timezone": "Asia/Kolkata"},
         "pinData": {},
-        "meta": {"generatedBy": "scripts/n8n_workflows.py", "steps": list(steps)},
+        "meta": {"generatedBy": "scripts/n8n_workflows.py", "steps": [s.name for s in steps]},
     }
 
 
@@ -261,7 +327,7 @@ def render(doc: Mapping[str, Any]) -> str:
     return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
 
 
-def expected_files(workflows: Mapping[str, Sequence[str]]) -> dict[str, str]:
+def expected_files(workflows: Mapping[str, Sequence[Step]]) -> dict[str, str]:
     return {
         f"chhatri-{name}.json": render(build_workflow(name, steps))
         for name, steps in sorted(workflows.items())

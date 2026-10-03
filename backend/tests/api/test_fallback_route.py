@@ -116,22 +116,47 @@ async def test_forcing_the_lender_answers_its_row_and_is_idempotent_and_audited(
     assert audit_actions(loaded).count("integration.fallback_set") == 2
 
 
-async def test_get_integrations_lists_seventeen_extended_rows_while_the_flag_is_on(loaded: AppState) -> None:
+async def test_get_integrations_lists_eighteen_extended_rows_while_the_flag_is_on(loaded: AppState) -> None:
     app = app_for(loaded)
     await call(app, "POST", LENDER, json={"force": True}, headers=OFFICER)
     items, meta = list_of(await call(app, "GET", "/api/integrations"), IntegrationStatus)
-    assert (meta.total, meta.limit, meta.offset) == (17, 17, 0)
+    assert (meta.total, meta.limit, meta.offset) == (18, 18, 0)  # the 17 and the treating doctor
+    assert items[-1].name == "doctor" and items[-1].mode == "SIMULATED"
     by_name = {item.name: item for item in items}
     assert by_name["lender"].mode == "FALLBACK" and by_name["lender"].forced
     assert by_name["kyc"].switchable is False
     assert by_name["gemini_chat"].provider == "template"
 
 
-async def test_get_integrations_keeps_the_fifteen_plain_rows_while_the_flag_is_off(loaded: AppState) -> None:
+async def test_get_integrations_keeps_the_fifteen_plain_rows_and_the_doctor_while_the_flag_is_off(
+    loaded: AppState,
+) -> None:
     items, meta = list_of(
         await call(app_for(loaded, features=""), "GET", "/api/integrations"), IntegrationStatus
     )
-    assert meta.total == 15 and all(item.provider is None for item in items)
+    assert meta.total == 16 and all(item.provider is None for item in items)
+    assert (items[-1].name, items[-1].mode) == ("doctor", "SIMULATED")
+
+
+async def test_forcing_the_doctor_mutes_it_and_releasing_brings_the_register_back(loaded: AppState) -> None:
+    app = app_for(loaded)
+    path = "/api/integrations/doctor/fallback"
+    forced = data_of(await call(app, "POST", path, json={"force": True}, headers=OFFICER), IntegrationStatus)
+    assert (forced.name, forced.mode, forced.fallback_reason, forced.forced, forced.switchable) == (
+        "doctor",
+        "FALLBACK",
+        "FORCED",
+        True,
+        True,
+    )
+    assert forced.detail == "Treating doctor not answering: forced for the demo; the claim goes to a person"
+    assert PROCESS_SWITCH.forced == ("doctor",)
+    assert loaded.runtime.integrations.doctor.route_for("MMC-2011-45817") == "FORCED"  # type: ignore[attr-defined]
+    released = data_of(
+        await call(app, "POST", path, json={"force": False}, headers=OFFICER), IntegrationStatus
+    )
+    assert (released.mode, released.forced) == ("SIMULATED", False)
+    assert loaded.runtime.integrations.doctor.route_for("MMC-2011-45817") == "SIMULATED"  # type: ignore[attr-defined]
 
 
 async def test_switch_survives_a_scenario_load(loaded: AppState) -> None:

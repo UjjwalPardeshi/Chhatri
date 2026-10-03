@@ -399,7 +399,8 @@ Per-zone premiums come from the backtest (§18) and are stored in
 `backend/artifacts/premiums.json` (`{zone_id: premium_per_day_paise}`); a zone with no price is an
 error (X3: start-up logs it and `/api/preflight` lists it), and `min_per_day_rupees` is the floor of every entry.
 
-9.2 **Checks** (`CheckCode`, severity):
+9.2 **Checks** (`CheckCode`, severity). Nineteen in all; a personal claim runs fourteen of them
+and an area claim nine:
 
 | Code | Applies | Severity | Passes when |
 |---|---|---|---|
@@ -414,6 +415,11 @@ error (X3: start-up logs it and `/api/preflight` lists it), and `min_per_day_rup
 | SLIP_READABLE | personal | SOFT | slip present, `document_type` medical, confidence ≥ min |
 | NAME_MATCHES_KYC | personal | SOFT | name score ≥ min |
 | DATES_MATCH | personal | SOFT | admission ≤ each silent day ≤ (discharge or ∞) |
+| HOSPITAL_IDENTIFIED | personal | HARD | the hospital named on the slip is in the directory |
+| DOCTOR_IDENTIFIED | personal | HARD | the slip names a doctor and a registration number on that hospital's register |
+| VERIFICATION_CONSENT | personal | SOFT | the merchant agreed to the doctor being asked |
+| DOCTOR_NOT_DENIED | personal | HARD | the treating doctor has not answered "no" |
+| DOCTOR_CONFIRMED | personal | SOFT | the treating doctor confirmed the patient attended |
 | WITHIN_AUTO_LIMIT | personal | SOFT | silent days ≤ `max_auto_days` |
 | NOT_ALREADY_PAID | all | HARD | no approved payout for (merchant, date, kind) |
 | WITHIN_ANNUAL_LIMIT | all | HARD | paid in the rolling 365 days + amount ≤ annual limit |
@@ -425,6 +431,19 @@ NAME_MATCHES_KYC is UNSURE when `patient_name` is missing or not in Latin script
 score < min; DATES_MATCH is UNSURE when `admission_date` is missing, FAIL when the dates do not
 cover every silent day; WITHIN_AUTO_LIMIT is FAIL when silent days > `max_auto_days` (the whole
 claim is REFERRED — "anything above the cap goes to a human").
+
+**Doctor confirmation** (rule `personal.require_doctor_confirmation`, on). Every medical claim is
+confirmed with the treating doctor before it pays. The slip must carry the hospital, the doctor's
+name and their medical registration number; those name *which* doctor, and the way to reach them
+comes from the independent directory (`chhatri/directory.yaml`), never from the slip — a contact
+printed on a claimant's own slip would confirm whatever the claimant wanted. A doctor only resolves
+within the hospital the slip names, so a real registration number quoted against the wrong hospital
+identifies nobody. Chhatri asks only with the merchant's consent (purpose `DOCTOR_CONFIRMATION`),
+and sends only the patient, the hospital, the date and the question — never the amount, the policy
+or the reason, so a hospital-cash claim never reveals an illness. The request carries
+`doctor_reply_delay_minutes` (2, simulated) and expires after `doctor_reply_sla_hours` (24).
+Outcomes: confirmed ⇒ APPROVED; denied ⇒ DECLINED (DOCTOR_NOT_DENIED is HARD); no answer or no
+consent ⇒ REFERRED, because silence is neither a confirmation nor a denial.
 
 **Name score** (`name_match_score`): uppercase; replace every non-letter with a space; collapse
 spaces; expand a single-letter token to the KYC token starting with that letter (if exactly one);
@@ -502,7 +521,8 @@ subject_id, data, prev_hash}))` with `canonical_json = json.dumps(sort_keys=True
 separators=(",",":"), ensure_ascii=False, default=str)`. Genesis `prev_hash` = 64 zeros.
 `verify()` recomputes the chain and returns `{valid, entries, head_hash, first_bad_seq}`.
 Actors: `system`, `model`, `policy-engine`, `ai-agent`, `officer:<id>`, `merchant:<id>`,
-`workflow:<name>`. Every decision stores all checks in `data`.
+`workflow:<name>`, `doctor:<registration-no>` (the treating doctor who answers a §9.2
+confirmation; the question is asked by `system`, the answer is recorded as the doctor's own). Every decision stores all checks in `data`.
 
 ## 12. Cases (`chhatri/cases/service.py`)
 
@@ -738,8 +758,14 @@ seeking backward = reset + seek.
   After 17:05 the phone view supports the Q&A (17:12 in the deck).
 - `illness` — Anil silent all of **Wed 2025-08-20** (zone normal); replay **Thu 2025-08-21**
   10:30→13:00; outreach 11:20; voice reply; slip `anil_admission_slip.png` (patient
-  "Anil R. Jadhav", admitted 2025-08-20, "Viral fever", KEM Hospital, Parel) ⇒ APPROVED ₹1,500;
-  Thursday's (next day's) instalment paused.
+  "Anil R. Jadhav", admitted 2025-08-20, "Viral fever", KEM Hospital, Parel, **Dr S. Rao,
+  reg. MMC-2011-45817**). Consent to confirm, the doctor asked on the chat the officer's link
+  enrolled, and the confirmation back, all at **11:21** ⇒ APPROVED ₹1,500 at 11:21; credit
+  **11:25**; Thursday's (next day's) instalment paused at **11:26**.
+- `illness_denied` — the same timeline with the hospital register showing no such visit: the doctor
+  answers no at 11:21 ⇒ DECLINED, nothing is paid, and the merchant is told the hospital's answer.
+- `illness_no_answer` — the doctor does not answer within `doctor_reply_sla_hours` ⇒ REFERRED with
+  the amount already computed; an officer calls the hospital on the directory number.
 - `illness_mismatch` — same timeline, slip `mismatch_admission_slip.png` (patient "Sunil Pawar")
   ⇒ REFERRED ⇒ case; the officer approves in the console ⇒ ₹1,500.
 - `buy_cover` — **Mon 2025-08-18** 18:00→19:00; alert `A-20250818-01` (issued 17:30) is in the

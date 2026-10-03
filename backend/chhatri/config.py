@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # X4: how long Chhatri waits for the lender's answer to an EDI holiday request, in seconds. One attempt, no
     # retry (fs-03 section 7.4); proposed 10 s, a target to tune. Simulated lender answers are instant.
     chhatri_lender_timeout_seconds: float = Field(default=10.0, gt=0)
+    # Doctor confirmation (design 2.9): how long a question sent to an enrolled doctor's Telegram chat waits for a tap,
+    # in real seconds. No tap in time is "no answer" (the claim goes to a person), never a denial.
+    chhatri_doctor_timeout_seconds: float = Field(default=90.0, gt=0, le=600)
 
     # Sarvam (SPEC §14.1)
     sarvam_api_key: SecretStr | None = None

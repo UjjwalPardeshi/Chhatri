@@ -89,6 +89,8 @@ export type NbaInput = {
   buy?: NbaBuyState
   /** The dispute clock of the rules (`dispute_sla_hours`): the sentences that promise an answer name it. */
   slaHours: number
+  /** A silence check-in waits for the slip, or for the answer about it (GET slip-precheck/open, design 2.4). */
+  slipOpen?: boolean
   features?: NbaFeatures
 }
 
@@ -206,7 +208,8 @@ const seeWhyOfLatest: Rule = ({ claims }) => {
 /** A personal claim that waits for the slip (its Detected step is the current one, fs-04 9.5), with the pre-check on. */
 const isWaitingForSlip = (item: ClaimItem): boolean => item.kind === 'PERSONAL' && item.decision_id === null && item.steps[0]?.status === 'current'
 
-const sendSlip: Rule = ({ claims, features }) => (features?.slip && claims.some(isWaitingForSlip) ? answer('send_slip', 'SEND_SLIP', screenTarget('slip')) : null)
+const sendSlip: Rule = ({ claims, features, slipOpen }) =>
+  features?.slip && (slipOpen === true || claims.some(isWaitingForSlip)) ? answer('send_slip', 'SEND_SLIP', screenTarget('slip')) : null
 
 const seeCoverageWaiting: Rule = ({ cover, lang }) =>
   cover?.status === 'WAITING' && cover.starts_on !== null

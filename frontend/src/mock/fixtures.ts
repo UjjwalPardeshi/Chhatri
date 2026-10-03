@@ -111,9 +111,12 @@ const MOCK_REASON: Readonly<Record<string, string>> = { sarvam_chat: 'MOCK_BACKE
 /** The Telegram bot row (flag telegram_channel): simulated in the static demo, which has no bot token. */
 const TELEGRAM_ROW: IntegrationStatus = { name: 'telegram', mode: 'SIMULATED', detail: `Telegram bot: messages recorded in the console phone, no token in the static demo (${MOCK_DETAIL})` }
 
+/** The treating doctor (design 2.9): the static demo has no bot, so the simulated doctor answers from the attendance register. */
+const DOCTOR_ROW: IntegrationStatus = { name: 'doctor', mode: 'SIMULATED', detail: `simulated doctor (attendance register) · no doctor chat enrolled (${MOCK_DETAIL})` }
+
 /** The rows the mock serves: every component SIMULATED, the lender FORCED to FALLBACK while its switch is on (fs-08 9.7). */
 export function integrationRows(lenderForced: boolean): IntegrationStatus[] {
-  const rows = isFeatureEnabled('telegram_channel') ? [...BASE_INTEGRATIONS, TELEGRAM_ROW] : BASE_INTEGRATIONS
+  const rows = isFeatureEnabled('telegram_channel') ? [...BASE_INTEGRATIONS, TELEGRAM_ROW, DOCTOR_ROW] : BASE_INTEGRATIONS
   return rows.map((row) => {
     const forced = row.name === 'lender' && lenderForced
     const base = { ...row, provider: MOCK_PROVIDER[row.name] ?? 'simulated', model: null, fallback_reason: MOCK_REASON[row.name] ?? null, switchable: MOCK_FORCEABLE.has(row.name), forced, last_call: null }

@@ -1,6 +1,6 @@
 {
   "id": "chhatri-human-review",
-  "name": "chhatri-human-review",
+  "name": "Chhatri · Human review (referred claim or dispute)",
   "active": true,
   "nodes": [
     {
@@ -10,7 +10,7 @@
       "typeVersion": 2.1,
       "position": [
         0,
-        300
+        320
       ],
       "parameters": {
         "httpMethod": "POST",
@@ -26,8 +26,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        240,
-        300
+        220,
+        320
       ],
       "parameters": {
         "conditions": {
@@ -66,12 +66,12 @@
     },
     {
       "id": "99066ce3-bde1-5be4-8f98-51e66fd4bf8b",
-      "name": "Step 1 · open_case",
+      "name": "1 · Queue for an officer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        480,
-        300
+        440,
+        320
       ],
       "parameters": {
         "method": "POST",
@@ -96,16 +96,18 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 1000
+      "waitBetweenTries": 1000,
+      "notes": "open_case (+0 min)\nPOST /internal/workflows/open_case\n3 tries, 1 s wait between, 10 s timeout each\nRuns at case opened +0 min, simulated time (Chhatri schedules it)",
+      "notesInFlow": true
     },
     {
       "id": "a1efa4d6-28ce-5652-8440-e85c384ab79b",
-      "name": "Step 2 · notify_officer",
+      "name": "2 · Notify the officer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        720,
-        300
+        660,
+        320
       ],
       "parameters": {
         "method": "POST",
@@ -130,7 +132,9 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 1000
+      "waitBetweenTries": 1000,
+      "notes": "notify_officer (+0 min)\nPOST /internal/workflows/notify_officer\n3 tries, 1 s wait between, 10 s timeout each\nRuns at case opened +0 min, simulated time (Chhatri schedules it)",
+      "notesInFlow": true
     },
     {
       "id": "8672473f-77a7-58ff-b87d-45956b216485",
@@ -138,8 +142,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        960,
-        300
+        880,
+        320
       ],
       "parameters": {
         "respondWith": "json",
@@ -155,8 +159,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        480,
-        500
+        220,
+        520
       ],
       "parameters": {
         "respondWith": "json",
@@ -164,6 +168,70 @@
         "options": {
           "responseCode": 403
         }
+      }
+    },
+    {
+      "id": "626af5c6-3692-581e-bb0e-135146c6d466",
+      "name": "Note · what starts it",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        0
+      ],
+      "parameters": {
+        "content": "## Chhatri · Human review (referred claim or dispute)\n\n**What starts it:** Chhatri opened a case for a claims officer: its policy engine referred a personal claim to a person, or a merchant disputed a decision.\n\n**n8n never decides.** The officer approves or declines the case in Chhatri's console. n8n runs the checklist and reports every step back to Chhatri, which re-checks each report.",
+        "height": 110,
+        "width": 1520,
+        "color": 5
+      }
+    },
+    {
+      "id": "e708d2bd-b2b8-570a-b32f-3380e86c9fe9",
+      "name": "Note · security check",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        130
+      ],
+      "parameters": {
+        "content": "### Security check\n\nEvery run must carry the shared secret in its X-Chhatri-Secret header. A wrong or missing secret is refused with 403 and n8n calls no step. If n8n has no secret set, every run is refused.\n\nEach step report carries the same secret, and Chhatri checks it.",
+        "height": 570,
+        "width": 420,
+        "color": 3
+      }
+    },
+    {
+      "id": "ef36a8b3-2ef1-5a47-b7ed-90b03861f895",
+      "name": "Note · checklist",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        390,
+        130
+      ],
+      "parameters": {
+        "content": "### Checklist: n8n reports each step, Chhatri does it\n\nNo Wait nodes: n8n reports the steps right away, one after another; Chhatri runs each one at its simulated time after the case opened.\n\n1. **Queue for an officer** · +0 min: Chhatri publishes the case to the console's officer queue; the live feed shows its due time.\n2. **Notify the officer** · +0 min: Chhatri records the alert in the audit log (case.officer_notified).\n\nThen **Completed (200)** answers Chhatri, only after the last step was reported.",
+        "height": 370,
+        "width": 1080,
+        "color": 4
+      }
+    },
+    {
+      "id": "94150c6b-95ae-5f93-b098-98e10dfbf5af",
+      "name": "Note · if a step fails",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        390,
+        520
+      ],
+      "parameters": {
+        "content": "### If a step fails\n\n- A step report that errors, times out after 10 s or gets a non-2xx answer is tried again after a 1 s wait: 3 tries in all.\n- If all 3 fail, the run stops there: later steps are not called and the webhook answers 500.\n- If the webhook answers with an error or without the completion, or n8n cannot be reached, Chhatri hands the run to its built-in runner. It schedules only the steps n8n did not report, so no step runs twice.\n- Chhatri waits at most 30 s for the answer (3 timed-out tries take 32 s). If none comes, it does not take over, because n8n may still be running: it records workflow.start_failed in the audit log.",
+        "height": 180,
+        "width": 1080,
+        "color": 2
       }
     }
   ],
@@ -183,7 +251,7 @@
       "main": [
         [
           {
-            "node": "Step 1 · open_case",
+            "node": "1 · Queue for an officer",
             "type": "main",
             "index": 0
           }
@@ -197,18 +265,18 @@
         ]
       ]
     },
-    "Step 1 · open_case": {
+    "1 · Queue for an officer": {
       "main": [
         [
           {
-            "node": "Step 2 · notify_officer",
+            "node": "2 · Notify the officer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Step 2 · notify_officer": {
+    "2 · Notify the officer": {
       "main": [
         [
           {

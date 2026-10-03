@@ -1,4 +1,9 @@
-"""The two slip pre-check routes on the real app (data-model 5.3, fs-02 section 8; AC-SLIP-01 to 05, 09)."""
+"""The slip pre-check routes on the real app (data-model 5.3, fs-02 section 8; AC-SLIP-01 to 05, 09).
+
+With rule personal.require_doctor_confirmation on, CONFIRM answers AWAITING_CONSENT (the doctor question, nothing filed)
+and CONSENT_YES / CONSENT_NO file the claim. The outcome after the answer is not pinned where the claim pipeline's doctor
+step (chhatri-61) decides it.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 from chhatri.api.app import create_app
+from chhatri.api.schemas.rights import PrecheckOpen
 from chhatri.config import DATA_DIR
 from chhatri.events import EventBus
 from chhatri.replay.state import AppState
@@ -25,6 +31,8 @@ ANIL: Final = "S-0142"
 FLAG: Final = "n3_slip_precheck"
 URL: Final = f"/api/merchants/{ANIL}/slip-precheck"
 SAMPLE: Final = {"sample": "anil_admission_slip.png"}
+OPEN: Final = f"{URL}/open"
+FILED: Final = {"APPROVED", "REFERRED"}
 
 
 def sample(name: str) -> bytes:
@@ -93,6 +101,7 @@ def png() -> bytes:
 async def test_both_routes_answer_the_ordinary_404_while_the_flag_is_off(flag_off: AsyncClient) -> None:
     assert error_of(await flag_off.post(URL, json=SAMPLE), 404, "not_found").message == "not found"
     error_of(await flag_off.post(f"{URL}/PC-000001/confirm", json={"action": "CONFIRM"}), 404, "not_found")
+    error_of(await flag_off.get(OPEN), 404, "not_found")
 
 
 async def test_the_photo_route_still_decides_in_one_step_while_the_flag_is_off(flag_off: AsyncClient) -> None:
@@ -121,6 +130,8 @@ async def test_a_sample_is_read_ready_with_the_contract_shape(client: AsyncClien
         {"key": "admission_date", "value": "2025-08-20", "state": "READ", "note": None},
         {"key": "discharge_date", "value": None, "state": "NOT_ON_SLIP", "note": None},
         {"key": "hospital_name", "value": "KEM Hospital, Parel", "state": "READ", "note": None},
+        {"key": "doctor_name", "value": "Dr S. Rao", "state": "READ", "note": None},
+        {"key": "doctor_registration_no", "value": "MMC-2011-45817", "state": "READ", "note": None},
     ]
     assert body["checklist"] == [
         {"id": "photo_readable", "state": "PASS"},
@@ -161,7 +172,7 @@ async def test_a_blurry_slip_is_a_retake_with_one_reason(client: AsyncClient) ->
     assert (body["status"], body["reason"]) == ("RETAKE", "LOW_CONFIDENCE")
     assert body["document"] == {"type": None, "accepted": False}
     assert body["gate"] == {"passed": False, "confidence": 0.22, "minimum": 0.8}
-    assert [s["state"] for s in body["slots"]] == ["MISSING", "MISSING", "NOT_ON_SLIP", "NOT_ON_SLIP"]
+    assert [s["state"] for s in body["slots"]] == ["MISSING", "MISSING", *["NOT_ON_SLIP"] * 4]
     assert [c["state"] for c in body["checklist"]] == ["WARN", "WARN", "WARN"]
     assert body["guidance"]["key"] == "SLIP_RETAKE_CLEAR" and body["guidance"]["text_en"].startswith(
         "The photo is not clear."
@@ -210,14 +221,14 @@ async def test_unknown_and_malformed_merchants(client: AsyncClient) -> None:
 
 async def test_no_open_check_in_is_a_409_and_nothing_is_stored(make_client) -> None:
     async for http in started(make_client, at="11:19"):
-        error_of(await http.post(URL, json=SAMPLE), 409, "conflict")
+        error_of(await http.post(URL, json=SAMPLE), 409, "no_checkin")
         assert (await http.get("/api/media/MD-000001")).status_code == 404
 
 
 async def test_the_photo_limit_is_a_409(client: AsyncClient) -> None:
     for _ in range(3):
         data(await client.post(URL, json={"sample": "blurry_slip.png"}))
-    error_of(await client.post(URL, json={"sample": "blurry_slip.png"}), 409, "conflict")
+    error_of(await client.post(URL, json={"sample": "blurry_slip.png"}), 409, "photo_limit")
 
 
 async def test_the_uploads_rate_limit_applies(client: AsyncClient) -> None:
@@ -228,23 +239,112 @@ async def test_the_uploads_rate_limit_applies(client: AsyncClient) -> None:
 # ------------------------------------------------------------------------------------------------ confirm
 
 
-async def test_confirm_files_the_claim_and_the_engine_decides(client: AsyncClient) -> None:
+async def test_confirm_asks_the_doctor_question_then_the_answer_files_the_claim(client: AsyncClient) -> None:
     pc = data(await client.post(URL, json=SAMPLE))
-    body = data(await client.post(f"{URL}/{pc['precheck_id']}/confirm", json={"action": "CONFIRM"}))
-    assert body["precheck_id"] == pc["precheck_id"] and body["status"] == "CONFIRMED"
-    assert (body["confirmed_as"], body["outcome"], body["case_id"], body["messages"]) == (
-        "FIELDS_CONFIRMED",
-        "APPROVED",
+    confirm = f"{URL}/{pc['precheck_id']}/confirm"
+    asked = data(await client.post(confirm, json={"action": "CONFIRM"}))
+    assert (asked["status"], asked["confirmed_as"]) == ("AWAITING_CONSENT", "FIELDS_CONFIRMED")
+    assert (
+        asked["claim_id"],
+        asked["decision_id"],
+        asked["outcome"],
+        asked["case_id"],
+        asked["doctor_check"],
+    ) == (
         None,
-        [],
+        None,
+        None,
+        None,
+        None,
     )
+    consent = asked["consent"]
+    assert (consent["purpose"], consent["status"], consent["precheck_id"], consent["answered_at"]) == (
+        "doctor_verification",
+        "ASKED",
+        pc["precheck_id"],
+        None,
+    )
+    assert (consent["doctor_name"], consent["hospital_name"]) == ("Dr S. Rao", "KEM Hospital, Parel")
+    assert consent["question_en"].startswith(
+        "May we ask Dr S. Rao at KEM Hospital, Parel to confirm your visit?"
+    )
+    [question] = asked["messages"]
+    assert question["card"]["consent_for"] == pc["precheck_id"]
+    assert [a["kind"] for a in question["card"]["actions"]] == ["CONSENT_YES", "CONSENT_NO"]
+    assert question["meta"]["consent_purpose"] == "doctor_verification"
+    error_of(await client.post(confirm, json={"action": "CONFIRM"}), 409, "consent_pending")
+    error_of(await client.post(confirm, json={"action": "SEND_TO_TEAM"}), 409, "consent_pending")
+
+    body = data(await client.post(confirm, json={"action": "CONSENT_YES"}))
+    assert body["status"] == "CONFIRMED" and body["outcome"] in FILED
     assert body["claim_id"].startswith("CL-") and body["decision_id"].startswith("D-")
-    decision = data(await client.get(f"/api/decisions/{body['decision_id']}"))
-    assert decision["outcome"] == "APPROVED" and decision["amount_paise"] == 150_000
+    assert body["consent"]["status"] == "GIVEN" and body["consent"]["answered_at"].endswith("+05:30")
+    error_of(await client.post(confirm, json={"action": "CONSENT_NO"}), 409, "already_confirmed")
+    error_of(await client.post(URL, json=SAMPLE), 409, "no_checkin")
+
+
+async def test_a_no_files_the_claim_with_a_refused_consent(client: AsyncClient) -> None:
+    pc = data(await client.post(URL, json=SAMPLE))
+    confirm = f"{URL}/{pc['precheck_id']}/confirm"
+    data(await client.post(confirm, json={"action": "CONFIRM"}))
+    body = data(await client.post(confirm, json={"action": "CONSENT_NO"}))
+    assert body["status"] == "CONFIRMED" and body["consent"]["status"] == "REFUSED"
+    assert body["outcome"] is not None and body["claim_id"].startswith("CL-")
+
+
+async def test_an_answer_before_the_question_is_a_409(client: AsyncClient) -> None:
+    pc = data(await client.post(URL, json=SAMPLE))
     error_of(
-        await client.post(f"{URL}/{pc['precheck_id']}/confirm", json={"action": "CONFIRM"}), 409, "conflict"
+        await client.post(f"{URL}/{pc['precheck_id']}/confirm", json={"action": "CONSENT_YES"}),
+        409,
+        "no_consent_question",
     )
-    error_of(await client.post(URL, json=SAMPLE), 409, "conflict")
+
+
+# ------------------------------------------------------------------------------------------------ what is open
+
+
+def open_view(response) -> dict[str, Any]:  # noqa: ANN001
+    body = data(response)
+    PrecheckOpen.model_validate(body)
+    return body
+
+
+async def test_the_open_route_follows_the_merchant_through_the_steps(client: AsyncClient) -> None:
+    empty = open_view(await client.get(OPEN))
+    assert empty == {
+        "merchant_id": ANIL,
+        "checkin_open": True,
+        "first_silent_day": "2025-08-20",
+        "precheck": None,
+        "awaiting_consent": None,
+    }
+    retake = data(await client.post(URL, json={"sample": "blurry_slip.png"}))
+    shown = open_view(await client.get(OPEN))
+    assert (
+        shown["precheck"]["precheck_id"] == retake["precheck_id"] and shown["precheck"]["status"] == "RETAKE"
+    )
+    ready = data(await client.post(URL, json=SAMPLE))
+    assert open_view(await client.get(OPEN))["precheck"]["precheck_id"] == ready["precheck_id"]
+    data(await client.post(f"{URL}/{ready['precheck_id']}/confirm", json={"action": "CONFIRM"}))
+    waiting = open_view(await client.get(OPEN))
+    assert waiting["precheck"] is None and waiting["awaiting_consent"]["status"] == "ASKED"
+    assert waiting["awaiting_consent"]["precheck_id"] == ready["precheck_id"]
+    data(await client.post(f"{URL}/{ready['precheck_id']}/confirm", json={"action": "CONSENT_YES"}))
+    done = open_view(await client.get(OPEN))
+    assert (done["checkin_open"], done["first_silent_day"], done["precheck"], done["awaiting_consent"]) == (
+        False,
+        None,
+        None,
+        None,
+    )
+
+
+async def test_the_open_route_without_a_check_in(make_client) -> None:
+    async for http in started(make_client, at="11:19"):
+        body = open_view(await http.get(OPEN))
+        assert (body["checkin_open"], body["precheck"]) == (False, None)
+        error_of(await http.get("/api/merchants/S-9999/slip-precheck/open"), 404, "not_found")
 
 
 async def test_a_blurry_slip_sent_to_the_team_is_referred_with_a_case(client: AsyncClient) -> None:
@@ -262,9 +362,8 @@ async def test_a_blurry_slip_sent_to_the_team_is_referred_with_a_case(client: As
 )
 async def test_the_wrong_action_for_the_status_is_a_409(client: AsyncClient, first: str, action: str) -> None:
     pc = data(await client.post(URL, json={"sample": first}))
-    error_of(
-        await client.post(f"{URL}/{pc['precheck_id']}/confirm", json={"action": action}), 409, "conflict"
-    )
+    code = "ready_not_team" if action == "SEND_TO_TEAM" else "not_ready"
+    error_of(await client.post(f"{URL}/{pc['precheck_id']}/confirm", json={"action": action}), 409, code)
 
 
 async def test_a_superseded_pre_check_cannot_be_confirmed(client: AsyncClient) -> None:
@@ -273,7 +372,7 @@ async def test_a_superseded_pre_check_cannot_be_confirmed(client: AsyncClient) -
     error_of(
         await client.post(f"{URL}/{old['precheck_id']}/confirm", json={"action": "SEND_TO_TEAM"}),
         409,
-        "conflict",
+        "superseded",
     )
 
 
@@ -315,8 +414,10 @@ async def test_the_photo_route_goes_through_the_pre_check_while_the_flag_is_on(c
     assert card["card"]["status"] == "READY" and card["meta"]["precheck_id"] == "PC-000001"
     detail = (await client.get(f"/api/merchants/{ANIL}")).json()["data"]
     assert detail["decisions"] == []  # nothing is decided until the merchant confirms
-    confirmed = data(await client.post(f"{URL}/PC-000001/confirm", json={"action": "CONFIRM"}))
-    assert confirmed["outcome"] == "APPROVED"
+    asked = data(await client.post(f"{URL}/PC-000001/confirm", json={"action": "CONFIRM"}))
+    assert asked["status"] == "AWAITING_CONSENT"
+    confirmed = data(await client.post(f"{URL}/PC-000001/confirm", json={"action": "CONSENT_YES"}))
+    assert confirmed["outcome"] in FILED
 
 
 async def test_a_scenario_reload_clears_the_pre_checks_and_restarts_the_ids(client: AsyncClient) -> None:

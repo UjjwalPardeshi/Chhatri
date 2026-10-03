@@ -92,6 +92,10 @@ test('forget my slip: a slip under review cannot be erased; once the officer ans
   await page.getByTestId('slip-demo-good').click()
   await page.getByTestId('slip-result').waitFor()
   await (await page.getByTestId('slip-confirm').count() > 0 ? page.getByTestId('slip-confirm') : page.getByTestId('slip-team')).click()
+  /** A confirmed slip is followed by the doctor question; No keeps the claim with a person, as this test needs. */
+  const declineDoctor = page.getByTestId('slip-consent-no')
+  await Promise.race([declineDoctor.waitFor(), page.waitForURL(/screen=claim&claim=/)])
+  if ((await declineDoctor.count()) > 0) await declineDoctor.click()
   await expect(page).toHaveURL(/screen=claim&claim=/)
   await goWithin(page, `${APP}?lang=en&screen=consents`)
   const held = page.getByTestId('consent-held').locator('li').first()

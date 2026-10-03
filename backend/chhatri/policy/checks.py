@@ -1,4 +1,4 @@
-"""The fourteen policy checks (SPEC §9.2), each a pure function returning a `CheckResult`.
+"""The nineteen policy checks (SPEC §9.2), each a pure function returning a `CheckResult`.
 
 Status semantics (SPEC §9.2): HARD checks return only PASS / FAIL (NOT_APPLICABLE is never produced
 here because the engine runs only the checks that apply to a claim kind) and missing data is FAIL.
@@ -13,8 +13,17 @@ from datetime import date, datetime
 from typing import Final
 
 from chhatri.clock import IST
-from chhatri.domain.enums import CheckCode, CheckStatus
-from chhatri.domain.models import Alert, AreaTrigger, CheckResult, Cover, SlipExtraction
+from chhatri.domain.enums import CheckCode, CheckStatus, VerificationStatus
+from chhatri.domain.models import (
+    Alert,
+    AreaTrigger,
+    CheckResult,
+    Cover,
+    Doctor,
+    DoctorVerification,
+    Hospital,
+    SlipExtraction,
+)
 from chhatri.money import format_inr
 from chhatri.policy.catalogue import MEDICAL_DOCUMENT_TYPES, spec
 from chhatri.policy.cover import EffectiveStatus, effective_status
@@ -263,3 +272,94 @@ def within_annual_limit(paid_365_paise: int, amount_paise: int, rules: PolicyRul
         return result(CheckCode.WITHIN_ANNUAL_LIMIT, FAIL, detail, observed, required)
     detail = f"{format_inr(total)} of the {format_inr(limit)} yearly limit."
     return result(CheckCode.WITHIN_ANNUAL_LIMIT, PASS, detail, observed, required)
+
+
+def hospital_identified(slip: SlipExtraction | None, hospital: Hospital | None) -> CheckResult:
+    """HOSPITAL_IDENTIFIED: the slip names a hospital the independent directory knows (SPEC §9.2).
+
+    SOFT, and deliberately so: this reads text an AI lifted off a photograph. A misread hospital
+    must send the claim to a person, never decline it. Only a doctor's explicit "no" can decline.
+    """
+    code, required = CheckCode.HOSPITAL_IDENTIFIED, "A hospital listed in the directory"
+    named = slip.hospital_name if slip is not None else None
+    if named is None or not named.strip():
+        return result(code, FAIL, "The slip does not name a hospital.", "No hospital", required)
+    if hospital is None:
+        detail = f"No hospital matching “{named}” is in the directory, so there is nobody to ask."
+        return result(code, FAIL, detail, named, required)
+    return result(code, PASS, f"The slip names {hospital.name}.", hospital.name, required)
+
+
+def doctor_identified(
+    slip: SlipExtraction | None, doctor: Doctor | None, hospital: Hospital | None = None
+) -> CheckResult:
+    """DOCTOR_IDENTIFIED: the slip names a doctor on that hospital's register (SPEC §9.2).
+
+    The registration number is the identity key. Nothing here reads a contact detail off the slip:
+    a number the claimant supplied would confirm whatever the claimant wanted it to.
+    """
+    code, required = CheckCode.DOCTOR_IDENTIFIED, "A doctor on that hospital's register"
+    name = slip.doctor_name if slip is not None else None
+    registration = slip.doctor_registration_no if slip is not None else None
+    if name is None or not name.strip():
+        return result(code, FAIL, "The slip does not name a treating doctor.", "No doctor", required)
+    if registration is None or not registration.strip():
+        detail = "The slip shows no medical registration number, so the doctor cannot be identified."
+        return result(code, FAIL, detail, name, required)
+    observed = f"{name} ({registration})"
+    if doctor is None:
+        detail = f"No doctor with registration {registration} is on that hospital's register."
+        return result(code, FAIL, detail, observed, required)
+    if hospital is not None and doctor.hospital_id != hospital.id:
+        detail = f"{doctor.name} is not on the register of {hospital.name}."
+        return result(code, FAIL, detail, observed, required)
+    return result(code, PASS, f"{doctor.name} is on that hospital's register.", observed, required)
+
+
+def verification_consent(consent: bool | None, consented_at: datetime | None) -> CheckResult:
+    """VERIFICATION_CONSENT: the merchant agreed to their doctor being asked (SPEC §9.2, DPDP Act).
+
+    SOFT on purpose. Consent governs whether Chhatri may *ask* a doctor, not whether a merchant
+    deserves to be paid: saying no, or not having been asked yet, sends the claim to a person who
+    can verify it another way. The pipeline must never call a doctor without a PASS here.
+    """
+    code, required = CheckCode.VERIFICATION_CONSENT, "Merchant consented"
+    if consent is None:
+        detail = "The merchant has not been asked yet whether we may confirm with the hospital."
+        return result(code, UNSURE, detail, "Not asked", required)
+    if not consent:
+        detail = "The merchant does not want us to contact the hospital, so a person must check."
+        return result(code, FAIL, detail, "Refused", required)
+    given = fmt_time(consented_at) if consented_at is not None else "yes"
+    return result(code, PASS, f"The merchant agreed on {given}.", given, required)
+
+
+def doctor_not_denied(verification: DoctorVerification | None) -> CheckResult:
+    """DOCTOR_NOT_DENIED: HARD, and fails only on an explicit no (SPEC §9.2).
+
+    Silence is handled by DOCTOR_CONFIRMED, which refers rather than declines.
+    """
+    code, required = CheckCode.DOCTOR_NOT_DENIED, "No denial from the treating doctor"
+    if verification is not None and verification.status is VerificationStatus.DENIED:
+        who = verification.answered_by or "The treating doctor"
+        detail = f"{who} says this patient was not treated on the day claimed."
+        return result(code, FAIL, detail, "Denied", required)
+    observed = verification.status.value if verification is not None else "Not asked yet"
+    return result(code, PASS, "The treating doctor has not denied the visit.", observed, required)
+
+
+def doctor_confirmed(verification: DoctorVerification | None) -> CheckResult:
+    """DOCTOR_CONFIRMED: SOFT. PASS once the doctor says yes; UNSURE while they have not (SPEC §9.2)."""
+    code, required = CheckCode.DOCTOR_CONFIRMED, "The treating doctor confirms the visit"
+    if verification is None:
+        return result(code, UNSURE, "The treating doctor has not been asked yet.", "Not asked", required)
+    status = verification.status
+    if status is VerificationStatus.CONFIRMED:
+        who = verification.answered_by or "The treating doctor"
+        return result(code, PASS, f"{who} confirmed the visit.", "Confirmed", required)
+    if status is VerificationStatus.NO_ANSWER:
+        detail = "The treating doctor did not answer in time, so a person should call the hospital."
+        return result(code, UNSURE, detail, "No answer", required)
+    if status is VerificationStatus.DENIED:
+        return result(code, FAIL, "The treating doctor denied the visit.", "Denied", required)
+    return result(code, UNSURE, "We are still waiting for the doctor to answer.", "Waiting", required)

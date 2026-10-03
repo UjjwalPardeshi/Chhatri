@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Final, Protocol, runtime_checkable
 
-from chhatri.domain.enums import HolidayReason, HolidayStatus, IntegrationMode, Language
+from chhatri.domain.enums import HolidayReason, HolidayStatus, IntegrationMode, Language, VerificationStatus
 from chhatri.domain.models import Merchant, SlipExtraction
 
 
@@ -291,3 +291,57 @@ class Lender(Protocol):
     """The port to the loan partner. One attempt per request id; raises `IntegrationError` when it cannot answer."""
 
     async def request_holiday(self, request: LenderRequest) -> LenderAnswer: ...
+
+
+# ---------------------------------------------------------------- doctor confirmation (SPEC §9.2)
+
+DOCTOR_BASIS: Final = "Merchant consented to the treating doctor confirming the visit"
+
+
+@dataclass(frozen=True, slots=True)
+class DoctorVerificationRequest:
+    """What Chhatri asks a treating doctor.
+
+    Only what is needed to answer "did this person attend on this day": no claim amount, no policy,
+    no merchant phone number and no reason for the claim. ``verify_chat_id`` comes from the
+    directory (``chhatri.directory``) and never from the slip, which the claimant supplied.
+    ``request_id`` doubles as the idempotency key, as with ``LenderRequest``.
+    """
+
+    request_id: str
+    claim_id: str
+    hospital_id: str
+    doctor_registration_no: str
+    verify_chat_id: str
+    patient_name: str
+    visit_date: date
+    requested_at: datetime
+    basis: str = DOCTOR_BASIS
+
+
+@dataclass(frozen=True, slots=True)
+class DoctorVerificationAnswer:
+    """The doctor's answer: the patient attended, or they did not. Nothing else is asked for."""
+
+    request_id: str
+    status: VerificationStatus
+    answered_at: datetime
+    answered_by: str
+
+    def __post_init__(self) -> None:
+        if self.status not in (VerificationStatus.CONFIRMED, VerificationStatus.DENIED):
+            raise ValueError(f"a doctor answers CONFIRMED or DENIED, not {self.status}")
+
+
+class DoctorNoResponse(IntegrationError):
+    """The doctor did not answer in time. Never read as a confirmation (SPEC §9.2)."""
+
+    def __init__(self, safe_message: str = "no answer from the treating doctor") -> None:
+        super().__init__("doctor", safe_message)
+
+
+@runtime_checkable
+class DoctorVerifier(Protocol):
+    """The port to the treating doctor. One attempt per request id; raises when it cannot answer."""
+
+    async def ask(self, request: DoctorVerificationRequest) -> DoctorVerificationAnswer: ...

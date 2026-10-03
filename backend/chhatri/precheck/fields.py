@@ -1,6 +1,6 @@
 """Validate what a reader returned before anything is shown or stored (H16; fs-02 7.3.7).
 
-Only the four slip fields and the class are kept. Strings are capped, must use letters of any script, digits, spaces and
+Only the six slip fields and the class are kept. Strings are capped, must use letters of any script, digits, spaces and
 `. , - ' / ( ) &`, and are scanned for instruction-like text. A strong signal is INJECTION_SUSPECTED and stops the chain,
 anything else outside the allowed set is INVALID_REPLY and the next link is tried. The reader's raw dictionary is dropped.
 """
@@ -17,8 +17,15 @@ from chhatri.precheck.signals import strong_signal
 
 MAX_NAME_CHARS: Final = 80
 MAX_HOSPITAL_CHARS: Final = 120
+MAX_DOCTOR_NAME_CHARS: Final = 80
+MAX_REGISTRATION_CHARS: Final = 32
 _PUNCTUATION: Final = frozenset(" .,-'/()&")
-_STRING_CAPS: Final = (("patient_name", MAX_NAME_CHARS), ("hospital_name", MAX_HOSPITAL_CHARS))
+_STRING_CAPS: Final = (
+    ("patient_name", MAX_NAME_CHARS),
+    ("hospital_name", MAX_HOSPITAL_CHARS),
+    ("doctor_name", MAX_DOCTOR_NAME_CHARS),
+    ("doctor_registration_no", MAX_REGISTRATION_CHARS),
+)
 
 
 def _allowed(char: str) -> bool:
@@ -38,5 +45,5 @@ def reject(slip: SlipExtraction) -> Rejection | None:
 
 
 def kept(slip: SlipExtraction) -> SlipExtraction:
-    """`slip` without the reader's raw dictionary: the four fields, the class, the confidence and the source."""
+    """`slip` without the reader's raw dictionary: the six fields, the class, the confidence and the source."""
     return slip.model_copy(update={"raw": {}})

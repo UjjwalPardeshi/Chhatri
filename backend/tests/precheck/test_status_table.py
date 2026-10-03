@@ -125,16 +125,70 @@ def test_the_gate_uses_the_loaded_minimum_and_the_class() -> None:
     assert decide(slip(document_type="other"), today=TODAY, minimum=MIN).gate_passed is False
 
 
-def test_slots_are_four_in_fixed_order_with_the_right_states() -> None:
-    read = slots(slip(hospital_name="KEM Hospital, Parel"))
+def test_slots_are_six_in_fixed_order_with_the_right_states() -> None:
+    read = slots(slip(hospital_name="KEM Hospital, Parel", doctor_name="Dr S. Rao"))
     assert [(s.key, s.state) for s in read] == [
         ("patient_name", "READ"),
         ("admission_date", "READ"),
         ("discharge_date", "NOT_ON_SLIP"),
         ("hospital_name", "READ"),
+        ("doctor_name", "READ"),
+        ("doctor_registration_no", "NOT_ON_SLIP"),
     ]
+    assert read[4].value == "Dr S. Rao"
     empty = slots(None)
-    assert [s.state for s in empty] == ["MISSING", "MISSING", "NOT_ON_SLIP", "NOT_ON_SLIP"]
+    assert [s.state for s in empty] == ["MISSING", "MISSING", *["NOT_ON_SLIP"] * 4]
+
+
+DOCTOR = {"doctor_name": "Dr S. Rao", "doctor_registration_no": "MMC-2011-45817"}
+
+DOCTOR_CASES = [
+    pytest.param(slip(**DOCTOR), {}, S.READY, None, None, id="doctor-read"),
+    pytest.param(slip(), {}, S.RETAKE, R.DOCTOR_MISSING, "SLIP_RETAKE_DOCTOR", id="no-doctor"),
+    pytest.param(
+        slip(doctor_name="Dr S. Rao"), {}, S.RETAKE, R.DOCTOR_MISSING, "SLIP_RETAKE_DOCTOR", id="no-reg-no"
+    ),
+    pytest.param(
+        slip(doctor_registration_no="MMC-2011-45817"),
+        {},
+        S.RETAKE,
+        R.DOCTOR_MISSING,
+        "SLIP_RETAKE_DOCTOR",
+        id="no-doctor-name",
+    ),
+    pytest.param(
+        slip(admission_date=None), {}, S.RETAKE, R.DATES_NOT_CLEAR, "SLIP_RETAKE_DATE", id="dates-beat-doctor"
+    ),
+    pytest.param(
+        slip(confidence=0.5),
+        {},
+        S.RETAKE,
+        R.DOCTOR_MISSING,
+        "SLIP_RETAKE_DOCTOR",
+        id="doctor-beats-confidence",
+    ),
+    pytest.param(
+        slip(),
+        {"last_photo": True},
+        S.NEEDS_TEAM,
+        R.DOCTOR_MISSING,
+        "SLIP_PHOTO_LIMIT",
+        id="doctor-last-photo",
+    ),
+]
+
+
+@pytest.mark.parametrize(("read", "extra", "status", "reason", "key"), DOCTOR_CASES)
+def test_the_doctor_row_applies_only_with_the_rule_on(
+    read: SlipExtraction, extra: dict[str, bool], status: S, reason: R | None, key: str | None
+) -> None:
+    verdict = decide(read, today=TODAY, minimum=MIN, require_doctor=True, **extra)
+    assert (verdict.status, verdict.reason, verdict.guidance_key) == (status, reason, key)
+
+
+def test_without_the_rule_a_slip_without_a_doctor_is_ready() -> None:
+    assert decide(slip(), today=TODAY, minimum=MIN).status is S.READY
+    assert decide(slip(), today=TODAY, minimum=MIN, require_doctor=False).reason is None
 
 
 def test_a_name_that_is_not_latin_is_kept_and_noted() -> None:

@@ -13,6 +13,13 @@ Voice notes: the transcript comes from the SpeechToText (``transcript_hint`` is 
 are silent WAV clips — the hint is used, labelled ``voice_source: "browser-simulated"``; without a
 hint the merchant is asked to repeat or type (VOICE_UNCLEAR). The audio is kept as media so the
 console can play it; ``meta.duration_s`` is read from WAV headers.
+
+The open next step (``pending``): before any intent, a yes / no / "team" that answers the step that waits for the
+merchant (the doctor question, a read slip, a slip for the team) runs that step's action on the pre-check, exactly as
+the app's buttons and the Telegram buttons (``handle_choice``) do. A message that is not about the step and would get
+the generic help line gets the step's own line instead, also when Ask Chhatri fell back to its template (its label is
+kept as the chain reported it). The doctor check: ``ask_doctor_consent`` (the pre-check service sends the question),
+``notify_doctor_asked`` / ``notify_doctor_answered`` / ``notify_personal_decided`` (the claim pipeline).
 """
 
 from __future__ import annotations
@@ -27,10 +34,11 @@ from typing import Final
 from chhatri.clock import Clock
 from chhatri.conversation.ask_port import UnknownResolver
 from chhatri.conversation.consent_text import CONSENT_WITHDRAWN_KEYS
+from chhatri.conversation.doctor_notices import DoctorNotices
 from chhatri.conversation.explain_first import explain_first
 from chhatri.conversation.intents import Intent, classify
 from chhatri.conversation.message_guard import MessageGuard
-from chhatri.conversation.messages import date_en, date_hi, name_facts
+from chhatri.conversation.messages import bilingual, date_en, date_hi, name_facts
 from chhatri.conversation.nlu import IntentChain, IntentResult, detect_intent, detect_intent_chain
 from chhatri.conversation.notifications import Notifications
 from chhatri.conversation.outbox import (
@@ -41,10 +49,21 @@ from chhatri.conversation.outbox import (
     Outbox,
     Outgoing,
 )
-from chhatri.conversation.ports import ClaimsPort, ConversationStore, MerchantDirectory
+from chhatri.conversation.pending import (
+    CHOICE_ACTIONS,
+    Choice,
+    PendingStep,
+    StepKind,
+    choice_label,
+    resolve_step,
+    step_reminder,
+    wants_team,
+    yes_no,
+)
+from chhatri.conversation.ports import ClaimsPort, ConversationStore, DoctorCheckPort, MerchantDirectory
 from chhatri.conversation.replies import Replies
 from chhatri.conversation.slip_flow import FiledSlip, PrecheckResolver, SlipFlow
-from chhatri.domain.enums import Channel, MessageKind, PreferredChannel
+from chhatri.domain.enums import Channel, MessageKind, PreferredChannel, VerificationStatus
 from chhatri.domain.models import (
     AreaTrigger,
     Case,
@@ -69,6 +88,10 @@ from chhatri.integrations.base import (
     SpeechToText,
     TextToSpeech,
 )
+from chhatri.precheck.chat import consent_outgoing
+from chhatri.precheck.consent_step import ConsentQuestion
+from chhatri.precheck.model import Action
+from chhatri.precheck.service import PrecheckConflict, PrecheckNotFound
 from chhatri.store.protocols import AuditSink
 
 __all__ = ["ClaimsPort", "ConversationService"]
@@ -78,6 +101,9 @@ logger = logging.getLogger(__name__)
 MAX_TEXT_CHARS: Final = 2000
 SARVAM_SOURCE_PREFIX: Final = "sarvam"
 MODEL_BLOCKED_INTENTS: Final = frozenset({Intent.DISPUTE_AMOUNT, Intent.BUY_COVER})
+STEP_SOURCE: Final = "pending-step"
+# A refused button or word: what the merchant is told instead (an answer already counted, or a step that is gone).
+DONE_CODES: Final = frozenset({"already_confirmed", "no_checkin"})
 
 
 def wav_duration_s(audio: bytes) -> float | None:
@@ -88,6 +114,10 @@ def wav_duration_s(audio: bytes) -> float | None:
             return round(clip.getnframes() / rate, 2) if rate else None
     except (wave.Error, EOFError):
         return None
+
+
+def _no_precheck() -> None:
+    return None
 
 
 def _require_bytes(data: bytes, what: str) -> None:
@@ -144,13 +174,19 @@ class ConversationService:
             preferred=preferred_channel,
         )
         self._store = store
-        self._replies = Replies(outbox=self._outbox, claims=claims, store=store)
+        self._claims = claims
+        self._precheck: PrecheckResolver = precheck if precheck is not None else _no_precheck
+        self._replies = Replies(
+            outbox=self._outbox, claims=claims, store=store, next_step=self._step_reminder
+        )
+        self._doctor = DoctorNotices(outbox=self._outbox, directory=city)
         self._slips = SlipFlow(
             outbox=self._outbox,
             claims=claims,
             store=store,
             reader=slips,
             audit=audit,
+            doctor=self._doctor,
             **({} if precheck is None else {"precheck": precheck}),
             **({} if slip_consent is None else {"slip_consent": slip_consent}),
         )
@@ -224,7 +260,108 @@ class ConversationService:
             return hint.strip(), "hint"
         return text, source
 
+    # ------------------------------------------------------------------ the open next step
+
+    def pending_step(self, merchant_id: str) -> PendingStep | None:
+        """What waits for the merchant now (``pending`` module docstring), or None."""
+        service = self._precheck()
+        claims: object = self._claims
+        return resolve_step(
+            merchant_id,
+            precheck=None if service is None else service.open_for(merchant_id),
+            checkin_open=self._claims.open_silence(merchant_id) is not None,
+            store=self._store,
+            doctor=claims if isinstance(claims, DoctorCheckPort) else None,
+            latest_decision_id=self._latest_decision_id,
+        )
+
+    def _latest_decision_id(self, merchant_id: str) -> str | None:
+        decisions = getattr(self._store, "decisions_for", None)
+        found = decisions(merchant_id) if callable(decisions) else ()
+        return found[-1].id if found else None
+
+    def _step_reminder(self, merchant_id: str) -> Outgoing | None:
+        step = self.pending_step(merchant_id)
+        return None if step is None else step_reminder(step)
+
+    async def handle_choice(self, merchant_id: str, choice: Choice) -> tuple[Message, ...]:
+        """A tapped pre-check or doctor-question button: recorded as the button's words, then the action runs."""
+        merchant = self._city.merchant(merchant_id)
+        _, label_en = choice_label(choice)
+        inbound = self._outbox.receive(merchant, kind=MessageKind.TEXT, text=label_en)
+        action = CHOICE_ACTIONS[(choice.kind, choice.answer)]
+        return (inbound, *await self._run_action(merchant, choice.precheck_id, action))
+
+    async def _run_action(self, merchant: Merchant, precheck_id: str, action: Action) -> tuple[Message, ...]:
+        service = self._precheck()
+        if service is None:
+            return (await self._outbox.send(merchant, Outgoing.text("SLIP_ACTION_EXPIRED")),)
+        try:
+            done = await service.confirm(merchant.id, precheck_id, action, source="CHAT")
+        except PrecheckNotFound:
+            return (await self._outbox.send(merchant, Outgoing.text("SLIP_ACTION_EXPIRED")),)
+        except PrecheckConflict as exc:
+            step = self.pending_step(merchant.id)
+            if exc.code == "consent_pending" and step is not None:
+                return (await self._outbox.send(merchant, step_reminder(step)),)
+            key = "SLIP_ACTION_DONE" if exc.code in DONE_CODES else "SLIP_ACTION_EXPIRED"
+            return (await self._outbox.send(merchant, Outgoing.text(key)),)
+        return done.messages
+
+    async def _answer_step(
+        self, merchant: Merchant, inbound: Message, text: str
+    ) -> tuple[Message, ...] | None:
+        """The open step's answer (L2), or None when `text` does not answer it."""
+        step = self.pending_step(merchant.id)
+        if step is None or step.precheck_id is None:
+            return None
+        said = yes_no(text)
+        action: Action | None = None
+        if step.kind is StepKind.CONSENT and said is not None:
+            action = Action.CONSENT_YES if said else Action.CONSENT_NO
+        elif step.kind is StepKind.PRECHECK_READY and said is True:
+            action = Action.CONFIRM
+        elif step.kind is StepKind.PRECHECK_TEAM and wants_team(text):
+            action = Action.SEND_TO_TEAM
+        elif not (step.kind is StepKind.PRECHECK_READY and said is False):
+            return None
+        self._audit.append(
+            at=inbound.created_at,
+            actor=AI_ACTOR,
+            action="intent.detected",
+            subject_type="message",
+            subject_id=inbound.id,
+            data={
+                "merchant_id": merchant.id,
+                "intent": classify(text).value,
+                "source": STEP_SOURCE,
+                "step": step.kind.value,
+            },
+        )
+        if action is None:  # "no" to a read slip: nothing is filed, a clearer photo is asked for
+            return (await self._outbox.send(merchant, Outgoing.text("SLIP_PRECHECK_SAID_NO")),)
+        return await self._run_action(merchant, step.precheck_id, action)
+
+    def _ask_fallback(self, merchant: Merchant, out: Outgoing) -> Outgoing:
+        """Ask Chhatri's template answer (a timeout, a refusal) becomes the open step's line; the label is kept."""
+        if (out.text_hi, out.text_en) != bilingual("FALLBACK_HELP"):
+            return out
+        reminder = self._step_reminder(merchant.id)
+        if reminder is None:
+            return out
+        return Outgoing(
+            key=out.key,
+            kind=out.kind,
+            text_hi=reminder.text_hi,
+            text_en=reminder.text_en,
+            meta=out.meta,
+            buttons=reminder.buttons,
+        )
+
     async def _answer(self, merchant: Merchant, inbound: Message, text: str) -> tuple[Message, ...]:
+        stepped = await self._answer_step(merchant, inbound, text)
+        if stepped is not None:
+            return stepped
         answerer = self._unknown() if self._unknown is not None else None
         if answerer is None:
             if (
@@ -258,11 +395,35 @@ class ConversationService:
                 text_en=reply.text_en,
                 meta=reply.meta,
             )
-            return (await self._outbox.send(merchant, out),)
+            return (await self._outbox.send(merchant, self._ask_fallback(merchant, out)),)
         if detected.source == "llm" and detected.intent in MODEL_BLOCKED_INTENTS:
             # N2.15: with N2 off, a model-chosen intent never runs a handler that writes (a case, a payment link)
             return await self._replies.respond(merchant, Intent.UNKNOWN, text)
         return await self._replies.respond(merchant, detected.intent, text)
+
+    # ------------------------------------------------------------------ the doctor check
+
+    async def ask_doctor_consent(self, merchant_id: str, question: ConsentQuestion) -> Message:
+        """DOCTOR_CONSENT_ASK[_GENERIC] with its Yes / No card and buttons (the pre-check service calls this)."""
+        return await self._outbox.send(self._city.merchant(merchant_id), consent_outgoing(question))
+
+    async def notify_doctor_asked(
+        self, merchant_id: str, *, doctor_name: str, hospital_name: str, mode: str
+    ) -> Message:
+        """DOCTOR_ASKED once the question is out (`mode` LIVE, SIMULATED or FALLBACK)."""
+        return await self._doctor.asked(
+            merchant_id, doctor_name=doctor_name, hospital_name=hospital_name, mode=mode
+        )
+
+    async def notify_doctor_answered(
+        self, merchant_id: str, *, status: VerificationStatus, doctor_name: str, mode: str
+    ) -> Message | None:
+        """DOCTOR_CONFIRMED_VISIT for CONFIRMED; nothing for DENIED or NO_ANSWER (the decision message explains)."""
+        return await self._doctor.answered(merchant_id, status=status, doctor_name=doctor_name, mode=mode)
+
+    async def notify_personal_decided(self, decision: Decision) -> tuple[Message, ...]:
+        """The outcome lines of a personal decision made after the doctor answered (APPROVED: nothing yet)."""
+        return await self._slips.outcome_messages(self._city.merchant(decision.merchant_id), decision)
 
     # ------------------------------------------------------------------ business-initiated
 

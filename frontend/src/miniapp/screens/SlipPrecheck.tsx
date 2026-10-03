@@ -5,7 +5,8 @@
  * three photos per check-in. The sheet carries the H26 label (LIVE, SIMULATED or FALLBACK) and never a confidence
  * number. It exists only behind `n3_slip_precheck` (the URL does not know the screen while the flag is off). With
  * `n6_consents` on and no ACTIVE slip consent, one unticked box asks for the OK first (fs-07 9.3); the OK goes with
- * the photo and the server records it before it reads anything.
+ * the photo and the server records it before it reads anything. After "Yes, this is right" the doctor question follows
+ * (design 2.4): Yes or No, and the claim opens. Opening the sheet resumes what the open check-in waits on.
  */
 import { useRef, useState, type ChangeEvent } from 'react'
 
@@ -22,7 +23,7 @@ import { ScreenRoot } from '../shell/SharedStates'
 import { Button } from '../ui/button'
 import { Skeleton } from '../ui/skeleton'
 import { MAX_MB, slipPossible, useSlipPrecheckFlow, type FlowState } from './SlipPrecheckFlow'
-import { SlipActions, SlipChecklist, SlipFields, SlipFooter, SlipNotes } from './SlipPrecheckParts'
+import { ConsentStep, SlipActions, SlipChecklist, SlipFields, SlipFooter, SlipNotes } from './SlipPrecheckParts'
 
 const BLURRY_SAMPLE = 'blurry_slip.png'
 const NO_CONSENTS: Consent[] = []
@@ -61,7 +62,7 @@ export function SlipPrecheck() {
   const waitingForOk = slipOk.needed && !slipOk.ticked
 
   const { snapshot } = useLive()
-  const { phase, check } = state
+  const { phase, check, consent } = state
   const busy = phase === 'reading' || phase === 'deciding'
 
   if (!check && !slipPossible(snapshot?.clock.scenario)) {
@@ -87,6 +88,17 @@ export function SlipPrecheck() {
       <input ref={gallery} data-testid="slip-gallery-input" type="file" accept="image/*" hidden onChange={picked} />
     </>
   )
+
+  if (consent && (phase === 'consent' || phase === 'deciding')) {
+    return (
+      <ScreenRoot name="slip" state={online ? 'ready' : 'offline'}>
+        <ConsentStep consent={consent} lang={lang} busy={busy} online={online} onAnswer={(yes) => void decide(yes ? 'CONSENT_YES' : 'CONSENT_NO')} />
+        <ErrorLine state={state} lang={lang} />
+        {phase === 'deciding' ? <p data-testid="slip-deciding" className="text-sm text-ink-2">{t('slip.working', lang)}</p> : null}
+        {online ? null : <p className="text-xs text-ink-3">{t('offline.blocked', lang)}</p>}
+      </ScreenRoot>
+    )
+  }
 
   if (phase === 'reading' || phase === 'deciding') {
     const reading = phase === 'reading'

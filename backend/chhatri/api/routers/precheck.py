@@ -1,9 +1,12 @@
 """The slip pre-check routes (N3; data-model 5.3, fs-02 section 8).
 
-Behind the flag ``n3_slip_precheck``: while it is off both routes answer the ordinary 404 ``not_found``. The first route
-reads one photo (multipart ``file`` or JSON ``{sample}``) and shows what was read, and nothing is decided. The second files
-the claim once the merchant confirms the fields or sends the slip to the team; the policy engine alone decides it. A provider
-failure is never an HTTP error: it is a 200 with status NEEDS_TEAM and a label.
+Behind the flag ``n3_slip_precheck``: while it is off every route answers the ordinary 404 ``not_found``. The first route
+reads one photo (multipart ``file`` or JSON ``{sample}``) and shows what was read, and nothing is decided. The second takes
+the merchant's action: CONFIRM the fields (with the doctor rule on this asks "may we ask your doctor?" and files nothing),
+CONSENT_YES / CONSENT_NO (the answer, then the claim is filed) or SEND_TO_TEAM; the policy engine alone decides the claim.
+The third (``GET …/slip-precheck/open``) says what is open for the merchant now: the check-in, the pre-check that waits
+for them, or the doctor question. A provider failure is never an HTTP error: it is a 200 with status NEEDS_TEAM and a
+label. Every 409 carries a specific ``code`` (``PrecheckConflict.code``) so the app can say a true, friendly sentence.
 """
 
 from __future__ import annotations
@@ -24,7 +27,8 @@ from chhatri.api.uploads import MAX_IMAGE_BYTES, ValidatedImage, read_limited, v
 from chhatri.consent.errors import ConsentConflict
 from chhatri.consent.slip_gate import require_slip_consent
 from chhatri.precheck.clean import UncleanableImage
-from chhatri.precheck.model import Action
+from chhatri.precheck.consent_step import consent_question, consent_view
+from chhatri.precheck.model import Action, PrecheckStatus
 from chhatri.precheck.registry import FLAG, precheck_service
 from chhatri.precheck.service import PrecheckConflict, PrecheckNotFound, SlipPrecheckService
 from chhatri.precheck.view import confirmation_view, precheck_view
@@ -93,7 +97,7 @@ async def read_slip(
     try:
         created = await service.precheck(merchant_id, image.data, image.mime)
     except PrecheckConflict as exc:
-        raise ApiError(409, str(exc)) from exc
+        raise ApiError(409, str(exc), code=exc.code) from exc
     except UncleanableImage as exc:
         raise ApiError(415, "image file is damaged or unreadable") from exc
     return ok(precheck_view(created, minimum=service.minimum))
@@ -109,17 +113,47 @@ async def confirm_slip(
     merchant_id: MerchantId,
     precheck_id: PrecheckId,
 ) -> dict[str, Any]:
-    """Confirm the fields, or send the slip to the team. The engine decides as it does for any personal claim."""
+    """Confirm the fields, answer the doctor question, or send the slip to the team. The engine decides the claim."""
     merchant_or_404(state, merchant_id)
     service = _service(runtime)
     try:
-        done = await service.confirm(merchant_id, precheck_id, body.action)
+        done = await service.confirm(merchant_id, precheck_id, body.action, source="APP")
     except PrecheckNotFound as exc:
         raise ApiError(404, f"pre-check {precheck_id} not found") from exc
     except PrecheckConflict as exc:
-        raise ApiError(409, str(exc)) from exc
+        raise ApiError(409, str(exc), code=exc.code) from exc
     messages = [views.message_view(message) for message in done.messages]
-    return ok(confirmation_view(done.precheck, outcome=done.outcome, case_id=done.case_id, messages=messages))
+    return ok(
+        confirmation_view(
+            done.precheck,
+            outcome=done.outcome,
+            case_id=done.case_id,
+            messages=messages,
+            consent=done.consent,
+            doctor_pending=done.doctor_pending,
+        )
+    )
+
+
+@router.get("/{merchant_id}/slip-precheck/open")
+async def open_precheck(state: StateDep, runtime: RuntimeDep, merchant_id: MerchantId) -> dict[str, Any]:
+    """What waits for the merchant now: the open check-in, its open pre-check, or the doctor question."""
+    merchant_or_404(state, merchant_id)
+    service = _service(runtime)
+    first = runtime.orchestrator.open_silence(merchant_id)
+    pc = service.open_for(merchant_id)
+    waiting = pc is not None and pc.status is PrecheckStatus.AWAITING_CONSENT
+    return ok(
+        {
+            "merchant_id": merchant_id,
+            "checkin_open": first is not None,
+            "first_silent_day": None if first is None else first.isoformat(),
+            "precheck": None if pc is None or waiting else precheck_view(pc, minimum=service.minimum),
+            "awaiting_consent": consent_view(consent_question(pc), status="ASKED", answered_at=None)
+            if pc is not None and waiting
+            else None,
+        }
+    )
 
 
 async def _uploaded(request: Request) -> tuple[ValidatedImage, tuple[bool | None, str | None]]:

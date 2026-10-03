@@ -9,7 +9,7 @@ The token is part of every URL, so it is guarded in three ways: `IntegrationErro
 status or exception type only (never a URL or a Telegram description), `repr()` of the client shows nothing, and the
 `httpx` loggers, which print each request URL at INFO, are raised to WARNING when this module is imported.
 Retries follow SPEC §14 (429 and 5xx only, via `chhatri.integrations.retry`); `getUpdates` makes one attempt, because the
-poller owns its backoff.
+poller owns its backoff. A 429's `retry_after` is waited for, up to `RETRY_AFTER_CAP_S` (10 s).
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ __all__ = [
     "API_BASE",
     "INTEGRATION",
     "MAX_BUTTONS",
+    "FileTooLarge",
     "MAX_CALLBACK_BYTES",
     "MAX_FILE_BYTES",
     "MAX_TEXT_CHARS",
@@ -58,6 +59,9 @@ MAX_CAPTION_CHARS: Final = 1024
 MAX_BUTTONS: Final = 3
 MAX_CALLBACK_BYTES: Final = 64  # Telegram's limit for `callback_data`
 MAX_FILE_BYTES: Final = 5 * 1024 * 1024  # SPEC §19: uploads <= 5 MB, like WhatsApp media
+RETRY_AFTER_CAP_S: Final = (
+    10.0  # a 429's retry_after is honoured up to this; a longer ban fails the send instead
+)
 LONG_POLL_MARGIN_S: Final = 10.0  # the HTTP timeout of a long poll is the poll timeout plus this
 ALLOWED_UPDATES: Final = ("message", "callback_query")
 _FILE_PATH: Final = re.compile(r"^[A-Za-z0-9_./-]{1,256}$")
@@ -79,6 +83,10 @@ class TelegramFile:
 
     path: str
     size: int | None
+
+
+class FileTooLarge(IntegrationError):
+    """The merchant sent a file over `MAX_FILE_BYTES`: nothing was downloaded (the inbox says so)."""
 
 
 def inline_keyboard(buttons: Sequence[tuple[str, str]]) -> dict[str, Any]:
@@ -230,10 +238,10 @@ class TelegramBotClient:
         """`getFile`, then the bytes (at most 5 MB). `mime_type` is what the update said; the caller validates by content."""
         meta = await self.get_file(file_id)
         if meta.size is not None and meta.size > MAX_FILE_BYTES:
-            raise IntegrationError(INTEGRATION, "file larger than 5 MB")
+            raise FileTooLarge(INTEGRATION, "file larger than 5 MB")
         response = await self._request("GET", f"{self._api_base}/file/bot{self._token}/{meta.path}")
         if len(response.content) > MAX_FILE_BYTES:
-            raise IntegrationError(INTEGRATION, "file larger than 5 MB")
+            raise FileTooLarge(INTEGRATION, "file larger than 5 MB")
         if not response.content:
             raise IntegrationError(INTEGRATION, "file was empty")
         return InboundMedia(data=response.content, mime_type=mime_type.split(";", 1)[0].strip())
@@ -282,5 +290,6 @@ class TelegramBotClient:
                 integration=INTEGRATION,
                 policy=policy or self._policy,
                 sleep=self._sleep,
+                retry_after_cap_s=RETRY_AFTER_CAP_S,
                 **kwargs,
             )
