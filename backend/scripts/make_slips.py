@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Regenerate the sample admission slips in backend/data/slips (SPEC §17.2).
 
-- anil_admission_slip.png: "Anil R. Jadhav", admitted 2025-08-20, "Viral fever", KEM Hospital, Parel
-- mismatch_admission_slip.png: "Sunil Pawar", same dates (the HUMAN live test, §13.6)
+- anil_admission_slip.png: "Anil R. Jadhav", admitted 2025-08-20, "Viral fever", KEM Hospital, Parel,
+  treating doctor "Dr S. Rao", "Reg. No: MMC-2011-45817" (the directory's doctor at KEM)
+- mismatch_admission_slip.png: "Sunil Pawar", same dates, hospital and doctor (the HUMAN live test, §13.6)
 - blurry_slip.png: the Anil slip photographed out of focus; unreadable, low confidence
 
 Deterministic: re-running produces byte-identical files.
@@ -26,14 +27,23 @@ HOSPITAL = "KEM Hospital, Parel"
 DIAGNOSIS = "Viral fever"
 ANIL_PATIENT = "Anil R. Jadhav"
 MISMATCH_PATIENT = "Sunil Pawar"
+DOCTOR_NAME = "Dr S. Rao"
+DOCTOR_REG = "MMC-2011-45817"
 
 
 def build_slips() -> dict[str, bytes]:
     """File name -> PNG bytes for the three sample slips."""
+    doctor, reg = DOCTOR_NAME, DOCTOR_REG
     return {
-        SLIP_ANIL: render_slip(ANIL_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS),
-        SLIP_MISMATCH: render_slip(MISMATCH_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS),
-        SLIP_BLURRY: render_unreadable_slip(ANIL_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS),
+        SLIP_ANIL: render_slip(
+            ANIL_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS, doctor_name=doctor, doctor_registration_no=reg
+        ),
+        SLIP_MISMATCH: render_slip(
+            MISMATCH_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS, doctor_name=doctor, doctor_registration_no=reg
+        ),
+        SLIP_BLURRY: render_unreadable_slip(
+            ANIL_PATIENT, ADMITTED, HOSPITAL, DIAGNOSIS, doctor_name=doctor, doctor_registration_no=reg
+        ),
     }
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+import io
 import struct
 import zlib
 from datetime import date
@@ -14,9 +16,11 @@ from PIL import Image
 from chhatri.sim.slips import (
     READABLE_CONFIDENCE,
     SLIP_KEY,
+    UNREADABLE_CONFIDENCE,
     read_embedded_slip,
     render_slip,
     render_unreadable_slip,
+    slip_payload,
 )
 
 from .conftest import load_script
@@ -34,6 +38,8 @@ def test_render_and_read_round_trip() -> None:
         "hospital_name": "KEM Hospital, Parel",
         "diagnosis": "Viral fever",
         "document_type": "admission_slip",
+        "doctor_name": None,
+        "doctor_registration_no": None,
         "confidence": READABLE_CONFIDENCE,
         "sample": True,
     }
@@ -115,3 +121,60 @@ def test_committed_slips_are_regenerated_by_make_slips(tmp_path: Path, data_dir:
         "Anil R. Jadhav", "2025-08-20", "Viral fever", "KEM Hospital, Parel",
     )  # fmt: skip
     assert (mismatch["patient_name"], mismatch["admission_date"]) == ("Sunil Pawar", "2025-08-20")
+    for key in (anil, mismatch):
+        assert (key["doctor_name"], key["doctor_registration_no"]) == ("Dr S. Rao", "MMC-2011-45817")
+        assert (key["hospital_name"], key["confidence"]) == ("KEM Hospital, Parel", READABLE_CONFIDENCE)
+    blurry = read_embedded_slip((data_dir / "slips" / "blurry_slip.png").read_bytes())
+    assert blurry is not None and blurry["confidence"] == UNREADABLE_CONFIDENCE
+    assert not [k for k in FIELDS if blurry[k] is not None]
+
+
+FIELDS = (
+    "patient_name",
+    "admission_date",
+    "hospital_name",
+    "document_type",
+    "doctor_name",
+    "doctor_registration_no",
+)
+DOCTOR = {"doctor_name": "Dr S. Rao", "doctor_registration_no": "MMC-2011-45817"}
+
+
+def _pixels(png: bytes) -> np.ndarray:
+    return np.asarray(Image.open(io.BytesIO(png)).convert("L"), float)
+
+
+def test_the_doctor_is_drawn_and_carried_in_the_answer_key() -> None:
+    plain = render_slip("Anil R. Jadhav", ADMITTED, "KEM Hospital, Parel", "Viral fever")
+    signed = render_slip("Anil R. Jadhav", ADMITTED, "KEM Hospital, Parel", "Viral fever", **DOCTOR)
+    key = read_embedded_slip(signed)
+    assert key is not None and {k: key[k] for k in DOCTOR} == DOCTOR
+    assert key["patient_name"] == "Anil R. Jadhav" and key["admission_date"] == "2025-08-20"
+    assert signed == render_slip("Anil R. Jadhav", ADMITTED, "KEM Hospital, Parel", "Viral fever", **DOCTOR)
+    changed = np.abs(_pixels(signed) - _pixels(plain)) > 40
+    rows, cols = np.nonzero(changed)
+    assert changed.sum() > 1500  # two printed lines at least, not a speck
+    height, width = _pixels(signed).shape
+    assert (
+        rows.min() > 120 and rows.max() < height - 40 and cols.max() < width
+    )  # below the stamp, above the caption
+
+
+def test_the_unreadable_slip_draws_the_doctor_blurred_and_keeps_no_fields() -> None:
+    png = render_unreadable_slip("Anil R. Jadhav", ADMITTED, "KEM Hospital, Parel", "Viral fever", **DOCTOR)
+    key = read_embedded_slip(png)
+    assert key is not None and key["confidence"] == UNREADABLE_CONFIDENCE
+    assert not [k for k in FIELDS if key[k] is not None]
+
+
+def test_the_doctor_keywords_default_to_none() -> None:
+    for function in (render_slip, render_unreadable_slip):
+        params = inspect.signature(function).parameters
+        assert params["doctor_name"].default is None and params["doctor_registration_no"].default is None
+        assert params["doctor_name"].kind is inspect.Parameter.KEYWORD_ONLY
+    payload = slip_payload("A", ADMITTED, "H", "D", 0.5)
+    assert payload["doctor_name"] is None and payload["doctor_registration_no"] is None
+    with pytest.raises(ValueError, match="doctor_name"):
+        render_slip("A", ADMITTED, "H", "D", doctor_name=" ")
+    with pytest.raises(ValueError, match="doctor_registration_no"):
+        render_unreadable_slip("A", ADMITTED, "H", "D", doctor_registration_no="")
