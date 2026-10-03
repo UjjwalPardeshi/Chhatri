@@ -79,6 +79,12 @@ SPEC_ROUTES: tuple[tuple[str, str, str | None], ...] = (
         "/api/merchants/{merchant_id}/slips/{slip_id}/forget",
         None,
     ),  # officer token and flag n6_consents; the token is tested in test_consents
+    ("GET", "/api/merchants/{merchant_id}/channel", None),  # flag telegram_channel
+    (
+        "POST",
+        "/api/merchants/{merchant_id}/channel",
+        None,
+    ),  # officer token and flag telegram_channel; the token is tested in test_channel_route
 )
 EXAMPLES = {
     "{zone_id}": "Z7",
@@ -104,7 +110,7 @@ def test_route_table_matches_spec_exactly(app: FastAPI) -> None:
         (method.upper(), path) for path, operations in app.openapi()["paths"].items() for method in operations
     }
     assert served == {(method, path) for method, path, _ in SPEC_ROUTES}
-    assert len(SPEC_ROUTES) == 57
+    assert len(SPEC_ROUTES) == 59
 
 
 @pytest.mark.parametrize(("method", "path"), [(m, p) for m, p, auth in SPEC_ROUTES if auth == "officer"])

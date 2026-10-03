@@ -144,6 +144,7 @@ class MerchantDetail(MerchantSummary):
     kyc_name_masked: str
     phone_masked: str
     language: str
+    preferred_channel: Literal["whatsapp", "telegram"]
     cover: MerchantCover | None
     loan: MerchantLoan | None
     expected_today_label: str | None
@@ -171,7 +172,7 @@ class Message(Schema):
     id: str
     merchant_id: str = Field(pattern=MERCHANT_ID_PATTERN)
     direction: Literal["INBOUND", "OUTBOUND"]
-    channel: Literal["WHATSAPP", "SIMULATOR", "SOUNDBOX"]
+    channel: Literal["WHATSAPP", "SIMULATOR", "SOUNDBOX", "TELEGRAM"]
     kind: Literal["TEXT", "VOICE", "IMAGE", "PAYOUT_CARD", "CASE_CHIP", "SOUNDBOX", "TEMPLATE", "BUTTONS"]
     text_hi: str | None
     text_en: str | None

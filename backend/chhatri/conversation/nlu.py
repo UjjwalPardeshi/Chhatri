@@ -11,9 +11,12 @@ UNKNOWN stands and a warning is logged (the merchant's text is never logged). Te
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, Protocol
 
+from chhatri.ai.chain import ChainResult, Rejection
+from chhatri.ai.labels import AiLabel, FallbackReason
 from chhatri.conversation.intents import Intent, classify
 from chhatri.integrations.base import ChatModel
 
@@ -50,6 +53,7 @@ class IntentResult:
 
     intent: Intent
     source: Source
+    label: AiLabel | None = None  # the H26 label of a model-classified intent (None when the rules decided)
 
 
 def _parse(result: object) -> Intent:
@@ -76,4 +80,56 @@ async def detect_intent(text: str, chat: ChatModel | None) -> IntentResult:
         return IntentResult(_parse(answer), "llm")
     except Exception as exc:  # SPEC §13.2: on ANY error fall back to the rules
         logger.warning("nlu: chat model unusable (%s); falling back to rules", type(exc).__name__)
+        return IntentResult(ruled, "rules")
+
+
+INTENT_TIMEOUT_S: Final = 6.0
+
+
+class IntentChain(Protocol):
+    """The Ask chat chain (Gemini, then Sarvam): `integrations.chat_chain` satisfies it."""
+
+    async def complete_json(
+        self,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        *,
+        schema_name: str,
+        timeout_s: float,
+        accept: Callable[[dict[str, Any]], Rejection | None] | None = None,
+    ) -> ChainResult[dict[str, Any]]: ...
+
+
+def _accept(answer: dict[str, Any]) -> Rejection | None:
+    try:
+        _parse(answer)
+    except ValueError:
+        return Rejection(FallbackReason.INVALID_REPLY)
+    return None
+
+
+async def detect_intent_chain(text: str, chain: IntentChain | None) -> IntentResult:
+    """Rules first; for UNKNOWN text the Gemini-then-Sarvam chain, labelled; rules again when no link answers.
+
+    Only a LIVE or FALLBACK answer from a real model is "llm"; the label says which provider and model decided.
+    """
+    ruled = classify(text)
+    if ruled is not Intent.UNKNOWN or chain is None:
+        return IntentResult(ruled, "rules")
+    try:
+        result = await chain.complete_json(
+            SYSTEM_PROMPT,
+            f"Merchant message: {text[:MAX_PROMPT_CHARS]}",
+            INTENT_SCHEMA,
+            schema_name=SCHEMA_NAME,
+            timeout_s=INTENT_TIMEOUT_S,
+            accept=_accept,
+        )
+        if result.value is None:
+            return IntentResult(ruled, "rules", result.label)
+        return IntentResult(_parse(result.value), "llm", result.label)
+    # the chain never raises for a provider failure; anything else falls back to the rules
+    except Exception as exc:
+        logger.warning("nlu: intent chain unusable (%s); falling back to rules", type(exc).__name__)
         return IntentResult(ruled, "rules")

@@ -102,7 +102,7 @@ backend/
 ├── scripts/                      (build_data.py, calibrate.py, demo_check.py, make_slips.py, ...)
 ├── tests/                        (one folder per package below)
 └── chhatri/
-    ├── config.py clock.py money.py ids.py events.py features.py   (settings, IST clock, paise and format_inr, ids, event bus, the 14 flags)
+    ├── config.py clock.py money.py ids.py events.py features.py   (settings, IST clock, paise and format_inr, ids, event bus, the 15 flags)
     ├── domain/                   (frozen pydantic models and enums)
     ├── sim/                      (geo, city, merchants, sales, weather, alerts, scenarios, slips, truth)
     ├── forecast/                 (LightGBM P10/P50/P90 model, conformal calibration, training, persistence)
@@ -141,7 +141,7 @@ frontend/
 ├── tests/e2e/                    (Playwright specs; projects "mock" and "live")
 └── src/
     ├── main.tsx  App.tsx         (bootstrap picks the real API or the in-browser mock; routes)
-    ├── features.ts               (the 14 flags, read from VITE_FEATURES)
+    ├── features.ts               (the 15 flags, read from VITE_FEATURES)
     ├── pages/                    (Overview, Live, Claims, Merchant, Audit, Policy, Evals; Backtest is a lazy route)
     ├── components/               (layout, map, panel, claims, phone, overview, audit, backtest, policy, evals, common, ...)
     ├── api/                      (client, endpoints, sse, stream, types, contract/)

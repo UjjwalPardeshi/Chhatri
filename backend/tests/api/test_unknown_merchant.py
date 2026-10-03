@@ -16,6 +16,7 @@ FLAGGED_PREFIXES = (
     "/api/merchants/{merchant_id}/consents",  # n6_consents: tests/api/test_consents.py checks it with the flag on
     "/api/merchants/{merchant_id}/slips",
     "/api/merchants/{merchant_id}/ask",  # n2_ask_chhatri: tests/api/test_ask.py checks the 404 and 422 with the flag on
+    "/api/merchants/{merchant_id}/channel",  # telegram_channel: tests/api/test_channel_route.py checks 404 and 422, flag on
 )  # n3_slip_precheck: a flag that is off answers 404 first
 MERCHANT_ROUTES = [
     (method, path)

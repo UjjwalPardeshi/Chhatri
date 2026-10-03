@@ -78,6 +78,10 @@ class Settings(BaseSettings):
     whatsapp_template_language: str = "hi"
     whatsapp_demo_recipient: str | None = None  # E.164; live messages for demo merchants go here
 
+    # Telegram bot (Bot API, long polling: no webhook and no public URL). Without a token the channel is simulated.
+    telegram_bot_token: SecretStr | None = None
+    telegram_polling: bool = True  # with a token: poll getUpdates in the background; false = send only
+
     # Paytm payment link (SPEC §14.3)
     paytm_mcp_url: str | None = None  # e.g. http://localhost:8080/sse
     paytm_mid: str | None = None
@@ -135,6 +139,19 @@ class Settings(BaseSettings):
         )
 
     @property
+    def telegram_token_set(self) -> bool:
+        return _has(self.telegram_bot_token)
+
+    @property
+    def telegram_live(self) -> bool:
+        """A token AND the synthetic-data declaration (ADR 0009): Telegram is a free third-party service."""
+        return self.telegram_token_set and self.chhatri_data_is_synthetic
+
+    @property
+    def telegram_polling_on(self) -> bool:
+        return self.telegram_live and self.telegram_polling
+
+    @property
     def paytm_mode(self) -> str:
         """'mcp' | 'rest' | 'simulated'."""
         if _has(self.paytm_mcp_url):
@@ -154,6 +171,7 @@ class Settings(BaseSettings):
             "demo_mode": self.chhatri_demo_mode,
             "sarvam_live": self.sarvam_live,
             "whatsapp_live": self.whatsapp_live,
+            "telegram_live": self.telegram_live,
             "paytm_mode": self.paytm_mode,
             "n8n_live": self.n8n_live,
             "cognee_enabled": self.cognee_enabled,

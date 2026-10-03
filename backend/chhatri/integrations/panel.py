@@ -14,11 +14,12 @@ from typing import Any, Final, Protocol
 from chhatri.ai.labels import FallbackReason
 from chhatri.config import Settings
 from chhatri.domain.enums import IntegrationMode
+from chhatri.features import is_enabled
 from chhatri.integrations.base import IntegrationStatus
-from chhatri.integrations.statuses import GEMINI_STATUS_NAMES, STATUS_NAMES
+from chhatri.integrations.statuses import GEMINI_STATUS_NAMES, STATUS_NAMES, TELEGRAM_STATUS_NAMES
 from chhatri.integrations.switch import FORCEABLE, FallbackSwitch
 
-__all__ = ["LENDER_FORCED_DETAIL", "panel_row", "panel_rows"]
+__all__ = ["LENDER_FORCED_DETAIL", "panel_row", "panel_rows", "telegram_rows"]
 
 LENDER_FORCED_DETAIL: Final = "Simulated lender (NBFC partner), not answering: forced for the demo"
 
@@ -41,6 +42,7 @@ _LIVE_PROVIDER: Final = {
     "gemini_chat": "gemini",
     "gemini_vision": "gemini",
     "whatsapp": "whatsapp",
+    "telegram": "telegram",
     "paytm": "paytm",
     "n8n": "n8n",
     "memory": "cognee",
@@ -77,6 +79,12 @@ def _reason_when_simulated(name: str, settings: Settings) -> str | None:
             return FallbackReason.NO_KEY.value
         if not (settings.gemini_chat_live if name == "gemini_chat" else settings.gemini_vision_live):
             return FallbackReason.MODEL_NOT_SET.value
+        return FallbackReason.FREE_TIER_BLOCKED.value
+    if (
+        name == "telegram"
+    ):  # not an AI component, but the data gate (ADR 0009) keeps a keyed bot off real traffic too
+        if not settings.telegram_token_set:
+            return FallbackReason.NO_KEY.value
         return FallbackReason.FREE_TIER_BLOCKED.value
     return None
 
@@ -134,9 +142,17 @@ def panel_row(
 
 
 def panel_rows(integrations: HasStatuses, settings: Settings, switch: FallbackSwitch) -> list[dict[str, Any]]:
-    """The 17 rows, in the order of `STATUS_NAMES` then `GEMINI_STATUS_NAMES`."""
-    statuses = {s.name: s for s in (*integrations.statuses, *integrations.gemini_statuses)}
-    return [
-        panel_row(statuses[name], statuses, settings, switch)
-        for name in (*STATUS_NAMES, *GEMINI_STATUS_NAMES)
-    ]
+    """The 17 rows, in the order of `STATUS_NAMES` then `GEMINI_STATUS_NAMES`; with the flag `telegram_channel` on, a
+    18th row `telegram` follows."""
+    telegram = telegram_rows(integrations, settings)
+    statuses = {s.name: s for s in (*integrations.statuses, *integrations.gemini_statuses, *telegram)}
+    names = (*STATUS_NAMES, *GEMINI_STATUS_NAMES, *(s.name for s in telegram))
+    return [panel_row(statuses[name], statuses, settings, switch) for name in names]
+
+
+def telegram_rows(integrations: object, settings: Settings) -> tuple[IntegrationStatus, ...]:
+    """The `telegram` status row when the flag `telegram_channel` is on and the integrations carry it, else none."""
+    if not is_enabled("telegram_channel", settings):
+        return ()
+    rows: tuple[IntegrationStatus, ...] = tuple(getattr(integrations, "telegram_statuses", ()))
+    return tuple(row for row in rows if row.name in TELEGRAM_STATUS_NAMES)

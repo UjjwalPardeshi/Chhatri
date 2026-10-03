@@ -35,6 +35,10 @@ STATUS_NAMES: tuple[str, ...] = (
 
 GEMINI_STATUS_NAMES: tuple[str, ...] = ("gemini_chat", "gemini_vision")
 
+# The Telegram channel (flag `telegram_channel`): a row of its own, like the Gemini rows, so the 15 and the 17 of the
+# flag-off API never change. It is added to `GET /api/integrations`, the provider panel and the preflight only with the flag on.
+TELEGRAM_STATUS_NAMES: tuple[str, ...] = ("telegram",)
+
 ALWAYS_SIMULATED: tuple[IntegrationStatus, ...] = (
     IntegrationStatus("sales_data", IntegrationMode.SIMULATED, "Paytm sales simulated from a fixed seed"),
     IntegrationStatus("alerts", IntegrationMode.SIMULATED, "IMD-style nowcast · simulated"),
@@ -64,6 +68,11 @@ def _in_order(
 def ordered(statuses: list[IntegrationStatus]) -> tuple[IntegrationStatus, ...]:
     """All 15 statuses in §19.2 order; ValueError if any name is missing, duplicated or unknown."""
     return _in_order(statuses, STATUS_NAMES, "integration statuses (SPEC §19.2)")
+
+
+def ordered_telegram(statuses: list[IntegrationStatus]) -> tuple[IntegrationStatus, ...]:
+    """The one `telegram` row; ValueError if it is missing, duplicated or another name is present."""
+    return _in_order(statuses, TELEGRAM_STATUS_NAMES, "Telegram statuses")
 
 
 def ordered_gemini(statuses: list[IntegrationStatus]) -> tuple[IntegrationStatus, ...]:

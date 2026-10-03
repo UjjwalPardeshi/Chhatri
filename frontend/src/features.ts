@@ -24,6 +24,7 @@ export const FEATURE_NAMES = [
   'h24_whatif',
   'h25_evals',
   'console_polish',
+  'telegram_channel',
 ] as const
 
 export type FeatureName = (typeof FEATURE_NAMES)[number]

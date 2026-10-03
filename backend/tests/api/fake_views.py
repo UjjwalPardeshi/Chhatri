@@ -123,6 +123,7 @@ def merchant_detail(rt: Any, merchant_id: str) -> dict[str, Any]:
         "kyc_name_masked": m.kyc_name[:4] + "•••",
         "phone_masked": "+91•••••" + m.phone[-5:],
         "language": m.language.value,
+        "preferred_channel": "whatsapp",
         "cover": {
             "status": "ACTIVE",
             "starts_on": "2025-06-01",

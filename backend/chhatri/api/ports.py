@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from chhatri.config import Settings
-from chhatri.domain.enums import CaseStatus
+from chhatri.domain.enums import CaseStatus, PreferredChannel
 from chhatri.domain.models import (
     AuditEntry,
     Case,
@@ -90,6 +90,8 @@ class StorePort(Protocol):
     def payouts(self, *, zone_id: str | None = None, day: date | None = None) -> tuple[Payout, ...]: ...
     def messages(self, merchant_id: str) -> tuple[Message, ...]: ...
     def media(self, media_id: str) -> tuple[bytes, str]: ...
+    def preferred_channel(self, merchant_id: str) -> PreferredChannel: ...
+    def set_preferred_channel(self, merchant_id: str, channel: PreferredChannel) -> None: ...
 
 
 class AuditPort(Protocol):

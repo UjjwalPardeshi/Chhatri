@@ -42,7 +42,14 @@ class SleepRecorder:
         self.delays.append(delay)
 
 
-AMBIENT_AI_ENV = ("GOOGLE_API_KEY", "GEMINI_MODEL", "GEMINI_VISION_MODEL", "CHHATRI_DATA_IS_SYNTHETIC")
+AMBIENT_AI_ENV = (
+    "GOOGLE_API_KEY",
+    "GEMINI_MODEL",
+    "GEMINI_VISION_MODEL",
+    "CHHATRI_DATA_IS_SYNTHETIC",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_POLLING",
+)
 
 
 @pytest.fixture(autouse=True)

@@ -3,7 +3,8 @@
 
 Reads SARVAM_API_KEY and GOOGLE_API_KEY from the process environment, falling back to the repo's `.env`
 (the file the backend reads; the environment wins, as in pydantic-settings), and prints each as `SET` or
-`NOT SET`. When GOOGLE_API_KEY is set it also lists the Gemini models that key can call, through the free
+`NOT SET`. TELEGRAM_BOT_TOKEN is reported the same way; it is optional, so NOT SET is never a failure, even with --strict.
+When it is set the bot is asked who it is (`getMe`, free, sends nothing) and its username is printed; the token is not. When GOOGLE_API_KEY is set it also lists the Gemini models that key can call, through the free
 models-list endpoint (`GET /v1beta/models`): no generation call is made, so no quota or content is used.
 The key travels in the `x-goog-api-key` header, never in a URL. The output never contains a key, a prefix,
 a length or a raw provider answer.
@@ -37,7 +38,12 @@ import init_env
 REPO_ROOT: Final = Path(__file__).resolve().parent.parent
 SARVAM_KEY: Final = "SARVAM_API_KEY"
 GOOGLE_KEY: Final = "GOOGLE_API_KEY"
+TELEGRAM_KEY: Final = "TELEGRAM_BOT_TOKEN"
 KEY_NAMES: Final = (SARVAM_KEY, GOOGLE_KEY)
+OPTIONAL_KEY_NAMES: Final = (
+    TELEGRAM_KEY,
+)  # reported, never required: the bot is simulated without its token
+TELEGRAM_API: Final = "https://api.telegram.org"
 GEMINI_MODELS_URL: Final = "https://generativelanguage.googleapis.com/v1beta/models"
 API_KEY_HEADER: Final = "x-goog-api-key"
 GENERATE_METHOD: Final = "generateContent"
@@ -46,10 +52,12 @@ PAGE_SIZE: Final = 100
 MAX_PAGES: Final = 20
 TIMEOUT_S: Final = 15.0
 STATUS_WORD: Final = re.compile(r"^[A-Z_]{3,40}$")
-LABEL_WIDTH: Final = max(len(name) for name in KEY_NAMES)
+LABEL_WIDTH: Final = max(len(name) for name in (*KEY_NAMES, *OPTIONAL_KEY_NAMES))
 
 Fetcher = Callable[[str, str], Mapping[str, Any]]
 """`(url, api_key) -> parsed JSON object`; raises `KeyCheckError` with a message that is safe to print."""
+TelegramFetcher = Callable[[str], Mapping[str, Any]]
+"""`token -> getMe answer`; raises `KeyCheckError` with a message that is safe to print (never the token)."""
 
 
 class KeyCheckError(RuntimeError):
@@ -112,6 +120,45 @@ def fetch_json(url: str, api_key: str, timeout: float = TIMEOUT_S) -> Mapping[st
     if not isinstance(parsed, dict):
         raise KeyCheckError("unreadable response (not a JSON object)")
     return parsed
+
+
+def fetch_telegram_me(token: str, timeout: float = TIMEOUT_S) -> Mapping[str, Any]:
+    """`getMe` for `token`: the bot's own answer. The token is in the URL path, so no URL or body is ever raised or printed."""
+    request = urllib.request.Request(  # noqa: S310 - the https Bot API host is a constant
+        f"{TELEGRAM_API}/bot{token}/getMe", headers={"Accept": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - https constant above
+            body = response.read()
+    except urllib.error.HTTPError as exc:
+        raise KeyCheckError(f"HTTP {exc.code}") from None
+    except (OSError, http.client.HTTPException) as exc:
+        raise KeyCheckError(f"network error ({type(exc).__name__})") from None
+    except ValueError:
+        raise KeyCheckError("the token cannot be used in a URL (stray space or line break?)") from None
+    try:
+        parsed = json.loads(body)
+    except ValueError:
+        raise KeyCheckError("unreadable response (not JSON)") from None
+    if not isinstance(parsed, dict):
+        raise KeyCheckError("unreadable response (not a JSON object)")
+    return parsed
+
+
+def _report_telegram(token: str, fetch: TelegramFetcher) -> bool:
+    """Print the bot's username (never the token); False when `getMe` failed."""
+    try:
+        answer = fetch(token)
+    except KeyCheckError as exc:
+        print(f"{TELEGRAM_KEY}: getMe failed ({exc})")
+        return False
+    result = answer.get("result")
+    username = result.get("username") if isinstance(result, dict) else None
+    if answer.get("ok") is not True or not isinstance(username, str) or not username:
+        print(f"{TELEGRAM_KEY}: getMe did not name a bot (is the token right?)")
+        return False
+    print(f"Telegram bot: @{username}  (deep link: https://t.me/{username}?start=S-0142)")
+    return True
 
 
 def _page_url(page_token: str | None) -> str:
@@ -186,19 +233,24 @@ def main(
     *,
     environ: Mapping[str, str] | None = None,
     fetch: Fetcher = fetch_json,
+    telegram_fetch: TelegramFetcher = fetch_telegram_me,
 ) -> int:
-    parser = argparse.ArgumentParser(description="Report SARVAM_API_KEY and GOOGLE_API_KEY as SET or NOT SET")
+    parser = argparse.ArgumentParser(
+        description="Report SARVAM_API_KEY, GOOGLE_API_KEY and TELEGRAM_BOT_TOKEN as SET or NOT SET"
+    )
     parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env", help="default: the repo's .env")
     parser.add_argument("--strict", action="store_true", help="exit 1 when a key is NOT SET")
     args = parser.parse_args(argv)
     env = os.environ if environ is None else environ
     dotenv = _load_dotenv(args.env_file)
-    values = {name: key_value(name, env, dotenv) for name in KEY_NAMES}
-    for name in KEY_NAMES:
+    values = {name: key_value(name, env, dotenv) for name in (*KEY_NAMES, *OPTIONAL_KEY_NAMES)}
+    for name in (*KEY_NAMES, *OPTIONAL_KEY_NAMES):
         print(f"{name:<{LABEL_WIDTH}}  {'SET' if is_set(values[name]) else 'NOT SET'}")
     failed = False
     if is_set(values[GOOGLE_KEY]):
         failed = not _report_models(values[GOOGLE_KEY].strip(), fetch)
+    if is_set(values[TELEGRAM_KEY]):
+        failed = not _report_telegram(values[TELEGRAM_KEY].strip(), telegram_fetch) or failed
     missing = not all(is_set(values[name]) for name in KEY_NAMES)
     return 1 if failed or (args.strict and missing) else 0
 

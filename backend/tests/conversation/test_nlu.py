@@ -92,3 +92,57 @@ async def test_llm_unknown_is_accepted_as_unknown() -> None:
     assert await detect_intent("something unclear", FakeChat({"intent": "UNKNOWN"})) == IntentResult(
         Intent.UNKNOWN, "llm"
     )
+
+
+# ---- the Gemini -> Sarvam chain (audit build 5): a labelled model intent for free Hindi/Hinglish text
+
+from chhatri.ai.labels import AiMode, AiProvider, FallbackReason  # noqa: E402
+from chhatri.conversation.nlu import detect_intent_chain  # noqa: E402
+from tests.ask.fakes import GEMINI_MODEL, ScriptedChat, chain_of  # noqa: E402
+
+
+async def test_chain_not_asked_when_rules_know_the_text() -> None:
+    gemini = ScriptedChat({"intent": "GREETING"})
+    result = await detect_intent_chain("Red alert tomorrow. Cover me today.", chain_of(gemini))
+    assert (result.intent, result.source, result.label) == (Intent.BUY_COVER, "rules", None)
+    assert gemini.calls == []
+
+
+async def test_chain_gemini_classifies_free_hinglish_with_a_live_label() -> None:
+    gemini = ScriptedChat({"intent": "REPORT_ILLNESS"})
+    result = await detect_intent_chain("bhai pair toot gaya, dukaan nahi khol paunga", chain_of(gemini))
+    assert (result.intent, result.source) == (Intent.REPORT_ILLNESS, "llm")
+    assert result.label is not None
+    assert (result.label.mode, result.label.provider, result.label.model) == (
+        AiMode.LIVE,
+        AiProvider.GEMINI,
+        GEMINI_MODEL,
+    )
+
+
+async def test_chain_falls_to_sarvam_and_says_so() -> None:
+    gemini = ScriptedChat(RuntimeError("down"))
+    sarvam = ScriptedChat({"intent": "WHY_AMOUNT"})
+    result = await detect_intent_chain("ye kitna kyun mila", chain_of(gemini, sarvam))
+    assert (result.intent, result.source) == (Intent.WHY_AMOUNT, "llm")
+    assert result.label is not None
+    assert (result.label.mode, result.label.provider) == (AiMode.FALLBACK, AiProvider.SARVAM)
+
+
+async def test_chain_invalid_intent_is_refused_and_rules_stand() -> None:
+    result = await detect_intent_chain(
+        "something unclear", chain_of(ScriptedChat({"intent": "APPROVE_PAYMENT"}))
+    )
+    assert (result.intent, result.source) == (Intent.UNKNOWN, "rules")
+    assert result.label is not None and result.label.mode is AiMode.FALLBACK
+
+
+async def test_chain_without_keys_is_labelled_simulated_and_rules_stand() -> None:
+    result = await detect_intent_chain("something unclear", chain_of())
+    assert (result.intent, result.source) == (Intent.UNKNOWN, "rules")
+    assert result.label is not None
+    assert (result.label.mode, result.label.fallback_reason) == (AiMode.SIMULATED, FallbackReason.NO_KEY)
+
+
+async def test_no_chain_means_rules() -> None:
+    assert await detect_intent_chain("something unclear", None) == IntentResult(Intent.UNKNOWN, "rules")

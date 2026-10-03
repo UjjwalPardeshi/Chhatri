@@ -27,6 +27,7 @@ FORCEABLE: Final[frozenset[str]] = frozenset(
         "lender",
         "n8n",
         "whatsapp",
+        "telegram",
         "paytm",
     }
 )

@@ -12,7 +12,7 @@
 - **Domain model:** frozen pydantic models (Merchant, Cover, Loan, Alert, Decision, Payout, Case, ...). Money is integer paise, with a `*_label` string made by `format_inr`. Times are timezone-aware IST.
 - **Storage:** an in-memory store rebuilt on every scenario load, and an append-only, hash-chained audit log in a private in-memory SQLite database. Artefacts (model, backtest, premiums) are committed files.
 - **IDs:** `S-0142` merchant, `D-000142` decision, `CL-000142` claim, `C-2291` case (the first case after a fresh load), `A-20250818-01` alert, `E-Z7-20250819` trigger. Sequence ids restart on every scenario load.
-- **API (BUILT):** 57 route handlers (section 4.1). Envelope: `{ok, data}`, `{ok, data, meta}` for lists, `{ok: false, error: {code, message, fields?}}` for errors. Error codes are the 13 status names plus `no_scenario` (section 4.3).
+- **API (BUILT):** 59 route handlers (section 4.1). Envelope: `{ok, data}`, `{ok, data, meta}` for lists, `{ok: false, error: {code, message, fields?}}` for errors. Error codes are the 13 status names plus `no_scenario` (section 4.3).
 - **Feature additions (section 5, BUILT, each behind its flag where it has one):** 18 endpoints for the mini-app and its cover, claims and receipt views, Ask Chhatri, the slip pre-check, voice, the grievance ladder, the consent centre and "forget my slip", the provider fallback switch, the published evaluation, the ops strip and the what-if panel. Each ships behind a feature flag (a flag that is off answers 404). Changes to existing endpoints are in 5.12.
 - **Mock parity:** every section 5 endpoint has an entry in the in-browser mock backend (`frontend/src/mock`), so the static demo works with no server (section 6).
 - **Limits (BUILT):** per client address per minute, `messages` 60, `uploads` 20, `webhooks` 60; 32 open event streams; images and audio at most 5 MB, audio at most 30 seconds (`backend/chhatri/api/security.py`, `uploads.py`).
@@ -403,7 +403,7 @@ Implementation: `backend/chhatri/ids.py` exports factory functions; tests seed t
 
 ## 4. Existing API: routes and methods
 
-### 4.1 Route table (API: 57 route handlers)
+### 4.1 Route table (API: 59 route handlers)
 
 | Router | Method | Path | Purpose | Auth | SPEC § |
 |---|---|---|---|---|---|
@@ -464,6 +464,8 @@ Implementation: `backend/chhatri/ids.py` exports factory functions; tests seed t
 | **evals** | GET | `/api/evals/summary` | Stored evaluation results, flag `h25_evals` (5.10) | none | 5.10 |
 | **voice** | POST | `/api/voice/stt` | Speech to text with chips, flag `n4_voice` (5.11) | none | 5.11 |
 | | POST | `/api/voice/tts` | Text to speech (5.11) | none | 5.11 |
+| **channel** | GET | `/api/merchants/{merchant_id}/channel` | Preferred channel and channel modes, flag `telegram_channel` (5.13) | none | 5.13 |
+| | POST | `/api/merchants/{merchant_id}/channel` | Choose WhatsApp or Telegram (5.13) | officer | 5.13 |
 
 ### 4.2 Request/response envelope (SPEC §19)
 
@@ -570,8 +572,10 @@ Everything here is P0 (team decision, 2 Oct 2026). The work runs in waves behind
 | 16 | GET `/api/evals/summary` | H25 | 3 | `h25_evals` | none | none | [AI evaluation plan](ai-evaluation-plan.md) |
 | 17 | GET `/api/ops/summary` | H8 | 4 | `h8_ops_strip` | none | none | fs-08 |
 | 18 | POST `/api/whatif/area` | H24 | 4 | `h24_whatif` | `whatif` (new) | none | fs-08, fs-09 |
+| 19 | GET `/api/merchants/{merchant_id}/channel` | Telegram | 5 | `telegram_channel` | none | none | 5.13 |
+| 20 | POST `/api/merchants/{merchant_id}/channel` | Telegram | 5 | `telegram_channel` | messages | officer token (demo session) | 5.13 |
 
-With all 18, the route table has 57 handlers and `SPEC_ROUTES` in `backend/tests/api/test_route_table.py` lists them (the guide, Wave 0, says how). Changes to existing endpoints, which add no route, are in section 5.12.
+With all 20 (the 18 of the waves plus the two Telegram channel routes of 5.13), the route table has 59 handlers and `SPEC_ROUTES` in `backend/tests/api/test_route_table.py` lists them (the guide, Wave 0, says how). Changes to existing endpoints, which add no route, are in section 5.12.
 
 **Conventions that apply to every endpoint below**
 
@@ -1787,7 +1791,7 @@ The 39 routes that existed before section 5 keep their paths, methods and auth. 
 | POST `/api/merchants/{merchant_id}/messages` | With `n2_ask_chhatri` on, UNKNOWN text goes through the Ask service and the reply's `meta` carries `mode`, `provider`, `model`, `fallback_reason`, `clauses`, `next_action` and `scam_warning`. Known intents behave exactly as today. With `n6_consents` on, a photo sent without an ACTIVE slip consent gets SLIP_CONSENT_NEEDED and nothing is read | N2, N6 | 2, 3 |
 | POST `/api/merchants/{merchant_id}/photo` | With `n3_slip_precheck` on, the image goes to the pre-check service (5.3). The reply is a message whose `card` and `meta` carry the pre-check with three actions, and the message `meta` carries the label fields. With the flag off the route reads and decides in one step, as today | N3, H26 | 2 |
 | POST `/api/premium/link` | The body gains `consents` (a list of purposes) and `notice_version`. For a merchant without a live cover the two required purposes and the current version must be present, else 422 `validation_error` with `fields.consents` or `fields.notice_version`, and nothing is created. Paying the link turns them into consent records (5.5). With the flag off the two fields are ignored | N6 | 3 |
-| GET `/api/integrations` | Two new components, `gemini_chat` and `gemini_vision` (15 rows become 17), `mode` may be `FALLBACK`, and each row gains `provider`, `model`, `fallback_reason`, `switchable`, `forced` and `last_call` (5.6). `GEMINI_STATUS_NAMES` in `integrations/statuses.py` adds the two rows to the 15 of `STATUS_NAMES`, and SPEC section 19.2 has the `ProviderRow` shape. `/api/preflight` lists all 17 | X6 | 2 |
+| GET `/api/integrations` | With `telegram_channel` on, one more row `telegram` (5.13). Two new components, `gemini_chat` and `gemini_vision` (15 rows become 17), `mode` may be `FALLBACK`, and each row gains `provider`, `model`, `fallback_reason`, `switchable`, `forced` and `last_call` (5.6). `GEMINI_STATUS_NAMES` in `integrations/statuses.py` adds the two rows to the 15 of `STATUS_NAMES`, and SPEC section 19.2 has the `ProviderRow` shape. `/api/preflight` lists all 17 | X6 | 2 |
 | GET `/api/preflight` | Two more kinds of row: `free_tier_gate` (always `ok`, its detail says whether free-tier AI links may be called, ADR 0009) and the two Gemini integration rows, so it lists all 17 components | X6, ADR 0009 | 2 |
 | GET `/api/cases/{case_id}` | `evidence.precheck` (optional) on a case filed through the pre-check: `precheck_id`, `filed_as` (`FIELDS_CONFIRMED` or `SENT_TO_TEAM`), `photos`, `injection_suspected` and the read's `mode`, `provider`, `model`, `fallback_reason`. After an erase, `evidence.slip` is `{erased: true, erased_at}` | N3, N6 | 2, 3 |
 | POST `/api/replay/load`, `/api/replay/reset` | Also clear pre-checks, grievances and consents, which live in memory per scenario load. They do **not** clear the forced components, which are process-wide (5.6) | N3, N5, N6 | 2, 3 |
@@ -1795,6 +1799,16 @@ The 39 routes that existed before section 5 keep their paths, methods and auth. 
 | GET `/api/audit` | New actions appear: `precheck.shown`, `precheck.confirmed`, `ask.answered`, `voice.transcribed`, `instalment.holiday_request`, `instalment.holiday_decision`, `grievance.open`, `grievance.escalate`, `grievance.resolve`, `consent.granted`, `consent.withdrawn`, `cover.cancelled`, `slip.erased`, `integration.fallback_set`, `message.suppressed`, `voice.confirmed`, `instalment.holiday_skipped`. The existing `slip.read` gains the label fields and `premium.not_settled` gains the reason "consent withdrawn". The hash chain is unchanged | all | 1 to 3 |
 
 Nothing else changes. In particular `GET /api/cases/{case_id}` stays the officer's evidence bundle (with the two optional evidence keys above), which the merchant app never reads, and `GET /api/decisions/{decision_id}` keeps its shape.
+
+### 5.13 Telegram channel (preferred channel)
+
+Behind the flag `telegram_channel` (default off; 404 `not_found` while off). Telegram is a second messaging channel next to WhatsApp: a live bot through the free Bot API with long polling (`getUpdates`, no webhook, no public URL), or a recorder when `TELEGRAM_BOT_TOKEN` is not set (or `CHHATRI_DATA_IS_SYNTHETIC` is not true, ADR 0009). Each merchant has a `preferred_channel` (`whatsapp` default, or `telegram`) that outbound messages and notifications follow.
+
+**GET `/api/merchants/{merchant_id}/channel`** answers `{merchant_id, preferred_channel, channels: [{channel: "whatsapp", mode}, {channel: "telegram", mode, linked, bot_username, deep_link}]}`. `mode` is LIVE, SIMULATED or FALLBACK (the X6 switch forces `telegram` off). `linked` says whether a Telegram chat is bound to this merchant; `deep_link` is `https://t.me/<bot>?start=S-0142` once the bot's username is known, else null.
+
+**POST `/api/merchants/{merchant_id}/channel`** takes `{"channel": "whatsapp" | "telegram"}` and answers the same object. Officer token (401, 403), rate group `messages`, 422 for another value, 404 for an unknown merchant, 409 `no_scenario`. A repeat is a no-op. A change appends the audit entry `channel.preference_set` (actor `officer:officer`, subject type `merchant`, data `{merchant_id, channel}`). The choice lives in the scenario run: a load starts again on the merchant's default (`Merchant.preferred_channel`, `whatsapp`).
+
+Other effects with the flag on: `GET /api/merchants/{id}` gains `preferred_channel`; a message's `channel` may be `TELEGRAM`; `GET /api/integrations`, the provider panel and `GET /api/preflight` gain a row `telegram` (18 rows with `x6_provider_panel` on); `telegram` can be forced (X6). Binding is by chat, not by route: `/start S-0142` in the bot links that chat to a demo merchant (a non-demo or unknown id is refused), `/stop` unlinks, and the audit entries `telegram.bound` and `telegram.unbound` are written. Inbound text, a tapped quick-reply button, a photo (slip flow, and the pre-check with `n3_slip_precheck`) and a voice note take the same conversation paths as WhatsApp, and the answer goes back on Telegram whatever the preference is. With the flag off nothing about WhatsApp, the 15 and 17 rows or the route table's other 57 routes changes.
 
 ## 6. Mock-mode parity (N7 static demo, `frontend/src/mock`)
 

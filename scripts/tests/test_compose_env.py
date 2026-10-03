@@ -52,6 +52,7 @@ def test_env_example_lists_every_settings_field_without_secrets(
     for name in SECRET_FIELDS | {
         "N8N_ENCRYPTION_KEY",
         "WHATSAPP_DEMO_RECIPIENT",
+        "TELEGRAM_BOT_TOKEN",
         "PAYTM_MID",
     }:
         assert active.get(name, "") == "", f"{name} must not carry a value in .env.example"
@@ -213,3 +214,16 @@ def test_compose_refuses_to_start_without_the_internal_secret(repo_root: Path, t
 )
 def test_gitignore_keeps_secrets_and_run_state_out(repo_root: Path, line: str) -> None:
     assert line in (repo_root / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+def test_compose_passes_the_telegram_settings_only_when_they_are_set(repo_root: Path, tmp_path: Path) -> None:
+    names = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_POLLING")
+    env = _resolved(repo_root, tmp_path, "")["services"]["backend"]["environment"]
+    assert all(env.get(name) is None for name in names)  # unset stays unset: the bot is simulated
+    env = _resolved(repo_root, tmp_path, "TELEGRAM_BOT_TOKEN=t0k\nTELEGRAM_POLLING=false\n")["services"][
+        "backend"
+    ]["environment"]
+    assert [env[name] for name in names] == ["t0k", "false"]
+    example = (repo_root / ".env.example").read_text(encoding="utf-8")
+    assert re.search(r"^# TELEGRAM_BOT_TOKEN=$", example, re.M)
+    assert re.search(r"^# TELEGRAM_POLLING=true$", example, re.M)

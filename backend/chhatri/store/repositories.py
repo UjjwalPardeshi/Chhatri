@@ -26,7 +26,7 @@ from types import MappingProxyType
 from typing import Final
 
 from chhatri.clock import IST
-from chhatri.domain.enums import CaseStatus, ClaimKind, DecisionOutcome, PayoutStatus
+from chhatri.domain.enums import CaseStatus, ClaimKind, DecisionOutcome, PayoutStatus, PreferredChannel
 from chhatri.domain.models import (
     AreaTrigger,
     Case,
@@ -85,6 +85,7 @@ class Store:
         self._messages: dict[str, Message] = {}
         self._media: dict[str, tuple[bytes, str]] = {}
         self._triggers: dict[str, AreaTrigger] = {}
+        self._channels: dict[str, PreferredChannel] = {}
 
     def _select[T](self, table: Mapping[str, T], keep: Callable[[T], bool] | None = None) -> tuple[T, ...]:
         with self._lock:
@@ -320,6 +321,18 @@ class Store:
 
     def cases(self, status: CaseStatus | None = None) -> tuple[Case, ...]:
         return self._select(self._cases, lambda c: status is None or c.status == status)
+
+    # preferred channel (Telegram channel): a per-run choice on top of the merchant's default ------
+    def preferred_channel(self, merchant_id: str) -> PreferredChannel:
+        """Where this merchant's notifications go: the choice made in this run, else the merchant's own default."""
+        with self._lock:
+            return self._channels.get(merchant_id) or self.city.merchant(merchant_id).preferred_channel
+
+    def set_preferred_channel(self, merchant_id: str, channel: PreferredChannel) -> None:
+        """Choose the channel for `merchant_id` (KeyError for an unknown merchant); recreated with the store on a load."""
+        self.city.merchant(merchant_id)
+        with self._lock:
+            self._channels[merchant_id] = PreferredChannel(channel)
 
     # messages + media ------------------------------------------------------------------------
     def add_message(self, m: Message) -> None:

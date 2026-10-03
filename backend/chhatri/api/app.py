@@ -28,10 +28,15 @@ from chhatri.api.ports import AppStatePort
 from chhatri.api.routers import ROUTERS
 from chhatri.api.security import RateLimiter
 from chhatri.api.sse import StreamHub
+from chhatri.api.telegram_inbox import TelegramInbox
 from chhatri.api.whatsapp_inbox import WhatsAppInbox
 from chhatri.config import Settings, get_settings
-from chhatri.features import FEATURE_NAMES, enabled_features, unknown_features
+from chhatri.features import FEATURE_NAMES, enabled_features, is_enabled, unknown_features
 from chhatri.integrations.free_tier import free_tier_gate_detail
+from chhatri.integrations.switch import PROCESS_SWITCH
+from chhatri.integrations.telegram import build_telegram_client
+from chhatri.integrations.telegram_poller import TelegramPoller
+from chhatri.store.telegram_bindings import LIVE_TELEGRAM_BINDINGS
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +101,36 @@ def _announce_free_tier_gate(settings: Settings) -> None:
     logger.info("free-tier data gate: %s", free_tier_gate_detail(settings))
 
 
+BOT_LOOKUP_TIMEOUT_S: Final = 5.0
+
+
+async def _start_telegram(app: FastAPI, settings: Settings) -> TelegramPoller | None:
+    """Start long polling when the flag `telegram_channel` is on, a token is set, the data gate is open and polling is on.
+
+    Never raises: a Telegram problem must not stop the API (the poller backs off on its own). The token is never logged."""
+    if not is_enabled("telegram_channel", settings):
+        return None
+    client = build_telegram_client(settings) if settings.telegram_live else None
+    if client is None:
+        logger.info("telegram: simulated (no token, or the data gate is closed); nothing is polled")
+        return None
+    try:
+        bot = await asyncio.wait_for(client.get_me(), BOT_LOOKUP_TIMEOUT_S)
+        LIVE_TELEGRAM_BINDINGS.set_bot_username(bot.username or None)
+        logger.info("telegram: live as @%s", bot.username)
+    except Exception as exc:  # no network or a wrong token: the poller keeps trying, the API stays up
+        reason = getattr(exc, "safe_message", type(exc).__name__)
+        logger.warning("telegram: could not read the bot's identity (%s)", reason)
+    if not settings.telegram_polling:
+        logger.info("telegram: polling is off (TELEGRAM_POLLING=false); send only")
+        return None
+    inbox = TelegramInbox(app.state.chhatri, client, LIVE_TELEGRAM_BINDINGS, PROCESS_SWITCH)
+    poller = TelegramPoller(client, inbox.handle)
+    poller.start()
+    logger.info("telegram: long polling started")
+    return poller
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
@@ -107,9 +142,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.chhatri = state
         app.state.whatsapp_inbox = WhatsAppInbox(state, settings.whatsapp_demo_recipient)
         await _load_default_scenario(state)
+    poller = await _start_telegram(app, settings)
+    app.state.telegram_poller = poller
     try:
         yield
     finally:
+        if poller is not None:
+            await poller.stop()
         inbox: WhatsAppInbox | None = getattr(app.state, "whatsapp_inbox", None)
         if inbox is not None:
             await inbox.close()

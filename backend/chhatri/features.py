@@ -35,6 +35,7 @@ FEATURE_NAMES: Final[tuple[str, ...]] = (
     "h24_whatif",
     "h25_evals",
     "console_polish",
+    "telegram_channel",
 )
 _KNOWN: Final = frozenset(FEATURE_NAMES)
 _SEPARATORS: Final = re.compile(r"[\s,]+")

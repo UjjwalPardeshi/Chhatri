@@ -24,6 +24,15 @@ SARVAM = "sarvam-DUMMY-key-5a1c"
 GOOGLE = "AIza-DUMMY-key-9f3e"
 
 
+def ai_not_set(out: str) -> int:
+    """NOT SET lines for the two AI keys only (the Telegram line is checked on its own)."""
+    return sum(
+        1
+        for line in out.splitlines()
+        if line.startswith(("SARVAM_API_KEY", "GOOGLE_API_KEY")) and line.endswith("NOT SET")
+    )
+
+
 @pytest.fixture(autouse=True)
 def no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test is offline unless it installs its own fake `urlopen`."""
@@ -129,7 +138,7 @@ def test_report_marks_each_key_and_never_prints_a_value(
     assert ck.main(["--env-file", str(tmp_path / "none")], environ=environ, fetch=fetch) == 0
     out = capsys.readouterr().out
     assert "SARVAM_API_KEY" in out and "GOOGLE_API_KEY" in out
-    assert out.count("NOT SET") == 0 and out.count("SET") >= 2
+    assert ai_not_set(out) == 0 and out.count("SET") >= 2
     for secret in (
         SARVAM,
         GOOGLE,
@@ -147,7 +156,7 @@ def test_keys_that_are_not_set_make_no_network_call(
     fetch = FakeGemini()
     assert ck.main(["--env-file", str(tmp_path / "none")], environ={}, fetch=fetch) == 0
     out = capsys.readouterr().out
-    assert out.count("NOT SET") == 2
+    assert ai_not_set(out) == 2
     assert fetch.calls == []
 
 
@@ -171,7 +180,7 @@ def test_keys_come_from_the_env_file_when_the_environment_has_none(
     fetch = FakeGemini(PAGE_TWO)
     assert ck.main(["--env-file", str(env_file)], environ={}, fetch=fetch) == 0
     out = capsys.readouterr().out
-    assert out.count("NOT SET") == 1 and GOOGLE not in out
+    assert ai_not_set(out) == 1 and GOOGLE not in out
     assert fetch.calls and fetch.calls[0][1] == GOOGLE
 
 
@@ -362,4 +371,4 @@ def test_the_script_runs_end_to_end_without_keys(repo_root: Path, tmp_path: Path
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.count("NOT SET") == 2
+    assert ai_not_set(result.stdout) == 2 and "TELEGRAM_BOT_TOKEN  NOT SET" in result.stdout

@@ -51,6 +51,7 @@ IntegrationName = Literal[
     "kyc",
     "gemini_chat",
     "gemini_vision",
+    "telegram",
 ]
 ScenarioName = Literal["monsoon", "illness", "illness_mismatch", "buy_cover"]
 ZoneStatusName = Literal["normal", "watch", "triggered", "slow_day", "no_data"]

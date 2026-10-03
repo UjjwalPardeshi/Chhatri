@@ -19,6 +19,10 @@ Documented choices:
 - Soundbox (§14.7): every paid merchant's log gets a SOUNDBOX message (channel SOUNDBOX). The
   Soundbox integration (with TTS) is called and the ``soundbox`` event is published for demo
   merchants only, because the console auto-plays every ``soundbox`` event and the deck shows one.
+- Telegram: with the ``telegram_channel`` flag on, a merchant whose preferred channel is Telegram gets every message on
+  channel TELEGRAM through the Telegram channel (live or simulated), voiced as OGG/Opus, never as a template (Telegram has
+  no 24-hour window), and a payout card carries its quick-reply buttons. A message that answers a Telegram or WhatsApp
+  inbound goes back the way it came (``reply_via``), whatever the preference. Without the flag nothing changes.
 - A delivery failure (``IntegrationError``) is logged and audited (``delivered: false``); the
   message stays in the log so the console still shows it.
 - Events: ``message`` carries ``{message: Message}`` in the exact §19.2 shape (``message_json``: ISO
@@ -33,7 +37,9 @@ Documented choices:
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from types import MappingProxyType
@@ -43,7 +49,8 @@ from chhatri.clock import IST, Clock
 from chhatri.conversation.message_guard import SEND_KIND_META, MessageGuard, MessageSuppressed, SendKind
 from chhatri.conversation.messages import bilingual
 from chhatri.conversation.ports import ConversationStore
-from chhatri.domain.enums import Channel, Direction, Language, MessageKind
+from chhatri.conversation.telegram_replies import QUICK_REPLIES
+from chhatri.domain.enums import Channel, Direction, Language, MessageKind, PreferredChannel
 from chhatri.domain.models import Merchant, Message
 from chhatri.events import EventBus
 from chhatri.ids import IdFactory
@@ -73,9 +80,23 @@ TEMPLATE_CHECKIN: Final = "chhatri_checkin"
 _NO_META: Final[Mapping[str, Any]] = MappingProxyType({})
 DEVANAGARI_FIRST: Final = "\u0900"
 DEVANAGARI_LAST: Final = "\u097f"
+_REPLY_VIA: Final[ContextVar[PreferredChannel | None]] = ContextVar("outbox_reply_via", default=None)
 DECK_TRANSLATIONS: Final[Mapping[str, str]] = MappingProxyType(
     {u.transcript: u.text_en for u in DEMO_UTTERANCES.values() if u.transcript != u.text_en}
 )
+
+
+@contextmanager
+def reply_via(channel: PreferredChannel) -> Iterator[None]:
+    """Everything the conversation says inside this block goes out on ``channel``, whatever the merchant prefers.
+
+    The inboxes wrap an inbound message in it so the answer returns the way the question came. It is a context variable,
+    so it only affects the task that set it: a notification running concurrently keeps the merchant's preference."""
+    token = _REPLY_VIA.set(channel)
+    try:
+        yield
+    finally:
+        _REPLY_VIA.reset(token)
 
 
 def is_devanagari(text: str) -> bool:
@@ -170,6 +191,8 @@ class Outbox:
         soundbox: Soundbox,
         channel_name: Channel,
         guard: MessageGuard | None = None,
+        telegram: MessagingChannel | None = None,
+        preferred: Callable[[str], PreferredChannel] | None = None,
     ) -> None:
         channel_name = Channel(channel_name)  # accepts the enum value string, rejects anything else
         if channel_name is Channel.SOUNDBOX:
@@ -185,6 +208,22 @@ class Outbox:
         self._channel_name = channel_name
         self._whatsapp = channel_name is Channel.WHATSAPP
         self._guard = guard
+        self._telegram = (
+            telegram  # None while the telegram_channel flag is off: every merchant is on WhatsApp
+        )
+        self._preferred = preferred
+
+    def _route(self, merchant_id: str) -> PreferredChannel:
+        """Which channel carries this merchant's messages now: the inbound's, else the merchant's preference."""
+        if self._telegram is None:
+            return PreferredChannel.WHATSAPP
+        override = _REPLY_VIA.get()
+        if override is not None:
+            return override
+        return self._preferred(merchant_id) if self._preferred is not None else PreferredChannel.WHATSAPP
+
+    def _channel_name_for(self, route: PreferredChannel) -> Channel:
+        return Channel.TELEGRAM if route is PreferredChannel.TELEGRAM else self._channel_name
 
     def now(self) -> datetime:
         return self._clock.now()
@@ -224,11 +263,12 @@ class Outbox:
     ) -> Message:
         """Record an inbound message (script and deck translation: see the module docstring)."""
         hindi = text is not None and is_devanagari(text)
+        channel_name = self._channel_name_for(self._route(merchant.id))
         message = Message(
             id=self._ids.next("message"),
             merchant_id=merchant.id,
             direction=Direction.INBOUND,
-            channel=self._channel_name,
+            channel=channel_name,
             kind=kind,
             text_hi=text if hindi else None,
             text_en=DECK_TRANSLATIONS.get(text or "") if hindi else text,
@@ -244,7 +284,7 @@ class Outbox:
             action="message.inbound",
             subject_type="message",
             subject_id=message.id,
-            data={"merchant_id": merchant.id, "kind": kind.value, "channel": self._channel_name.value},
+            data={"merchant_id": merchant.id, "kind": kind.value, "channel": channel_name.value},
         )
         return message
 
@@ -258,14 +298,23 @@ class Outbox:
         """
         now = self.now()
         extra = self._guard_meta(merchant, out, now)
-        voice = await self._voice(merchant, out) if out.voiced and out.text_hi else _Voice()
-        templated = out.template is not None and self._whatsapp and not self.in_session(merchant.id, now)
+        route = self._route(merchant.id)
+        telegram = route is PreferredChannel.TELEGRAM
+        channel_name = self._channel_name_for(route)
+        ogg = self._whatsapp or telegram  # voice notes are OGG/Opus on WhatsApp and on Telegram
+        voice = await self._voice(merchant, out, ogg) if out.voiced and out.text_hi else _Voice()
+        templated = (
+            out.template is not None
+            and self._whatsapp
+            and not telegram
+            and not self.in_session(merchant.id, now)
+        )
         meta = dict(voice.meta) | dict(out.meta) | extra | ({"case_id": out.case_id} if out.case_id else {})
         message = Message(
             id=self._ids.next("message"),
             merchant_id=merchant.id,
             direction=Direction.OUTBOUND,
-            channel=self._channel_name,
+            channel=channel_name,
             kind=MessageKind.TEMPLATE if templated else out.kind,
             text_hi=out.text_hi,
             text_en=out.text_en,
@@ -275,7 +324,7 @@ class Outbox:
             meta=meta,
         )
         self._record(message)
-        delivered, detail = await self._deliver(merchant, out, voice)
+        delivered, detail = await self._deliver(merchant, out, voice, route)
         self._audit.append(
             at=now,
             actor=AI_ACTOR,
@@ -286,7 +335,7 @@ class Outbox:
                 "merchant_id": merchant.id,
                 "key": out.key,
                 "kind": message.kind.value,
-                "channel": self._channel_name.value,
+                "channel": channel_name.value,
                 "delivered": delivered,
                 "delivery": detail,
             },
@@ -318,20 +367,20 @@ class Outbox:
             else {}
         )
 
-    async def _voice(self, merchant: Merchant, out: Outgoing) -> _Voice:
+    async def _voice(self, merchant: Merchant, out: Outgoing, ogg: bool) -> _Voice:
         if not merchant.is_demo or out.text_hi is None:
             return _BROWSER_VOICE
         try:
-            audio = await self._tts.synthesize(out.text_hi, Language.HI, for_whatsapp=self._whatsapp)
+            audio = await self._tts.synthesize(out.text_hi, Language.HI, for_whatsapp=ogg)
         except IntegrationError as exc:
             logger.warning("conversation: TTS failed for %s (%s); browser voice", out.key, exc.safe_message)
             return _BROWSER_VOICE
-        return self._stored_voice(audio)
+        return self._stored_voice(audio, ogg)
 
-    def _stored_voice(self, audio: SynthesizedAudio | None) -> _Voice:
+    def _stored_voice(self, audio: SynthesizedAudio | None, ogg: bool | None = None) -> _Voice:
         if audio is None or audio.audio is None:
             return _BROWSER_VOICE
-        default_mime = WHATSAPP_AUDIO_MIME if self._whatsapp else BROWSER_AUDIO_MIME
+        default_mime = WHATSAPP_AUDIO_MIME if (self._whatsapp if ogg is None else ogg) else BROWSER_AUDIO_MIME
         mime = audio.mime_type or default_mime
         media_id = self.store_media(audio.audio, mime)
         return _Voice(
@@ -341,18 +390,25 @@ class Outbox:
             meta=MappingProxyType({"voice_source": VOICE_SARVAM}),
         )
 
-    async def _deliver(self, merchant: Merchant, out: Outgoing, voice: _Voice) -> tuple[bool, str]:
+    async def _deliver(
+        self, merchant: Merchant, out: Outgoing, voice: _Voice, route: PreferredChannel
+    ) -> tuple[bool, str]:
+        telegram = route is PreferredChannel.TELEGRAM and self._telegram is not None
+        templated = out.template is not None and not telegram
+        ogg = self._whatsapp or telegram
         outbound = OutboundMessage(
             merchant_id=merchant.id,
             to_phone=merchant.phone,
             text=out.wire_text(),
-            template_name=out.template.name if out.template else None,
-            template_params=out.template.params if out.template else (),
-            audio=voice.audio if self._whatsapp else None,
-            audio_mime=voice.mime if self._whatsapp else None,
+            template_name=out.template.name if templated and out.template else None,
+            template_params=out.template.params if templated and out.template else (),
+            audio=voice.audio if ogg else None,
+            audio_mime=voice.mime if ogg else None,
+            buttons=QUICK_REPLIES.get(out.key, ()) if telegram else (),
         )
+        channel = self._telegram if telegram and self._telegram is not None else self._channel
         try:
-            receipt = await self._channel.send(outbound)
+            receipt = await channel.send(outbound)
         except IntegrationError as exc:
             logger.error("conversation: %s to %s not delivered: %s", out.key, merchant.id, exc.safe_message)
             return False, f"failed: {exc.safe_message}"

@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from chhatri.integrations.free_tier import free_tier_gate_detail
+from chhatri.integrations.panel import telegram_rows
 from chhatri.replay.static import StaticContext
 
 if TYPE_CHECKING:
@@ -70,7 +71,11 @@ def _runtime_rows(rt: Runtime | None) -> list[dict[str, Any]]:
     rows = [_row("scenario", True, f"{rt.scenario.name} loaded ({rt.scenario.title})")]
     rows += [
         _row(f"integration:{s.name}", True, f"{s.mode.value} · {s.detail}")
-        for s in (*rt.integrations.statuses, *rt.integrations.gemini_statuses)  # X6: 17 rows, like the panel
+        for s in (
+            *rt.integrations.statuses,
+            *rt.integrations.gemini_statuses,  # X6: 17 rows, like the panel
+            *telegram_rows(rt.integrations, rt.static.settings),  # the 18th, with flag telegram_channel on
+        )
     ]
     state = "running" if rt.engine.running else "paused"
     rows.append(_row("clock", True, f"{rt.clock.now():%Y-%m-%d %H:%M} simulated, {state}"))

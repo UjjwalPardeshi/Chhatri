@@ -47,7 +47,7 @@ Sarvam, Gemini and Cognee run on free tiers, so they are called only when `CHHAT
 
 Every feature added after the first build (N1 mini-app, N2 Ask Chhatri, N3 slip pre-check, N4 voice, N5
 grievance ladder, N6 consent centre, N8 Marathi, X4 lender request, X6 provider panel, X8 distress guard, H8 ops
-strip, H24 what-if, H25 evaluation page, console polish) ships behind one of 14 flags, off by default. They are
+strip, H24 what-if, H25 evaluation page, console polish, Telegram channel) ships behind one of 15 flags, off by default. They are
 the names in `chhatri/features.py` (`FEATURE_NAMES`), read from `CHHATRI_FEATURES`; the console reads the same
 names from `VITE_FEATURES` (`frontend/src/features.ts`), and a test keeps the two lists identical. A route whose
 flag is off answers the ordinary 404 `not_found`. `GET /api/health` lists the flags that are on. The golden
@@ -835,6 +835,8 @@ Uploads: images ≤ 5 MB (jpeg/png/webp), audio ≤ 5 MB and ≤ 30 s (ogg/opus/
 | GET /api/merchants/{id}/consents/activity | H23 what was used, for what and when: a projection of the audit log through a fixed map, newest first, `limit`, `offset`, `purpose` (flag `n6_consents`) |
 | POST /api/merchants/{id}/consents/{consent_id}/withdraw | N6 turn one purpose off (officer token; 409 `already_withdrawn`, 409 `case_open`; flag `n6_consents`; group `messages`) |
 | POST /api/merchants/{id}/slips/{slip_id}/forget | H23 erase one stored slip (officer token; 409 `case_open`, 409 `already_erased`; the audit log is never edited; flag `n6_consents`; group `messages`) |
+| GET /api/merchants/{id}/channel | Telegram channel: the merchant's preferred channel (`whatsapp` default or `telegram`), the mode of each channel (LIVE, SIMULATED, FALLBACK) and whether a Telegram chat is linked, with the `https://t.me/<bot>?start=S-0142` deep link once the bot's username is known (flag `telegram_channel`: 404 while off; data-model 5.0) |
+| POST /api/merchants/{id}/channel `{channel: "whatsapp"\|"telegram"}` | Telegram channel: choose where this merchant's notifications go (officer token; repeat is a no-op; audit `channel.preference_set`; flag `telegram_channel`; group `messages`; the choice lasts for the scenario run) |
 | GET /api/evals/summary | H25 results of the offline evaluation suites, read from `backend/artifacts/evals/summary.json` (flag `h25_evals`: 404 while off; 200 with every suite `NOT_MEASURED` when no run is stored; no provider call, no rate group) |
 
 19.1 SSE events (`event:` = type, `id:` = event id, `data:` = JSON `{id, type, at, data}` with
@@ -1013,7 +1015,7 @@ errors never echo secrets or stack traces; CORS restricted; rate limits on webho
 - `scripts/demo_check.py` runs every scenario through the HTTP API and asserts the outcomes.
 - Frontend: vitest for formatters/colour scale, the console and the mini-app; Playwright E2E (projects `mock` and
   `live`) for the monsoon replay, the officer approve flow and the mini-app flows.
-- Route table: `backend/tests/api/test_route_table.py` pins §19 to exactly 57 routes, with their auth.
+- Route table: `backend/tests/api/test_route_table.py` pins §19 to exactly 59 routes, with their auth.
 - Feature flags: every flagged route answers 404 while its flag is off (`tests/api/test_feature_routes.py`), and
   the golden numbers hold with every flag off.
 - Infra: `scripts/tests/` (n8n workflows generated from `WORKFLOWS`, compose, env, nginx, Makefile).

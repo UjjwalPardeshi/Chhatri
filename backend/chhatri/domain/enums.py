@@ -145,6 +145,14 @@ class Channel(StrEnum):
     WHATSAPP = "WHATSAPP"
     SIMULATOR = "SIMULATOR"  # console phone view
     SOUNDBOX = "SOUNDBOX"
+    TELEGRAM = "TELEGRAM"  # the Telegram bot (live, or recorded while it is simulated)
+
+
+class PreferredChannel(StrEnum):
+    """Where a merchant's notifications go (lowercase on the wire: `GET /api/merchants/{id}/channel`)."""
+
+    WHATSAPP = "whatsapp"
+    TELEGRAM = "telegram"
 
 
 class MessageKind(StrEnum):

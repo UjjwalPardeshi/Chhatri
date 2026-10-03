@@ -5,6 +5,7 @@
 | Sarvam    | SARVAM_API_KEY                                                      | deterministic simulators    |
 | Gemini    | GOOGLE_API_KEY + GEMINI_MODEL (slips: or GEMINI_VISION_MODEL) + CHHATRI_DATA_IS_SYNTHETIC | templates, simulated slip reader |
 | WhatsApp  | the four WHATSAPP_* keys **and** WHATSAPP_DEMO_RECIPIENT            | in-console phone simulator  |
+| Telegram  | TELEGRAM_BOT_TOKEN **and** CHHATRI_DATA_IS_SYNTHETIC (ADR 0009)     | in-console Telegram recorder |
 | Paytm     | PAYTM_MCP_URL (MCP over SSE) or PAYTM_MID + PAYTM_KEY_SECRET (REST) | simulated links             |
 | n8n       | N8N_BASE_URL                                                        | in-process runner           |
 | memory    | COGNEE_ENABLED + cognee installed + LLM configured                  | networkx graph              |
@@ -73,7 +74,14 @@ from chhatri.integrations.sarvam import (
 )
 from chhatri.integrations.slip_chain import SlipChain, build_slip_chain
 from chhatri.integrations.soundbox import SimulatedSoundbox
-from chhatri.integrations.statuses import ALWAYS_SIMULATED, live, ordered, ordered_gemini, simulated
+from chhatri.integrations.statuses import (
+    ALWAYS_SIMULATED,
+    live,
+    ordered,
+    ordered_gemini,
+    ordered_telegram,
+    simulated,
+)
 from chhatri.integrations.switch import PROCESS_SWITCH, FallbackSwitch
 from chhatri.integrations.switched import (
     SwitchedChannel,
@@ -84,8 +92,11 @@ from chhatri.integrations.switched import (
     SwitchedTts,
     SwitchedWorkflows,
 )
+from chhatri.integrations.telegram import build_telegram
+from chhatri.integrations.telegram_sim import TelegramSimulatorChannel
 from chhatri.integrations.whatsapp import InboundGate, LiveWhatsAppChannel, SimulatorChannel
 from chhatri.policy.rules import PolicyRules, default_rules
+from chhatri.store.telegram_bindings import LIVE_TELEGRAM_BINDINGS, TelegramBindings
 from chhatri.workflows.definitions import Scheduler, StepHandlers, build_workflows
 from chhatri.workflows.runner import InProcessWorkflowEngine, N8nWorkflowEngine
 
@@ -122,6 +133,11 @@ class Integrations:
     slip_chain: SlipChain  # Gemini vision, Sarvam Vision, the simulator only when nothing live applies (4.2)
     # X6 (card 4.5): the demo switch every wrapper, both chains and the lender read on each call. Process-wide.
     switch: FallbackSwitch = field(default_factory=lambda: PROCESS_SWITCH)
+    # Telegram channel (flag `telegram_channel`): the channel for merchants who prefer Telegram, its status row and the
+    # process-wide chat bindings. The row is not in `statuses`, so the 15 and the 17 do not change with the flag off.
+    telegram: MessagingChannel = field(default_factory=TelegramSimulatorChannel)
+    telegram_statuses: tuple[IntegrationStatus, ...] = ()
+    telegram_bindings: TelegramBindings = field(default_factory=lambda: LIVE_TELEGRAM_BINDINGS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,11 +356,13 @@ def build_integrations(
     whatsapp_gate: InboundGate | None = None,
     loans: Mapping[str, Loan] | None = None,
     switch: FallbackSwitch | None = None,
+    telegram_bindings: TelegramBindings | None = None,
 ) -> Integrations:
     """SPEC §24.5 builder; `rules` defaults to rules.yaml, `env` to the process environment and
     `whatsapp_gate` to the process-wide `LIVE_WHATSAPP_GATE`. `loans` is the city's loan book by merchant: the
     simulated lender's own records (X4). Without it the lender knows no loan and every request is refused.
-    `switch` is the X6 demo switch, the process-wide one by default."""
+    `switch` is the X6 demo switch, the process-wide one by default. `telegram_bindings` are the Telegram chats bound to
+    demo merchants, the process-wide ones by default (a chat outlives a scenario load)."""
     switch = PROCESS_SWITCH if switch is None else switch
     speech = build_speech(settings, switch)
     gate_open = settings.chhatri_data_is_synthetic
@@ -353,6 +371,8 @@ def build_integrations(
     channel, channel_status = build_channel(
         settings, LIVE_WHATSAPP_GATE if whatsapp_gate is None else whatsapp_gate, switch
     )
+    bindings = LIVE_TELEGRAM_BINDINGS if telegram_bindings is None else telegram_bindings
+    telegram, telegram_status = build_telegram(settings, bindings, switch)
     payments, paytm_status = build_payments(settings, scheduler, switch)
     weather, weather_status = build_weather(settings, Path(data_dir))
     workflows, n8n_status = build_workflow_engine(
@@ -386,6 +406,9 @@ def build_integrations(
         lender=SimulatedLender(loans or {}, forced=switch.checker("lender")),
         statuses=ordered(statuses),
         gemini_statuses=ordered_gemini(list(gemini.statuses)),
+        telegram=telegram,
+        telegram_statuses=ordered_telegram([telegram_status]),
+        telegram_bindings=bindings,
         chat_chain=build_chat_chain(
             settings, gemini=gemini.chat, sarvam=speech.chat, forced_source=lambda: switch.forced
         ),

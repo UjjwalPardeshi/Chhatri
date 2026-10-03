@@ -309,6 +309,7 @@ def merchant_detail(rt: Runtime, merchant_id: str) -> dict[str, Any]:
         "kyc_name_masked": mask_name(m.kyc_name),
         "phone_masked": mask_phone(m.phone),
         "language": m.language.value,
+        "preferred_channel": rt.store.preferred_channel(m.id).value,
         "cover": None
         if cover is None
         else {

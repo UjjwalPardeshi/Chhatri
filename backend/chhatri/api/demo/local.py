@@ -34,6 +34,7 @@ OFFLINE_OVERRIDES: Final[dict[str, Any]] = {
     "whatsapp_app_secret": None,
     "whatsapp_verify_token": None,
     "whatsapp_demo_recipient": None,
+    "telegram_bot_token": None,
     "paytm_mcp_url": None,
     "paytm_mid": None,
     "paytm_key_secret": None,

@@ -12,7 +12,7 @@ retried, because n8n already retries each callback (see "n8n workflows").
 `/api/integrations` reports these components: `sarvam_stt`, `sarvam_tts`, `sarvam_chat`,
 `sarvam_vision`, `whatsapp`, `paytm`, `n8n`, `memory`, `weather`, `soundbox`, `sales_data`, `alerts`,
 `payout_rail`, `lender`, `kyc`. With the flag `x6_provider_panel` on it also lists `gemini_chat` and
-`gemini_vision` (17 rows), with `mode` LIVE, SIMULATED or FALLBACK, the provider, the model, the reason and
+`gemini_vision` (17 rows; with `telegram_channel` on, an 18th row `telegram`), with `mode` LIVE, SIMULATED or FALLBACK, the provider, the model, the reason and
 a demo switch (data-model 5.6). `/api/preflight` always lists all 17.
 
 **Free-tier data gate (ADR 0009).** Gemini, Sarvam and Cognee's LLM run on free tiers, so they are called
@@ -104,6 +104,31 @@ Sample value: `अनिल`.
 The send payload is
 `{"type":"template","template":{"name":…,"language":{"code":"hi"},"components":[{"type":"body","parameters":[{"type":"text","text":…},…]}]}}`,
 built by `chhatri.integrations.whatsapp_payloads.template_payload`.
+
+## Telegram bot (flag `telegram_channel`; data-model 5.13)
+
+Telegram is a second chat app next to WhatsApp, never a replacement: WhatsApp stays the default, and a
+merchant (or the officer, for the demo) can move Chhatri's messages to Telegram and back. It only changes
+where messages go; cover, decisions and payouts are the same.
+
+**Live when** the flag is on, `TELEGRAM_BOT_TOKEN` is set and `CHHATRI_DATA_IS_SYNTHETIC=true` (ADR 0009:
+Telegram is a free third-party service). Otherwise the channel records every message on the console phone
+and `/api/integrations` labels the `telegram` row SIMULATED (reason `NO_KEY` or `FREE_TIER_BLOCKED`).
+
+- **Set-up**: create a bot with @BotFather, put its token in `.env` as `TELEGRAM_BOT_TOKEN` (never commit
+  it), and run `make check-keys`: it prints SET or NOT SET and the bot's `@username` with the demo deep link,
+  never the token.
+- **No public URL**: the backend reads updates by long polling (`getUpdates`) while `TELEGRAM_POLLING=true`
+  (the default). There is no webhook. Only one process may poll a token, so `make stage-e2e` starts its
+  backend without the token.
+- **Binding a chat**: open `https://t.me/<bot username>?start=S-0142` on a phone and press Start; the chat is
+  bound to that demo merchant. `/stop` unbinds it. Only demo merchants are ever bound or sent to.
+- **Choosing the channel**: the console's merchant phone has a "Chat app" switch (WhatsApp | Telegram), and
+  the mini-app's Settings screen has "Messages from Chhatri". Both call `POST /api/merchants/{id}/channel`
+  (officer token; audit `channel.preference_set`). A replay load starts again on WhatsApp.
+- **What the bot sends**: the same bilingual texts as WhatsApp, voice notes as OGG/Opus, and the payout card
+  with its quick-reply buttons ("why", "my loss was bigger"). A reply to an inbound message goes back on the
+  channel it came from. The console phone wears Telegram's colours while the merchant is on Telegram.
 
 ## Paytm payment link (SPEC §14.3)
 

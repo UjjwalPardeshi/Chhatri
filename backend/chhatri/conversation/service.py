@@ -31,7 +31,7 @@ from chhatri.conversation.explain_first import explain_first
 from chhatri.conversation.intents import Intent, classify
 from chhatri.conversation.message_guard import MessageGuard
 from chhatri.conversation.messages import date_en, date_hi, name_facts
-from chhatri.conversation.nlu import IntentResult, detect_intent
+from chhatri.conversation.nlu import IntentChain, IntentResult, detect_intent, detect_intent_chain
 from chhatri.conversation.notifications import Notifications
 from chhatri.conversation.outbox import (
     AI_ACTOR,
@@ -44,7 +44,7 @@ from chhatri.conversation.outbox import (
 from chhatri.conversation.ports import ClaimsPort, ConversationStore, MerchantDirectory
 from chhatri.conversation.replies import Replies
 from chhatri.conversation.slip_flow import FiledSlip, PrecheckResolver, SlipFlow
-from chhatri.domain.enums import Channel, MessageKind
+from chhatri.domain.enums import Channel, MessageKind, PreferredChannel
 from chhatri.domain.models import (
     AreaTrigger,
     Case,
@@ -119,11 +119,15 @@ class ConversationService:
         unknown: UnknownResolver | None = None,
         message_guard: MessageGuard | None = None,
         slip_consent: Callable[[str], bool] | None = None,
+        intent_chain: IntentChain | None = None,
+        telegram: MessagingChannel | None = None,
+        preferred_channel: Callable[[str], PreferredChannel] | None = None,
     ) -> None:
         self._city = city
         self._audit = audit
         self._stt = stt
         self._chat = chat
+        self._intent_chain = intent_chain
         self._unknown = unknown
         self._outbox = Outbox(
             store=store,
@@ -136,6 +140,8 @@ class ConversationService:
             soundbox=soundbox,
             channel_name=channel_name,
             guard=message_guard,
+            telegram=telegram,
+            preferred=preferred_channel,
         )
         self._store = store
         self._replies = Replies(outbox=self._outbox, claims=claims, store=store)
@@ -221,7 +227,12 @@ class ConversationService:
     async def _answer(self, merchant: Merchant, inbound: Message, text: str) -> tuple[Message, ...]:
         answerer = self._unknown() if self._unknown is not None else None
         if answerer is None:
-            detected = await detect_intent(text, self._chat)
+            if (
+                self._intent_chain is not None
+            ):  # Gemini, then Sarvam: a labelled model intent for free Hindi/Hinglish
+                detected = await detect_intent_chain(text, self._intent_chain)
+            else:
+                detected = await detect_intent(text, self._chat)
         else:  # N2 is on: the word lists alone choose the intent, so a model can never open a case (fs-05 N2.15)
             detected = IntentResult(classify(text), "rules")
         self._audit.append(
@@ -230,7 +241,12 @@ class ConversationService:
             action="intent.detected",
             subject_type="message",
             subject_id=inbound.id,
-            data={"merchant_id": merchant.id, "intent": detected.intent.value, "source": detected.source},
+            data={
+                "merchant_id": merchant.id,
+                "intent": detected.intent.value,
+                "source": detected.source,
+                **({"ai": detected.label.to_wire()} if detected.label is not None else {}),
+            },
         )
         grounded = detected.intent is Intent.UNKNOWN or explain_first(text, detected.intent)  # N2.7
         if answerer is not None and grounded:

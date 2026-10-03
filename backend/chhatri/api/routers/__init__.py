@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from chhatri.api.routers import (
     ask,
     cases,
+    channel,
     consents,
     evals,
     fallback,
@@ -50,6 +51,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     fallback.router,
     grievances.router,
     consents.router,
+    channel.router,
 )
 
 __all__ = ["ROUTERS"]

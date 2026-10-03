@@ -303,7 +303,7 @@ kill "${pids[@]}"
 
 Both lists are comma or space separated, case-insensitive, and an unknown name is ignored and logged once. A flag changes only when the backend restarts or the console is rebuilt, so the demo flag set is chosen before the demo and never changed during it.
 
-**The 14 flags, and the cards each one gates.** This list is final. Where a spec proposes another name, the spec changes (the last column).
+**The 14 flags of the waves, and the cards each one gates.** This list is final; a 15th flag, `telegram_channel` (the Telegram chat app, data-model 5.13), came on 3 Oct. Where a spec proposes another name, the spec changes (the last column).
 
 | Flag | Gates | On in wave | Name the spec uses today |
 |---|---|---|---|

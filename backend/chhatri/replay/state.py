@@ -41,6 +41,7 @@ from chhatri.conversation.service import ConversationService
 from chhatri.domain.enums import Channel, IntegrationMode
 from chhatri.domain.models import Loan
 from chhatri.events import EventBus
+from chhatri.features import is_enabled
 from chhatri.forecast.errors import ForecastError
 from chhatri.ids import IdFactory
 from chhatri.integrations.registry import Integrations, build_integrations
@@ -297,6 +298,9 @@ class AppState:
             stt=integrations.stt,
             tts=integrations.tts,
             chat=integrations.chat,
+            intent_chain=integrations.chat_chain,
+            telegram=integrations.telegram if is_enabled("telegram_channel", self.static.settings) else None,
+            preferred_channel=core.store.preferred_channel,
             slips=integrations.slips,
             soundbox=integrations.soundbox,
             claims=core.orchestrator,

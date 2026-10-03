@@ -20,6 +20,7 @@ those badges. With the flag `x6_provider_panel` on, a live component that failed
 | Sarvam STT, TTS, chat, vision | `SARVAM_API_KEY` set | deterministic simulator |
 | Gemini chat and slip reading | `GOOGLE_API_KEY` and `GEMINI_MODEL` set (`GEMINI_VISION_MODEL` optional) | templates and the simulated slip reader |
 | WhatsApp Cloud API | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` all set | in-console phone simulator |
+| Telegram bot (flag `telegram_channel`) | `TELEGRAM_BOT_TOKEN` set and `CHHATRI_DATA_IS_SYNTHETIC=true`; long polling, no public URL | messages recorded on the console phone |
 | Paytm payment link | `PAYTM_MCP_URL` (MCP over SSE), or `PAYTM_MID` + `PAYTM_KEY_SECRET` (REST, staging) | simulated `https://paytm.me/sim-…` link |
 | n8n workflows | `N8N_BASE_URL` set (the docker stack sets it) | in-process workflow runner, with the same steps and timeline |
 | Cognee memory | `COGNEE_ENABLED=true`, cognee installed and an LLM configured | in-process networkx graph |
@@ -33,8 +34,8 @@ Sarvam, Gemini and Cognee run on free tiers, so they are called only when `CHHAT
 
 Every feature added for the final (the merchant mini-app, Ask Chhatri, the slip pre-check, voice, the grievance
 ladder, the consent centre, Marathi, the lender request, the provider panel, the distress guard, the ops strip,
-the what-if drawer, the evaluation page and the console polish) ships behind one of 14 flags that are **off by
-default**. Set `CHHATRI_FEATURES` (backend) and `VITE_FEATURES` (console) to the same comma-separated list, for
+the what-if drawer, the evaluation page, the console polish and the Telegram channel) ships behind one of 15 flags
+that are **off by default**. Set `CHHATRI_FEATURES` (backend) and `VITE_FEATURES` (console) to the same comma-separated list, for
 example `n1_miniapp,n2_ask_chhatri`. A route whose flag is off answers the ordinary 404. The names are in
 `backend/chhatri/features.py` and `frontend/src/features.ts`, and `GET /api/health` lists the flags that are on.
 

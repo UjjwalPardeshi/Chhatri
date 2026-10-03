@@ -25,6 +25,7 @@ WAVE0_FLAGS = (
     "h24_whatif",
     "h25_evals",
     "console_polish",
+    "telegram_channel",
 )
 
 

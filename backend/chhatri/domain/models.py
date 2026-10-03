@@ -29,6 +29,7 @@ from chhatri.domain.enums import (
     Language,
     MessageKind,
     PayoutStatus,
+    PreferredChannel,
     PremiumMethod,
     PremiumStatus,
     Severity,
@@ -73,6 +74,9 @@ class Merchant(Frozen):
     shop_type: ShopType
     weekly_off: int | None = Field(default=None, ge=0, le=6)
     is_demo: bool = False
+    preferred_channel: PreferredChannel = (
+        PreferredChannel.WHATSAPP
+    )  # where notifications go (Telegram channel)
 
     @property
     def first_name(self) -> str:

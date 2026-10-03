@@ -56,8 +56,11 @@ def test_claims_port_is_importable_from_service_and_structural(world: World) -> 
     assert set(ConversationService.__init__.__kwdefaults__ or {}) <= {
         "precheck",
         "unknown",
+        "intent_chain",
         "message_guard",
         "slip_consent",
+        "telegram",  # telegram_channel: the Telegram outbox and the merchant's preferred channel
+        "preferred_channel",
     }
 
 
