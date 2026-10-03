@@ -73,7 +73,7 @@ make down
 |---|---|---|
 | frontend | http://localhost:8080 | nginx serves the console and proxies `/api` and `/webhooks` to the backend (SSE-safe) |
 | backend | http://localhost:8000 | FastAPI, non-root, artefacts baked into the image |
-| n8n | http://localhost:5678 | n8n 2.41.3; the three Chhatri workflows are imported and published at start |
+| n8n | http://localhost:5678 | n8n 2.41.3; the three Chhatri workflows are imported and published at start, each with plain-words step names and sticky notes that explain it |
 
 Ports bind to `127.0.0.1` by default. Change them with `CHHATRI_BIND_ADDR`, `CHHATRI_BACKEND_PORT`,
 `CHHATRI_CONSOLE_PORT` and `CHHATRI_N8N_PORT` in `.env`. The stack runs workflows on n8n. To use the
@@ -143,7 +143,7 @@ backend/            Python 3.12 package `chhatri` (FastAPI app factory chhatri.a
 frontend/           Vite + React 19 + TypeScript + react-leaflet console, with the merchant mini-app in src/miniapp/
                     (Tailwind v4 and shadcn, scoped to the mini-app) and an in-browser mock backend in src/mock/
 n8n/                entrypoint.sh and workflows/ (generated; see scripts/n8n_workflows.py)
-scripts/            infra tooling: init_env.py, n8n_workflows.py, n8n_selftest.py (+ tests/)
+scripts/            infra tooling: init_env.py, n8n_workflows.py (+ n8n_canvas*.py), n8n_selftest.py (+ tests/)
 docs/               SPEC.md (contract), ARCHITECTURE.md, DEMO.md, INTEGRATIONS.md, SECURITY.md, and the
                     product docs indexed in docs/README.md
 docker-compose.yml  Makefile  .env.example  .github/workflows/ci.yml

@@ -172,8 +172,10 @@ and `/api/integrations` labels the `telegram` row SIMULATED (reason `NO_KEY` or 
 - **Callbacks**: n8n calls `POST {CHHATRI_PUBLIC_URL}/internal/workflows/{step}` for each step, in
   `WORKFLOWS` order. Each call has the same header and the body `{"run_id", "workflow", "step",
   "payload"}`, with the payload passed through unchanged. The backend answers
-  `200 {"ok": true, "data": {"step", "status": "done"|"skipped"}}`. Any non-2xx answer, after 3 tries,
-  stops the n8n run, and the webhook answers 500.
+  `200 {"ok": true, "data": {"step", "status": "done"|"skipped"}}`. A callback that fails (an error, a
+  non-2xx answer, or no answer within 10 s) is tried 3 times, with a 1 s wait between tries; then the
+  run stops, later steps are not called, and the webhook answers 500. Three timed-out tries take about
+  32 s, longer than the backend's 30 s wait, so that case ends as a timeout (see Fallback).
 - **Fallback**: connect failure, a non-2xx webhook answer or a missing completion body hands the run
   to the in-process runner, which schedules only the steps n8n had not reported yet. A timeout is not
   handed over (n8n may still be running it); it is audited as `workflow.start_failed`.
@@ -188,14 +190,36 @@ and `/api/integrations` labels the `telegram` row SIMULATED (reason `NO_KEY` or 
   | `human-review` | `open_case` → `notify_officer` |
   | `follow-up` | `check_case_sla` → `notify_officer` |
 
-  There are no Wait nodes. The backend schedules each effect at decision time + the step's simulated
-  offset (+0/+4/+4/+5 min for payout, +24 h for follow-up), so the timeline is identical to the
+  There are no Wait nodes. The backend schedules each effect at the run's start (the decision for
+  payout, the case opening for human-review and follow-up) + the step's simulated offset (+0/+4/+4/+5
+  min for payout, +0 for human-review, +24 h for follow-up), so the timeline is identical to the
   in-process runner.
 - **Files**: `n8n/workflows/chhatri-{payout,human-review,follow-up}.json` are generated from
   `chhatri.workflows.definitions.WORKFLOWS` by `make n8n-workflows`. Never edit them by hand; CI fails on
-  drift. In each workflow, the webhook node verifies `x-chhatri-secret` against
+  drift. In each workflow, the `Verify X-Chhatri-Secret` node checks `x-chhatri-secret` against
   `$env.CHHATRI_INTERNAL_SECRET` and requires the secret to be non-empty. Reading `$env` needs
   `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, which compose sets.
+- **Canvas**: the words are in `scripts/n8n_canvas_text.py` and the layout in `scripts/n8n_canvas.py`.
+  Each workflow has a plain-words name and numbered plain-words step nodes, on one row from left to
+  right, with the reject branch below the secret check:
+
+  | Workflow (name in n8n) | Step nodes |
+  |---|---|
+  | `payout` (Chhatri · Payout (approved claim)) | 1 · Prepare the payout → 2 · Credit ₹ to merchant → 3 · Tell merchant: WhatsApp + Soundbox → 4 · Ask lender to pause next instalment |
+  | `human-review` (Chhatri · Human review (referred claim or dispute)) | 1 · Queue for an officer → 2 · Notify the officer |
+  | `follow-up` (Chhatri · Follow-up (case deadline)) | 1 · Check the deadline → 2 · Remind officer if open |
+
+  Each step node's notes give the step key and its simulated offset, the callback
+  `POST /internal/workflows/{step}`, the retry policy and when Chhatri runs the step. n8n shows the notes
+  as one line under the node, cut off with "…" at the node's width: the first line (step key and
+  offset) always fits, and the full text is under the node's Settings, Notes. Four sticky notes explain
+  the workflow: a title note (blue) with what starts it and that n8n never decides; the security check
+  (red) around the webhook, the secret check and the reject branch; the checklist (green) around the
+  steps, with each step's simulated time and, for payout, the monsoon example; and what happens when a
+  step fails (gold). The times are computed from the step offsets. The canvas changes how the workflow looks, not what it does. Ids, file names, webhook paths,
+  the secret check, every callback and its retry settings are unchanged: step node ids still come from
+  the step key, and a test pins the executable part of each file by hash. A backend step without a
+  plain-words text makes `make n8n-workflows` fail.
 - **Start-up**: `n8n/entrypoint.sh` fails fast without `CHHATRI_INTERNAL_SECRET` or
   `CHHATRI_PUBLIC_URL`. It then runs `n8n import:workflow --separate` (fixed ids, so a restart
   re-imports in place), `n8n publish:workflow --id=…` for each workflow, and finally starts n8n.
