@@ -3,12 +3,13 @@
  * status chip with a glyph and its word (colour is never the only signal), a metric row and a suite card. A suite that
  * was not measured says why and shows no number; configurations are separate chips and are never averaged.
  */
-import type { EvalMetric, EvalRun, EvalSuite, MetricStatus } from '../../api/evals'
+import type { EvalMetric, EvalMode, EvalRun, EvalSuite, MetricStatus } from '../../api/evals'
 import { ModeWord } from '../common/ModeChip'
 import { intervalText, METRIC_STATUS_LABEL, SUITE_STATUS_LABEL, SUITE_TITLES, targetText, valueText } from './evalFormat'
 
 const TONE: Readonly<Record<MetricStatus, { badge: string; glyph: string }>> = {
   NOT_MEASURED: { badge: 'badge--grey', glyph: '○' },
+  MEASURED: { badge: 'badge--blue', glyph: '●' },
   MISSED: { badge: 'badge--red', glyph: '✕' },
   'MET, WIDE INTERVAL': { badge: 'badge--amber', glyph: '▲' },
   MET: { badge: 'badge--green', glyph: '✓' },
@@ -23,6 +24,18 @@ export function StatusChip({ status, testId }: { status: MetricStatus; testId?: 
   )
 }
 
+/** LIVE, SIMULATED and FALLBACK use the console's mode word; the offline RULES and MOCK runs are a plain grey word. */
+function ProviderMode({ mode }: { mode: EvalMode }) {
+  if (mode === 'RULES' || mode === 'MOCK') {
+    return (
+      <span className="badge badge--grey" data-mode={mode}>
+        {mode}
+      </span>
+    )
+  }
+  return <ModeWord mode={mode} />
+}
+
 export function RunHeader({ run }: { run: EvalRun | null }) {
   if (run === null) return <p data-testid="eval-run" className="muted">Run: none stored</p>
   return (
@@ -35,7 +48,7 @@ export function RunHeader({ run }: { run: EvalRun | null }) {
       <ul className="eval-providers" aria-label="Provider configurations used">
         {run.providers.map((provider) => (
           <li key={`${provider.component}-${provider.provider}`} data-testid="eval-provider">
-            <ModeWord mode={provider.mode} /> {provider.component} · {provider.provider}
+            <ProviderMode mode={provider.mode} /> {provider.component} · {provider.provider}
             {provider.model ? ` · ${provider.model}` : ''}
           </li>
         ))}

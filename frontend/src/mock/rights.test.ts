@@ -228,11 +228,12 @@ describe('GET /api/evals/summary', () => {
     await expect(api.evalsSummary()).rejects.toMatchObject({ status: 404 })
   })
 
-  it('answers the no-run state: six suites in the plan order, every one NOT_MEASURED, no number anywhere', async () => {
+  it('answers the stored run: six suites in the plan order, slips and voice NOT_MEASURED with no number', async () => {
     const { api } = await setup()
     const summary = await api.evalsSummary()
-    expect(summary).toMatchObject({ measured: false, run: null })
+    expect(summary.measured).toBe(true)
+    expect(summary.run?.data_origin).toBe('synthetic')
     expect(summary.suites.map((s) => s.id)).toEqual(['intent', 'guard', 'ask', 'slips', 'voice', 'chain'])
-    expect(summary.suites.every((s) => s.status === 'NOT_MEASURED' && s.reason === 'no run stored' && s.metrics.length === 0)).toBe(true)
+    for (const id of ['slips', 'voice']) expect(summary.suites.find((s) => s.id === id)).toMatchObject({ status: 'NOT_MEASURED', metrics: [] })
   })
 })

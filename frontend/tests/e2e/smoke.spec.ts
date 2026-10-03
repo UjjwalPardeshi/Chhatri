@@ -153,12 +153,13 @@ async function sidewaysOverflow(page: Page): Promise<{ page: number; main: numbe
   })
 }
 
-test('the Evals page says NOT MEASURED until a run is stored (h25_evals)', async ({ page }) => {
+test('the Evals page shows the stored run, and NOT MEASURED where nothing was measured (h25_evals)', async ({ page }) => {
   test.skip(!E2E_FEATURES.includes('h25_evals'), 'the page is behind h25_evals: run with E2E_FEATURES=h25_evals')
   await openConsole(page)
   await goTo(page, 'Evals')
   await expect(page.getByRole('heading', { name: 'AI evaluation' })).toBeVisible()
-  await expect(page.getByTestId('eval-none')).toContainText('NOT MEASURED')
+  await expect(page.getByTestId('eval-run')).toContainText('data origin: synthetic')
+  await expect(page.getByTestId('eval-suite-slips')).toContainText('NOT MEASURED')
 })
 
 test.describe('projector 1280×720', () => {

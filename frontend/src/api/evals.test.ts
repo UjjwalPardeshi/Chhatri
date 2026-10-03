@@ -1,7 +1,13 @@
 /** The strict parser of GET /api/evals/summary: the no-run example passes, and a number the plan does not allow is a contract violation. */
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
+import storedRun from '../mock/data/evals-summary.json'
 import { parseEvalsSummary } from './evals'
+
+const BACKEND_RUN = resolve(__dirname, '../../../backend/artifacts/evals/summary.json')
 
 const IDS = ['intent', 'guard', 'ask', 'slips', 'voice', 'chain']
 const noRun = () => ({ measured: false, run: null, suites: IDS.map((id) => ({ id, status: 'NOT_MEASURED', reason: 'no run stored', metrics: [] })) })
@@ -31,6 +37,20 @@ describe('parseEvalsSummary', () => {
     const parsed = parseEvalsSummary(measured(metric()))
     expect(parsed.run?.providers[0]).toMatchObject({ mode: 'LIVE', provider: 'gemini' })
     expect(parsed.suites[3].metrics[0]).toMatchObject({ k: 0, n: 120, status: 'MET, WIDE INTERVAL' })
+  })
+
+  it('accepts the run the backend stored: MEASURED metrics with no target, an "all" target, RULES and MOCK runs, hashes keyed by file', () => {
+    const parsed = parseEvalsSummary(storedRun)
+    expect(parsed.measured).toBe(true)
+    expect(parsed.run?.held_out_sha256).toEqual(['ask.jsonl', 'guard.jsonl', 'intents.jsonl'])
+    expect(parsed.run?.providers.map((p) => p.mode)).toEqual(['RULES', 'RULES', 'LIVE', 'MOCK'])
+    const ask = parsed.suites.find((s) => s.id === 'ask')
+    expect(ask?.metrics.find((m) => m.id === 'ask.hindi_present')).toMatchObject({ direction: 'all', status: 'MET' })
+    expect(parsed.suites.find((s) => s.id === 'intent')?.metrics[0].status).toBe('MEASURED')
+  })
+
+  it.runIf(existsSync(BACKEND_RUN))('serves a copy equal to backend/artifacts/evals/summary.json', () => {
+    expect(storedRun).toEqual(JSON.parse(readFileSync(BACKEND_RUN, 'utf8')))
   })
 
   it.each([

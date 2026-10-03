@@ -20,6 +20,7 @@ export const SUITE_STATUS_LABEL: Readonly<Record<SuiteStatus, string>> = { MEASU
 
 export const METRIC_STATUS_LABEL: Readonly<Record<MetricStatus, string>> = {
   NOT_MEASURED: 'NOT MEASURED',
+  MEASURED: 'MEASURED',
   MISSED: 'MISSED',
   'MET, WIDE INTERVAL': 'MET, WIDE INTERVAL',
   MET: 'MET',

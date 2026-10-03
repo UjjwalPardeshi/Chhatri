@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import type { EvalsSummary } from '../api/evals'
 import type { MockBackend } from '../mock/backend'
+import { NO_RUN_SUMMARY } from '../mock/endpoints/evals'
 import { testApi, testBackend } from '../mock/testkit'
 import { AppRoutes } from '../App'
 import { AppShell } from '../components/layout/AppShell'
@@ -65,7 +66,7 @@ describe('the /evals page', () => {
   })
 
   it('says NOT MEASURED in all six suites with no number, the banner, and "Run: none stored"', async () => {
-    renderApp('/evals', backend)
+    renderWith(() => Promise.resolve(NO_RUN_SUMMARY))
     await waitFor(() => expect(screen.getByTestId('eval-run').textContent).toBe('Run: none stored'))
     expect(screen.getByTestId('eval-banner').textContent).toContain('Synthetic data only. Results on generated slips and written questions say little about real merchants or real hospital paper.')
     for (const [id, title] of [['intent', 'S1 Intent routing'], ['guard', 'S2 Guard red-team'], ['ask', 'S3 Ask end to end'], ['slips', 'S4 Slip reading and the gate'], ['voice', 'S5 Voice'], ['chain', 'S6 Chains and labels']]) {
@@ -91,6 +92,18 @@ describe('the /evals page', () => {
     expect(metric.textContent).toContain('target 0 (proposed)')
     expect(within(metric).getByText(/MET, WIDE INTERVAL/).getAttribute('data-status')).toBe('MET, WIDE INTERVAL')
     expect(screen.getByTestId('eval-suite-intent').textContent).toContain('no key')
+    expect(screen.queryByTestId('eval-none')).toBeNull()
+  })
+
+  it('shows the stored run from the mock: the live model by name, rules and mocks as plain words, k of n', async () => {
+    renderApp('/evals', backend)
+    const header = await screen.findByTestId('eval-run')
+    expect(header.textContent).toContain('ask_chain · gemini · gemini-flash-lite-latest')
+    expect(within(header).getAllByText('RULES')).toHaveLength(2)
+    const misroute = document.querySelector('[data-metric="intent.write_misroute"]')
+    expect(misroute?.textContent).toContain('0 of 44')
+    expect(document.querySelector('[data-metric="intent.route_accuracy"] [data-status="MEASURED"]')).not.toBeNull()
+    expect(screen.getByTestId('eval-suite-slips').textContent).toContain('NOT MEASURED')
     expect(screen.queryByTestId('eval-none')).toBeNull()
   })
 

@@ -3,19 +3,23 @@
  * shows nothing but what was measured, so the parser holds the plan's own rules: a metric that is NOT_MEASURED carries
  * no number, a measured one carries its k of n, and a status never contradicts the numbers beside it. A body that
  * breaks a rule raises `ContractViolation` and the page shows its error state. Keys the plan marks as proposed (the
- * run header, the latency share) are read when present and never required; unknown extra keys are ignored.
+ * run header, the latency share) are read when present and never required; unknown extra keys are ignored. The
+ * vocabulary is the backend's (`chhatri/evals/summary.py`): a metric with no target is MEASURED, a target can cover
+ * every item (`all`), offline components run as RULES or MOCK, and the held-out hashes arrive keyed by file.
  */
 import { ContractViolation } from '../miniapp/api/parse'
 
 export const SUITE_IDS = ['intent', 'guard', 'ask', 'slips', 'voice', 'chain'] as const
 export const SUITE_STATUSES = ['MEASURED', 'PARTIAL', 'NOT_MEASURED'] as const
-export const METRIC_STATUSES = ['NOT_MEASURED', 'MISSED', 'MET, WIDE INTERVAL', 'MET'] as const
-export const EVAL_MODES = ['LIVE', 'SIMULATED', 'FALLBACK'] as const
+export const METRIC_STATUSES = ['NOT_MEASURED', 'MEASURED', 'MISSED', 'MET, WIDE INTERVAL', 'MET'] as const
+export const EVAL_MODES = ['LIVE', 'SIMULATED', 'FALLBACK', 'RULES', 'MOCK'] as const
+export const DIRECTIONS = ['at_least', 'at_most', 'all'] as const
 
 export type SuiteId = (typeof SUITE_IDS)[number]
 export type SuiteStatus = (typeof SUITE_STATUSES)[number]
 export type MetricStatus = (typeof METRIC_STATUSES)[number]
 export type EvalMode = (typeof EVAL_MODES)[number]
+export type Direction = (typeof DIRECTIONS)[number]
 
 export type MetricInterval = { method: string; level: number | null; low: number | null; high: number | null }
 export type EvalMetric = {
@@ -26,7 +30,7 @@ export type EvalMetric = {
   n: number | null
   value: number | null
   interval: MetricInterval
-  direction: 'at_least' | 'at_most' | null
+  direction: Direction | null
   target: number | null
   target_source: string | null
   meets_target: boolean | null
@@ -120,7 +124,7 @@ function parseMetric(raw: unknown, path: string, suite: SuiteId): EvalMetric {
   const source = record(raw, path, ['id', 'suite', 'title', 'status', 'interval'])
   const metricSuite = oneOf(source, 'suite', path, SUITE_IDS)
   if (metricSuite !== suite) fail(`${path}.suite`, `expected ${suite}`)
-  const direction = isNil(source.direction) ? null : oneOf(source, 'direction', path, ['at_least', 'at_most'] as const)
+  const direction = isNil(source.direction) ? null : oneOf(source, 'direction', path, DIRECTIONS)
   const metric: EvalMetric = {
     id: str(source, 'id', path),
     suite: metricSuite,
@@ -160,6 +164,13 @@ function parseProvider(raw: unknown, path: string): EvalProvider {
   return { component: str(source, 'component', path), mode: oneOf(source, 'mode', path, EVAL_MODES), provider: str(source, 'provider', path), model: strOrNull(source, 'model', path) }
 }
 
+/** The held-out files the run hashed: the backend writes `{file: sha256}`; a plain list of hashes is read as it is. */
+function heldOut(hashes: unknown, path: string): string[] {
+  if (isNil(hashes)) return []
+  const entries = Array.isArray(hashes) ? hashes : Object.keys(record(hashes, path, [])).toSorted()
+  return entries.map((entry, index) => (typeof entry === 'string' ? entry : fail(`${path}[${index}]`, 'expected text')))
+}
+
 function parseRun(raw: unknown): EvalRun {
   const path = 'run'
   const source = record(raw, path, ['run_id', 'data_origin'])
@@ -170,7 +181,7 @@ function parseRun(raw: unknown): EvalRun {
     started_at: strOrNull(source, 'started_at', path),
     ended_at: strOrNull(source, 'ended_at', path),
     data_origin: str(source, 'data_origin', path),
-    held_out_sha256: isNil(hashes) ? [] : list(hashes, `${path}.held_out_sha256`).map((hash, index) => (typeof hash === 'string' ? hash : fail(`${path}.held_out_sha256[${index}]`, 'expected text'))),
+    held_out_sha256: heldOut(hashes, `${path}.held_out_sha256`),
     providers: isNil(source.providers) ? [] : list(source.providers, `${path}.providers`).map((entry, index) => parseProvider(entry, `${path}.providers[${index}]`)),
   }
 }
