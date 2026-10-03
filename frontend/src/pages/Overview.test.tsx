@@ -1,4 +1,4 @@
-/** Overview homepage "/" (SPEC §20; deck slides 1-13) against the mock backend. */
+/** Landing page "/" (SPEC §20) against the mock backend. */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,26 +14,36 @@ beforeEach(() => {
 })
 afterEach(() => backend.dispose())
 
-/** The whole deck story renders at once; role queries over it are slow under coverage. */
+/** The whole landing page renders at once; role queries over it are slow under coverage. */
 const SLOW_RENDER_MS = 30_000
 
 const section = (name: string) => screen.getByRole('region', { name })
 
 describe('Overview page', () => {
-  it('tells the deck story with the golden numbers and hides the replay controls', async () => {
+  it('tells the story with the golden numbers and hides the replay controls', async () => {
     renderApp('/', backend)
-    expect(await screen.findByRole('heading', { level: 1, name: /Chhatri/ })).toBeTruthy()
-    expect(screen.getByText('Merchant insurance where the claim starts itself')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'The claim starts itself.' })).toBeTruthy()
     expect(document.querySelector('.control-bar')).toBeNull()
     const hero = within(section('Chhatri'))
     expect(hero.getByText('अनिल जी, आज भारी बारिश से आपके इलाके की बिक्री 63% गिरी।')).toBeTruthy()
-    expect(hero.getAllByText('₹1,380')).toHaveLength(2)
-    expect(hero.getByText('credited at 17:04')).toBeTruthy()
+    expect(hero.getAllByText('₹1,380')).toHaveLength(1)
     expect(hero.getByText('No claim needed')).toBeTruthy()
+    expect(hero.getByText('Every rupee explained')).toBeTruthy()
+
+    const strip = within(section('The storm replay in numbers'))
+    expect(strip.getByText('shops paid in the storm replay')).toBeTruthy()
+    expect(strip.getByText(/Not production results/)).toBeTruthy()
 
     const problem = within(section('The problem'))
-    expect(problem.getByText('30-60')).toBeTruthy()
+    expect(problem.getByText('30-60 days')).toBeTruthy()
     expect(problem.getByText('Same day')).toBeTruthy()
+
+    const decides = within(section('Who decides'))
+    expect(decides.getByRole('note').textContent).toBe('AI cannot approve money')
+    expect(decides.getByText('The only part that can say APPROVED')).toBeTruthy()
+
+    const paytm = within(section('Why Paytm'))
+    for (const asset of ['Paytm payments data', 'Paytm settlement', 'Paytm Soundbox', 'Paytm merchant loan']) expect(paytm.getByText(asset)).toBeTruthy()
 
     const storm = within(section('The storm replay'))
     expect(storm.getByRole('heading', { name: 'Zone 7 · 46 shops' })).toBeTruthy()
@@ -53,7 +63,9 @@ describe('Overview page', () => {
     expect(humans.getAllByRole('button', { name: /Run it/ })).toHaveLength(3)
     expect(humans.getByText('Waiting period applies')).toBeTruthy()
 
-    expect(within(section('Roadmap and team')).getByText('Ujjwal Pardeshi')).toBeTruthy()
+    expect(within(section('Who gains')).getByText(/No insurer, lender or Paytm team has signed anything/)).toBeTruthy()
+    expect(within(section('Questions')).getByText('Can the AI approve a payout?')).toBeTruthy()
+    expect(within(screen.getByRole('contentinfo', { name: 'About Chhatri' })).getByText(/Ujjwal Pardeshi/)).toBeTruthy()
   }, SLOW_RENDER_MS)
 
   it('reads the backtest and the integration modes from the API', async () => {
@@ -61,9 +73,9 @@ describe('Overview page', () => {
     const proof = within(section('Backtest'))
     expect(await proof.findByText(/^60%/)).toBeTruthy()
     expect(proof.getByText('simulated sales · real Open-Meteo rainfall')).toBeTruthy()
-    const tech = section('Technology')
-    await waitFor(() => expect(tech.querySelectorAll('[data-mode="SIMULATED"]').length).toBe(17))
-    expect(within(tech).getByText('The only layer that can approve a payout')).toBeTruthy()
+    const trust = section('What is real')
+    await waitFor(() => expect(trust.querySelectorAll('[data-mode="SIMULATED"]').length).toBe(17))
+    expect(within(trust).getByRole('link', { name: /Audit log/ }).getAttribute('href')).toBe('/audit')
   })
 
   it('runs a live test: loads the scenario, seeks and opens the phone', async () => {
@@ -86,7 +98,7 @@ describe('Overview page', () => {
   it('shows the failure next to the journey that could not load', async () => {
     renderApp('/', backend)
     const journeys = within(section('What the merchant sees'))
-    await screen.findByText('Merchant insurance where the claim starts itself')
+    await screen.findByRole('heading', { level: 1, name: 'The claim starts itself.' })
     backend.outage(60_000)
     fireEvent.click(journeys.getByRole('button', { name: /Play the illness claim/ }))
     expect(await journeys.findByText(/Can’t reach the Chhatri server/)).toBeTruthy()
@@ -98,6 +110,6 @@ describe('Overview page', () => {
     renderApp('/', backend)
     const proof = within(section('Backtest'))
     expect(await proof.findByText(/Can’t reach the Chhatri server/)).toBeTruthy()
-    expect(await within(section('Technology')).findByText('Integration status unavailable')).toBeTruthy()
+    expect(await within(section('What is real')).findByText('Integration status unavailable')).toBeTruthy()
   })
 })

@@ -25,7 +25,7 @@ async function step(page: Page, label: string): Promise<void> {
 
 test('projector 1280×720: the overview and the storm on the live map', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1, name: /Chhatri/ })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'The claim starts itself.' })).toBeVisible()
   await expect(page.locator('.ov-hero__phone .soundbox')).toBeVisible()
   await page.waitForTimeout(2_200)
   await shot(page, '01-overview-hero')
@@ -192,7 +192,7 @@ test.describe('phone 390×844', () => {
 
   test('the overview, the live map and Anil’s phone on a phone', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1, name: /Chhatri/ })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'The claim starts itself.' })).toBeVisible()
     await page.waitForTimeout(1_500)
     await shot(page, '20-phone-overview')
     await openConsole(page)

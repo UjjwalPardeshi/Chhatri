@@ -10,7 +10,11 @@ import { describe, expect, it } from 'vitest'
 import { consoleSheets, readTokens, sheet, type Block } from './test/cssSource'
 
 /** Decorative artwork the type step must not touch: the "paytm" mark drawn on the simulated Soundbox device. */
-const RAW_SIZE_ALLOW: readonly { file: string; selector: string }[] = [{ file: 'merchant-panel.css', selector: '.soundbox-device__brand' }]
+const RAW_SIZE_ALLOW: readonly { file: string; selector: string }[] = [
+  { file: 'merchant-panel.css', selector: '.soundbox-device__brand' },
+  // the landing page's display headline scales with the viewport, from --fs-4xl up
+  { file: 'landing.css', selector: '.lp-hero__title' },
+]
 
 const TOKEN_ORDER = ['2xs', 'xs', 'sm', 'base', 'md', 'lg', 'xl', '2xl', '3xl', '4xl'] as const
 const FLOOR_PX = 11

@@ -2,9 +2,8 @@
 import { act, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { LAUNCHES, LIVE_TESTS, TIME_TO_MONEY } from '../../content/deck'
+import { LAUNCHES, LIVE_TESTS } from '../../content/deck'
 import { HERO_THREAD, JOURNEYS, STORY } from '../../content/story'
-import { barWidthPct, CHART_MAX_DAYS } from './Problem'
 import { pctLabel, PROOF_MEASURES } from './Proof'
 import { RevealSection } from './Reveal'
 
@@ -41,12 +40,6 @@ describe('RevealSection', () => {
 })
 
 describe('deck content', () => {
-  it('draws wait bars relative to the longest wait', () => {
-    expect(CHART_MAX_DAYS).toBe(60)
-    expect(barWidthPct(TIME_TO_MONEY[0])).toBe(100)
-    expect(Math.round(barWidthPct(TIME_TO_MONEY[1]))).toBe(93)
-  })
-
   it('formats the backtest measures', () => {
     expect(pctLabel(0.906)).toBe('91%')
     const t = { recall: 0.5, false_positive_rate: 0.25, real_drops_paid: 1, real_drops: 2, payouts_no_real_drop: 1, payouts: 4 } as Parameters<(typeof PROOF_MEASURES)[0]['value']>[0]

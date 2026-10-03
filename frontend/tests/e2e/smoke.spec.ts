@@ -41,8 +41,8 @@ test('monsoon golden numbers, local fonts and the tile fallback', async ({ page 
 
 test('overview tells the story and jumps into a live test', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1, name: /Chhatri/ })).toBeVisible()
-  await expect(page.getByText('Merchant insurance where the claim starts itself')).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'The claim starts itself.' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Chhatri' }).getByText('Every rupee explained')).toBeVisible()
   await expect(page.locator('.control-bar')).toHaveCount(0)
   const storm = page.getByRole('region', { name: 'The storm replay' })
   await storm.scrollIntoViewIfNeeded()

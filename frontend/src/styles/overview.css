@@ -3,6 +3,7 @@
  * white like the deck's bookends; a hairline separates two sections only when their surface is
  * the same. Tokens only (tokens.css).
  */
+
 .overview {
   --ov-max: 1180px;
   --ov-pad-x: 40px;
@@ -10,6 +11,7 @@
 }
 
 /* Section frame + scroll reveal (motion: the story arrives section by section). */
+
 .ov-section--paper {
   background: var(--paper);
 }
@@ -58,7 +60,6 @@
   text-wrap: balance;
 }
 
-.ov-h2--light,
 .ov-section--navy .ov-h2 {
   color: var(--on-navy);
 }
@@ -67,20 +68,6 @@
   margin-bottom: 14px;
   color: var(--ink);
   font-size: var(--fs-md);
-  font-weight: 500;
-}
-
-.ov-lede {
-  max-width: 72ch;
-  margin-top: var(--sp-6);
-  color: var(--ink-2);
-  font-size: var(--fs-lg);
-  line-height: 1.55;
-}
-
-.ov-lede strong,
-.failures__fix strong {
-  color: var(--ink);
   font-weight: 500;
 }
 
@@ -101,6 +88,7 @@
 }
 
 /* Pill buttons with a nested arrow (tactile press, never wraps). */
+
 .ov-btn {
   display: inline-flex;
   align-items: center;
@@ -197,129 +185,22 @@
 }
 
 /* On navy, the primary CTA takes the deck accent so it reads first. */
-.ov-hero .ov-btn--primary,
-.ov-section--navy .ov-btn--primary,
-.ov-closing .ov-btn--primary {
+
+.ov-section--navy .ov-btn--primary {
   background: var(--accent);
   color: var(--navy);
 }
 
-.ov-hero .ov-btn--primary:hover:not(:disabled),
-.ov-section--navy .ov-btn--primary:hover:not(:disabled),
-.ov-closing .ov-btn--primary:hover:not(:disabled) {
+.ov-section--navy .ov-btn--primary:hover:not(:disabled) {
   background: #5bb5ee;
 }
 
-.ov-hero .ov-btn__icon,
-.ov-section--navy .ov-btn__icon,
-.ov-closing .ov-btn__icon {
+.ov-section--navy .ov-btn__icon {
   background: rgb(15 26 51 / 14%);
 }
 
-/* Hero (deck slide 1): fits the first screen at 1280x720 with the phone's bottom bezel visible. */
-.ov-hero {
-  position: relative;
-  overflow: hidden;
-  background: var(--navy);
-  color: var(--on-navy);
-}
-
-.ov-hero__inner {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 316px;
-  align-items: center;
-  gap: var(--sp-14);
-  max-width: var(--ov-max);
-  min-height: calc(100dvh - var(--header-h) - var(--footer-h));
-  margin: 0 auto;
-  padding: var(--sp-3) var(--ov-pad-x);
-}
-
-.ov-kicker {
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-
-.ov-hero__name {
-  margin: var(--sp-3) 0 0;
-  font-size: 96px;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.025em;
-}
-
-.ov-hero__gloss {
-  color: var(--on-navy-3);
-  font-size: var(--fs-2xl);
-  font-weight: 300;
-  letter-spacing: 0;
-}
-
-.ov-hero__claim {
-  max-width: 22ch;
-  margin-top: var(--sp-4);
-  font-size: 40px;
-  font-weight: 400;
-  line-height: 1.12;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
-}
-
-.ov-hero__sub {
-  max-width: 46ch;
-  margin-top: var(--sp-4);
-  color: var(--on-navy-2);
-  font-size: var(--fs-lg);
-  font-weight: 300;
-  line-height: 1.55;
-}
-
-.ov-hero__ctas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  margin-top: var(--sp-6);
-}
-
-.ov-hero .inline-error,
-.ov-closing .inline-error {
-  margin-top: var(--sp-3);
-}
-
-/* The 10-second takeaway: large numerals, small labels, no cards. */
-.ov-figures {
-  display: grid;
-  grid-template-columns: repeat(4, max-content);
-  gap: var(--sp-8);
-  margin: var(--sp-8) 0 0;
-  padding-top: var(--sp-5);
-  border-top: 1px solid var(--navy-line);
-}
-
-.ov-figure {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 2px;
-}
-
-.ov-figure dt {
-  color: var(--on-navy-3);
-  font-size: var(--fs-sm);
-}
-
-.ov-figure dd {
-  margin: 0;
-  color: var(--on-navy);
-  font-size: var(--fs-2xl);
-  font-weight: 500;
-  line-height: 1.1;
-}
-
 /* Story phones: the real phone components, sized for the page. */
+
 .story-phone {
   height: 610px;
   color: var(--ink);
@@ -369,6 +250,7 @@
 }
 
 /* As tall as the first screen allows, so the "why this amount" answer (deck slide 1) clears the Soundbox line. */
+
 .ov-hero__phone {
   height: min(620px, calc(100dvh - var(--header-h) - var(--footer-h) - 2 * var(--sp-3)));
 }
@@ -382,6 +264,7 @@
 }
 
 /* Bubbles arrive one by one, 350 ms apart, then the Soundbox line slides up from the bottom. */
+
 .ov-hero__phone .bubble-row {
   animation: story-in 420ms var(--ease-out) both;
 }
@@ -407,6 +290,7 @@
 }
 
 /* The thread fades out above the Soundbox, so a bubble cut by the screen edge reads as more. */
+
 .ov-hero__phone .phone__thread {
   padding-bottom: 20px;
   mask-image: linear-gradient(#000 calc(100% - 18px), transparent);
@@ -436,10 +320,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .reveal .ov-section__inner,
-  .engine__step,
-  .wait-row__bar,
-  .proof-bar__fill,
-  .revenue__bar {
+  .proof-bar__fill {
     opacity: 1;
     transform: none;
     transition: none;
@@ -451,16 +332,6 @@
   }
 }
 
-@media (max-width: 1100px) and (min-width: 901px) {
-  .ov-hero__name {
-    font-size: 80px;
-  }
-
-  .ov-figures {
-    gap: var(--sp-6);
-  }
-}
-
 @media (max-width: 900px) {
   .overview {
     --ov-pad-x: 16px;
@@ -469,33 +340,6 @@
   .ov-section__inner {
     padding-top: var(--sp-10);
     padding-bottom: var(--sp-10);
-  }
-
-  .ov-hero__inner {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-8);
-    min-height: 0;
-    padding-top: var(--sp-8);
-    padding-bottom: var(--sp-10);
-  }
-
-  .ov-hero__name {
-    font-size: 64px;
-  }
-
-  .ov-hero__gloss {
-    display: block;
-    margin-top: var(--sp-2);
-    font-size: var(--fs-xl);
-  }
-
-  .ov-hero__claim {
-    font-size: 30px;
-  }
-
-  .ov-figures {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--sp-5) var(--sp-4);
   }
 
   .ov-h2 {
@@ -516,7 +360,8 @@
 }
 
 /* The Overview's ground while its chunk loads (App RouteFallback): navy, like the hero it becomes. */
+
 .ov-fallback {
   min-height: 100%;
-  background: var(--navy);
+  background: var(--card);
 }

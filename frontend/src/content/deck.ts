@@ -57,15 +57,6 @@ export const LAUNCHES = Object.freeze({
 
 export type LaunchKey = keyof typeof LAUNCHES
 
-/** Deck slide 2: time to money after a loss, in days. */
-export type TimeToMoney = { label: string; minDays: number; maxDays: number; text: string; ours: boolean }
-export const TIME_TO_MONEY: readonly TimeToMoney[] = [
-  { label: 'Paytm’s earlier merchant protection plans', minDays: 30, maxDays: 60, text: '30-60', ours: false },
-  // SEWA: facts-and-sources §E says only "weeks"; minDays/maxDays only draw the bar (illustrative), the label does not claim a day range.
-  { label: 'Weather-triggered heat cover (SEWA)', minDays: 42, maxDays: 56, text: 'Weeks', ours: false },
-  { label: 'Chhatri', minDays: 0, maxDays: 0, text: 'Same day', ours: true },
-]
-
 export const FAILURES: readonly { what: string; evidence: string }[] = [
   { what: 'Claims are slow and need proof', evidence: 'Paytm’s earlier merchant plans took 30 to 60 days and needed multiple documents.' },
   { what: 'Weather readings miss real losses', evidence: 'Across 270 Indian weather-insurance contracts: a one-in-three chance of no payout even after a total crop loss.' },
@@ -87,23 +78,6 @@ export const CHHATRI_DAY: readonly TimelineStep[] = [
   { at: '17:00', text: 'The drop holds for 3 hours across 46 shops; the trigger fires.' },
   { at: '17:04', text: '₹1,380 credited with the settlement; the Soundbox announces it.' },
   { at: '17:05', text: 'Tomorrow’s ₹600 instalment paused automatically.' },
-]
-
-/** Deck slide 4: one engine, five steps, and a learning loop. */
-export const ENGINE_STEPS: readonly { title: string; text: string; control: boolean }[] = [
-  { title: 'Watch', text: 'Expected sales for every shop, hour by hour.', control: false },
-  { title: 'Detect', text: 'An area drops during an alert, or one shop goes silent.', control: false },
-  { title: 'Decide', text: 'Policy engine checks cover, amount and fraud signals.', control: true },
-  { title: 'Pay', text: 'Same-day payout; loan instalment paused.', control: false },
-  { title: 'Explain', text: 'Answers “why this amount” in the merchant’s language.', control: false },
-]
-export const LEARN_LOOP = 'Learn: every payout, dispute and review sharpens the triggers.'
-
-export const TWO_WAYS: readonly { label: string; area: string; personal: string }[] = [
-  { label: 'Starts when', area: 'A weather or civic alert, and the area’s sales fall far below expected', personal: 'A shop’s payments stop for a full business day' },
-  { label: 'Merchant does', area: 'Nothing', personal: 'Replies to a voice check-in and sends one photo' },
-  { label: 'Checked by', area: 'An area-level index, so one shop can’t fake it', personal: 'AI reads the slip; name matches KYC; dates match the silent days' },
-  { label: 'Paid', area: 'Same day, automatically', personal: 'Same day; doubtful cases go to a human' },
 ]
 
 /** SPEC §17.2 golden strings of the monsoon replay at 17:05 (deck slide 6). */
@@ -138,65 +112,6 @@ export const LIVE_TESTS: readonly LiveTest[] = [
   { quote: 'A hospital slip with a different name', tag: 'HUMAN', tone: 'amber', text: 'No automatic payout. A claims officer decides.', launch: 'mismatch' },
   { quote: '“Red alert tomorrow. Cover me today.”', tag: 'BLOCKED', tone: 'red', text: 'New cover starts after the waiting period.', launch: 'cover' },
 ]
-
-/** Deck slide 9: statistics measure the loss, AI talks to people, code controls the money. */
-export const SIGNALS: readonly string[] = ['Hourly sales per shop', 'Weather and civic alerts', 'Merchant voice replies', 'Photos of hospital slips', 'Loan instalment schedule']
-export const REASONING: readonly { title: string; text: string }[] = [
-  { title: 'Expected-sales model', text: 'LightGBM per area and shop type. Pays only when sales fall below the bottom of its prediction range.' },
-  { title: 'Sarvam chat + vision', text: 'Runs the conversation in the merchant’s language; a vision model reads the slip.' },
-  { title: 'Cognee memory graph', text: 'Links shops, areas, past events, payouts and disputes.' },
-]
-export const CONTROL: readonly string[] = ['FastAPI service with cover rules, caps and the waiting period', 'Checks prepaid cover, the area index, KYC and dates', 'Writes the audit log']
-export const ACTIONS: readonly { title: string; text: string }[] = [
-  { title: 'n8n workflows', text: 'Payout, instalment pause, human review and follow-ups.' },
-  { title: 'Paytm payment links', text: 'Premium paid through the Paytm MCP server (staging).' },
-  { title: 'Sarvam voice', text: 'Bulbul speaks on WhatsApp and the Soundbox; Saaras hears code-mixed Hindi.' },
-]
-export const STACK: readonly string[] = ['Python + FastAPI', 'LightGBM', 'Sarvam: Bulbul, Saaras, chat', 'Cognee', 'n8n', 'Paytm MCP server', 'WhatsApp Cloud API', 'Open-Meteo', 'React + Leaflet']
-
-/** Deck slide 13. */
-export const ROADMAP: readonly { when: string; title: string; items: readonly string[] }[] = [
-  {
-    when: 'By 3 October',
-    title: 'Hackathon final',
-    items: ['Storm replay on a live city heat map', 'Personal claim on WhatsApp in Hindi: voice and one photo', 'Payout, instalment pause and audit log', 'Premium paid with a real Paytm link (staging)'],
-  },
-  {
-    when: 'Before the next monsoon',
-    title: 'Backtest and pilot',
-    items: ['Replay two past monsoons on sandboxed sales data', 'Set triggers and prices with one insurer', 'Pilot with merchants already on the plan, in one city'],
-  },
-  { when: 'After the pilot', title: 'Scale', items: ['Heatwave and bandh cover', 'More cities and languages', 'Area income index for insurers through Pi'] },
-]
-
-/** The 10-second takeaway under the hero (SPEC §17.2 golden numbers, deck slide 3). */
-export const HERO_FIGURES: readonly { value: string; label: string; count?: boolean }[] = [
-  { value: '₹1,380', label: 'credited at 17:04' },
-  { value: String(STORM.shopsPaid), label: 'shops paid', count: true },
-  { value: `${STORM.triggerToMoneyMin} min`, label: 'trigger to money', count: true },
-  { value: '0', label: 'forms or documents' },
-]
-
-/** Deck slide 12: why Paytm wins. Revenue in ₹ crore, value drivers and go-to-market, exact wording. */
-export const BUSINESS = Object.freeze({
-  title: 'Claims that start themselves grow insurance revenue and protect the loan book.',
-  chartLabel: 'Paytm financial services revenue, ₹ crore',
-  revenue: [
-    { quarter: 'Q1 FY26', crore: 561, ours: false },
-    { quarter: 'Q1 FY27', crore: 814, ours: true },
-  ],
-  growth: '+45% in a year.',
-  growthNote: 'Insurance sits in this line, and it grows on merchants who stay active on Paytm.',
-  drivers: [
-    { driver: 'Insurance distribution', how: 'A rider on the existing merchant plan, sold in the same three taps' },
-    { driver: 'Merchant renewals', how: 'Getting paid on a bad day is the best reason to renew' },
-    { driver: 'Loan quality', how: 'On bad days, instalments are paused and covered instead of missed' },
-    { driver: 'Data for Pi', how: 'A live area income index, offered to insurers and lenders' },
-  ],
-  goToMarket:
-    'Start as a rider on Paytm’s merchant plan (2 lakh+ merchants) in one flood-prone city, with one insurer. Add heatwave cover for north India. Later, offer the area income index to insurers and lenders through Pi.',
-  sources: 'Sources: Paytm Q1 FY27 results; Assurekit-Paytm case study; Insurance Act 1938, Sec. 64VB; Pi: Bloomberg via Free Press Journal, Sep 2026',
-})
 
 /**
  * What is real, what can be live, what is always simulated (SPEC §0.1). The live count comes from

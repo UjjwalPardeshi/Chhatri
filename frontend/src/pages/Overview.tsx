@@ -1,42 +1,45 @@
 /**
- * Overview homepage "/" (SPEC §20 routes; B10): the whole idea told like the deck, from the
- * problem to the team, with launchers into the live demo (live map, phone, claims, backtest) and a
- * sticky section rail under the hero.
- * Surfaces alternate (navy hero, paper, white, navy storm, ...) so the long page keeps a rhythm.
+ * Landing page "/" (SPEC §20 routes; B10): what Chhatri is, how it works, who decides, why it needs Paytm, the live
+ * demo launchers (storm, merchant phones, humans in control), proof, business, honesty and questions, then a call
+ * to watch it happen. Surfaces alternate white, paper and navy so the long page keeps a rhythm.
  */
-import { Business } from '../components/overview/Business'
-import { Closing } from '../components/overview/Closing'
-import { Hero } from '../components/overview/Hero'
-import { HowItWorks } from '../components/overview/HowItWorks'
+import { BeforeAfter } from '../components/landing/BeforeAfter'
+import { Boundary } from '../components/landing/Boundary'
+import { BusinessSection } from '../components/landing/BusinessSection'
+import { Faq } from '../components/landing/Faq'
+import { Features } from '../components/landing/Features'
+import { FinalCta, LandingFooter } from '../components/landing/FinalCta'
+import { HowSteps } from '../components/landing/HowSteps'
+import { LandingHero } from '../components/landing/LandingHero'
+import { ProofStrip } from '../components/landing/ProofStrip'
+import { TrustSection } from '../components/landing/TrustSection'
+import { WhyPaytm } from '../components/landing/WhyPaytm'
 import { Humans } from '../components/overview/Humans'
 import { Journeys } from '../components/overview/Journeys'
-import { BadDay, Problem } from '../components/overview/Problem'
 import { Proof } from '../components/overview/Proof'
-import { Roadmap } from '../components/overview/Roadmap'
-import { SectionRail } from '../components/overview/SectionRail'
 import { Storm } from '../components/overview/Storm'
-import { Tech } from '../components/overview/Tech'
-import { Usp } from '../components/overview/Usp'
 import { useLaunch } from '../state/useLaunch'
 
 export default function Overview() {
   const launcher = useLaunch()
   return (
-    <div className="overview">
-      <Hero launcher={launcher} />
-      <SectionRail />
-      <Problem />
-      <BadDay />
-      <HowItWorks />
+    <div className="overview landing">
+      <LandingHero launcher={launcher} />
+      <ProofStrip />
+      <BeforeAfter />
+      <HowSteps />
+      <Boundary />
+      <WhyPaytm />
       <Storm launcher={launcher} />
       <Journeys launcher={launcher} />
       <Humans launcher={launcher} />
+      <Features />
       <Proof />
-      <Usp />
-      <Tech />
-      <Business />
-      <Roadmap />
-      <Closing launcher={launcher} />
+      <BusinessSection />
+      <TrustSection />
+      <Faq />
+      <FinalCta launcher={launcher} />
+      <LandingFooter />
     </div>
   )
 }

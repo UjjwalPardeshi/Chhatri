@@ -31,7 +31,7 @@ function NotFound() {
   )
 }
 
-/** While a page's chunk loads: the Overview's navy ground (no spinner on the landing page), a spinner elsewhere. */
+/** While a page's chunk loads: the landing page's white ground (no spinner on the landing page), a spinner elsewhere. */
 export function RouteFallback() {
   const { pathname } = useLocation()
   return pathname === '/' ? <div className="ov-fallback" aria-busy="true" /> : <Loading />
