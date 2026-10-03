@@ -20,22 +20,24 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from types import MappingProxyType
 from typing import Final
 
 from chhatri.clock import at as at_time
-from chhatri.consent.ledger import consent_gate_open
-from chhatri.consent.notice import SALES
+from chhatri.consent.ledger import consent_book, consent_gate_open
+from chhatri.consent.notice import DOCTOR, SALES
 from chhatri.conversation.message_guard import MessageSuppressed
 from chhatri.detect.silent import find_silent, silent_this_morning
 from chhatri.detect.triggers import TRIGGER_ALERT_KINDS
 from chhatri.detect.types import SilentFinding
-from chhatri.domain.enums import ClaimKind, DecisionOutcome
-from chhatri.domain.models import Claim, Decision, SlipExtraction
+from chhatri.domain.enums import ClaimKind, DecisionOutcome, VerificationStatus
+from chhatri.domain.models import Claim, Decision, DoctorVerification, SlipExtraction
+from chhatri.integrations.base import DoctorVerificationRequest, IntegrationError
 from chhatri.policy.engine import evaluate_personal_claim, publish_expected_day
 from chhatri.replay.cases_flow import CaseFlow
-from chhatri.replay.claim_facts import personal_facts
+from chhatri.replay.claim_facts import personal_facts, resolve_care
 from chhatri.replay.decisions import DecisionRecorder
 from chhatri.replay.fmt import weekday_day_month
 from chhatri.replay.publish import RuntimeLink
@@ -49,6 +51,16 @@ ONE_DAY: Final = timedelta(days=1)
 OUTREACH_UNTIL_HOUR: Final = 11  # SPEC §8.3: "zero transactions that morning (by 11:00)"
 SILENCE_LOOKBACK_DAYS: Final = 7
 DETECTION_ACTOR: Final = "model"
+
+
+@dataclass(frozen=True, slots=True)
+class _Confirmation:
+    """What the doctor-confirmation step produced, and when the claim can therefore be decided."""
+
+    consent: bool | None
+    consent_at: datetime | None
+    verification: DoctorVerification | None
+    decided_at: datetime
 
 
 class PersonalFlow:
@@ -162,18 +174,112 @@ class PersonalFlow:
             raise ValueError(f"merchant {merchant_id} has no open silence check-in")
         verified = self.verified_days(merchant_id, first, now)
         claim = self._claim(merchant_id, slip, media_id, first, verified, now)
-        facts = personal_facts(rt, claim, merchant, verified)
+        confirmation = await self._confirm_with_doctor(claim, merchant_id, now)
+        facts = personal_facts(
+            rt,
+            claim,
+            merchant,
+            verified,
+            consent=confirmation.consent,
+            consent_at=confirmation.consent_at,
+            verification=confirmation.verification,
+        )
+        decided_at = confirmation.decided_at
         decision = evaluate_personal_claim(
-            facts, rt.static.rules, decision_id=rt.ids.next("decision"), now=now
+            facts, rt.static.rules, decision_id=rt.ids.next("decision"), now=decided_at
         )
         decision = await self._recorder.record(decision, action="decision.personal", claim=claim, facts=facts)
         self._checkins = MappingProxyType({k: v for k, v in self._checkins.items() if k != merchant_id})
-        self._feed(decision, claim, now)
+        self._feed(decision, claim, decided_at)
         if decision.outcome is DecisionOutcome.APPROVED:
             await start_payout(rt, decision.id, merchant_id)
         elif decision.outcome is DecisionOutcome.REFERRED:
             await self._cases.open_review(claim, decision)
         return decision
+
+    def _doctor_consent(self, merchant_id: str) -> bool:
+        """Whether Chhatri may contact this merchant's doctor at all (SPEC §9.2, DPDP Act).
+
+        An answer the merchant actually gave binds, even when the consent feature is switched off:
+        once we have asked "may we check with your doctor?", a "no" has to mean no. Only when
+        nothing was ever recorded do we fall back to the ordinary gate, which is open while the
+        consent book is disabled.
+        """
+        book = consent_book(self._link.rt.store)
+        if book is not None and book.latest(merchant_id, DOCTOR) is not None:
+            return book.is_active(merchant_id, DOCTOR)
+        return consent_gate_open(self._link.rt.store, merchant_id, DOCTOR)
+
+    async def _confirm_with_doctor(self, claim: Claim, merchant_id: str, now: datetime) -> _Confirmation:
+        """Ask the treating doctor whether the patient really attended (SPEC §9.2).
+
+        Chhatri only asks, and only with the merchant's consent. The doctor is reached on the chat
+        id in the directory, never on anything printed on the slip. A doctor who does not answer
+        leaves the claim for a person: silence is not a denial, and it is never a confirmation.
+        """
+        rt = self._link.rt
+        rules = rt.static.rules.personal
+        if not rules.require_doctor_confirmation:
+            return _Confirmation(consent=None, consent_at=None, verification=None, decided_at=now)
+        consent = self._doctor_consent(merchant_id)
+        if not consent:
+            return _Confirmation(consent=False, consent_at=None, verification=None, decided_at=now)
+        hospital, doctor = resolve_care(claim)
+        if hospital is None or doctor is None or doctor.verify_chat_id is None:
+            # The HARD checks name which of the three is missing; there is nobody to ask.
+            return _Confirmation(consent=True, consent_at=now, verification=None, decided_at=now)
+
+        request = DoctorVerificationRequest(
+            request_id=rt.ids.next("doctor_request"),
+            claim_id=claim.id,
+            hospital_id=hospital.id,
+            doctor_registration_no=doctor.registration_no,
+            verify_chat_id=doctor.verify_chat_id,
+            patient_name=(claim.slip.patient_name if claim.slip else None) or "",
+            visit_date=claim.event_date,
+            requested_at=now,
+        )
+        rt.audit.append(
+            at=now,
+            actor="chhatri",
+            action="doctor.asked",
+            subject_type="claim",
+            subject_id=claim.id,
+            data={"hospital_id": hospital.id, "doctor_registration_no": doctor.registration_no},
+        )
+        answered_at = now + timedelta(minutes=rules.doctor_reply_delay_minutes)
+        try:
+            answer = await rt.integrations.doctor.ask(request)
+            status, answered_by = answer.status, answer.answered_by
+        except IntegrationError:
+            logger.info("doctor %s did not answer for claim %s", doctor.registration_no, claim.id)
+            status, answered_by = VerificationStatus.NO_ANSWER, None
+
+        verification = DoctorVerification(
+            id=rt.ids.next("doctor_verification"),
+            claim_id=claim.id,
+            hospital_id=hospital.id,
+            doctor_registration_no=doctor.registration_no,
+            status=status,
+            requested_at=now,
+            answered_at=None if status is VerificationStatus.NO_ANSWER else answered_at,
+            answered_by=answered_by,
+        )
+        rt.audit.append(
+            at=answered_at,
+            actor=f"doctor:{doctor.registration_no}",
+            action="doctor.answered",
+            subject_type="claim",
+            subject_id=claim.id,
+            data={"status": status.value},
+        )
+        rt.feed.add(
+            answered_at,
+            "checkin",
+            f"{doctor.name} at {hospital.name}: {status.value.lower().replace('_', ' ')}",
+            merchant_id=merchant_id,
+        )
+        return _Confirmation(consent=True, consent_at=now, verification=verification, decided_at=answered_at)
 
     def _claim(
         self,
