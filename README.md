@@ -77,10 +77,13 @@ make down
 
 Ports bind to `127.0.0.1` by default. Change them with `CHHATRI_BIND_ADDR`, `CHHATRI_BACKEND_PORT`,
 `CHHATRI_CONSOLE_PORT` and `CHHATRI_N8N_PORT` in `.env`. The stack runs workflows on n8n. To use the
-in-process runner instead, set `CHHATRI_STACK_N8N_URL=` (an empty value). If the backend cannot reach
-n8n, it falls back to the in-process runner and logs an error. Both modes give the same simulated
-timeline, but with n8n the monsoon replay holds at 17:00 for about 30–60 s of real time while its 312
-payout runs go through n8n (see [docs/DEMO.md](docs/DEMO.md) for the stage set-up).
+in-process runner instead, set `CHHATRI_STACK_N8N_URL=` (an empty value). If n8n refuses the
+connection, its host is unknown, or it answers with an error or without the completion, the backend
+falls back to the in-process runner and logs an error. A timeout (connecting included) is not handed
+over (if the request reached n8n, n8n may still be running it): it is audited as `workflow.start_failed`.
+Both modes give the same simulated timeline, but with n8n the monsoon replay holds at 17:00 while its
+312 payout runs go through n8n: about 30–60 s of real time on an otherwise idle machine, and about 3
+minutes was measured on a heavily loaded one (see [docs/DEMO.md](docs/DEMO.md) for the stage set-up).
 
 Check a running stack with `backend/.venv/bin/python backend/scripts/demo_check.py --url
 http://localhost:8000` (it reloads scenarios on that backend).

@@ -173,15 +173,24 @@ and `/api/integrations` labels the `telegram` row SIMULATED (reason `NO_KEY` or 
   `WORKFLOWS` order. Each call has the same header and the body `{"run_id", "workflow", "step",
   "payload"}`, with the payload passed through unchanged. The backend answers
   `200 {"ok": true, "data": {"step", "status": "done"|"skipped"}}`. A callback that fails (an error, a
-  non-2xx answer, or no answer within 10 s) is tried 3 times, with a 1 s wait between tries; then the
-  run stops, later steps are not called, and the webhook answers 500. Three timed-out tries take about
-  32 s, longer than the backend's 30 s wait, so that case ends as a timeout (see Fallback).
-- **Fallback**: connect failure, a non-2xx webhook answer or a missing completion body hands the run
-  to the in-process runner, which schedules only the steps n8n had not reported yet. A timeout is not
-  handed over (n8n may still be running it); it is audited as `workflow.start_failed`.
-- **Throughput**: about 5–10 runs per second on the dev machine (n8n 2.41.3, SQLite, every execution
-  saved). The monsoon burst of 312 payout runs holds the simulated clock at 17:00 for roughly 30–60 s;
-  see docs/DEMO.md for the stage set-up.
+  4xx or 5xx answer, or no answer within 10 s; n8n follows redirects) is tried 3 times, with a 1 s wait
+  between tries; then the run stops, later steps are not called, and the webhook answers 500. Three
+  timed-out tries take about 32 s, longer than the backend's 30 s wait, so that case ends as a timeout
+  (see Fallback).
+- **Fallback**: a connection that fails outright (refused, unknown host: `httpx.ConnectError`), a 4xx or
+  5xx webhook answer, or an answer without the completion body hands the run to the in-process runner,
+  which schedules only the steps Chhatri has not already accepted from n8n, that is, not yet put on its
+  simulated scheduler (`Scheduler.was_scheduled`). A step report that Chhatri refused (for example 404
+  or 409) was never scheduled, so the runner schedules that step; no step runs twice. A timeout
+  (connecting included) or another transport error, such as a dropped connection, is not handed over (if
+  the request reached n8n, n8n may still be running the workflow); it is audited as
+  `workflow.start_failed`.
+- **Throughput**: about 5–10 runs per second on an otherwise idle dev machine (n8n 2.41.3, SQLite, every
+  execution saved). The monsoon burst of 312 payout runs then holds the simulated clock at 17:00 for
+  roughly 30–60 s. On a heavily loaded machine (load average about 20) it took about 3 minutes, longer
+  than `backend/scripts/demo_check.py`'s default 120 s request timeout: keep the stage machine free of
+  other heavy work, and give `demo_check.py` `--timeout 300` when n8n is live. See docs/DEMO.md for the
+  stage set-up.
 - **Steps**:
 
   | Workflow | Steps |
@@ -196,12 +205,13 @@ and `/api/integrations` labels the `telegram` row SIMULATED (reason `NO_KEY` or 
   in-process runner.
 - **Files**: `n8n/workflows/chhatri-{payout,human-review,follow-up}.json` are generated from
   `chhatri.workflows.definitions.WORKFLOWS` by `make n8n-workflows`. Never edit them by hand; CI fails on
-  drift. In each workflow, the `Verify X-Chhatri-Secret` node checks `x-chhatri-secret` against
-  `$env.CHHATRI_INTERNAL_SECRET` and requires the secret to be non-empty. Reading `$env` needs
-  `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, which compose sets.
+  drift. In each workflow, the `Secret OK?` node checks `x-chhatri-secret` against
+  `$env.CHHATRI_INTERNAL_SECRET` and requires the secret to be non-empty (its node id still comes from
+  its earlier name, `Verify X-Chhatri-Secret`). Reading `$env` needs `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`,
+  which compose sets.
 - **Canvas**: the words are in `scripts/n8n_canvas_text.py` and the layout in `scripts/n8n_canvas.py`.
   Each workflow has a plain-words name and numbered plain-words step nodes, on one row from left to
-  right, with the reject branch below the secret check:
+  right:
 
   | Workflow (name in n8n) | Step nodes |
   |---|---|
@@ -209,17 +219,32 @@ and `/api/integrations` labels the `telegram` row SIMULATED (reason `NO_KEY` or 
   | `human-review` (Chhatri · Human review (referred claim or dispute)) | 1 · Queue for an officer → 2 · Notify the officer |
   | `follow-up` (Chhatri · Follow-up (case deadline)) | 1 · Check the deadline → 2 · Remind officer if open |
 
-  Each step node's notes give the step key and its simulated offset, the callback
-  `POST /internal/workflows/{step}`, the retry policy and when Chhatri runs the step. n8n shows the notes
-  as one line under the node, cut off with "…" at the node's width: the first line (step key and
-  offset) always fits, and the full text is under the node's Settings, Notes. Four sticky notes explain
-  the workflow: a title note (blue) with what starts it and that n8n never decides; the security check
-  (red) around the webhook, the secret check and the reject branch; the checklist (green) around the
-  steps, with each step's simulated time and, for payout, the monsoon example; and what happens when a
-  step fails (gold). The times are computed from the step offsets. The canvas changes how the workflow looks, not what it does. Ids, file names, webhook paths,
-  the secret check, every callback and its retry settings are unchanged: step node ids still come from
-  the step key, and a test pins the executable part of each file by hash. A backend step without a
-  plain-words text makes `make n8n-workflows` fail.
+  The secret check is called `Secret OK?`, short enough to fit under its node. `Reject (403)` sits
+  below it, one node width to the right, so n8n draws the `false` edge as a curve down past the check's
+  name instead of a loop back to the left. Each step node's notes give the step key and its simulated
+  offset, the callback `POST /internal/workflows/{step}`, the retry policy and when Chhatri runs the
+  step. n8n shows the notes as one line under the node, cut off with "…" at the node's width: the first
+  line (step key and offset) always fits, and the full text is under the node's Settings, Notes. Four
+  sticky notes explain the workflow: a title note (blue) with what starts it and that n8n never decides;
+  the security check (red) around the webhook, the secret check and the reject branch; the checklist
+  (green) around the steps, with each step's simulated time and, for payout, the monsoon example and
+  what is simulated (the settlement rail, the lender and the Soundbox); and what happens when a step
+  fails (gold). The times are computed from the step offsets.
+
+  The layout uses n8n 2.41.3's own geometry: 96 px nodes on its 16 px grid (so nothing is moved when
+  n8n snaps positions), names in a 192 px box under each node, and its edge rule (a loop only when the
+  target handle is more than 20 px left of the source handle). Nothing overlaps, every node and name sits inside
+  its note below the note's text, and no note's text is clipped. The "+" that n8n shows after
+  `Completed (200)` (an output with no connection) sits just outside the green note on payout. Zoom to
+  fit in a 1280 × 720 window shows all three canvases at zoom 0.67, so the note text is about 9 px:
+  titles, headings and node names read at a glance; zoom in to read the notes. Each time a published
+  workflow opens, n8n shows its own "Production Checklist" pop-up over the top left of the canvas; close
+  it with its × (the workflow does not change) before showing the canvas.
+
+  The canvas changes how the workflow looks, not what it does. Ids, file names, webhook paths, the
+  secret check, every callback and its retry settings are unchanged: node ids still come from the step
+  key (and, for the check, its earlier name), and a test pins the executable part of each file by hash.
+  A backend step without a plain-words text makes `make n8n-workflows` fail.
 - **Start-up**: `n8n/entrypoint.sh` fails fast without `CHHATRI_INTERNAL_SECRET` or
   `CHHATRI_PUBLIC_URL`. It then runs `n8n import:workflow --separate` (fixed ids, so a restart
   re-imports in place), `n8n publish:workflow --id=…` for each workflow, and finally starts n8n.
