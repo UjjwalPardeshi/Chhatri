@@ -128,7 +128,7 @@ Measured on 3 Oct 2026, one run of each command (details and how to read them in
 | Playwright e2e (`make e2e`, `npm run test:e2e:mock`) | 137 tests in 27 spec files (listed, not all run for this table) |
 
 The suites run against simulated data. One evaluation run is stored (`backend/artifacts/evals/`, shown on
-`/evals`): intent routing, the guard and 50 Ask questions answered live by a free-tier Gemini model, on
+`/evals`): intent routing, the guard and 50 Ask questions run live through a free-tier Gemini model (11 of 48 ended in a template), on
 synthetic sets the team wrote. Slip reading and voice are not measured
 ([AI evaluation plan §1.2.1](docs/04-engineering/ai-evaluation-plan.md)).
 

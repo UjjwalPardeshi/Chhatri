@@ -118,7 +118,7 @@ Among the Track-2 projects we could find in public repos, we found none that pay
 | H22 | Grievance ladder with response clocks and a respondent router | Praman | Built · `n5_grievances` |
 | H23 | Consent activity log and "forget my slip" | Sahaj; FINPATH | Built · `n6_consents` |
 | H24 | What-if panel for judges: change rain or sales and watch the engine recompute (read-only) | Resolve OS; FinPath AI | Built · `h24_whatif` |
-| H25 | Published AI evaluation; a number is shown only once it is measured | Sahaj; Resolve OS | The harness, the live Ask suite and the `/evals` page are built · `h25_evals`; one run is stored (3 Oct 2026, synthetic sets written by the team): intent routing 51 of 56, the guard stopped 34 of 35 unsupported replies, and 50 Ask questions answered live by a free-tier Gemini model with 0 of 50 forbidden statements and 2 of 50 rupee figures not traced to a fact; slip reading and voice are NOT MEASURED |
+| H25 | Published AI evaluation; a number is shown only once it is measured | Sahaj; Resolve OS | The harness, the live Ask suite and the `/evals` page are built · `h25_evals`; one run is stored (3 Oct 2026, synthetic sets written by the team): intent routing 51 of 56, the guard stopped 34 of 35 unsupported replies, and 50 Ask questions run live through a free-tier Gemini model (11 of 48 ended in a template), with 0 of 50 forbidden statements and 2 of 50 rupee figures not traced to a fact; slip reading and voice are NOT MEASURED |
 | H26 | Every AI reply carries its mode (LIVE, SIMULATED or FALLBACK), provider and fallback reason | Rakshak; Soundbox Saathi | Built |
 
 FINPATH and FinPath AI are two different projects.

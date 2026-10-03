@@ -15,10 +15,10 @@ Five moments, nothing else: **1** the trigger and the 312 shops, **2** Anil's ph
 
 ## 2. The flag set and the start command
 
-The seven flags below are the same in the backend (`CHHATRI_FEATURES`) and the console (`VITE_FEATURES`). `make demo-stage` sets both from one variable, `STAGE_FLAGS`, and adds `CHHATRI_DATA_IS_SYNTHETIC=true`.
+The eight flags below are the same in the backend (`CHHATRI_FEATURES`) and the console (`VITE_FEATURES`). `make demo-stage` sets both from one variable, `STAGE_FLAGS`, and adds `CHHATRI_DATA_IS_SYNTHETIC=true`.
 
 ```
-n1_miniapp, n2_ask_chhatri, n3_slip_precheck, x4_lender_request, x6_provider_panel, h24_whatif, console_polish
+n1_miniapp, n2_ask_chhatri, n3_slip_precheck, x4_lender_request, x6_provider_panel, h24_whatif, console_polish, telegram_channel
 ```
 
 | Flag | Why it is on |
@@ -28,8 +28,9 @@ n1_miniapp, n2_ask_chhatri, n3_slip_precheck, x4_lender_request, x6_provider_pan
 | `n3_slip_precheck` | The slip pre-check: what the reader found, a three-line checklist, one tap to confirm |
 | `n2_ask_chhatri` | Ask Chhatri with clause chips and a footer that names what answered |
 | `x6_provider_panel` | The header chip and the Integrations panel: the one-click way to force a component to FALLBACK if a live AI call misbehaves |
-| `h24_whatif` | The spare 15 seconds on Zone 9 |
+| `h24_whatif` | The spare 15 seconds on Zone 9, and the pricing simulator on Backtest for questions |
 | `console_polish` | The moment card on the map while the payout runs |
+| `telegram_channel` | The chat-app switch on the console phone and in the app (WhatsApp or Telegram). With `TELEGRAM_BOT_TOKEN` in `.env` the presenting machine polls the real bot; every other machine runs `TELEGRAM_POLLING=false`. Without a token the messages stay on the console phone |
 
 Left off on purpose: `n6_consents` (it adds a tick before the slip and a tick before a purchase, which costs seconds the 3 minutes do not have), `n4_voice` (needs a microphone and a quiet room), `n5_grievances`, `n8_marathi` (a draft that waits for a native speaker's review), `x8_distress_guard`, `h8_ops_strip`, `h25_evals`. `make demo-check` must still be run with its own flag set (`x4_lender_request` only); it is never run against this stack, and never with `n3_slip_precheck` or `n6_consents` on.
 
@@ -53,7 +54,7 @@ Three checks before choosing Gemini live, at T-30 on the venue network: `make ch
 
 Pre-flight at T-30, after the stack is up:
 
-1. `curl -s localhost:8000/api/health` lists exactly the seven flags above. `curl -s localhost:8000/api/preflight` has every item `"ok": true`.
+1. `curl -s localhost:8000/api/health` lists exactly the eight flags above. `curl -s localhost:8000/api/preflight` has every item `"ok": true`.
 2. Console at 1280×720, browser zoom 100%, full screen, Chrome. Click **Enable sound** once. Presenter mode stays off (the spec runs without it).
 3. Copy `backend/data/slips/anil_admission_slip.png` to the Desktop so the file dialog finds it in one click.
 4. Park: pick **Monsoon replay**, seek **16:40**, stay paused on **Live map**. The clock reads `Mumbai · monsoon replay · 16:40`. Slow near payout stays on.
@@ -65,7 +66,7 @@ Omkar speaks and never clicks. Ujjwal clicks. Times are the plan for the speaker
 
 | Time | Ujjwal clicks | Omkar says | Screen must show (asserted by the spec) | If it fails |
 |---|---|---|---|---|
-| 0:00 to 0:20 | Nothing. Live map parked at 16:40 | "Before the demo, one honest line: the policy engine, the console and the audit chain are real; shop sales, WhatsApp and the Paytm link are simulated, and every screen labels which is which. Anil runs a tea stall in Parel. In heavy rain his sales fall by more than half, and his 600 rupee instalment is still cut. Getting paid for a day like that has typically taken 30 to 60 days. Watch what Chhatri does with no claim." | Map at 16:40, paused. Header chip `Simulated`. Footer: `Sales, alerts, KYC, payouts, lender and Soundbox are simulated` | Blank map: reload the page (the backend holds the clock). Still blank: `post /api/replay/load '{"scenario":"monsoon"}'` then seek 16:40 |
+| 0:00 to 0:20 | Nothing. Live map parked at 16:40 | "Before the demo, one honest line: the policy engine, the console and the audit chain are real; shop sales, WhatsApp and the Paytm link are simulated, and every screen labels which is which. Anil runs a tea stall in Parel. In heavy rain his sales fall by more than half, and his 600 rupee instalment is still cut. Getting paid for a day like that has typically taken 30 to 60 days. Watch what Chhatri does with no claim." | Map at 16:40, paused. Header chip `Simulated · 18` in the all-simulated mode; with live keys it names them first, for example `Gemini · Telegram + 15 simulated`. Footer: `Sales, alerts, KYC, payouts, lender and Soundbox are simulated` | Blank map: reload the page (the backend holds the clock). Still blank: `post /api/replay/load '{"scenario":"monsoon"}'` then seek 16:40 |
 | 0:20 to 0:45 | **Play** (about 12 s later the clock reads 17:05) then **Pause** | "A red alert from 14:00 over three wards. Zone 7: sales at 37% of expected for three hours, all 46 shops. At 17:00 the rule fires. At 17:04, with the evening settlement, 312 shops are paid. Nobody filed anything." | Map labels `Z7 · 37% · 46 shops`, `Z3 · 38% · 141 shops`, `Z12 · 47% · 125 shops`. Moment card `₹1,380 credited · 17:04` with `Anil's Tea Stall · with the settlement`. Strip `123 instalments paused · ₹4,25,420 to 312 shops`. Tiles `3` zones, `312` shops paid, `4 min` to money. Zone 7 panel: Alert `Red alert from 14:00`, Sales `37% of expected for 3 hours`, Cover `46 of 46 prepaid`, Paid `17:04, with the settlement`, Total `₹58,900 · instalments paused` | Replay stalls: pause, then seek 17:05 and say "same replay, one step". Last resort: Overview "Watch the storm replay" |
 | 0:45 to 0:55 | Nothing (Zone 7 and the Zone 9 line are already on screen) | "Zone 9 also dipped, to 61%, but it had no alert. A slow day is not a loss event, so it gets nothing." | `Z9 · 61% of expected`. Line `Why Zone 9 got nothing: its sales fell to 61% on a day with no weather alert. That's a slow day, not a loss event, so Chhatri doesn't pay.` | Skip the line (first thing to drop) |
 | 0:55 to 1:10 | **Merchant phone** | "Anil's phone, in Hindi. 1,380 rupees with today's settlement, and the Soundbox says it out loud. No claim needed." | Chat card `₹1,380`, badge `No claim needed`, Soundbox `“Paytm par ₹1,380 prapt hue — Chhatri se”`. The app header reads `डेमो: 19 अगस्त, 17:05` on one line, with the SIMULATED badge. The lender line `आपके लेंडर ने कल की ₹600 की किस्त रोक दी है।` | No sound: click **Enable sound**; the Soundbox text is on screen |
@@ -93,8 +94,8 @@ Each answer is one screen. Open it only when a judge asks.
 |---|---|---|
 | "Who approved this money?" | Anil's app: **दावे**, the claim, **रसीद देखें** (see the receipt) | The receipt opens with who authorised the money: the policy engine under rules `pilot-0.1`, "AI authority: none", and **Verify this decision**, which checks the audit log. |
 | "What happens to Anil after the payout?" | Anil's app: the paid claim | "What happens next": the credit, the lender's answer (SIMULATED), how to dispute and the reply time, the cover's paid-up date. Every line comes from the receipt and the cover. |
-| "How do you know the AI is any good?" | `/evals` (flag `h25_evals`, not in the stage flag set: use `make dev` with every flag, or say it) | One stored run on synthetic questions we wrote: 50 live Ask answers with no forbidden statement, 30 of 31 citing the right clause, 2 of 50 with a rupee figure not traced to a fact; slip reading and voice not measured. Quote the page, with its n. |
-| "How did you price it? What if the price is wrong?" | **Backtest**, scroll to **Price the cover** (flag `h24_whatif`, in the stage set) | Every zone priced from the backtest's own triggers. Z7 is ₹18.62 a day at the published rules; press 55% or drag the share and the premium, the loss ratio at today's price and the false payouts move with it. "Planning figures, not an actuarial price; the pilot sets the price." |
+| "How do you know the AI is any good?" | `/evals` (flag `h25_evals`, not in the stage flag set: use `make dev` with every flag, or say it) | One stored run on synthetic questions we wrote: 50 Ask questions run live, no answer with a forbidden statement, 30 of 31 citing the right clause, 2 of 50 with a rupee figure not traced to a fact; slip reading and voice not measured. Quote the page, with its n. |
+| "How did you price it? What if the price is wrong?" | **Backtest**, scroll to **Price the cover** (flag `h24_whatif`, in the stage set) | Every zone priced from the backtest's own triggers. Z7 is ₹18.62 a day at the published rules; press 55% and the premium, the loss ratio at today's price and the false payouts move; drag the share and the premium and the loss ratio move. "Planning figures, not an actuarial price; the pilot sets the price." |
 | "Is the build real?" | A terminal: `make judge` | One line per check, ending `CHHATRI JUDGE READY ✓`: artefacts against their hashes, 70 demo checks, the audit chain after the payout. |
 
 ## 4. The cut-downs

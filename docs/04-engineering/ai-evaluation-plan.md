@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-- One run is stored (3 Oct 2026, §1.2.1): intent routing, the guard and the chain labels offline, and 50 Ask questions answered live by a free-tier Gemini model. Slip reading and voice are not measured, and no human has graded an answer, so `ask.grounded_rate` is NOT MEASURED.
+- One run is stored (3 Oct 2026, §1.2.1): intent routing, the guard and the chain labels offline, and 50 Ask questions run live through a free-tier Gemini model (11 of 48 ended in a template). Slip reading and voice are not measured, and no human has graded an answer, so `ask.grounded_rate` is NOT MEASURED.
 - H25 is a harness (`python -m chhatri.evals`, `make evals`; `--live` runs the Ask suite) and a console page (`/evals`, flag `h25_evals`). A number reaches the page only from a stored run.
 - Six suites: intent routing (S1), the guard against unsupported figures and promises (S2), end-to-end Ask answers (S3), slip reading and the confidence gate (S4), voice (S5), and the labels and fallback behaviour of every chain (S6).
 - Ground rules: synthetic data only ([ADR 0009](adr/0009-synthetic-data-only-to-free-tier-ai.md)). Held-out items are kept apart from the items used to tune. Every result is k of n with an interval. A simulated or mocked provider is never scored as accuracy. Every target is shown with its source, and a miss is shown as a miss.
