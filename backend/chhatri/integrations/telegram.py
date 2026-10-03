@@ -9,7 +9,9 @@
 `build_telegram` returns the `MessagingChannel` the conversation uses for merchants whose preferred channel is Telegram.
 The live channel only ever sends to the chat a demo merchant bound with `/start <merchant id>` (synthetic gate: bindings
 are made for `is_demo` merchants only, and `send` checks again); any other merchant, or one with no bound chat, is recorded
-and nothing leaves the process. There is no 24-hour window and no template on Telegram, so messages are always free text.
+and nothing leaves the process, and the receipt says it was not delivered (the outbox audits `delivered: false`). There is
+no 24-hour window and no template on Telegram, so messages are always free text. Every real send is recorded in
+`TelegramHealth`, so a revoked token or a rate limit shows on the status row instead of reading LIVE.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from chhatri.integrations.statuses import live, simulated
 from chhatri.integrations.switch import PROCESS_SWITCH, FallbackSwitch
 from chhatri.integrations.switched import SwitchedChannel
 from chhatri.integrations.telegram_api import INTEGRATION, MAX_TEXT_CHARS, TelegramBotClient
+from chhatri.integrations.telegram_health import TELEGRAM_HEALTH, TelegramHealth
 from chhatri.integrations.telegram_sim import TELEGRAM_SIMULATOR, TelegramSimulatorChannel
 from chhatri.integrations.whatsapp_state import DEMO_MERCHANT_IDS
 from chhatri.store.telegram_bindings import LIVE_TELEGRAM_BINDINGS, TelegramBindings
@@ -48,6 +51,7 @@ __all__ = [
 
 TELEGRAM_COMPONENT: Final = "telegram"
 OGG_MIME: Final = "audio/ogg"
+NOT_LINKED: Final = "not sent: no Telegram chat is linked to this shop"
 
 
 def _token(settings: Settings) -> str:
@@ -70,19 +74,28 @@ class LiveTelegramChannel:
         bindings: TelegramBindings,
         *,
         demo_merchant_ids: frozenset[str] = DEMO_MERCHANT_IDS,
+        health: TelegramHealth = TELEGRAM_HEALTH,
     ) -> None:
         self.client = client
         self.bindings = bindings
         self._demo_ids = demo_merchant_ids
+        self._health = health
 
     async def send(self, message: OutboundMessage) -> DeliveryReceipt:
         if not (message.text or message.audio):
             raise ValueError("outbound message has no text or audio")
         chat_id = self.bindings.chat_for(message.merchant_id)
         if message.merchant_id not in self._demo_ids or chat_id is None:
-            return DeliveryReceipt(
-                None, TELEGRAM_SIMULATOR, True, "recorded only: no Telegram chat bound to this demo merchant"
-            )
+            return DeliveryReceipt(None, TELEGRAM_SIMULATOR, False, NOT_LINKED)
+        try:
+            ids = await self._send(chat_id, message)
+        except IntegrationError as exc:
+            self._health.record_send_failure(exc)
+            raise
+        self._health.record_send_ok()
+        return DeliveryReceipt(str(ids[0]), INTEGRATION, True, f"sent {len(ids)} message(s)")
+
+    async def _send(self, chat_id: int, message: OutboundMessage) -> list[int]:
         ids: list[int] = []
         if message.text:
             ids.append(
@@ -92,7 +105,7 @@ class LiveTelegramChannel:
             )
         if message.audio and (message.audio_mime or OGG_MIME).split(";", 1)[0] == OGG_MIME:
             ids.append(await self.client.send_voice(chat_id, message.audio))
-        return DeliveryReceipt(str(ids[0]), INTEGRATION, True, f"sent {len(ids)} message(s)")
+        return ids
 
     async def download_media(self, media_id: str) -> InboundMedia:
         raise IntegrationError(

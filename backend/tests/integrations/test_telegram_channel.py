@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
 from chhatri.clock import ist
 from chhatri.config import DATA_DIR, Settings
-from chhatri.domain.enums import IntegrationMode
+from chhatri.conversation.outbox import Outbox, Outgoing
+from chhatri.domain.enums import Channel, IntegrationMode, PreferredChannel
 from chhatri.integrations import registry
 from chhatri.integrations.base import IntegrationError, OutboundMessage
 from chhatri.integrations.panel import panel_rows
+from chhatri.integrations.soundbox import SimulatedSoundbox
 from chhatri.integrations.statuses import STATUS_NAMES, TELEGRAM_STATUS_NAMES, ordered_telegram
 from chhatri.integrations.switch import FORCEABLE, FallbackSwitch
 from chhatri.integrations.telegram import (
@@ -21,12 +24,23 @@ from chhatri.integrations.telegram import (
     telegram_status,
 )
 from chhatri.integrations.telegram_api import TelegramBotClient
+from chhatri.integrations.telegram_health import TELEGRAM_HEALTH, TelegramHealth
 from chhatri.integrations.telegram_sim import TelegramSimulatorChannel
+from chhatri.sim.city import ANIL
 from chhatri.store.telegram_bindings import TelegramBindings
+from tests.conversation.conftest import make_world
 from tests.fake_telegram import TOKEN, FakeBotApi
 from tests.integrations.conftest import SleepRecorder
 
 from ..workflows.fakes import FakeScheduler, RecordingHandlers
+
+
+@pytest.fixture(autouse=True)
+def _healthy() -> Iterator[None]:
+    """The process-wide Telegram health starts and ends clean in every test of this file."""
+    TELEGRAM_HEALTH.reset()
+    yield
+    TELEGRAM_HEALTH.reset()
 
 
 def settings(**values: Any) -> Settings:
@@ -65,7 +79,7 @@ async def test_a_bound_demo_merchant_gets_text_with_quick_replies_and_a_voice_no
     assert [row[0]["callback_data"] for row in text.payload["reply_markup"]["inline_keyboard"]] == [
         "why",
         "ill",
-    ]
+    ]  # the channel sends whatever buttons it is given
     assert len(api.sent("sendVoice")) == 1 and api.sent("sendVoice")[0].payload["chat_id"] == 555
 
 
@@ -79,8 +93,43 @@ async def test_a_voice_that_is_not_ogg_is_not_sent_as_a_voice_note() -> None:
 async def test_a_demo_merchant_with_no_chat_is_recorded_and_nothing_leaves_the_process() -> None:
     api = FakeBotApi()
     receipt = await live_channel(api, TelegramBindings()).send(message())
-    assert api.calls == [] and receipt.accepted and receipt.channel == "telegram-simulator"
-    assert "no Telegram chat bound" in receipt.detail
+    # not delivered: the outbox audits delivered false (demo-day finding: the audit said delivered)
+    assert api.calls == [] and not receipt.accepted and receipt.channel == "telegram-simulator"
+    assert receipt.detail == "not sent: no Telegram chat is linked to this shop"
+
+
+async def test_sends_are_recorded_in_the_health_and_a_failure_still_propagates() -> None:
+    api, bindings, health = FakeBotApi(), TelegramBindings(), TelegramHealth()
+    bindings.bind(555, "S-0142")
+    client = TelegramBotClient(TOKEN, transport=api.transport(), sleep=SleepRecorder())
+    channel = LiveTelegramChannel(client, bindings, health=health)
+    api.fail("sendMessage", 401)
+    with pytest.raises(IntegrationError):
+        await channel.send(message())
+    outage = health.outage()
+    assert outage is not None and outage.kind == "AUTH"
+    await channel.send(message())
+    assert health.outage() is None
+
+
+async def test_the_outbox_audits_an_unlinked_send_as_not_delivered() -> None:
+    world = make_world()
+    outbox = Outbox(
+        store=world.store,
+        audit=world.audit,
+        ids=world.ids,
+        clock=world.clock,
+        bus=world.bus,
+        channel=world.channel,
+        tts=world.tts,
+        soundbox=SimulatedSoundbox(world.tts),
+        channel_name=Channel.SIMULATOR,
+        telegram=live_channel(FakeBotApi(), TelegramBindings()),
+        preferred=lambda _merchant: PreferredChannel.TELEGRAM,
+    )
+    await outbox.send(ANIL, Outgoing.text("ASK_SLIP"))
+    [row] = [e for e in world.audit.entries() if e.action == "message.outbound"]
+    assert row.data["delivered"] is False and row.data["channel"] == "TELEGRAM"
 
 
 async def test_a_non_demo_merchant_is_never_sent_even_if_a_chat_was_bound_to_it() -> None:
@@ -163,6 +212,10 @@ async def test_forcing_telegram_sends_to_the_recorder_and_releasing_goes_live_ag
 # ------------------------------------------------------------------ registry and panel
 
 
+def _telegram(rows: Any) -> Any:
+    return next(r for r in rows if r["name"] == "telegram")
+
+
 def build_integrations(
     conf: Settings, switch: FallbackSwitch, bindings: TelegramBindings
 ) -> registry.Integrations:
@@ -191,20 +244,19 @@ def test_the_panel_has_a_telegram_row_only_with_the_flag_on() -> None:
     on, off = settings(), settings(chhatri_features="")
     built = build_integrations(on, switch, bindings)
     rows = panel_rows(built, on, switch)
-    assert len(rows) == 18 and rows[-1]["name"] == "telegram"
-    assert (rows[-1]["mode"], rows[-1]["fallback_reason"], rows[-1]["switchable"]) == (
-        "SIMULATED",
-        "NO_KEY",
-        False,
-    )
-    assert len(panel_rows(built, off, switch)) == 17
+    # the doctor row (always present) follows the telegram row
+    assert len(rows) == 19 and [r["name"] for r in rows[-2:]] == ["telegram", "doctor"]
+    row = _telegram(rows)
+    assert (row["mode"], row["fallback_reason"], row["switchable"]) == ("SIMULATED", "NO_KEY", False)
+    off_rows = panel_rows(built, off, switch)
+    assert len(off_rows) == 18 and "telegram" not in [r["name"] for r in off_rows]
 
 
 def test_a_live_telegram_row_can_be_forced_and_reads_fallback() -> None:
     switch, bindings = FallbackSwitch(), TelegramBindings()
     conf = settings(telegram_bot_token=TOKEN)
     built = build_integrations(conf, switch, bindings)
-    row = panel_rows(built, conf, switch)[-1]
+    row = _telegram(panel_rows(built, conf, switch))
     assert (row["mode"], row["provider"], row["switchable"], row["forced"]) == (
         "LIVE",
         "telegram",
@@ -213,7 +265,7 @@ def test_a_live_telegram_row_can_be_forced_and_reads_fallback() -> None:
     )
     assert built.telegram_bindings is bindings
     switch.force("telegram")
-    forced = panel_rows(built, conf, switch)[-1]
+    forced = _telegram(panel_rows(built, conf, switch))
     assert (forced["mode"], forced["forced"], forced["fallback_reason"]) == ("FALLBACK", True, "FORCED")
     assert TOKEN not in repr(forced)
 
@@ -221,5 +273,5 @@ def test_a_live_telegram_row_can_be_forced_and_reads_fallback() -> None:
 def test_a_keyed_telegram_row_behind_a_closed_gate_says_free_tier_blocked() -> None:
     switch = FallbackSwitch()
     conf = settings(telegram_bot_token=TOKEN, chhatri_data_is_synthetic=False)
-    row = panel_rows(build_integrations(conf, switch, TelegramBindings()), conf, switch)[-1]
+    row = _telegram(panel_rows(build_integrations(conf, switch, TelegramBindings()), conf, switch))
     assert (row["mode"], row["fallback_reason"]) == ("SIMULATED", "FREE_TIER_BLOCKED")

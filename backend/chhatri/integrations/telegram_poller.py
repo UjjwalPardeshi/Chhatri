@@ -6,8 +6,10 @@ events and handed, in order, to the handler. The offset moves on before the hand
 delivered twice; a handler failure is logged (error type only) and the next batch is still polled.
 
 Failures never crash the app: any error from Telegram (no network, 401, 409 from a second poller, 5xx) is logged with its
-safe message, the poller sleeps `backoff` (1 s, doubling to 30 s, reset by the next good poll) and tries again. `stop()`
-cancels the task and waits for it, so shutdown never leaves a request open. The token is never logged.
+safe message, the poller sleeps `backoff` (1 s, doubling to 30 s, reset by the next good poll) and tries again. Every poll
+outcome is recorded in `TelegramHealth` (a 409 or 401 is an outage at once, two other failures in a row are one, a good
+poll clears it), so the status panel stops reading LIVE while Telegram is not actually receiving. `stop()` cancels the
+task and waits for it, so shutdown never leaves a request open. The token is never logged.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from typing import Any, Final, Protocol
 
 from chhatri.integrations.base import IntegrationError
 from chhatri.integrations.retry import Sleep
+from chhatri.integrations.telegram_health import TELEGRAM_HEALTH, TelegramHealth
 from chhatri.integrations.telegram_updates import TgEvent, parse_updates
 
 logger = logging.getLogger(__name__)
@@ -64,8 +67,10 @@ class TelegramPoller:
         poll_timeout_s: int = DEFAULT_POLL_TIMEOUT_S,
         backoff: Backoff | None = None,
         sleep: Sleep = asyncio.sleep,
+        health: TelegramHealth = TELEGRAM_HEALTH,
     ) -> None:
         self._source = source
+        self._health = health
         self._handler = handler
         self._poll_timeout_s = poll_timeout_s
         self._backoff = backoff or Backoff()
@@ -105,7 +110,7 @@ class TelegramPoller:
 
         Raises what the source raises (the loop turns that into a backoff)."""
         updates = await self._source.get_updates(offset=self._offset, timeout_s=self._poll_timeout_s)
-        self._failures = 0
+        self._record_ok()
         if not updates:
             return 0
         ids = [item["update_id"] for item in updates if isinstance(item.get("update_id"), int)]
@@ -115,6 +120,14 @@ class TelegramPoller:
         if events:
             await self._deliver(events)
         return len(updates)
+
+    def _record_ok(self) -> None:
+        self._failures = 0
+        self._health.record_poll_ok()
+
+    def _record_failure(self, error: BaseException) -> None:
+        self._failures += 1
+        self._health.record_poll_failure(error)
 
     async def _deliver(self, events: Sequence[TgEvent]) -> None:
         try:
@@ -132,7 +145,7 @@ class TelegramPoller:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # never crash the app: back off and poll again
-                self._failures += 1
+                self._record_failure(exc)
                 delay = self._backoff.delay(self._failures)
                 reason = exc.safe_message if isinstance(exc, IntegrationError) else type(exc).__name__
                 logger.warning(
