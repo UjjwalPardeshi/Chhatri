@@ -118,7 +118,7 @@ Among the Track-2 projects we could find in public repos, we found none that pay
 | H22 | Grievance ladder with response clocks and a respondent router | Praman | Built · `n5_grievances` |
 | H23 | Consent activity log and "forget my slip" | Sahaj; FINPATH | Built · `n6_consents` |
 | H24 | What-if panel for judges: change rain or sales and watch the engine recompute (read-only) | Resolve OS; FinPath AI | Built · `h24_whatif` |
-| H25 | Published AI evaluation; a number is shown only once it is measured | Sahaj; Resolve OS | The offline harness and the `/evals` page are built · `h25_evals`; no run is stored, so no number is shown |
+| H25 | Published AI evaluation; a number is shown only once it is measured | Sahaj; Resolve OS | The harness, the live Ask suite and the `/evals` page are built · `h25_evals`; one run is stored (3 Oct 2026, synthetic sets written by the team): intent routing 51 of 56, the guard stopped 34 of 35 unsupported replies, and 50 Ask questions answered live by a free-tier Gemini model with 0 of 50 forbidden statements and 2 of 50 rupee figures not traced to a fact; slip reading and voice are NOT MEASURED |
 | H26 | Every AI reply carries its mode (LIVE, SIMULATED or FALLBACK), provider and fallback reason | Rakshak; Soundbox Saathi | Built |
 
 FINPATH and FinPath AI are two different projects.
@@ -207,7 +207,7 @@ Then choose by role:
 | Document | What it covers |
 |---|---|
 | [Implementation guide](04-engineering/implementation-guide.md) | The engineering guide for the P0 work, built in waves |
-| [AI evaluation plan](04-engineering/ai-evaluation-plan.md) | How AI quality is measured (H25). The offline harness is built and nothing is measured yet; a number reaches the evaluation page only from a stored run |
+| [AI evaluation plan](04-engineering/ai-evaluation-plan.md) | How AI quality is measured (H25). The harness and the live Ask suite are built and the first run is stored (§1.2.1 there); slip reading and voice are not measured. A number reaches the evaluation page only from a stored run |
 | [Copy deck](03-design/copy-deck.md) | Every new merchant-facing string, in English, Hindi and Marathi. Marathi is a draft |
 | [On-site checklist](06-delivery/on-site-checklist.md) | The checklist for the final day |
 | [Final deck and video script](06-delivery/final-deck-and-video-script.md) | The slides for the 7-minute and 3-minute cuts, and the backup video script |

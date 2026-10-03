@@ -292,7 +292,7 @@ Ramesh's link shows ₹424.80 for 30 days (₹14.16 a day, from the backtest; pr
 - "Slip reading: Gemini free tier, then Sarvam Vision, then a person decides"
 - "Voice: Sarvam, then browser speech, then tap-to-send chips"
 - Badge legend: "LIVE · SIMULATED · FALLBACK. Every reply shows its mode, its provider and, if a backup stepped in, why."
-- Rules: "Words, not money: the engine decides." · "Free tiers see synthetic data only." · "Accuracy: not measured yet. Shown on /evals only after a stored run."
+- Rules: "Words, not money: the engine decides." · "Free tiers see synthetic data only." · "Measured on synthetic sets, with n, on /evals: slip reading and voice not yet."
 
 **On-slide text, built today**
 - Headline: "AI that says what it is."
@@ -305,7 +305,7 @@ Ramesh's link shows ₹424.80 for 30 days (₹14.16 a day, from the backtest; pr
 **Speaker notes** (this is also where the "what is real" disclosure is said)
 > "What runs live here: the policy engine, the forecast model, the audit chain and the claims console. [Say that Sarvam speech and slip reading are live only if their badges read LIVE.] Simulated and labelled: shop sales, the alert feed, WhatsApp, the Paytm payment link, KYC, payouts, the lender and the Soundbox. Language models talk to people. They never decide money, and every AI reply shows its mode."
 
-If the provider panel shipped, add: "and, if a backup stepped in, why." If the evaluation page shipped and has a stored run, read the figures off the screen with their n. Never quote a number from the [AI evaluation plan](../04-engineering/ai-evaluation-plan.md): it is a plan, and nothing in it has been measured.
+If the provider panel shipped, add: "and, if a backup stepped in, why." The evaluation page has a stored run (3 Oct 2026): read the figures off the screen with their n, and say the sets are synthetic and written by the team. Quote no figure that the page does not show.
 
 **Depends on:** N2, N3, N4, X6, H26; H25 and `/evals`. **If hidden:** the built version.
 

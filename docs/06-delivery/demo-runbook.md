@@ -164,7 +164,7 @@ Every beat here is BUILT behind its flag and passes the mock end-to-end suite wi
 | **B11 Presenter mode** (Wave 4) | `console_polish`. Whole demo | Text steps up one size, the keys work, nothing scrolls sideways at 1280×720 | `?presenter=0` | Toggle absent |
 | **B12 Ops strip** (H8) | `h8_ops_strip`, Wave 4. Passive on `/live` and `/claims` | The numbers equal their definitions. The strip does not push the zone card below the fold | None needed | Strip hidden |
 | **B13 Marathi** (N8) | `n8_marathi`, Wave 4. Q&A on request | A named native reader has signed off. The option switches the app | Hindi | Option hidden |
-| **B14 Evaluation page** (H25) | `h25_evals`, Wave 3. Q&A on request | Every number comes from a stored run, with its n. Otherwise NOT MEASURED | Do not quote a number. Say the page shows what has been run | Page hidden |
+| **B14 Evaluation page** (H25) | `h25_evals`, Wave 3. Q&A on request | Every number comes from the stored run (3 Oct 2026), with its n; slip reading and voice read NOT MEASURED | Read a figure off the page with its n, and say the sets are synthetic and small | Page hidden |
 
 ### 4.1 Scenario order and state
 
@@ -257,7 +257,7 @@ Keep these tabs open, in this order: `/` (overview), `/live` (map), `/merchant/S
 | See a complaint or the consent screens | Help → Complaints, or My data and consent | The ladder and the consent log | Say they are in the app and show the spec |
 | See what happens when the lender does not answer | Provider panel: force `lender`. Load monsoon, seek 17:03, Play through 17:05 | The holiday request ends with no answer. The payout is untouched | Say it in words |
 | See Marathi | S9 Language, if `n8_marathi` is on and signed off | The app switches | Say Marathi is a draft that waits for a native speaker's review, and show Hindi |
-| See a measured number | `/evals`, if on | Numbers from a stored run, with n, and nothing else | Do not quote a number |
+| See a measured number | `/evals`, if on | Numbers from the stored run, with n, and nothing else | Quote only what the page shows, with its n |
 
 Do not hand the microphone or the camera to a visitor to use with real data. The notice and the free-tier data rule exist for this.
 
