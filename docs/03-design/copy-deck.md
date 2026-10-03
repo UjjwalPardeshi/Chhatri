@@ -265,7 +265,7 @@ The mini-app sits next to the phone on `/merchant/:id`. It is Tailwind v4 with s
 | `nav.help` | Help | मदद | मदत | - |
 | `app.name` | Chhatri | छतरी | छत्री | product name; the Hindi spelling follows the catalogue |
 | `app.tagline` | Chhatri in Paytm for Business | Paytm for Business में छतरी | Paytm for Business मधील छत्री | - |
-| `app.clock` | Demo date and time: {time} | डेमो की तारीख़ और समय: {time} | डेमोची तारीख आणि वेळ: {time} | facts: `time`; the replay clock, shown in the app bar |
+| `app.clock` | Demo date and time: {time} | डेमो: {time} | डेमो: {time} | facts: `time`; the replay clock, shown in the app bar (Hindi and Marathi kept short so the caption stays on one line in the phone frame) |
 | `app.fullscreen` | Open full screen | पूरी स्क्रीन पर खोलें | पूर्ण स्क्रीनवर उघडा | app bar button on the console |
 | `lang.label` | Language | भाषा | भाषा | - |
 | `lang.hi` | हिंदी | हिंदी | हिंदी | shown in its own script in every language |
@@ -1209,7 +1209,7 @@ The static demo runs in the browser against the in-browser mock backend. This de
 |---|---|---|---|---|
 | `offline.banner` | Offline. Showing data from {time}. | ऑफ़लाइन। {time} का डेटा दिख रहा है। | ऑफलाइन. {time} चा डेटा दिसत आहे. | facts: `time`; the last good data stays on screen from memory; no copy is stored |
 | `offline.blocked` | This needs the internet. Please try again when you are online. | इसके लिए इंटरनेट चाहिए। ऑनलाइन होने पर फिर से कोशिश करें। | यासाठी इंटरनेट लागते. ऑनलाइन झाल्यावर पुन्हा प्रयत्न करा. | - |
-| `offline.static` | This is the static demo. It runs in your browser with made-up data. Nothing is sent anywhere. | यह स्टैटिक डेमो है। यह आपके ब्राउज़र में बनावटी डेटा के साथ चलता है। कुछ भी कहीं नहीं भेजा जाता। | हा स्टॅटिक डेमो आहे. तो आपल्या ब्राउझरमध्ये बनावट डेटासह चालतो. काहीही कुठेही पाठवले जात नाही. | N7; shown as a banner in the static build; nothing here claims that a public address exists |
+| `offline.static` | This is the static demo. It runs in your browser with made-up data. Nothing is sent anywhere. | यह स्टैटिक डेमो है। डेटा बनावटी है। कुछ भी कहीं नहीं भेजा जाता। | हा स्टॅटिक डेमो आहे. डेटा बनावट आहे. काहीही कुठेही पाठवले जात नाही. | N7; shown as a banner in the static build; nothing here claims that a public address exists |
 | `clock.sheet.title` | Demo date and time | डेमो की तारीख़ और समय | डेमोची तारीख आणि वेळ | proposed; title of the demo clock sheet, opened from the clock of the standalone route (screens and flows 8) |
 | `clock.sheet.note` | Move the demo clock. The replay is made up. | डेमो की घड़ी आगे-पीछे करें। यह रीप्ले काल्पनिक है। | डेमोचे घड्याळ पुढे-मागे करा. हा रिप्ले काल्पनिक आहे. | proposed; under the sheet title |
 | `clock.sheet.play` | Play | चलाएँ | सुरू करा | proposed; button while the replay is paused |
@@ -1336,7 +1336,7 @@ The 51 keys that `backend/chhatri/conversation/messages.py` had before the 2 Oct
 | `PERSONAL_DECLINED` | {name_en} ji, this claim can't be paid. {reason_en} | {name_hi} जी, यह दावा मंज़ूर नहीं हो सका। {reason_hi} | {name_mr} जी, हा दावा मंजूर होऊ शकला नाही. {reason_mr} | `name_en`, `name_hi`, `reason_en`, `reason_hi` |
 | `REASON_COVER_IN_FORCE` | Your cover wasn't in force on that day. | उस दिन आपका कवर चालू नहीं था। | त्या दिवशी आपले कवर सुरू नव्हते. | - |
 | `REASON_PREMIUM_PREPAID` | The premium for that day hadn't been paid in advance. | उस दिन का प्रीमियम पहले से जमा नहीं था। | त्या दिवसाचे प्रीमियम आधी भरलेले नव्हते. | - |
-| `REASON_SILENCE_VERIFIED` | Our records don't show your shop closed for that whole day. | हमारे रिकॉर्ड में उस दिन दुकान पूरे दिन बंद नहीं दिखी। | आमच्या नोंदींमध्ये त्या दिवशी दुकान दिवसभर बंद दिसली नाही. | - |
+| `REASON_SILENCE_VERIFIED` | Our records don't show your shop closed for that whole day. | हमारे रिकॉर्ड में उस दिन दुकान पूरे दिन बंद नहीं दिखी। | आमच्या नोंदींमध्ये त्या दिवशी दुकान दिवसभर बंद दिसले नाही. | - |
 | `REASON_NOT_ALREADY_PAID` | That day has already been paid. | उस दिन का भुगतान पहले ही हो चुका है। | त्या दिवसाची रक्कम आधीच दिली गेली आहे. | - |
 | `REASON_WITHIN_ANNUAL_LIMIT` | It would go over the yearly limit. | इससे साल की सीमा पार हो जाती। | यामुळे वार्षिक मर्यादा ओलांडली गेली असती. | - |
 | `REASON_COVER_BEFORE_ALERT` | The cover was bought after the alert was issued. | कवर अलर्ट जारी होने के बाद लिया गया था। | कवर अलर्ट जाहीर झाल्यानंतर घेतले होते. | - |

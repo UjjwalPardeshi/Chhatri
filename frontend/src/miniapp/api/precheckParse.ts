@@ -17,6 +17,7 @@ import {
   type SlipChecklistLine,
   type SlipPrecheck,
   type SlipSlot,
+  type Source,
 } from '../../api/types'
 import { ContractViolation, parseSource } from './parse'
 
@@ -191,6 +192,17 @@ function checkLabel(check: SlipPrecheck): void {
   if (mode === 'SIMULATED' && source.origin === 'LIVE') fail('source.origin', 'a SIMULATED read cannot have a LIVE source')
 }
 
+/**
+ * The backend sends the slip source with its Hindi label (`label_hi`) beside the English one. The screens keep their own
+ * Hindi copy, so the label is checked as text and dropped; every other extra field is still a contract error.
+ */
+function parseSlipSource(raw: unknown): Source {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || !('label_hi' in raw)) return parseSource(raw, 'source')
+  const { label_hi: labelHi, ...rest } = raw as Record<string, unknown>
+  if (typeof labelHi !== 'string' || labelHi.trim() === '') fail('source.label_hi', 'expected text')
+  return parseSource(rest, 'source')
+}
+
 export function parsePrecheck(raw: unknown): SlipPrecheck {
   const r = object(raw, 'precheck', KEYS)
   const attempt = whole(r, 'attempt', 'precheck', 1, MAX_PHOTOS)
@@ -210,7 +222,7 @@ export function parsePrecheck(raw: unknown): SlipPrecheck {
     reason: r.reason === null ? null : oneOf(r, 'reason', 'precheck', PRECHECK_REASONS),
     guidance: parseGuidance(r.guidance),
     next_action: parseNextAction(r.next_action),
-    source: parseSource(r.source, 'source'),
+    source: parseSlipSource(r.source),
     mode: oneOf(r, 'mode', 'precheck', MODES),
     provider: oneOf(r, 'provider', 'precheck', PROVIDERS),
     model: textOrNull(r, 'model', 'precheck'),

@@ -99,6 +99,8 @@ http://localhost:8000` (it reloads scenarios on that backend).
 | `make dev` | uvicorn with reload on :8000 plus vite on :5173 (`BACKEND_PORT=`, `CONSOLE_PORT=` to change) |
 | `make demo-check` | `python backend/scripts/demo_check.py`: every scenario through the HTTP API, in process with `CHHATRI_FEATURES=x4_lender_request` (the scripted flow stops by design when `n3_slip_precheck` or `n6_consents` is on) |
 | `make e2e` | Playwright (chromium) against running servers at `CONSOLE_URL` (default http://localhost:5173) |
+| `make demo-stage` | The 3-minute stage demo: backend and console with the stage flag set and `CHHATRI_DATA_IS_SYNTHETIC=true`, no reload; `STAGE_AI=sim` blanks both AI keys ([stage script](docs/06-delivery/stage-script.md)) |
+| `make stage-e2e` | Walks the stage script with Playwright against a fresh backend (:8301) and console (:5301) with no AI keys, then stops both; `STAGE_RUNS=3` repeats it |
 | `make up` / `make down` | docker compose stack: backend, frontend, n8n |
 | `make lint` | ruff check + format check (backend, scripts) |
 | `make n8n-workflows` | regenerate `n8n/workflows/*.json` from `chhatri.workflows.definitions.WORKFLOWS` |
@@ -116,7 +118,7 @@ Measured on 3 Oct 2026, one run of each command (details and how to read them in
 | `make test-infra` | 164 passed; coverage of `scripts/` 99.44 % (gate 90 %) |
 | Frontend unit tests (`npx vitest run`) | 1,340 passed in 135 files |
 | `make demo-check` | 70 of 70 checks |
-| Playwright e2e (`make e2e`, `npm run test:e2e:mock`) | 134 tests in 26 spec files (counted, not run for this table) |
+| Playwright e2e (`make e2e`, `npm run test:e2e:mock`) | 136 tests in 27 spec files (counted, not run for this table) |
 
 The suites run against simulated data. No test measures the accuracy of a live AI model: the evaluation
 harness is offline, and its page reads NOT MEASURED until a run is stored.

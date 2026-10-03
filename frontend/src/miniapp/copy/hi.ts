@@ -12,7 +12,7 @@ export const hi: Readonly<Record<CopyKey, string>> = {
   'nav.help': 'मदद',
   'app.name': 'छतरी',
   'app.tagline': 'Paytm for Business में छतरी',
-  'app.clock': 'डेमो की तारीख़ और समय: {time}',
+  'app.clock': 'डेमो: {time}',
   'app.fullscreen': 'पूरी स्क्रीन पर खोलें',
   'clock.sheet.title': 'डेमो की तारीख़ और समय',
   'clock.sheet.note': 'डेमो की घड़ी आगे-पीछे करें। यह रीप्ले काल्पनिक है।',
@@ -55,7 +55,7 @@ export const hi: Readonly<Record<CopyKey, string>> = {
   'error.not_found': 'यह नहीं मिला। हो सकता है यह हटा दिया गया हो, या लिंक ग़लत हो।',
   'offline.banner': 'ऑफ़लाइन। {time} का डेटा दिख रहा है।',
   'offline.blocked': 'इसके लिए इंटरनेट चाहिए। ऑनलाइन होने पर फिर से कोशिश करें।',
-  'offline.static': 'यह स्टैटिक डेमो है। यह आपके ब्राउज़र में बनावटी डेटा के साथ चलता है। कुछ भी कहीं नहीं भेजा जाता।',
+  'offline.static': 'यह स्टैटिक डेमो है। डेटा बनावटी है। कुछ भी कहीं नहीं भेजा जाता।',
   'explain.btn.got_it': 'समझ गया',
   'sim.banner': 'SIMULATED। यह डेमो डेटा है। असली पैसा, संदेश या भुगतान नहीं जाता।',
 

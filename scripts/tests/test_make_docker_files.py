@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from chhatri.features import FEATURE_NAMES
 
 MAKE = shutil.which("make") or "make"
 SH = shutil.which("sh") or "/bin/sh"
@@ -50,6 +51,16 @@ def test_data_is_exactly_build_data(repo_root: Path) -> None:
         ("test-slow", ["pytest -m slow"]),
         ("demo-check", ["python backend/scripts/demo_check.py"]),
         ("e2e", ["CONSOLE_URL=http://localhost:5173 npm run test:e2e"]),
+        (
+            "demo-stage",
+            [
+                "CHHATRI_FEATURES=n1_miniapp,",
+                "CHHATRI_DATA_IS_SYNTHETIC=true",
+                "VITE_FEATURES=n1_miniapp,",
+                "uvicorn --factory chhatri.api.app:create_app",
+                "npm run dev",
+            ],
+        ),
         ("up", ["scripts/init_env.py", "docker compose up -d --build"]),
         ("env", ["python3 ", "scripts/init_env.py"]),
         ("check-keys", ["python3 ", "scripts/check_keys.py"]),
@@ -77,6 +88,15 @@ def test_targets_run_the_contracted_commands_and_never_rebuild_data(
     for needle in needles:
         assert needle in text, f"make {target}: missing {needle!r}"
     assert "build_data.py" not in text and "calibrate.py" not in text
+
+
+def test_demo_stage_flags_are_real_flags_and_match_on_both_sides(repo_root: Path) -> None:
+    text = "\n".join(_dry_run(repo_root, "demo-stage"))
+    backend = re.search(r"CHHATRI_FEATURES=(\S+)", text)
+    console = re.search(r"VITE_FEATURES=(\S+)", text)
+    assert backend and console and backend.group(1) == console.group(1)
+    assert set(backend.group(1).split(",")) <= set(FEATURE_NAMES)
+    assert "--reload" not in text, "a saved file must never restart the backend on stage"
 
 
 def test_frontend_targets_use_existing_b7_scripts(repo_root: Path) -> None:

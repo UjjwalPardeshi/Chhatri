@@ -15,10 +15,21 @@ NPM ?= npm
 BACKEND_PORT ?= 8000
 CONSOLE_PORT ?= 5173
 CONSOLE_URL ?= http://localhost:$(CONSOLE_PORT)
+# The stage demo flag set (docs/06-delivery/stage-script.md). The backend and the console must read the same list.
+STAGE_FLAGS ?= n1_miniapp,n2_ask_chhatri,n3_slip_precheck,x4_lender_request,x6_provider_panel,h24_whatif,console_polish
+# GEMINI_MODEL for the stage: .env may still name a model Google has retired for new keys (HTTP 404 on 3 Oct 2026), which
+# sends the slip to a person on stage. STAGE_AI=sim blanks both AI keys so every badge reads SIMULATED.
+STAGE_GEMINI_MODEL ?= gemini-2.5-flash-lite
+STAGE_AI ?= env
+ifeq ($(STAGE_AI),sim)
+STAGE_AI_ENV := GOOGLE_API_KEY= SARVAM_API_KEY=
+else
+STAGE_AI_ENV :=
+endif
 COVERAGE_MIN ?= 80
 INFRA_COVERAGE_MIN ?= 90
 
-.PHONY: help setup data test test-backend test-frontend test-slow test-infra evals dev demo-check e2e \
+.PHONY: help setup data test test-backend test-frontend test-slow test-infra evals dev demo-check demo-stage stage-e2e e2e \
 	env check-keys up down lint n8n-workflows n8n-selftest clean
 
 help: ## List the targets
@@ -60,6 +71,15 @@ dev: ## Backend (uvicorn :8000, reload) + console (vite :5173, proxies /api); Ct
 
 demo-check: ## Every scenario through the HTTP API: python backend/scripts/demo_check.py (needs artefacts)
 	cd $(ROOT) && $(PY) backend/scripts/demo_check.py
+
+demo-stage: ## The 3-minute stage demo: backend + console, stage flag set, synthetic data, no reload (STAGE_AI=sim: no AI keys)
+	trap 'kill $$(jobs -p) 2>/dev/null || true' INT TERM EXIT; \
+	(cd $(ROOT)/backend && CHHATRI_FEATURES=$(STAGE_FLAGS) CHHATRI_DATA_IS_SYNTHETIC=true GEMINI_MODEL=$(STAGE_GEMINI_MODEL) $(STAGE_AI_ENV) $(PY) -m uvicorn --factory chhatri.api.app:create_app --host 127.0.0.1 --port $(BACKEND_PORT)) & \
+	(cd $(ROOT)/frontend && VITE_FEATURES=$(STAGE_FLAGS) VITE_API_URL=http://127.0.0.1:$(BACKEND_PORT) $(NPM) run dev -- --host 127.0.0.1 --port $(CONSOLE_PORT) --strictPort) & \
+	wait
+
+stage-e2e: ## Walk the stage script against the real backend on :8301/:5301 with no AI keys, then stop both (STAGE_RUNS=3 repeats it)
+	cd $(ROOT) && STAGE_FLAGS="$(STAGE_FLAGS)" STAGE_RUNS="$${STAGE_RUNS:-1}" bash scripts/stage_e2e.sh
 
 e2e: ## Playwright (chromium) against running backend + console at CONSOLE_URL (default :5173)
 	cd $(ROOT)/frontend && CONSOLE_URL=$(CONSOLE_URL) $(NPM) run test:e2e

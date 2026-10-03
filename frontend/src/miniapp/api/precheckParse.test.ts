@@ -18,6 +18,13 @@ describe('parsePrecheck', () => {
     expect(parsePrecheck(NEEDS_TEAM_PRECHECK)).toEqual(NEEDS_TEAM_PRECHECK)
   })
 
+  it('accepts the Hindi label the real backend adds to the slip source, and still rejects any other extra field', () => {
+    const real = mutate(READY_PRECHECK, (d) => { (d.source as Record<string, unknown>).label_hi = 'अस्पताल की पर्ची, जैसी पढ़ी गई' })
+    expect(parsePrecheck(real)).toEqual(READY_PRECHECK)
+    expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { (d.source as Record<string, unknown>).label_hi = '' }))).toThrow(/label_hi/)
+    expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { (d.source as Record<string, unknown>).label_fr = 'x' }))).toThrow(/unknown field label_fr/)
+  })
+
   it('rejects a body that is not an object, an unknown field and a missing field', () => {
     expect(() => parsePrecheck(null)).toThrow(ContractViolation)
     expect(() => parsePrecheck(mutate(READY_PRECHECK, (d) => { d.extra = 1 }))).toThrow(/unknown field extra/)

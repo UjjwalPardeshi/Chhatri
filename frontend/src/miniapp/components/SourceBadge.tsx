@@ -157,7 +157,7 @@ export function MissingSource() {
 /** The badges of one value, or "Source missing" when it has none. */
 export function SourceBadges({ sources, rulesVersion, testId }: { sources: readonly Source[]; rulesVersion: string; testId?: string }) {
   return (
-    <div data-testid={testId} className="flex flex-wrap gap-x-2 gap-y-3 pt-1">
+    <div data-testid={testId} className="flex flex-wrap gap-x-2 gap-y-5 pt-2">
       {sources.length === 0 ? <MissingSource /> : sources.map((source) => <SourceBadge key={source.ref} source={source} rulesVersion={rulesVersion} />)}
     </div>
   )

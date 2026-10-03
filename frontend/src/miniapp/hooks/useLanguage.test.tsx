@@ -52,7 +52,7 @@ describe('useLanguage', () => {
     const { result } = renderHook(() => useLanguage(), { wrapper: wrapperFor('?lang=hi') })
     expect(result.current.lang).toBe('hi')
     expect(result.current.t('nav.claims')).toBe('दावे')
-    expect(result.current.t('app.clock', { time: '17:05' })).toBe('डेमो की तारीख़ और समय: 17:05')
+    expect(result.current.t('app.clock', { time: '17:05' })).toBe('डेमो: 17:05')
   })
 
   it('switches the language: the URL carries it, the choice is kept, and the words change', async () => {

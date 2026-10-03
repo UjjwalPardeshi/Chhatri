@@ -63,7 +63,7 @@ export function AskClauses({ clauses, lang }: { clauses: readonly AskClause[]; l
   return (
     <div data-testid="ask-clauses" className="flex flex-col gap-1.5">
       <p className="text-xs font-medium text-ink-3">{label.trim()}</p>
-      <div className="flex flex-wrap gap-x-2 gap-y-3">
+      <div className="flex flex-wrap gap-x-2 gap-y-5">
         {clauses.map((clause) => (
           <ClauseChip key={clause.id} clause={clause} lang={lang} />
         ))}

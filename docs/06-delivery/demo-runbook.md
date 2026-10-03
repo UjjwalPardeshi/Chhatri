@@ -2,13 +2,14 @@
 
 | | |
 |---|---|
-| Status | v1.7 · 3 Oct 2026 · the golden path is BUILT. The new beats (N1–N6 and the H-items) are BUILT behind their flags (Waves 0 to 5, 2 Oct), and each is used when it has passed rehearsal, and not before |
+| Status | v1.8 · 3 Oct 2026 · the final 3-minute stage demo is [stage-script.md](stage-script.md) (its own flag set, start command, reset and cut-downs, walked by `make stage-e2e`). The rest of this runbook is the long cuts, the beat rules and the contingency ladder. v1.7 · 3 Oct 2026 · the golden path is BUILT. The new beats (N1–N6 and the H-items) are BUILT behind their flags (Waves 0 to 5, 2 Oct), and each is used when it has passed rehearsal, and not before |
 | Owner | Omkar Kadam (script) with Ujjwal Pardeshi (operator) |
 | Audience | The team, on-site demo logistics, backup operator |
-| Related | [docs/DEMO.md](../DEMO.md) (the golden script and numbers) · [Final deck and video script](final-deck-and-video-script.md) (the slide windows) · [On-site checklist](on-site-checklist.md) · [Build plan](build-plan.md) · [Risk register](risk-register.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) · [Feature specs](../02-product/feature-specs) |
+| Related | **[Stage script (the 3-minute demo to run)](stage-script.md)** · [docs/DEMO.md](../DEMO.md) (the golden script and numbers) · [Final deck and video script](final-deck-and-video-script.md) (the slide windows) · [On-site checklist](on-site-checklist.md) · [Build plan](build-plan.md) · [Risk register](risk-register.md) · [Pitch and judge Q&A](pitch-and-judge-qa.md) · [Feature specs](../02-product/feature-specs) |
 
 ## TL;DR
 
+- **For the 3-minute slot, run [stage-script.md](stage-script.md).** It has the exact flag set (`n1_miniapp`, `n2_ask_chhatri`, `n3_slip_precheck`, `x4_lender_request`, `x6_provider_panel`, `h24_whatif`, `console_polish`), the start command `make demo-stage` (add `STAGE_AI=sim` for an all-simulated run), the reset steps and the 30-second and 1-minute cut-downs. Where section 2 below and the stage script differ, the stage script wins. It uses `n3_slip_precheck` and leaves `n6_consents` off; `make demo-check` is still run with its own flag set and never against the stage stack.
 - **The demo runs live on the demo laptop:** console at http://localhost:5173 (`make dev`) or http://localhost:8080 (`make up`), API at http://localhost:8000. The deck is a second window. The operator switches windows on Omkar's cue words.
 - **Presenter:** Omkar Kadam narrates and makes no clicks. **Operator:** Ujjwal Pardeshi makes every click and speaks when the demo stalls, and at no other time.
 - **The slot time and length are not announced.** Two cuts are ready: 3 minutes and 7 minutes. Their windows are the slide windows of the [deck script](final-deck-and-video-script.md), so the slides and the clicks share one clock. Freeze the code 90 minutes before our slot.
@@ -272,6 +273,7 @@ Do not hand the microphone or the camera to a visitor to use with real data. The
 
 ## Changelog
 
+- 2026-10-03 · v1.8 · points the 3-minute slot to the stage script; adds `make demo-stage` and `make stage-e2e`
 - 2026-10-03 · v1.7 · audit against the code: X6 and Wave 2 wording no longer says "lands"; the component count is 15 (17 with the provider panel on); Marathi is a draft, not planned
 - 2026-10-02 · v1.6 · new beats added with a flag, a pass rule, a time budget and a fallback each (tracker, receipt, what-if, Ask with citations, voice, slip pre-check, grievance, consent, provider panel); the 3-minute and 7-minute cuts now use the slide windows of the deck script; the seek moves to 14:00 and 14:30 (DEMO.md seeks 13:30); disclosure matches DEMO.md; added time checks, a drop order, the demo card, the judge's turn and the instalment wording without X4; corrected the contingency ladder for flags and the provider panel
 - 2026-10-02 · v1.5 · rewritten against DEMO.md: no invented slot time, 7-minute order follows the golden script, dispute never changes the amount, BLOCKED wording, live/simulated disclosure matches our keys
