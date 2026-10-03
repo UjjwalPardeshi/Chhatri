@@ -215,11 +215,21 @@ chosen on the day from the AI Studio free tier; `make check-keys` lists the mode
 prints the key. A key without a model id leaves Gemini out of the chains (reason `MODEL_NOT_SET`).
 
 One call is `POST {base}/models/{model}:generateContent` over httpx (`integrations/gemini_client.py`), with
-the key only in the `x-goog-api-key` header. The request asks for JSON shaped by the caller's schema with
-thinking off; if the API answers 400 to those fields, the call is sent once more with the schema in the
+the key only in the `x-goog-api-key` header. The request asks for JSON shaped by the caller's schema with as
+little thinking as the model allows: `thinkingBudget: 0` for 2.x models, and `thinkingLevel` for 3.x models,
+which ignore the budget (`minimal` for flash-lite, `low` otherwise). Without it a 3.x model thinks past the
+3 s link budget. If the API answers 400 to those fields, the call is sent once more with the schema in the
 prompt and the adapter keeps that shape. Interactive paths make one attempt per link. Every reply is checked
-against the full schema, then by the guard (Ask) or the field validator (slips). Tested against fakes only:
-the request shape has not been run against the real API.
+against the full schema, then by the guard (Ask) or the field validator (slips). Run against the real API on
+3 Oct 2026 (the stage checks and the stored eval run, [AI evaluation plan §1.2.1](04-engineering/ai-evaluation-plan.md)).
+
+**Free-tier quota and backups.** On the AI Studio free tier each model allows about 20 requests a day per
+project (seen on 3 Oct 2026); a spent model answers 429 until the daily reset. A 429 is `RATE_LIMITED` and
+the chain moves on at once. `GEMINI_BACKUP_MODELS` (comma-separated, optional) adds more Gemini links right
+after the main one, each with one attempt, so a spent model hands over to a sibling model before Sarvam or the
+template. Backups share the main link's component name, so the provider switch turns them off together, and
+the status reads "Gemini <model> (+N backup)". The stage runs `gemini-3.5-flash-lite` with
+`gemini-flash-lite-latest` as the backup (`make demo-stage`); rehearsals spend the same quota as the show.
 
 | Use | Adapter | Chain |
 |---|---|---|
