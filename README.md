@@ -156,8 +156,8 @@ docker-compose.yml  Makefile  .env.example  .github/workflows/ci.yml
 ## Credits and data
 
 Ward boundaries: DataMeet Mumbai BMC wards (CC BY-SA 2.5 India). Weather data by Open-Meteo.com
-(CC BY 4.0). Map tiles, when enabled: © OpenStreetMap contributors, © CARTO. CARTO now needs an API key,
-so by default the console draws its own no-tile map from the ward outlines; set `VITE_TILE_URL` (a keyed
-tile URL) to show tiles. Sales, alerts, KYC, payouts and the
+(CC BY 4.0). Map tiles and the Mumbai Metropolitan Region outline: © OpenStreetMap contributors (ODbL),
+standard tiles from tile.openstreetmap.org. Without a network the console draws its own map from the ward
+outlines; `VITE_TILE_URL` swaps in another tile source. Sales, alerts, KYC, payouts and the
 lender are simulated and labelled as such. Built with Sarvam AI (Saaras, Bulbul, chat, vision),
 Google Gemini (free tier), Paytm payment MCP server, WhatsApp Cloud API, n8n, LightGBM and Cognee.

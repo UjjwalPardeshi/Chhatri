@@ -1,11 +1,13 @@
 /**
- * Data layers for the live map (SPEC §20 "Live map", B3): H3 hexes on the deck colour scale, ward
- * borders as white lines over the hexes (they read as structure, not roads), the selected zone
- * outlined in navy with a white halo, and the rain band as a hatch with a dashed edge above the
- * hexes (deck slide 6). Layers are created once per GeoJSON and restyled in place, so colours
- * update smoothly with no flicker.
+ * Data layers for the live map (SPEC §20 "Live map", B3): H3 hexes on the deck colour scale, drawn
+ * without strokes into a pane the stylesheet blurs and multiplies onto the basemap (heat.tsx: a
+ * wash, not a grid, so the map's place names show through); ward borders as thin navy hairlines,
+ * the selected zone outlined in navy with a white halo, and the rain band as a hatch with a dashed
+ * edge above the heat (deck slide 6). Layers are created once per GeoJSON and restyled in place,
+ * so colours update smoothly with no flicker.
  *
- * Stacking: basemap < hexes < ward borders < rain band < selected zone < labels (markers).
+ * Stacking: basemap < MMR context heat < covered-zone heat < ward borders < rain band < selected
+ * zone < labels (markers).
  */
 import L from 'leaflet'
 import type { FeatureCollection } from 'geojson'
@@ -17,11 +19,12 @@ import { indexColour } from '../../lib/colour'
 import { useLatest } from '../../state/useLatest'
 import { zoneId } from './geo'
 
-export { CARTO_ATTRIBUTION, LandLayer, TILE_ERROR_LIMIT, TILE_TIMEOUT_MS, Tiles, type TileFailure } from './basemap'
+export { LandLayer, OSM_ATTRIBUTION, TILE_ERROR_LIMIT, TILE_TIMEOUT_MS, Tiles, type TileFailure } from './basemap'
 export { LabelLayer, relayout, type LabelSpec } from './labels'
 
 const PANES: readonly [string, number][] = [
   ['land', 250],
+  ['context', 405],
   ['hexes', 410],
   ['wards', 420],
   ['rain', 425],
@@ -43,7 +46,7 @@ export function MapPanes() {
   return null
 }
 
-const HEX_STYLE: L.PathOptions = { color: '#ffffff', weight: 0.8, opacity: 0.85, fillOpacity: 0.84, className: 'hex-cell' }
+const HEX_STYLE: L.PathOptions = { stroke: false, fillOpacity: 1, className: 'hex-cell' }
 
 export function HexLayer({ hexes, values }: { hexes: FeatureCollection; values: Record<string, number | null> }) {
   const map = useMap()
@@ -76,8 +79,8 @@ export function HexLayer({ hexes, values }: { hexes: FeatureCollection; values: 
   return null
 }
 
-/** Ward border weight (px): a white line over the hexes. */
-const WARD_WEIGHT = 1.5
+/** Ward border weight (px): a navy hairline over the heat. */
+const WARD_WEIGHT = 1.25
 /** Selected zone: a navy outline over a wider white halo (px). */
 const SELECTED_WEIGHT = 3
 const SELECTED_HALO_WEIGHT = 7
@@ -138,7 +141,7 @@ export function WardLayer({ zones, snapshots, selected, onSelect }: WardProps) {
 }
 
 /** True on touch-only devices (no hover). */
-function touchOnly(): boolean {
+export function touchOnly(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches
 }
 

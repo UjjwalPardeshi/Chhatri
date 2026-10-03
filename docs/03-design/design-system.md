@@ -422,7 +422,7 @@ Files are under `frontend/src/components/`.
 | Area | Components | Used on |
 |---|---|---|
 | Shell | `layout/AppShell.tsx`, `Header.tsx` (`Brand`, nav, `ConnectionPill`, `IntegrationBadges`, `SoundToggle`), `ControlBar.tsx` (`ClockLabel`, `Scrubber` with chapter ticks), `Footer.tsx` | Every page. The control bar is hidden on Overview |
-| Map | `map/LiveMap.tsx` (with `layers`, `labels`, `overlays`, `basemap`), `storm/StormMap.tsx` | Live map, and the Overview storm section |
+| Map | `map/LiveMap.tsx` (with `layers`, `heat`, `labels`, `overlays`, `basemap`), `storm/StormMap.tsx` | Live map, and the Overview storm section |
 | Live panel | `panel/ZoneCard.tsx`, `KpiTiles.tsx`, `PayoutToast.tsx`, `EventFeed.tsx`, `Explanations.tsx` | Live map |
 | Claims | `claims/CaseQueue.tsx`, `CaseDetail.tsx`, `Evidence.tsx`, `Checks.tsx`, `NameCompare.tsx`, `WhyHuman.tsx`, `SlipLightbox.tsx`, `HourlyChart.tsx` | Claims |
 | Phone and merchant | `phone/Phone.tsx`, `Bubbles.tsx`, `Composer.tsx`, `Waveform.tsx`, `PaytmLinkCard.tsx`, `SoundboxStrip.tsx`, `SoundboxDevice.tsx`, `MerchantPanel.tsx`, `WhatHappened.tsx` | Merchant phone, Overview |
@@ -614,6 +614,8 @@ The JavaScript hooks (`useCountUp`, `useChangedKeys`) check `prefersReducedMotio
 ### 7.1 Map colour ramp (BUILT)
 
 `frontend/src/lib/colour.ts` colours each hex by its zone's live index on a continuous ramp. The ramp is a set of fills, not a token set.
+
+How the fills reach the map (`map/heat.tsx`, 3 Oct): the heat is a wash, not a grid. Cells have no strokes; their panes are blurred by about half a cell (the blur follows the zoom) and multiplied onto the OpenStreetMap tiles, which are softly desaturated, so place, district and sector names stay readable through the colour. The covered wards draw at 68% opacity. The rest of the Mumbai Metropolitan Region draws at 60% with simulated values (`lib/contextIndex.ts`: a level per area, a little texture per cell, an hourly drift and a dip near the rain band, never below 62%). That wash is labelled "Rest of MMR · simulated context, not covered" in the legend and on hover. Ward borders are navy hairlines; a watch ward is outlined in amber and a triggered ward in red.
 
 | Index | Stop | Name |
 |---|---|---|

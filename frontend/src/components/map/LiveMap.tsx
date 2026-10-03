@@ -1,16 +1,22 @@
 /**
- * Live city heat map (SPEC §20 "Live map", deck slide 6; binding decision B3): CARTO Positron
- * tiles when a tile URL works, otherwise a basemap drawn from the ward polygons (land without
- * shops stippled); H3 hexes coloured on the deck scale; white ward borders, the selected zone in
- * navy; zone labels ("Z7 · 37% · 46 shops") on leader lines; the rain band hatched above the hexes
- * with its pill on a leader above the band; and the demo merchant's pin ("₹1,380 paid · 17:04"
- * once credited, with one ring pulse). The map is framed on the storm cluster (Z3, Z7, Z12) with
- * Z9's callout kept in view.
+ * Live city heat map (SPEC §20 "Live map", deck slide 6; binding decision B3): OpenStreetMap tiles,
+ * softly muted, when they load, otherwise a basemap drawn from the ward polygons (land without
+ * shops stippled). The heat is a wash, not a grid: H3 hexes coloured on the deck scale, blurred and
+ * multiplied onto the map so its place, district and sector names stay readable (heat.tsx). The
+ * rest of the Mumbai Metropolitan Region carries a fainter simulated context wash (display only,
+ * labelled). Navy ward hairlines, the selected zone in navy; zone labels ("Z7 · 37% · 46 shops")
+ * on leader lines; the rain band hatched above the heat with its pill on a leader above the band;
+ * and the demo merchant's pin ("₹1,380 paid · 17:04" once credited, with one ring pulse).
+ *
+ * Views: "Mumbai" frames the storm cluster (Z3, Z7, Z12) with Z9's callout kept in view; "MMR"
+ * frames the whole region. A calm desktop map opens on MMR and moves to the storm once a rain band
+ * or an alert appears; phones stay on Mumbai; a choice on the switch always wins.
  */
 import 'leaflet/dist/leaflet.css'
 
 import type { FeatureCollection } from 'geojson'
-import { useEffect, useMemo, useState } from 'react'
+import L from 'leaflet'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AttributionControl, MapContainer, useMap } from 'react-leaflet'
 
 import type { MerchantDetail, StateSnapshot, ZoneSnapshot } from '../../api/types'
@@ -19,9 +25,12 @@ import { hhmm } from '../../lib/time'
 import { basemap } from '../../state/tileStatus'
 import { useLatest } from '../../state/useLatest'
 import { useMediaQuery } from '../../state/useMediaQuery'
-import { centroidsById, northernmostOf, stormFrame, type Bounds, type LatLng } from './geo'
+import { localHour } from '../../lib/contextIndex'
+import { contextBounds } from '../../lib/mmrCells'
+import { centroidsById, northernmostOf, regionFrame, stormFrame, type Bounds, type LatLng } from './geo'
+import { ContextHover, ContextLayer, HeatBlur } from './heat'
 import { escapeHtml, HexLayer, LabelLayer, LandLayer, MapPanes, RainBandLayer, SelectedZoneLayer, Tiles, WardLayer, type LabelSpec, type TileFailure } from './layers'
-import { alertStatus, basemapTitle, Legend, MapPatternDefs, NorthArrow, OfflineNote, StatusChip } from './overlays'
+import { alertStatus, basemapTitle, Legend, MapPatternDefs, NorthArrow, OfflineNote, StatusChip, ViewToggle, type MapView } from './overlays'
 
 export const PIN_ID_PREFIX = 'merchant:'
 export const WATER_ID_PREFIX = 'water:'
@@ -110,28 +119,74 @@ export function rainSpec(zones: readonly ZoneSnapshot[], band: FeatureCollection
   return { id: RAIN_LABEL_ID, at: top, html, className: 'rain-label-icon', movable: true, prefer: UP }
 }
 
-function Framer({ bounds, compact }: { bounds: Bounds; compact: boolean }) {
+/** Quarter zoom steps let a frame fill the map; FLY_SECONDS is the view switch's flight. */
+const ZOOM_SNAP = 0.25
+const FLY_SECONDS = 0.9
+const SHARP_FRACTION = 0.75
+const EPSILON = 1e-9
+
+/**
+ * The deepest sharp zoom at or below `zoom`. Leaflet draws the nearest tile level scaled: a whole
+ * zoom at 1x and .75 at 0.84x keep the map's names crisp; .25 stretches tiles (blurred) and .5
+ * shrinks them too far to read.
+ */
+export function crispZoom(zoom: number): number {
+  const whole = Math.floor(zoom + EPSILON)
+  return zoom - whole >= SHARP_FRACTION - EPSILON ? whole + SHARP_FRACTION : whole
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+/**
+ * Fits the frame on mount and on resize; a change of view flies there (unless motion is reduced).
+ * Over tiles the zoom is capped at a crisp level; the drawn basemap is vector and fills the frame.
+ */
+function Framer({ bounds, compact, crisp }: { bounds: Bounds; compact: boolean; crisp: boolean }) {
   const map = useMap()
   const key = JSON.stringify(bounds)
+  const shown = useRef<string | null>(null)
   useEffect(() => {
     const padding = compact ? COMPACT_PADDING : FRAME_PADDING
-    const fit = () => map.fitBounds(bounds, { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight, animate: false })
-    fit()
-    let frame = 0
+    const frame = () => {
+      const ideal = map.getBoundsZoom(bounds, false, L.point(padding.topLeft).add(padding.bottomRight))
+      return { paddingTopLeft: padding.topLeft, paddingBottomRight: padding.bottomRight, ...(crisp ? { maxZoom: crispZoom(ideal) } : {}) }
+    }
+    const fit = () => map.fitBounds(bounds, { ...frame(), animate: false })
+    let size = map.getSize()
+    const moved = shown.current !== null && shown.current !== key
+    if (moved && size.x > 0 && size.y > 0 && !prefersReducedMotion()) map.flyToBounds(bounds, { ...frame(), duration: FLY_SECONDS })
+    else fit()
+    shown.current = key
+    let raf = 0
     const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
         map.invalidateSize({ pan: false })
+        const next = map.getSize()
+        if (next.equals(size)) return
+        size = next
         fit()
       })
     })
     observer.observe(map.getContainer())
     return () => {
-      cancelAnimationFrame(frame)
+      cancelAnimationFrame(raf)
       observer.disconnect()
     }
-  }, [map, key, compact]) // eslint-disable-line react-hooks/exhaustive-deps -- `key` stands for `bounds`
+  }, [map, key, compact, crisp]) // eslint-disable-line react-hooks/exhaustive-deps -- `key` stands for `bounds`
   return null
+}
+
+/** A storm is on the map once a rain band or an alert (watch or triggered) is live. */
+function stormy(snapshot: StateSnapshot): boolean {
+  return snapshot.rain_band !== null || snapshot.zones.some((z) => z.status === 'triggered' || z.status === 'watch')
+}
+
+/** The rain band's points that pull the simulated context down (zone centroids of the band). */
+function rainPoints(band: FeatureCollection | null): LatLng[] {
+  return band ? [...centroidsById(band).values()] : []
 }
 
 type Props = {
@@ -159,9 +214,15 @@ function useLabels(geo: MapGeo, snapshot: StateSnapshot, merchant: MerchantDetai
 export function LiveMap({ geo, snapshot, merchant, selected, rule = null, onSelectZone, onOpenMerchant }: Props) {
   const [offline, setOffline] = useState<TileFailure | null>(null)
   const [tilesShown, setTilesShown] = useState(false)
+  const [choice, setChoice] = useState<MapView | null>(null)
   const compact = useMediaQuery(COMPACT_QUERY)
-  const bounds = useMemo(() => stormFrame(geo.zones, compact), [geo.zones, compact])
+  const view: MapView = choice ?? (compact || stormy(snapshot) ? 'city' : 'mmr')
+  const cityBounds = useMemo(() => stormFrame(geo.zones, compact), [geo.zones, compact])
+  const regionBounds = useMemo(() => regionFrame(geo.zones, contextBounds()), [geo.zones])
+  const bounds = view === 'mmr' ? regionBounds : cityBounds
   const labels = useLabels(geo, snapshot, merchant, selected)
+  const hour = localHour(snapshot.clock.now)
+  const rain = useMemo(() => rainPoints(snapshot.rain_band), [snapshot.rain_band])
   const handlers = useLatest({ onSelectZone, onOpenMerchant })
   const onLabel = useMemo(
     () => (id: string) => {
@@ -173,16 +234,19 @@ export function LiveMap({ geo, snapshot, merchant, selected, rule = null, onSele
   )
   useEffect(() => basemap.set(offline ?? (tilesShown ? 'tiles' : 'unknown')), [offline, tilesShown])
   useEffect(() => () => basemap.set('unknown'), [])
-  if (!bounds) return <div className="map-frame map-frame--empty">No ward geometry available</div>
+  if (!cityBounds || !bounds) return <div className="map-frame map-frame--empty">No ward geometry available</div>
 
   return (
-    <div className={`map-frame ${offline ? 'map-frame--drawn' : ''}`} data-testid="live-map" data-tiles={offline ? 'fallback' : 'carto'} data-reason={offline ?? undefined} title={basemapTitle(offline)}>
+    <div className={`map-frame ${offline ? 'map-frame--drawn' : ''}`} data-testid="live-map" data-tiles={offline ? 'fallback' : 'osm'} data-view={view} data-reason={offline ?? undefined} title={basemapTitle(offline)}>
       <MapPatternDefs prefix={LIVE_PATTERNS} />
-      <MapContainer bounds={bounds} zoomControl={false} attributionControl={false} className="map" zoomSnap={0.25}>
+      <MapContainer bounds={bounds} zoomControl={false} attributionControl={false} className="map" zoomSnap={ZOOM_SNAP}>
         {tilesShown && !offline ? <AttributionControl position="bottomleft" prefix={false} /> : null}
         <MapPanes />
-        <Framer bounds={bounds} compact={compact} />
+        <HeatBlur />
+        <Framer bounds={bounds} compact={compact} crisp={!offline} />
         {offline ? <LandLayer zones={geo.zones} patterns={LIVE_PATTERNS} /> : <Tiles onFallback={setOffline} onLoaded={() => setTilesShown(true)} />}
+        <ContextLayer hour={hour} rain={rain} />
+        <ContextHover hour={hour} rain={rain} />
         <HexLayer hexes={geo.hexes} values={snapshot.hexes} />
         <WardLayer zones={geo.zones} snapshots={snapshot.zones} selected={selected} onSelect={onSelectZone} />
         {snapshot.rain_band ? <RainBandLayer band={snapshot.rain_band} patterns={LIVE_PATTERNS} /> : null}
@@ -190,8 +254,9 @@ export function LiveMap({ geo, snapshot, merchant, selected, rule = null, onSele
         <LabelLayer labels={labels} onSelect={onLabel} />
       </MapContainer>
       <StatusChip status={alertStatus(snapshot.zones, snapshot.clock)} />
+      <ViewToggle view={view} onChange={setChoice} />
       <NorthArrow />
-      <Legend patterns={LIVE_PATTERNS} rule={rule} />
+      <Legend patterns={LIVE_PATTERNS} rule={rule} context />
       {offline ? <OfflineNote reason={offline} /> : null}
     </div>
   )

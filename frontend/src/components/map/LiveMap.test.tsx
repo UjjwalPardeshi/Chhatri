@@ -10,7 +10,7 @@ import { ANIL } from '../../mock/fixtures'
 import { testBackend } from '../../mock/testkit'
 import { merchantDetailView, snapshotView } from '../../mock/views'
 import { centroidsById } from './geo'
-import { LiveMap, pinCaption, rainCaption, waterSpecs, zoneLabelSpecs } from './LiveMap'
+import { crispZoom, LiveMap, pinCaption, rainCaption, waterSpecs, zoneLabelSpecs } from './LiveMap'
 import { alertStatus, basemapTitle, offlineText } from './overlays'
 
 let backend: MockBackend
@@ -63,8 +63,8 @@ describe('map labels', () => {
     expect(offlineText('watermark')).toBeNull()
     expect(offlineText('unreachable')).toBe('Basemap offline · wards shown')
     expect(offlineText('errors')).toBe('Basemap offline · wards shown')
-    expect(basemapTitle(null)).toBe('Basemap: CARTO Positron')
-    expect(basemapTitle('watermark')).toBe('Ward basemap (no CARTO tile key configured)')
+    expect(basemapTitle(null)).toBe('Basemap: OpenStreetMap')
+    expect(basemapTitle('watermark')).toBe('Ward basemap (tile provider needs a key)')
     expect(basemapTitle('unreachable')).toBe('Ward basemap (tiles unavailable)')
   })
 
@@ -95,12 +95,18 @@ function renderMap(props: Partial<Parameters<typeof LiveMap>[0]> = {}) {
   return { ...view, onSelectZone, onOpenMerchant }
 }
 
+describe('crispZoom', () => {
+  it('keeps whole and .75 zooms and steps .25 and .5 down to the whole level', () => {
+    expect([12, 12.25, 12.5, 12.75, 9.99].map(crispZoom)).toEqual([12, 12, 12, 12.75, 9.75])
+  })
+})
+
 describe('LiveMap', () => {
-  it('keeps CARTO tiles when the probe tile is real, and routes label clicks', async () => {
+  it('keeps OpenStreetMap tiles when the probe tile is real, and routes label clicks', async () => {
     vi.stubGlobal('fetch', () => tileResponse(new Uint8Array([1, 2, 3])))
     const { onSelectZone, onOpenMerchant, getByTestId } = renderMap()
     await waitFor(() => expect(document.querySelector('.map-tiles')).toBeTruthy())
-    expect(getByTestId('live-map').dataset.tiles).toBe('carto')
+    expect(getByTestId('live-map').dataset.tiles).toBe('osm')
     fireEvent.click(document.querySelector('.zone-label-icon--slow_day') as Element)
     expect(onSelectZone).toHaveBeenCalledWith('Z9')
     fireEvent.click(document.querySelector('.pin-icon') as Element)
@@ -111,13 +117,13 @@ describe('LiveMap', () => {
     expect(document.querySelector('.map-legend__ticks')?.textContent).toBe('40%50%70%100%+')
   })
 
-  it('falls back to ward outlines when CARTO returns the keyless watermark', async () => {
+  it('falls back to ward outlines when a keyed provider (CARTO override) returns the keyless watermark', async () => {
     const digest = vi.spyOn(crypto.subtle, 'digest').mockResolvedValue(Uint8Array.from(CARTO_WATERMARK_SHA256.match(/../g) ?? [], (h) => parseInt(h, 16)).buffer)
     vi.stubGlobal('fetch', () => tileResponse(new Uint8Array([9])))
     const { getByTestId } = renderMap()
     await waitFor(() => expect(getByTestId('live-map').dataset.tiles).toBe('fallback'))
     expect(getByTestId('live-map').dataset.reason).toBe('watermark')
-    expect(getByTestId('live-map').getAttribute('title')).toBe('Ward basemap (no CARTO tile key configured)')
+    expect(getByTestId('live-map').getAttribute('title')).toBe('Ward basemap (tile provider needs a key)')
     expect(document.querySelector('.map-offline')).toBeNull()
     expect(document.querySelector('.leaflet-control-attribution')).toBeNull()
     expect(digest).toHaveBeenCalled()
@@ -134,6 +140,19 @@ describe('LiveMap', () => {
     )
     expect(document.querySelector('.pin-icon')).toBeTruthy()
     expect(document.querySelector('.rain-label')).toBeNull()
+  })
+
+  it('frames the storm while it is live, and the switch shows the whole region on demand', async () => {
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+    const { getByTestId, getByRole } = renderMap()
+    await waitFor(() => expect(getByTestId('live-map').dataset.tiles).toBe('fallback'))
+    expect(getByTestId('live-map').dataset.view).toBe('city')
+    expect(getByRole('button', { name: 'Mumbai' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(getByRole('button', { name: 'MMR' }))
+    expect(getByTestId('live-map').dataset.view).toBe('mmr')
+    expect(getByRole('button', { name: 'MMR' }).getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelectorAll('.context-cell').length).toBeGreaterThan(1000)
+    expect(document.querySelector('.map-legend__context')?.textContent).toBe('Rest of MMR simulated context, not covered')
   })
 
   it('shows a message when there is no ward geometry', () => {

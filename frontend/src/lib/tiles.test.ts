@@ -1,21 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { CARTO_POSITRON_URL, CARTO_WATERMARK_SHA256, probeTiles, tileTemplate, tileUrl, tileXY } from './tiles'
+import { CARTO_POSITRON_URL, CARTO_WATERMARK_SHA256, OSM_TILE_URL, probeTiles, tileTemplate, tileUrl, tileXY, usesSubdomains } from './tiles'
 
 async function sha(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-describe('tiles (SPEC §20 CARTO Positron with graceful fallback)', () => {
+describe('tiles (SPEC §20 OpenStreetMap with graceful fallback)', () => {
   it('computes slippy tiles for Mumbai', () => {
     expect(tileXY(19.0, 72.85, 12)).toEqual({ x: 2876, y: 1827 })
   })
 
   it('fills templates', () => {
     expect(tileUrl(CARTO_POSITRON_URL, 12, 1, 2)).toBe('https://a.basemaps.cartocdn.com/light_all/12/1/2.png')
-    expect(tileTemplate(undefined)).toBe(CARTO_POSITRON_URL)
-    expect(tileTemplate('  ')).toBe(CARTO_POSITRON_URL)
+    expect(tileUrl(OSM_TILE_URL, 12, 1, 2)).toBe('https://tile.openstreetmap.org/12/1/2.png')
+    expect(tileTemplate(undefined)).toBe(OSM_TILE_URL)
+    expect(tileTemplate('  ')).toBe(OSM_TILE_URL)
+    expect(usesSubdomains(OSM_TILE_URL)).toBe(false)
+    expect(usesSubdomains(CARTO_POSITRON_URL)).toBe(true)
     expect(tileTemplate(' https://tiles.example/{z}/{x}/{y}.png ')).toBe('https://tiles.example/{z}/{x}/{y}.png')
   })
 

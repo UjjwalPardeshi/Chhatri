@@ -69,6 +69,8 @@ type LegendProps = {
   patterns: string
   /** The published trigger rule; null while it is unknown, and the legend then draws the ramp with no floor and no rule line. */
   rule: TriggerRule | null
+  /** True when the simulated MMR context wash is on the map, so the legend says what it is. */
+  context?: boolean
 }
 
 /**
@@ -77,7 +79,7 @@ type LegendProps = {
  * window), and swatches for the rain band hatch and land without shops. The floor and the rule
  * line come from the published rules (fs-08 13.2), never from a constant.
  */
-export function Legend({ patterns, rule }: LegendProps) {
+export function Legend({ patterns, rule, context = false }: LegendProps) {
   const first = COLOUR_STOPS[0].pct
   const middle = COLOUR_STOPS[Math.floor(COLOUR_STOPS.length / 2)].pct
   const last = COLOUR_STOPS[COLOUR_STOPS.length - 1].pct
@@ -123,7 +125,34 @@ export function Legend({ patterns, rule }: LegendProps) {
           No shops
         </span>
       </p>
+      {context ? (
+        <p className="map-legend__context">
+          <span className="map-legend__context-swatch" aria-hidden="true" />
+          <span>
+            <strong>Rest of MMR</strong> simulated context, not covered
+          </span>
+        </p>
+      ) : null}
     </div>
+  )
+}
+
+export type MapView = 'city' | 'mmr'
+const MAP_VIEWS: readonly { id: MapView; label: string; title: string }[] = [
+  { id: 'city', label: 'Mumbai', title: 'Frame the covered wards and the storm' },
+  { id: 'mmr', label: 'MMR', title: 'Show the whole Mumbai Metropolitan Region' },
+]
+
+/** The map's view switch (top right): the covered wards and the storm, or the whole region. */
+export function ViewToggle({ view, onChange }: { view: MapView; onChange: (view: MapView) => void }) {
+  return (
+    <fieldset className="map-view" aria-label="Map view" data-obstacle>
+      {MAP_VIEWS.map((v) => (
+        <button key={v.id} type="button" className="map-view__button" aria-pressed={view === v.id} title={v.title} onClick={() => onChange(v.id)}>
+          {v.label}
+        </button>
+      ))}
+    </fieldset>
   )
 }
 
@@ -136,8 +165,8 @@ export function offlineText(reason: TileFailure): string | null {
 }
 
 export function basemapTitle(reason: TileFailure | null): string {
-  if (reason === null) return 'Basemap: CARTO Positron'
-  return reason === 'watermark' ? 'Ward basemap (no CARTO tile key configured)' : 'Ward basemap (tiles unavailable)'
+  if (reason === null) return 'Basemap: OpenStreetMap'
+  return reason === 'watermark' ? 'Ward basemap (tile provider needs a key)' : 'Ward basemap (tiles unavailable)'
 }
 
 export function OfflineNote({ reason }: { reason: TileFailure }) {

@@ -82,9 +82,11 @@ On Netlify or Cloudflare Pages, publish `dist/` and add a rewrite `/* /index.htm
 
 ## Basemap
 
-The map uses CARTO Positron tiles. Since 2026, CARTO answers keyless requests with a watermark tile that reads "API KEY REQUIRED" (HTTP 200). Before loading tiles, the console fetches one probe tile and compares its sha256 with that watermark. If the probe returns the watermark, or tiles are unreachable, the map shows plain land with ward outlines and a note ("Basemap needs a CARTO key · wards shown" or "Basemap offline · wards shown").
+The map uses OpenStreetMap standard tiles (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, © OpenStreetMap contributors, ODbL), softly muted so the heat reads first. Tiles are drawn at whole or .75 zoom levels only, so their place names stay sharp. Before loading tiles, the console fetches one probe tile. If tiles are unreachable, the map shows land drawn from the ward outlines and the note "Basemap offline · wards shown". A keyed provider that answers with CARTO's keyless watermark tile is detected by its sha256 and treated the same way.
 
-To use keyed or other tiles, set `VITE_TILE_URL` to a Leaflet URL template, for example `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?api_key=...`.
+The heat is a wash, not a grid: cells have no strokes, and their panes are blurred by about half a cell and multiplied onto the tiles, so the map's names show through. The "Mumbai | MMR" switch frames the storm or the whole Mumbai Metropolitan Region. Outside the 24 covered wards, the MMR cells (`src/content/mmrContext.json`, built once by `scripts/build_mmr_context.py` from OpenStreetMap data) carry a fainter simulated wash: display only, labelled on hover and in the legend, never a KPI, a trigger or a payout.
+
+To use other tiles, set `VITE_TILE_URL` to a Leaflet URL template.
 
 ## Environment
 
@@ -92,7 +94,7 @@ To use keyed or other tiles, set `VITE_TILE_URL` to a Leaflet URL template, for 
 | --- | --- | --- |
 | `VITE_API_URL` | `http://localhost:8000` | Dev proxy target for `/api` |
 | `VITE_MOCK` | unset | `1` turns on mock mode |
-| `VITE_TILE_URL` | CARTO Positron | Basemap tile template |
+| `VITE_TILE_URL` | OpenStreetMap standard | Basemap tile template |
 | `CONSOLE_URL` | unset | Console URL for `npm run test:e2e` |
 | `E2E_PORT` | `4273` | Port of the mock server that `npm run test:e2e:mock` starts |
 | `VITE_FEATURES` | unset (all off) | Feature flags of the build (`src/features.ts`) |

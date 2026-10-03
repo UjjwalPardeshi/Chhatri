@@ -1,6 +1,6 @@
 /**
- * Basemap for the live map (SPEC §20 "Live map": CARTO Positron with attribution and a graceful
- * fallback to no tiles). Without a tile key the console draws its own basemap from the ward
+ * Basemap for the live map (SPEC §20 "Live map": OpenStreetMap tiles with attribution and a graceful
+ * fallback to no tiles). Offline the console draws its own basemap from the ward
  * polygons: a soft sea, paper-tinted land with a shallow-water halo along the coast and a crisp
  * coastline, styled by CSS classes (tokens --sea, --land, --coast) so it matches the static map.
  */
@@ -9,11 +9,10 @@ import type { FeatureCollection } from 'geojson'
 import { useEffect } from 'react'
 import { useMap } from 'react-leaflet'
 
-import { probeTiles, tileTemplate, type TileProbe } from '../../lib/tiles'
+import { OSM_ATTRIBUTION, probeTiles, TILE_MAX_ZOOM, tileTemplate, usesSubdomains, type TileProbe } from '../../lib/tiles'
 import { useLatest } from '../../state/useLatest'
 
-export const CARTO_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a> · Wards: DataMeet (CC BY-SA 2.5 India)'
+export { OSM_ATTRIBUTION }
 export const TILE_ERROR_LIMIT = 4
 export const TILE_TIMEOUT_MS = 8_000
 
@@ -22,9 +21,9 @@ export type TileFailure = Exclude<TileProbe, 'ok'> | 'errors'
 type TileProps = { onFallback: (reason: TileFailure) => void; onLoaded: () => void }
 
 /**
- * CARTO Positron with graceful fallback (SPEC §20): a probe tile first (watermark/offline ⇒ no
+ * OpenStreetMap tiles with graceful fallback (SPEC §20): a probe tile first (watermark/offline ⇒ no
  * tiles), then repeated tile errors or no tile within the timeout ⇒ no tiles. `onLoaded` fires
- * once real tiles are on screen (the footer then credits CARTO and OpenStreetMap).
+ * once real tiles are on screen. Tiles load the normal way only (no prefetching, OSM tile policy).
  */
 export function Tiles({ onFallback, onLoaded }: TileProps) {
   const map = useMap()
@@ -53,7 +52,7 @@ export function Tiles({ onFallback, onLoaded }: TileProps) {
       }
       let loaded = 0
       let failed = 0
-      const tiles = L.tileLayer(template, { subdomains: 'abcd', maxZoom: 19, attribution: CARTO_ATTRIBUTION, className: 'map-tiles' })
+      const tiles = L.tileLayer(template, { ...(usesSubdomains(template) ? { subdomains: 'abcd' } : {}), maxZoom: TILE_MAX_ZOOM, attribution: OSM_ATTRIBUTION, className: 'map-tiles' })
       tiles.on('tileload', () => {
         loaded += 1
         if (loaded === 1) callbacks.current.onLoaded()

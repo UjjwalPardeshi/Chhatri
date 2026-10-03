@@ -1,8 +1,10 @@
 /*
- * Live map (SPEC §20 "Live map", deck slide 6). Without a tile key the basemap is drawn from the
- * ward polygons: soft sea, paper land, a shallow-water halo and a crisp coastline, ward hairlines,
- * red outlines on the storm zones, the rain band under the hexes with a dashed edge above them.
- * Overlays share one white-card language; labels are dark navy chips on short leader lines.
+ * Live map (SPEC §20 "Live map", deck slide 6). OpenStreetMap tiles, softly muted, under a heat
+ * wash (no grid: blurred cells multiplied onto the map, so its names stay readable); without tiles
+ * the basemap is drawn from the ward polygons: soft sea, paper land, a shallow-water halo and a
+ * crisp coastline. Navy ward hairlines, alert outlines in the status colours, the rain band hatched
+ * above the heat with a dashed edge. Overlays share one white-card language; labels are dark navy
+ * chips on short leader lines.
  */
 .map-frame {
   position: relative;
@@ -56,20 +58,55 @@
 
 /* Land fill comes from the `live-stipple` pattern (MapPatternDefs), set as the layer's fill. */
 
-.hex-cell {
+/* OpenStreetMap tiles, softly muted: the heat reads first and the map's names stay crisp. */
+.map .map-tiles {
+  filter: saturate(0.6) contrast(1.04);
+}
+
+/* At a .75 zoom tiles are drawn at 0.84x; a half-pixel overlap hides the hairline seams between them. */
+.map .map-tiles img.leaflet-tile {
+  width: 256.5px !important;
+  height: 256.5px !important;
+}
+
+/*
+ * Heat (heat.tsx): a wash, not a grid. Cells have no strokes; their panes blur them by about half a
+ * cell (--heat-blur follows the zoom) and multiply them onto the basemap, so place, district and
+ * sector names show through the colour. The rest of the MMR (simulated context) is the fainter wash.
+ */
+.leaflet-context-pane,
+.leaflet-hexes-pane {
+  filter: blur(var(--heat-blur, 6px));
+  mix-blend-mode: multiply;
+}
+
+.leaflet-hexes-pane {
+  opacity: 0.68;
+}
+
+.leaflet-context-pane {
+  opacity: 0.6;
+}
+
+.hex-cell,
+.context-cell {
   transition: fill 0.8s ease;
 }
 
-/* Ward borders: white lines over the hexes, so they read as structure rather than roads. */
+/* Ward borders: navy hairlines over the heat (structure, not roads); alerts in the status colours. */
 .ward {
-  stroke: rgb(255 255 255 / 70%);
+  stroke: rgb(0 46 110 / 30%);
   transition: stroke 300ms ease;
 }
 
-.ward--watch,
-.ward--triggered,
-.ward--selected {
-  stroke: rgb(255 255 255 / 90%);
+.ward--watch {
+  stroke: var(--amber-solid);
+  stroke-opacity: 0.8;
+}
+
+.ward--triggered {
+  stroke: var(--red);
+  stroke-opacity: 0.8;
 }
 
 /* The selected zone: navy over a white halo (SelectedZoneLayer). */
@@ -342,8 +379,13 @@
   font-size: var(--fs-xs);
 }
 
+.context-tooltip__note {
+  color: var(--muted);
+}
+
 /* Overlays (white cards on the map). */
 .map-status,
+.map-view,
 .north-arrow,
 .map-legend,
 .map-offline {
@@ -391,8 +433,51 @@
   }
 }
 
-.north-arrow {
+/* View switch (top right): the covered wards and the storm, or the whole region. */
+.map-view {
   top: 12px;
+  right: 12px;
+  display: inline-flex;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.map-view__button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-press) var(--ease-out), color var(--dur-press) var(--ease-out);
+}
+
+.map-view__button:hover {
+  color: var(--navy);
+}
+
+.map-view__button[aria-pressed='true'] {
+  background: var(--navy);
+  color: var(--on-navy);
+}
+
+.map-view__button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.north-arrow {
+  top: 58px;
   right: 14px;
   display: flex;
   flex-direction: column;
@@ -506,6 +591,29 @@
   gap: 6px;
 }
 
+/* The simulated MMR context wash: a soft swatch and one honest line. */
+.map-legend__context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+
+.map-legend__context strong {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.map-legend__context-swatch {
+  flex: none;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgb(227 154 79 / 45%), rgb(109 187 115 / 45%));
+}
+
 .map-legend__swatch {
   flex: none;
   width: 14px;
@@ -534,8 +642,19 @@
     font-size: var(--fs-xs);
   }
 
-  .north-arrow {
+  .map-view {
     top: 8px;
+    right: 8px;
+  }
+
+  .map-view__button {
+    height: 26px;
+    padding: 0 10px;
+    font-size: var(--fs-xs);
+  }
+
+  .north-arrow {
+    top: 50px;
     right: 10px;
   }
 
@@ -550,7 +669,8 @@
   }
 
   .map-legend__title,
-  .map-legend__keys {
+  .map-legend__keys,
+  .map-legend__context {
     display: none;
   }
 

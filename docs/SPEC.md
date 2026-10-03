@@ -956,10 +956,13 @@ Routes: `/` Overview homepage (the whole idea, deck-grade: problem, how it works
 · `/policy`. Header: Chhatri wordmark, scenario picker, clock ("Mumbai · monsoon replay · 17:00 ·
 simulated"), play/pause/speed/seek, integration badges (LIVE green / SIMULATED grey).
 
-- **Live map**: Leaflet; the ward outlines and hexes are drawn without tiles by default (CARTO now needs a key),
-  and a keyed tile URL in `VITE_TILE_URL` adds tiles with their attribution; a failing tile layer falls back to the plain outline map;
-  ward outlines + H3 hexes coloured by sales vs expected on the deck's scale (40 % red →
-  70 % amber → 100 %+ green; legend "Pays below 50% for 3 h, with alert"); zone labels
+- **Live map**: Leaflet over OpenStreetMap standard tiles (softly muted, with their attribution;
+  `VITE_TILE_URL` swaps the source); a failing tile layer falls back to a map drawn from the ward outlines.
+  The heat is a wash, not a grid: H3 hexes coloured by sales vs expected on the deck's scale (40 % red →
+  70 % amber → 100 %+ green; legend "Pays below 50% for 3 h, with alert"), blurred and multiplied onto
+  the tiles so place, district and sector names stay readable; navy ward hairlines. A "Mumbai | MMR"
+  switch frames the storm or the whole Mumbai Metropolitan Region, where the cells outside the 24 covered
+  wards carry a fainter simulated wash (display only, labelled, never a payout); zone labels
   "Z7 · 37% · 46 shops"; Anil's pin with "₹1,380 paid · 17:04" after credit; rain band overlay
   during alerts; right panel = triggered zone card, KPI tiles (zones triggered, shops paid,
   trigger to money), "Why Zone 9 got nothing"; live event feed.

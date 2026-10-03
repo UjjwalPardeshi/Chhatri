@@ -117,6 +117,15 @@ export function stormFrame(zones: FeatureCollection, compact: boolean): Bounds |
   return extendBounds(storm, anchors)
 }
 
+/**
+ * The whole Mumbai Metropolitan Region: every covered zone plus the context cells' corners
+ * (`contextBounds()` from lib/mmrCells.ts), for the map's "MMR" view.
+ */
+export function regionFrame(zones: FeatureCollection, context: Bounds): Bounds {
+  const city = boundsOf(zones, [])
+  return city ? extendBounds(city, context) : context
+}
+
 /** The northernmost outer-ring vertex of a collection (where the rain band's label sits). */
 export function northernmostOf(collection: FeatureCollection): LatLng | null {
   let top: LatLng | null = null
