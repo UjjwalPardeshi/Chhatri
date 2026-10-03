@@ -240,3 +240,56 @@ async def test_handlers_refuse_foreign_exceptions(handler: Any) -> None:
 async def test_malformed_multipart_is_400(client: AsyncClient, path: str) -> None:
     response = await client.post(path, content=b"garbage", headers={"Content-Type": "multipart/form-data"})
     assert error_of(response, 400, "bad_request").message == "Missing boundary in multipart."
+
+
+async def test_live_telegram_wires_the_doctor_inbox_and_closes_the_inbox_on_shutdown(
+    monkeypatch: pytest.MonkeyPatch, patched_views: None
+) -> None:
+    """Design 2.9: the poller's inbox gets the doctor hook; shutdown stops the poller, then closes the inbox."""
+    from chhatri.api.telegram_doctor import DoctorInbox
+    from chhatri.store.doctor_chats import LIVE_DOCTOR_DESK
+
+    events: list[str] = []
+    inboxes: list[Any] = []
+
+    class Client:
+        async def get_me(self) -> Any:
+            return type("Bot", (), {"username": "ChhatriDemoBot"})()
+
+    class Inbox:
+        def __init__(self, *args: Any, doctor: Any = None) -> None:
+            self.args, self.doctor = args, doctor
+            inboxes.append(self)
+
+        async def handle(self, events_: Any) -> None:
+            return None
+
+        async def close(self) -> None:
+            events.append("inbox closed")
+
+    class Poller:
+        def __init__(self, client: Any, handle: Any) -> None:
+            self.handle = handle
+
+        def start(self) -> None:
+            events.append("poller started")
+
+        async def stop(self) -> None:
+            events.append("poller stopped")
+
+    monkeypatch.setattr(app_module, "build_telegram_client", lambda _settings: Client())
+    monkeypatch.setattr(app_module, "TelegramInbox", Inbox)
+    monkeypatch.setattr(app_module, "TelegramPoller", Poller)
+    monkeypatch.setattr(app_module.LIVE_TELEGRAM_BINDINGS, "set_bot_username", lambda _name: None)
+    settings = make_settings(
+        chhatri_features="telegram_channel",
+        telegram_bot_token="123456:TEST-token-never-print-me",
+        chhatri_data_is_synthetic=True,
+    )
+    app = create_app(settings, state=FakeAppState(settings))
+    async with app.router.lifespan_context(app):
+        [inbox] = inboxes
+        assert isinstance(inbox.doctor, DoctorInbox)
+        assert inbox.doctor._desk is LIVE_DOCTOR_DESK  # the desk the registry's verifier asks through
+        assert app.state.telegram_inbox is inbox
+    assert events == ["poller started", "poller stopped", "inbox closed"]

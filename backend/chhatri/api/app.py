@@ -3,7 +3,8 @@
 ``create_app(settings=None, *, state=None)`` builds the FastAPI app. With ``state=None`` the lifespan
 loads the static context once (``load_static``), creates ``AppState`` and loads the ``monsoon``
 scenario paused at its start; on shutdown the WhatsApp worker and the engine are stopped. Tests
-pass their own ``state``. The app is served with ``uvicorn --factory chhatri.api.app:create_app``.
+pass their own ``state``. With live Telegram the poller feeds ``TelegramInbox``, which hands doctor events to
+``DoctorInbox`` (design 2.9); on shutdown the poller stops first, then the inbox. The app is served with ``uvicorn --factory chhatri.api.app:create_app``.
 
 If the default scenario cannot be loaded (e.g. model artefacts are missing) the error is logged and
 the API still starts, so ``/api/preflight`` can say what is wrong and every scenario route answers
@@ -28,6 +29,7 @@ from chhatri.api.ports import AppStatePort
 from chhatri.api.routers import ROUTERS
 from chhatri.api.security import RateLimiter
 from chhatri.api.sse import StreamHub
+from chhatri.api.telegram_doctor import DoctorInbox
 from chhatri.api.telegram_inbox import TelegramInbox
 from chhatri.api.whatsapp_inbox import WhatsAppInbox
 from chhatri.config import Settings, get_settings
@@ -36,6 +38,7 @@ from chhatri.integrations.free_tier import free_tier_gate_detail
 from chhatri.integrations.switch import PROCESS_SWITCH
 from chhatri.integrations.telegram import build_telegram_client
 from chhatri.integrations.telegram_poller import TelegramPoller
+from chhatri.store.doctor_chats import LIVE_DOCTOR_DESK
 from chhatri.store.telegram_bindings import LIVE_TELEGRAM_BINDINGS
 
 logger = logging.getLogger(__name__)
@@ -107,7 +110,9 @@ BOT_LOOKUP_TIMEOUT_S: Final = 5.0
 async def _start_telegram(app: FastAPI, settings: Settings) -> TelegramPoller | None:
     """Start long polling when the flag `telegram_channel` is on, a token is set, the data gate is open and polling is on.
 
-    Never raises: a Telegram problem must not stop the API (the poller backs off on its own). The token is never logged."""
+    The inbox (kept at ``app.state.telegram_inbox``) handles merchants and hands doctor events to ``DoctorInbox``, which
+    shares the process-wide doctor desk with the registry's verifier. Never raises: a Telegram problem must not stop the
+    API (the poller backs off on its own). The token is never logged."""
     if not is_enabled("telegram_channel", settings):
         return None
     client = build_telegram_client(settings) if settings.telegram_live else None
@@ -124,7 +129,10 @@ async def _start_telegram(app: FastAPI, settings: Settings) -> TelegramPoller | 
     if not settings.telegram_polling:
         logger.info("telegram: polling is off (TELEGRAM_POLLING=false); send only")
         return None
-    inbox = TelegramInbox(app.state.chhatri, client, LIVE_TELEGRAM_BINDINGS, PROCESS_SWITCH)
+    state = app.state.chhatri
+    doctor = DoctorInbox(state, client, LIVE_DOCTOR_DESK, LIVE_TELEGRAM_BINDINGS, PROCESS_SWITCH)
+    inbox = TelegramInbox(state, client, LIVE_TELEGRAM_BINDINGS, PROCESS_SWITCH, doctor=doctor)
+    app.state.telegram_inbox = inbox
     poller = TelegramPoller(client, inbox.handle)
     poller.start()
     logger.info("telegram: long polling started")
@@ -142,6 +150,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.chhatri = state
         app.state.whatsapp_inbox = WhatsAppInbox(state, settings.whatsapp_demo_recipient)
         await _load_default_scenario(state)
+    app.state.telegram_inbox = None
     poller = await _start_telegram(app, settings)
     app.state.telegram_poller = poller
     try:
@@ -149,6 +158,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         if poller is not None:
             await poller.stop()
+        telegram_inbox: TelegramInbox | None = app.state.telegram_inbox
+        if telegram_inbox is not None:
+            await telegram_inbox.close()
         inbox: WhatsAppInbox | None = getattr(app.state, "whatsapp_inbox", None)
         if inbox is not None:
             await inbox.close()
