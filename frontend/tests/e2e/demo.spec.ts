@@ -6,7 +6,7 @@
  */
 import { expect, test, type Page } from '@playwright/test'
 
-import { bubble, goTo, GOLDEN, LINES, loadScenario, openConsole, recordSpeech, RED_HEX, REPLAY_TIMEOUT_MS, seek, spoken } from './helpers'
+import { bubble, E2E_FEATURES, goTo, GOLDEN, LINES, loadScenario, openConsole, recordSpeech, RED_HEX, REPLAY_TIMEOUT_MS, seek, SLIP_PRECHECK_SKIP, spoken } from './helpers'
 
 test.describe.configure({ timeout: 120_000 })
 
@@ -83,6 +83,7 @@ test('Anil’s phone after the storm: payout, pause, Soundbox, “why” and “
 })
 
 test('HUMAN: a slip with another name goes to an officer, who approves it; ₹1,500 reaches the phone', async ({ page }) => {
+  test.skip(E2E_FEATURES.includes('n3_slip_precheck'), SLIP_PRECHECK_SKIP)
   await openConsole(page)
   await loadScenario(page, 'illness_mismatch', 'illness mismatch replay')
   await seek(page, '11:25')
@@ -111,6 +112,7 @@ test('HUMAN: a slip with another name goes to an officer, who approves it; ₹1,
 })
 
 test('illness: one photo of the slip pays ₹1,500 the same day', async ({ page }) => {
+  test.skip(E2E_FEATURES.includes('n3_slip_precheck'), SLIP_PRECHECK_SKIP)
   await openConsole(page)
   await loadScenario(page, 'illness', 'illness replay')
   await seek(page, '11:25')

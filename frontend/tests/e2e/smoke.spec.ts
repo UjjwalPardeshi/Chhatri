@@ -4,14 +4,14 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { E2E_FEATURES, FONT_HOSTS, goTo, IS_MOCK, loadScenario, MOCK_HOOK, openConsole, REPLAY_TIMEOUT_MS, seek, settled } from './helpers'
+import { E2E_FEATURES, FONT_HOSTS, goTo, IS_MOCK, loadScenario, MOCK_HOOK, openConsole, REPLAY_TIMEOUT_MS, seek, settled, SLIP_PRECHECK_SKIP } from './helpers'
 
 test('monsoon golden numbers, local fonts and the tile fallback', async ({ page }) => {
   const fontRequests: string[] = []
   page.on('request', (request) => {
     if (request.resourceType() === 'font' || FONT_HOSTS.test(request.url())) fontRequests.push(request.url())
   })
-  await page.route(/basemaps\.cartocdn\.com/, (route) => route.abort())
+  await page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort())
   await openConsole(page)
   await loadScenario(page, 'monsoon', 'monsoon replay')
   await seek(page, '17:05')
@@ -72,6 +72,7 @@ test('phone: "why" answer, dispute case and the officer queue', async ({ page })
 })
 
 test('illness with a mismatched name goes to a human, who approves it', async ({ page }) => {
+  test.skip(E2E_FEATURES.includes('n3_slip_precheck'), SLIP_PRECHECK_SKIP)
   await openConsole(page)
   await loadScenario(page, 'illness_mismatch', 'illness mismatch replay')
   await seek(page, '11:20')

@@ -11,6 +11,7 @@ import { useRef, useState, type ChangeEvent } from 'react'
 
 import type { PrecheckConsent } from '../../api/types'
 import { isFeatureEnabled } from '../../features'
+import { useLive } from '../../state/live'
 import type { Consent } from '../api/rights'
 import { useResource } from '../hooks/useResource'
 
@@ -20,7 +21,7 @@ import { useMiniapp } from '../shell/MiniappContext'
 import { ScreenRoot } from '../shell/SharedStates'
 import { Button } from '../ui/button'
 import { Skeleton } from '../ui/skeleton'
-import { MAX_MB, useSlipPrecheckFlow, type FlowState } from './SlipPrecheckFlow'
+import { MAX_MB, slipPossible, useSlipPrecheckFlow, type FlowState } from './SlipPrecheckFlow'
 import { SlipActions, SlipChecklist, SlipFields, SlipFooter, SlipNotes } from './SlipPrecheckParts'
 
 const BLURRY_SAMPLE = 'blurry_slip.png'
@@ -59,8 +60,20 @@ export function SlipPrecheck() {
   const slipOk = useSlipOk(merchantId)
   const waitingForOk = slipOk.needed && !slipOk.ticked
 
+  const { snapshot } = useLive()
   const { phase, check } = state
   const busy = phase === 'reading' || phase === 'deciding'
+
+  if (!check && !slipPossible(snapshot?.clock.scenario)) {
+    return (
+      <ScreenRoot name="slip" state="ready">
+        <p data-testid="slip-none" className="text-md">{t('slip.none', lang)}</p>
+        <Button data-testid="slip-none-home" variant="outline" size="lg" onClick={() => url.go({ screen: 'home' })}>
+          {t('slip.none.home', lang)}
+        </Button>
+      </ScreenRoot>
+    )
+  }
 
   function picked(event: ChangeEvent<HTMLInputElement>): void {
     const file = event.target.files?.[0]

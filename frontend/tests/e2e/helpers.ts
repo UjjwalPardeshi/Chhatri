@@ -28,6 +28,11 @@ export const GOLDEN = Object.freeze({
 
 /** The flags of the console under test (playwright.config.ts passes E2E_FEATURES to the mock as VITE_FEATURES). */
 export const E2E_FEATURES: readonly string[] = (process.env.E2E_FEATURES ?? '').split(/[\s,]+/).filter((name) => name !== '')
+/**
+ * The photo journeys written for n3 off: with n3_slip_precheck on, a photo first comes back as the pre-check question,
+ * and human-console-live (phone confirm, referred slip) and stage-demo walk that path instead.
+ */
+export const SLIP_PRECHECK_SKIP = 'with n3_slip_precheck on the photo goes through the pre-check: human-console-live and stage-demo cover it'
 const LENDER_DECIDES = E2E_FEATURES.includes('x4_lender_request')
 /** E2E_FEATURES unset means the flags are whatever the server (live project) or the build says, so either 17:05 line is right. */
 const FLAGS_KNOWN = process.env.E2E_FEATURES !== undefined

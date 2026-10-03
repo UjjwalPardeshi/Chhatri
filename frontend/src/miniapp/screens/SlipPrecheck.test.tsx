@@ -186,6 +186,19 @@ describe('reading, errors and offline', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 
+  it('in a replay with no check-in (monsoon) says there is nothing to send and calls nothing', async () => {
+    const kit = testApi()
+    backend = kit.backend
+    await kit.api.load('monsoon')
+    await kit.api.seek('17:05')
+    const spy = vi.spyOn(kit.api, 'slipPrecheck')
+    renderStandalone('/merchant/S-0142/app?lang=en&screen=slip', kit.backend, kit.api)
+    expect(await screen.findByTestId('slip-none')).toBeTruthy()
+    expect(text('slip-none')).toContain('Nothing to send right now')
+    expect(screen.queryByTestId('slip-take')).toBeNull()
+    expect(spy).not.toHaveBeenCalled()
+  })
+
   it('says so when no check-in is open (409) and offers the photo buttons again', async () => {
     await openSlip({ at: '10:45' })
     fireEvent.click(screen.getByTestId('slip-demo-good'))

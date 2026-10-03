@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from 'react'
 
 import { ApiError } from '../../api/client'
 import { IMAGE_TYPES, MAX_UPLOAD_BYTES } from '../../api/endpoints'
-import type { PrecheckAction, PrecheckConsent, PrecheckInput, SlipPrecheck } from '../../api/types'
+import type { PrecheckAction, PrecheckConsent, PrecheckInput, ScenarioName, SlipPrecheck } from '../../api/types'
 import { useLive } from '../../state/live'
 import { parsePrecheck, parsePrecheckConfirm } from '../api/precheckParse'
 import type { CopyKey } from '../lib/copy'
@@ -17,6 +17,13 @@ export type Phase = 'idle' | 'reading' | 'shown' | 'deciding'
 export type FlowState = { phase: Phase; check: SlipPrecheck | null; errorKey: CopyKey | null }
 
 export const MAX_MB = MAX_UPLOAD_BYTES / (1024 * 1024)
+/** The replays with a silence check-in, so a slip to read; the monsoon and buy-cover replays have none, and the sheet says so without a call. */
+export const SLIP_SCENARIOS: readonly ScenarioName[] = ['illness', 'illness_mismatch']
+
+/** False only when the loaded replay can never ask for a slip (unknown while the clock has not answered: true). */
+export function slipPossible(scenario: ScenarioName | null | undefined): boolean {
+  return scenario === null || scenario === undefined || SLIP_SCENARIOS.includes(scenario)
+}
 const START: FlowState = { phase: 'idle', check: null, errorKey: null }
 
 /** The one plain sentence for a failure. A contract violation is the generic line; the code stays in the console. */
