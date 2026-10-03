@@ -12,7 +12,7 @@
 - **Domain model:** frozen pydantic models (Merchant, Cover, Loan, Alert, Decision, Payout, Case, ...). Money is integer paise, with a `*_label` string made by `format_inr`. Times are timezone-aware IST.
 - **Storage:** an in-memory store rebuilt on every scenario load, and an append-only, hash-chained audit log in a private in-memory SQLite database. Artefacts (model, backtest, premiums) are committed files.
 - **IDs:** `S-0142` merchant, `D-000142` decision, `CL-000142` claim, `C-2291` case (the first case after a fresh load), `A-20250818-01` alert, `E-Z7-20250819` trigger. Sequence ids restart on every scenario load.
-- **API (BUILT):** 59 route handlers (section 4.1). Envelope: `{ok, data}`, `{ok, data, meta}` for lists, `{ok: false, error: {code, message, fields?}}` for errors. Error codes are the 13 status names plus `no_scenario` (section 4.3).
+- **API (BUILT):** 60 route handlers (section 4.1). Envelope: `{ok, data}`, `{ok, data, meta}` for lists, `{ok: false, error: {code, message, fields?}}` for errors. Error codes are the 13 status names plus `no_scenario` (section 4.3).
 - **Feature additions (section 5, BUILT, each behind its flag where it has one):** 18 endpoints for the mini-app and its cover, claims and receipt views, Ask Chhatri, the slip pre-check, voice, the grievance ladder, the consent centre and "forget my slip", the provider fallback switch, the published evaluation, the ops strip and the what-if panel. Each ships behind a feature flag (a flag that is off answers 404). Changes to existing endpoints are in 5.12.
 - **Mock parity:** every section 5 endpoint has an entry in the in-browser mock backend (`frontend/src/mock`), so the static demo works with no server (section 6).
 - **Limits (BUILT):** per client address per minute, `messages` 60, `uploads` 20, `webhooks` 60; 32 open event streams; images and audio at most 5 MB, audio at most 30 seconds (`backend/chhatri/api/security.py`, `uploads.py`).
@@ -403,7 +403,7 @@ Implementation: `backend/chhatri/ids.py` exports factory functions; tests seed t
 
 ## 4. Existing API: routes and methods
 
-### 4.1 Route table (API: 59 route handlers)
+### 4.1 Route table (API: 60 route handlers)
 
 | Router | Method | Path | Purpose | Auth | SPEC § |
 |---|---|---|---|---|---|
@@ -461,6 +461,7 @@ Implementation: `backend/chhatri/ids.py` exports factory functions; tests seed t
 | **fallback** | POST | `/api/integrations/{component}/fallback` | Force or release a fallback, flag `x6_provider_panel`, demo mode (5.6) | officer | 5.6 |
 | **ops** | GET | `/api/ops/summary` | Ops counts, flag `h8_ops_strip` (5.7) | none | 5.7 |
 | **whatif** | POST | `/api/whatif/area` | Read-only engine re-run, flag `h24_whatif` (5.9) | none | 5.9 |
+| **pricing** | GET | `/api/pricing` | The pricing simulator: every zone's premium for the levers in the query, from the committed pricing table, flag `h24_whatif` (5.9.1) | none | 5.9.1 |
 | **evals** | GET | `/api/evals/summary` | Stored evaluation results, flag `h25_evals` (5.10) | none | 5.10 |
 | **voice** | POST | `/api/voice/stt` | Speech to text with chips, flag `n4_voice` (5.11) | none | 5.11 |
 | | POST | `/api/voice/tts` | Text to speech (5.11) | none | 5.11 |
@@ -1572,6 +1573,15 @@ On screen the chip says **Source**, never "verified by", because every input is 
 ### 5.9 H24: What-if panel (read-only)
 
 Wave 4, flag `h24_whatif`. BUILT (`api/routers/whatif.py`, `replay/whatif.py`). A judge changes the weather alert, the hourly sales or the shop count of a zone and watches the **deterministic engine** recompute. The route calls the same pure `trigger_verdict` function that the live trigger uses (fs-09 section 9.5) and the same amount arithmetic, so no threshold is copied. **It writes nothing**: no store change, no audit entry, no id, no message, no event and no model call. The panel and its controls are in [fs-08](../02-product/feature-specs/fs-08-claims-officer-console.md) section 11.
+
+#### GET `/api/pricing` — The pricing simulator (5.9.1)
+
+Wave 5, flag `h24_whatif`. BUILT (`api/routers/pricing.py`, `backtest/pricing_model.py`, `backtest/pricing.py`). Read-only and deterministic: no scenario, no store, no audit entry, no model call.
+
+- **Query:** `floor` (area index floor %, one of the table's floors: 40, 45, 50, 55, 60), `share` (payout share %, 10..100), `cap` (area daily cap ₹, 500..10,000), `loading` (%, 0..60). Defaults are the published rules (pilot-0.1: 50, 50, 2,500, 35).
+- **Source:** `backend/artifacts/pricing/events.json`, written by `python -m chhatri.backtest.pricing` (4 to 5 minutes): every area trigger of the backtest at each floor, with the drop, whether the zone-day was a real drop, and each covered shop's published expected day. A test pins that the table, priced at the rules' levers, gives `premiums.json` in every zone and the report's recall (89 of 148) and false payouts (36 of 125).
+- **Answer:** per zone: premium per day, month and year (paise), expected payout per shop per year, payout days per year, today's premium and the loss ratio at today's price; city: cheapest, median and dearest premium, real drops paid and payouts with no real drop at that floor; `levers`, `rules`, `label`, `seasons`.
+- **Limits:** area claims only (no hospital cash, no waiting period, no annual limit), simulated sales with real rainfall: a planning figure, not an actuarial price. 404 `not_found` while the flag is off or before the table is built; 422 for a lever out of range.
 
 #### POST `/api/whatif/area` — Recompute a zone's trigger and one shop's payout
 

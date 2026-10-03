@@ -64,6 +64,7 @@ SPEC_ROUTES: tuple[tuple[str, str, str | None], ...] = (
     ("GET", "/api/media/{media_id}", None),
     ("GET", "/api/ops/summary", None),
     ("POST", "/api/whatif/area", None),
+    ("GET", "/api/pricing", None),  # flag h24_whatif
     ("GET", "/api/evals/summary", None),  # flag h25_evals
     ("GET", "/api/merchants/{merchant_id}/grievances", None),  # flag n5_grievances
     ("POST", "/api/merchants/{merchant_id}/grievances", None),  # flag n5_grievances
@@ -110,7 +111,7 @@ def test_route_table_matches_spec_exactly(app: FastAPI) -> None:
         (method.upper(), path) for path, operations in app.openapi()["paths"].items() for method in operations
     }
     assert served == {(method, path) for method, path, _ in SPEC_ROUTES}
-    assert len(SPEC_ROUTES) == 59
+    assert len(SPEC_ROUTES) == 60
 
 
 @pytest.mark.parametrize(("method", "path"), [(m, p) for m, p, auth in SPEC_ROUTES if auth == "officer"])

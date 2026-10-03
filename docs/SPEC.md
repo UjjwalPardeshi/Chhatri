@@ -1015,7 +1015,7 @@ errors never echo secrets or stack traces; CORS restricted; rate limits on webho
 - `scripts/demo_check.py` runs every scenario through the HTTP API and asserts the outcomes.
 - Frontend: vitest for formatters/colour scale, the console and the mini-app; Playwright E2E (projects `mock` and
   `live`) for the monsoon replay, the officer approve flow and the mini-app flows.
-- Route table: `backend/tests/api/test_route_table.py` pins §19 to exactly 59 routes, with their auth.
+- Route table: `backend/tests/api/test_route_table.py` pins §19 to exactly 60 routes, with their auth.
 - Feature flags: every flagged route answers 404 while its flag is off (`tests/api/test_feature_routes.py`), and
   the golden numbers hold with every flag off.
 - Infra: `scripts/tests/` (n8n workflows generated from `WORKFLOWS`, compose, env, nginx, Makefile).

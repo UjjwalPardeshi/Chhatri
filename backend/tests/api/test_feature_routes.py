@@ -71,6 +71,7 @@ FLAGGED_ROUTES: Final = (
     ("GET", "/api/evals/summary", "h25_evals", "/api/evals/summary"),
     ("GET", "/api/ops/summary", "h8_ops_strip", "/api/ops/summary"),
     ("POST", "/api/whatif/area", "h24_whatif", "/api/whatif/area"),
+    ("GET", "/api/pricing", "h24_whatif", "/api/pricing"),
 )
 IDS: Final = [f"{method} {template}" for method, template, _, _ in FLAGGED_ROUTES]
 HEADERS: Final = {"Authorization": f"Bearer {OFFICER_TOKEN}"}

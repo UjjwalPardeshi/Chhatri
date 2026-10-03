@@ -9,7 +9,8 @@
     "model/p90.txt": "64ae1d9ab9a7e157e160a0b5b0f8a1628ae046f997ae479b76c24da781e1bd8b",
     "model/schema.json": "117b6946a69c8176ec6c368e5e37742b1891ca247d8918655b8ef2bf0c41074b",
     "model/training.json": "4c221be77c19f42901e0f03e7ad80aea17d054bd203e724675ecaeac65a67f8c",
-    "premiums.json": "0a278b194f3e1701272a31a9565a3408d97579776bf315e9cf3495d5c633115d"
+    "premiums.json": "0a278b194f3e1701272a31a9565a3408d97579776bf315e9cf3495d5c633115d",
+    "pricing/events.json": "6fc6995952f7d841c1c2202e30bcf75da48dd6e1f8cc1f91d37a633174cd50c1"
   },
   "backtest_inputs": "d3e4791c59393e59ae9de81b2334dc1298a9dfa7c9067dfe79ba30e239411101",
   "calibration": {
