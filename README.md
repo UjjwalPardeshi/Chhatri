@@ -18,9 +18,9 @@ those badges. With the flag `x6_provider_panel` on, a live component that failed
 | Component | Live when | Otherwise |
 |---|---|---|
 | Sarvam STT, TTS, chat, vision | `SARVAM_API_KEY` set | deterministic simulator |
-| Gemini chat and slip reading | `GOOGLE_API_KEY` and `GEMINI_MODEL` set (`GEMINI_VISION_MODEL` optional) | templates and the simulated slip reader |
+| Gemini chat and slip reading | `GOOGLE_API_KEY` and `GEMINI_MODEL` set (`GEMINI_VISION_MODEL`, `GEMINI_BACKUP_MODELS` optional; the free tier allows about 20 requests a day per model, [details](docs/INTEGRATIONS.md)) | templates and the simulated slip reader |
 | WhatsApp Cloud API | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` all set | in-console phone simulator |
-| Telegram bot (flag `telegram_channel`) | `TELEGRAM_BOT_TOKEN` set and `CHHATRI_DATA_IS_SYNTHETIC=true`; long polling, no public URL | messages recorded on the console phone |
+| Telegram bot (flag `telegram_channel`) | `TELEGRAM_BOT_TOKEN` set and `CHHATRI_DATA_IS_SYNTHETIC=true`; long polling, no public URL. Only one machine may poll a token: run every other one with `TELEGRAM_POLLING=false` (send only) | messages recorded on the console phone |
 | Paytm payment link | `PAYTM_MCP_URL` (MCP over SSE), or `PAYTM_MID` + `PAYTM_KEY_SECRET` (REST, staging) | simulated `https://paytm.me/sim-…` link |
 | n8n workflows | `N8N_BASE_URL` set (the docker stack sets it) | in-process workflow runner, with the same steps and timeline |
 | Cognee memory | `COGNEE_ENABLED=true`, cognee installed and an LLM configured | in-process networkx graph |
@@ -96,7 +96,7 @@ http://localhost:8000` (it reloads scenarios on that backend).
 | `make test-frontend` | frontend `typecheck`, `lint` and Vitest |
 | `make test-slow` | `pytest -m slow`: golden numbers and full-artefact flows; reads committed artefacts, never rebuilds them |
 | `make test-infra` | checks that the n8n workflow JSON matches `WORKFLOWS`; runs the compose, Makefile, env, nginx and script tests |
-| `make evals` | the offline evaluation suites (no network, no key); writes `backend/artifacts/evals/summary.json` |
+| `make evals` | the offline evaluation suites (no network, no key); writes `backend/artifacts/evals/summary.json`. `python -m chhatri.evals --live` also runs the 50 Ask questions against the live model, after the synthetic-data gate and a confirmation of the call count |
 | `make env` / `make check-keys` | create `.env` with generated secrets / print which keys are SET (never the value) and list the Gemini models a key can use |
 | `make dev` | uvicorn with reload on :8000 plus vite on :5173 (`BACKEND_PORT=`, `CONSOLE_PORT=` to change) |
 | `make demo-check` | `python backend/scripts/demo_check.py`: every scenario through the HTTP API, in process with `CHHATRI_FEATURES=x4_lender_request` (the scripted flow stops by design when `n3_slip_precheck` or `n6_consents` is on) |
@@ -122,8 +122,10 @@ Measured on 3 Oct 2026, one run of each command (details and how to read them in
 | `make demo-check` | 70 of 70 checks |
 | Playwright e2e (`make e2e`, `npm run test:e2e:mock`) | 136 tests in 27 spec files (counted, not run for this table) |
 
-The suites run against simulated data. No test measures the accuracy of a live AI model: the evaluation
-harness is offline, and its page reads NOT MEASURED until a run is stored.
+The suites run against simulated data. One evaluation run is stored (`backend/artifacts/evals/`, shown on
+`/evals`): intent routing, the guard and 50 Ask questions answered live by a free-tier Gemini model, on
+synthetic sets the team wrote. Slip reading and voice are not measured
+([AI evaluation plan §1.2.1](docs/04-engineering/ai-evaluation-plan.md)).
 
 ## Repository layout
 
