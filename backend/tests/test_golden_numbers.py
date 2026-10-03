@@ -25,10 +25,29 @@ from chhatri.config import BACKEND_DIR, DATA_DIR, Settings
 from chhatri.detect.silent import find_silent, silent_this_morning
 from chhatri.detect.triggers import evaluate_hour
 from chhatri.detect.types import ZoneState
-from chhatri.domain.enums import CheckCode, CheckStatus, ClaimKind, CoverQuoteOutcome, DecisionOutcome
-from chhatri.domain.models import AreaTrigger, Claim, Decision, SlipExtraction
+from chhatri.directory import default_directory
+from chhatri.domain.enums import (
+    CheckCode,
+    CheckStatus,
+    ClaimKind,
+    CoverQuoteOutcome,
+    DecisionOutcome,
+    VerificationStatus,
+)
+from chhatri.domain.models import (
+    AreaTrigger,
+    Claim,
+    Decision,
+    Doctor,
+    DoctorVerification,
+    Hospital,
+    SlipExtraction,
+)
 from chhatri.forecast.model import ExpectedSalesModel
 from chhatri.ids import IdFactory
+from chhatri.integrations.base import DoctorNoResponse, DoctorVerificationRequest
+from chhatri.integrations.doctor import SimulatedDoctor
+from chhatri.integrations.doctor_register import STAGE_ATTENDANCE, STAGE_DOCTOR_NAMES
 from chhatri.integrations.sarvam_sim import SimulatedSlipReader
 from chhatri.money import format_inr, rupees
 from chhatri.policy.engine import (
@@ -298,12 +317,49 @@ def _personal(loaded: Loaded, name: str) -> tuple[Day, Decision, int]:
         id="CL-000001", kind=ClaimKind.PERSONAL, merchant_id=ANIL, created_at=now, event_date=SILENT_DAY,
         silent_dates=(SILENT_DAY,), slip=slip, expected_day_paise=expected,
     )  # fmt: skip
+    kyc_name = city.merchant(ANIL).kyc_name
+    hospital, doctor, verification = _confirm(claim, kyc_name, now)
     facts = PersonalClaimFacts(
         claim=claim, merchant=city.merchant(ANIL), cover=city.covers[ANIL],
-        verified_silent_dates=(SILENT_DAY,), kyc_name=city.merchant(ANIL).kyc_name,
+        verified_silent_dates=(SILENT_DAY,), kyc_name=kyc_name,
         paid_last_365_days_paise=0, already_paid_dates=(), weekday=SILENT_DAY.weekday(),
+        hospital=hospital, doctor=doctor,
+        verification_consent=True, verification_consent_at=now, verification=verification,
     )  # fmt: skip
     return day, evaluate_personal_claim(facts, loaded.rules, decision_id="D-000001", now=now), expected
+
+
+def _confirm(
+    claim: Claim, kyc_name: str, now: datetime
+) -> tuple[Hospital | None, Doctor | None, DoctorVerification | None]:
+    """The doctor confirmation the pipeline would gather for this slip (SPEC §9.2).
+
+    The hospital and the doctor are looked up in the independent directory, and the stage register
+    is asked the same question the pipeline asks: did *the merchant* attend, by KYC name, never the
+    name read off the photograph. A doctor with nothing to say gives NO_ANSWER, not a denial.
+    """
+    slip = claim.slip
+    directory = default_directory()
+    hospital = None if slip is None else directory.find_hospital(slip.hospital_name)
+    doctor = None if slip is None else directory.find_doctor(hospital, slip.doctor_registration_no)
+    if hospital is None or doctor is None or doctor.verify_chat_id is None:
+        return hospital, doctor, None
+    request = DoctorVerificationRequest(
+        request_id="DR-000001", claim_id=claim.id, hospital_id=hospital.id,
+        doctor_registration_no=doctor.registration_no, verify_chat_id=doctor.verify_chat_id,
+        patient_name=kyc_name, visit_date=claim.event_date, requested_at=now,
+    )  # fmt: skip
+    stand_in = SimulatedDoctor(register=STAGE_ATTENDANCE, doctor_names=STAGE_DOCTOR_NAMES)
+    try:
+        answer = asyncio.run(stand_in.ask(request))
+        status, answered_by, answered_at = answer.status, answer.answered_by, now
+    except DoctorNoResponse:
+        status, answered_by, answered_at = VerificationStatus.NO_ANSWER, None, None
+    return hospital, doctor, DoctorVerification(
+        id="DV-000001", claim_id=claim.id, hospital_id=hospital.id,
+        doctor_registration_no=doctor.registration_no, status=status,
+        requested_at=now, answered_at=answered_at, answered_by=answered_by,
+    )  # fmt: skip
 
 
 def _read_slip(png: bytes) -> SlipExtraction:
@@ -331,4 +387,9 @@ def test_illness_mismatch_is_referred(loaded: Loaded) -> None:
     statuses = {c.code: c.status for c in decision.checks}
     assert statuses[CheckCode.NAME_MATCHES_KYC] is CheckStatus.FAIL  # "Sunil Pawar" vs Anil's KYC
     assert statuses[CheckCode.SILENCE_VERIFIED] is CheckStatus.PASS
+    # The name alone refers it. The doctor was asked about Anil, the man insured, not about the
+    # name on the slip, so the misread confirms rather than provoking a denial that would decline
+    # a claim the officer goes on to approve (SPEC §9.2).
+    assert statuses[CheckCode.DOCTOR_CONFIRMED] is CheckStatus.PASS
+    assert statuses[CheckCode.DOCTOR_NOT_DENIED] is CheckStatus.PASS
     assert decision.referral_reason is not None
