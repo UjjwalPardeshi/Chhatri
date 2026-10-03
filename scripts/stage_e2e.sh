@@ -11,7 +11,7 @@ FLAGS="${STAGE_FLAGS:?run it through make stage-e2e, which passes STAGE_FLAGS}"
 # sim (default): both AI keys blanked, every badge reads SIMULATED. live: the keys of .env are used with the stage Gemini
 # model, and the spec asserts LIVE · gemini on the slip and on a free question.
 AI="${STAGE_E2E_AI:-sim}"
-GEMINI="${STAGE_GEMINI_MODEL:-gemini-2.5-flash-lite}"
+GEMINI="${STAGE_GEMINI_MODEL:-gemini-3.5-flash-lite}"
 case "$AI" in sim | live) ;; *) echo "STAGE_E2E_AI must be sim or live" >&2; exit 1 ;; esac
 for port in "$BACKEND_PORT" "$CONSOLE_PORT"; do
   if ss -ltn 2>/dev/null | grep -qE "[:.]$port "; then echo "port $port is already in use: stop what runs there first" >&2; exit 1; fi

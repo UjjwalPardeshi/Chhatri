@@ -145,6 +145,8 @@ class _Gemini:
     chat: ChatModel | None
     vision: SlipReader | None
     statuses: tuple[IntegrationStatus, ...]
+    chat_backups: tuple[ChatModel, ...] = ()
+    vision_backups: tuple[SlipReader, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,19 +213,28 @@ def _gated_speech(speech: _Speech) -> _Speech:
 
 
 def _gemini_status(
-    name: str, adapter: object | None, *, key_set: bool, model_id: str, gate_open: bool, offline: str
+    name: str,
+    adapter: object | None,
+    *,
+    key_set: bool,
+    model_id: str,
+    gate_open: bool,
+    offline: str,
+    backups: int = 0,
 ) -> IntegrationStatus:
     """One Gemini row: LIVE only with an adapter (key and model id) and an open data gate, else why not."""
     if adapter is None:
         return simulated(name, f"{offline} ({'key set, model not set' if key_set else 'no GOOGLE_API_KEY'})")
     if not gate_open:
         return simulated(name, f"{offline} ({GATE_CLOSED_DETAIL})")
-    return live(name, f"Gemini {model_id}")
+    return live(name, f"Gemini {model_id}" + (f" (+{backups} backup)" if backups else ""))
 
 
 def build_gemini(settings: Settings) -> _Gemini:
-    """Gemini chat and vision (ADR 0003 rule 7). One attempt per link: quota exhaustion moves on at once."""
+    """Gemini chat and vision (ADR 0003 rule 7), with the backup models after the main one. One attempt per link:
+    quota exhaustion moves on at once, to the next model and then to the next provider."""
     key = _secret(settings.google_api_key)
+    backups = settings.gemini_backup_model_ids
     chat = (
         LiveGeminiChat(key, model=settings.gemini_chat_model_id, policy=INTERACTIVE_POLICY)
         if settings.gemini_chat_live
@@ -233,6 +244,20 @@ def build_gemini(settings: Settings) -> _Gemini:
         LiveGeminiSlipReader(key, model=settings.gemini_vision_model_id, policy=INTERACTIVE_POLICY)
         if settings.gemini_vision_live
         else None
+    )
+    chat_backups = (
+        tuple(LiveGeminiChat(key, model=m, policy=INTERACTIVE_POLICY) for m in backups)
+        if chat is not None
+        else ()
+    )
+    vision_backups = (
+        tuple(
+            LiveGeminiSlipReader(key, model=m, policy=INTERACTIVE_POLICY)
+            for m in backups
+            if m != settings.gemini_vision_model_id
+        )
+        if vision is not None
+        else ()
     )
     gate_open = settings.chhatri_data_is_synthetic
     return _Gemini(
@@ -246,6 +271,7 @@ def build_gemini(settings: Settings) -> _Gemini:
                 model_id=settings.gemini_chat_model_id,
                 gate_open=gate_open,
                 offline="rule-based answers",
+                backups=len(chat_backups),
             ),
             _gemini_status(
                 "gemini_vision",
@@ -254,8 +280,11 @@ def build_gemini(settings: Settings) -> _Gemini:
                 model_id=settings.gemini_vision_model_id,
                 gate_open=gate_open,
                 offline="reads sample slips' embedded data",
+                backups=len(vision_backups),
             ),
         ),
+        chat_backups,
+        vision_backups,
     )
 
 
@@ -410,11 +439,16 @@ def build_integrations(
         telegram_statuses=ordered_telegram([telegram_status]),
         telegram_bindings=bindings,
         chat_chain=build_chat_chain(
-            settings, gemini=gemini.chat, sarvam=speech.chat, forced_source=lambda: switch.forced
+            settings,
+            gemini=gemini.chat,
+            sarvam=speech.chat,
+            forced_source=lambda: switch.forced,
+            gemini_backups=gemini.chat_backups,
         ),
         slip_chain=build_slip_chain(
             settings,
             gemini=gemini.vision,
+            gemini_backups=gemini.vision_backups,
             sarvam=speech.slips if settings.sarvam_live else None,
             simulated=SimulatedSlipReader(),
             forced_source=lambda: switch.forced,

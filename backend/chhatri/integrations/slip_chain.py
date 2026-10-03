@@ -17,7 +17,7 @@ pre-check service (card 4.2) needs. Nothing calls either yet.
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable, Collection, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from typing import Final
@@ -39,6 +39,12 @@ DEFAULT_LINK_TIMEOUTS: Final[Mapping[AiProvider, float]] = {
     AiProvider.GEMINI: DEFAULT_TIMEOUT_S,
     AiProvider.SARVAM: DOC_AI_TIMEOUT_S,
 }
+
+
+def _model_of(reader: object) -> str | None:
+    """The model id a live reader echoes in its label (the Gemini readers have one)."""
+    model = getattr(reader, "model", None)
+    return model if isinstance(model, str) else None
 
 
 def _no_forced() -> Collection[str]:
@@ -131,9 +137,12 @@ def build_slip_chain(
     sarvam: SlipReader | None,
     simulated: SlipReader,
     forced_source: Callable[[], Collection[str]] = _no_forced,
+    gemini_backups: Sequence[SlipReader] = (),
 ) -> SlipChain:
-    """The chain for `settings`: `gemini` and `sarvam` are the live readers (None when not configured)."""
+    """The chain for `settings`: `gemini` and `sarvam` are the live readers (None when not configured), and
+    `gemini_backups` the GEMINI_BACKUP_MODELS readers, asked after the main model."""
     gemini_missing = FallbackReason.MODEL_NOT_SET if settings.gemini_key_set else FallbackReason.NO_KEY
+    backups = tuple(ReaderLink(AiProvider.GEMINI, GEMINI_VISION, _model_of(b), b) for b in gemini_backups)
     return SlipChain(
         links=(
             ReaderLink(
@@ -143,6 +152,7 @@ def build_slip_chain(
                 gemini,
                 None if gemini is not None else gemini_missing,
             ),
+            *backups,
             ReaderLink(
                 AiProvider.SARVAM,
                 SARVAM_VISION,

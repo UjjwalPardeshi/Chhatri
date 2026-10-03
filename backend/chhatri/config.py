@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     google_api_key: SecretStr | None = None
     gemini_model: str = ""  # text model; also reads slips unless GEMINI_VISION_MODEL names another
     gemini_vision_model: str = ""  # optional: a model that accepts images, for the slip reader
+    gemini_backup_models: str = (
+        ""  # optional, comma-separated: tried in order when a model is out of quota or slow
+    )
     # ADR 0009: free-tier AI links are called only when the deployment says its data is synthetic. Fails closed.
     chhatri_data_is_synthetic: bool = False
 
@@ -117,6 +120,13 @@ class Settings(BaseSettings):
     def gemini_vision_model_id(self) -> str:
         """The slip reader's model: GEMINI_VISION_MODEL, else the text model."""
         return _model_id(self.gemini_vision_model) or self.gemini_chat_model_id
+
+    @property
+    def gemini_backup_model_ids(self) -> tuple[str, ...]:
+        """GEMINI_BACKUP_MODELS as model ids, in order, once each, without the main chat model. The free tier counts
+        requests per model per day, so a second model keeps the AI live when the first one's quota is spent."""
+        ids = (_model_id(part) for part in self.gemini_backup_models.split(","))
+        return tuple(dict.fromkeys(i for i in ids if i and i != self.gemini_chat_model_id))
 
     @property
     def gemini_chat_live(self) -> bool:

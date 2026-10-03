@@ -156,6 +156,17 @@ def parse_json_text(text: str, schema: Mapping[str, Any], *, integration: str) -
     return data
 
 
+def thinking_config(model: str, budget: int | None) -> dict[str, Any] | None:
+    """The least thinking a model accepts. Gemini 2.x takes a token budget (0 switches thinking off); Gemini 3.x takes
+    a level instead, "minimal" on Flash-Lite and "low" on the other models, and ignores the budget (so a 3.x model left
+    on its default level thinks, and misses the Ask link budget). None: leave the model's default."""
+    if budget is None:
+        return None
+    if model.startswith("gemini-3"):
+        return {"thinkingLevel": "minimal" if "flash-lite" in model else "low"}
+    return {"thinkingBudget": budget}
+
+
 class GeminiCaller:
     """One adapter's connection to `generateContent`: auth, bounds, retries and the two request shapes."""
 
@@ -226,8 +237,9 @@ class GeminiCaller:
         instruction = system
         if constrained:
             config["responseJsonSchema"] = sanitize_schema(schema)
-            if self._thinking_budget is not None:
-                config["thinkingConfig"] = {"thinkingBudget": self._thinking_budget}
+            thinking = thinking_config(self.model, self._thinking_budget)
+            if thinking is not None:
+                config["thinkingConfig"] = thinking
         else:
             instruction = (
                 f"{system}\n\n{PROMPT_ONLY_NOTE}\n{json.dumps(schema, default=dict, ensure_ascii=False)}"

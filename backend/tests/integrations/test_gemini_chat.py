@@ -14,7 +14,7 @@ from chhatri.ai.failures import classify_failure
 from chhatri.ai.labels import FallbackReason
 from chhatri.integrations.base import ChatModel, IntegrationError
 from chhatri.integrations.gemini_chat import LiveGeminiChat
-from chhatri.integrations.gemini_client import INTERACTIVE_POLICY, sanitize_schema
+from chhatri.integrations.gemini_client import INTERACTIVE_POLICY, sanitize_schema, thinking_config
 from chhatri.integrations.retry import RetryPolicy
 
 from .conftest import SleepRecorder, no_sleep
@@ -303,3 +303,19 @@ async def test_the_prompt_text_is_sent_as_given_and_json_serialisable() -> None:
     body = json.loads(double.requests[0].content.decode("utf-8"))
     assert body["systemInstruction"]["parts"][0]["text"] == 'सिस्टम "text"'
     assert body["contents"][0]["parts"][0]["text"] == "₹1,380 क्यों?"
+
+
+@pytest.mark.parametrize(
+    ("model", "budget", "expected"),
+    [
+        ("gemini-2.5-flash-lite", 0, {"thinkingBudget": 0}),
+        ("gemini-3.5-flash-lite", 0, {"thinkingLevel": "minimal"}),
+        ("gemini-3.5-flash", 0, {"thinkingLevel": "low"}),
+        ("gemini-3.5-flash-lite", None, None),
+    ],
+)
+def test_thinking_is_kept_to_the_least_each_model_generation_accepts(
+    model: str, budget: int | None, expected: dict[str, Any] | None
+) -> None:
+    """Gemini 3.x ignores a token budget and thinks at its default level, which misses the Ask link budget."""
+    assert thinking_config(model, budget) == expected

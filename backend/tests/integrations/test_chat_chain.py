@@ -294,3 +294,32 @@ async def test_an_integration_error_from_any_adapter_is_a_label_not_an_exception
     chain = build_chat_chain(settings(google_api_key=KEY, gemini_model=MODEL), gemini=Down(), sarvam=None)
     result = await ask(chain)
     assert result.label.fallback_reason is FallbackReason.PROVIDER_ERROR
+
+
+async def test_a_backup_model_answers_when_the_main_one_is_out_of_quota() -> None:
+    """GEMINI_BACKUP_MODELS: a 429 on the main model moves to the next model at once, and the label names it."""
+    main = GeminiDouble(gemini_error(429, "RESOURCE_EXHAUSTED"))
+    backup = GeminiDouble(gemini_json(GEMINI_ANSWER))
+    chain = build_chat_chain(
+        settings(google_api_key=KEY, gemini_model=MODEL, gemini_backup_models="gemini-backup"),
+        gemini=gemini_with(main),
+        sarvam=None,
+        gemini_backups=(
+            LiveGeminiChat(KEY, model="gemini-backup", transport=backup.transport, sleep=no_sleep),
+        ),
+    )
+    result = await ask(chain)
+    assert result.value == GEMINI_ANSWER
+    assert result.label.provider is AiProvider.GEMINI and result.label.model == "gemini-backup"
+    assert result.label.fallback_reason is FallbackReason.RATE_LIMITED
+    assert [(a.provider, a.outcome) for a in result.label.attempts] == [
+        (AiProvider.GEMINI, "RATE_LIMITED"),
+        (AiProvider.GEMINI, "OK"),
+    ]
+    assert [link.model for link in chain.links] == [MODEL, "gemini-backup", None]
+
+
+def test_the_backup_models_are_read_in_order_once_each_without_the_main_model() -> None:
+    values = settings(gemini_model=MODEL, gemini_backup_models=f" models/b1 , {MODEL}, b2,b1,, ")
+    assert values.gemini_backup_model_ids == ("b1", "b2")
+    assert settings(gemini_backup_models="").gemini_backup_model_ids == ()

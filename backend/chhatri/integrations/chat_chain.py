@@ -15,7 +15,7 @@ caller's, set in the Wave 2 rehearsal (`timeout_s`, `link_timeouts`, `total_time
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable, Collection, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Final
@@ -116,9 +116,15 @@ def build_chat_chain(
     gemini: ChatModel | None,
     sarvam: ChatModel | None,
     forced_source: Callable[[], Collection[str]] = _no_forced,
+    gemini_backups: Sequence[ChatModel] = (),
 ) -> ChatChain:
-    """The chain for `settings`: `gemini` and `sarvam` are the live adapters, None when not configured."""
+    """The chain for `settings`: `gemini` and `sarvam` are the live adapters, None when not configured, and
+    `gemini_backups` the GEMINI_BACKUP_MODELS adapters, asked after the main model (same component, so the X6
+    switch turns them off together)."""
     gemini_missing = FallbackReason.MODEL_NOT_SET if settings.gemini_key_set else FallbackReason.NO_KEY
+    backups = tuple(
+        ChatLink(AiProvider.GEMINI, GEMINI_CHAT, getattr(b, "model", None), b) for b in gemini_backups
+    )
     return ChatChain(
         links=(
             ChatLink(
@@ -128,6 +134,7 @@ def build_chat_chain(
                 gemini,
                 None if gemini is not None else gemini_missing,
             ),
+            *backups,
             ChatLink(
                 AiProvider.SARVAM,
                 SARVAM_CHAT,

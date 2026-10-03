@@ -40,7 +40,7 @@ make demo-stage                 # backend :8000, console :5173; LIVE Gemini by d
 make demo-stage STAGE_AI=sim    # same, with both AI keys blanked: every badge reads SIMULATED
 ```
 
-`demo-stage` runs the backend without `--reload`, so saving a file cannot restart it. It sets `GEMINI_MODEL=gemini-2.5-flash-lite` (`STAGE_GEMINI_MODEL`) because the `.env` model `gemini-2.5-flash` answered HTTP 404 on 3 Oct 2026 ("no longer available to new users"), and a rejected live reader sends the slip to a person instead of reading it. Check on the demo day that the model still answers, and change `STAGE_GEMINI_MODEL` if it does not.
+`demo-stage` runs the backend without `--reload`, so saving a file cannot restart it. It sets `GEMINI_MODEL=gemini-3.5-flash-lite` (`STAGE_GEMINI_MODEL`) and `GEMINI_BACKUP_MODELS=gemini-flash-lite-latest` (`STAGE_GEMINI_BACKUPS`). The free tier allows about 20 requests a day per model: on 3 Oct 2026 `gemini-2.5-flash-lite` was spent by midday and `gemini-2.5-flash` answered HTTP 404, and a rejected live reader sends the slip to a person instead of reading it. `gemini-3.5-flash-lite` answers an Ask question in about 2 s; the larger 3.x models and Gemma miss the 3-second Ask budget. Do not loop rehearsals on the live models: check once on the demo day that the model answers, and change `STAGE_GEMINI_MODEL` if it does not.
 
 **Which AI mode to stage.** Choose before the slot, never during the talk:
 

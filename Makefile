@@ -17,10 +17,13 @@ CONSOLE_PORT ?= 5173
 CONSOLE_URL ?= http://localhost:$(CONSOLE_PORT)
 # The stage demo flag set (docs/06-delivery/stage-script.md). The backend and the console must read the same list.
 STAGE_FLAGS ?= n1_miniapp,n2_ask_chhatri,n3_slip_precheck,x4_lender_request,x6_provider_panel,h24_whatif,console_polish,telegram_channel
-# GEMINI_MODEL for the stage: .env may still name a model Google has retired for new keys (HTTP 404 on 3 Oct 2026), which
-# sends the slip to a person on stage. STAGE_AI=live (the default) uses the keys in .env: Gemini reads the slip and
-# answers free questions, and the footer says LIVE. STAGE_AI=sim blanks both AI keys so every badge reads SIMULATED.
-STAGE_GEMINI_MODEL ?= gemini-2.5-flash-lite
+# GEMINI_MODEL for the stage: the free tier allows about 20 requests a day per model, and .env may name a model that is
+# spent or retired (gemini-2.5-flash-lite was spent and gemini-2.5-flash answered HTTP 404 on 3 Oct 2026), which sends
+# the slip to a person on stage. STAGE_GEMINI_BACKUPS are tried in order when the main model is spent or slow.
+# STAGE_AI=live (the default) uses the keys in .env: Gemini reads the slip and answers free questions, and the footer
+# says LIVE. STAGE_AI=sim blanks both AI keys so every badge reads SIMULATED.
+STAGE_GEMINI_MODEL ?= gemini-3.5-flash-lite
+STAGE_GEMINI_BACKUPS ?= gemini-flash-lite-latest
 STAGE_AI ?= live
 ifeq ($(STAGE_AI),sim)
 STAGE_AI_ENV := GOOGLE_API_KEY= SARVAM_API_KEY=
@@ -75,7 +78,7 @@ demo-check: ## Every scenario through the HTTP API: python backend/scripts/demo_
 
 demo-stage: ## The 3-minute stage demo: backend + console, stage flag set, synthetic data, no reload. Live Gemini by default; STAGE_AI=sim: no AI keys
 	trap 'kill $$(jobs -p) 2>/dev/null || true' INT TERM EXIT; \
-	(cd $(ROOT)/backend && CHHATRI_FEATURES=$(STAGE_FLAGS) CHHATRI_DATA_IS_SYNTHETIC=true GEMINI_MODEL=$(STAGE_GEMINI_MODEL) $(STAGE_AI_ENV) $(PY) -m uvicorn --factory chhatri.api.app:create_app --host 127.0.0.1 --port $(BACKEND_PORT)) & \
+	(cd $(ROOT)/backend && CHHATRI_FEATURES=$(STAGE_FLAGS) CHHATRI_DATA_IS_SYNTHETIC=true GEMINI_MODEL=$(STAGE_GEMINI_MODEL) GEMINI_BACKUP_MODELS=$(STAGE_GEMINI_BACKUPS) $(STAGE_AI_ENV) $(PY) -m uvicorn --factory chhatri.api.app:create_app --host 127.0.0.1 --port $(BACKEND_PORT)) & \
 	(cd $(ROOT)/frontend && VITE_FEATURES=$(STAGE_FLAGS) VITE_API_URL=http://127.0.0.1:$(BACKEND_PORT) $(NPM) run dev -- --host 127.0.0.1 --port $(CONSOLE_PORT) --strictPort) & \
 	wait
 
