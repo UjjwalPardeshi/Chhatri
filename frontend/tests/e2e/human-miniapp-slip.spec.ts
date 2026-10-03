@@ -39,6 +39,8 @@ test('the good demo slip is read, shown plainly, and confirming it opens the pai
   await expect(page.getByTestId('screen-slip')).not.toContainText(/confidence|\d+\s?%/i)
   await expectCleanScreen(page)
   await page.getByTestId('slip-confirm').click()
+  /** The doctor question comes next (design 2.4); Yes lets the simulated doctor confirm the visit. */
+  await page.getByTestId('slip-consent-yes').click()
   await expect(page).toHaveURL(/screen=claim&claim=CL-\d+/)
   await expect(page.getByTestId('claim-amount')).toContainText('₹1,500')
   expect(errors).toEqual([])
